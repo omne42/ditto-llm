@@ -103,9 +103,10 @@ impl OpenAI {
             );
         }
         out.insert("parameters".to_string(), tool.parameters.clone());
-        if let Some(strict) = tool.strict {
-            out.insert("strict".to_string(), Value::Bool(strict));
-        }
+        out.insert(
+            "strict".to_string(),
+            Value::Bool(tool.strict.unwrap_or(true)),
+        );
         Value::Object(out)
     }
 
