@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Split `src/lib.rs` into `src/error.rs` and `src/profile.rs` (no behavior change).
+
 ## [0.1.1] - 2026-01-23
 
 ### Added
@@ -14,4 +18,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider profile config (`base_url` / auth / model whitelist / capability flags)
 - OpenAI-compatible `GET /models` discovery
 - Model-level `thinking` config (mapped by consumers to `reasoning.effort`)
-
