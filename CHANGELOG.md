@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
 - Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
+- Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.).
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
-- Examples: `basic`, `streaming`, `tool_calling`, `embeddings`.
+- Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`.
 - Utilities: generic SSE parsing and JSON Schema → OpenAPI schema conversion (for tool schemas).
 
 ### Changed

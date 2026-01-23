@@ -4,6 +4,8 @@ pub mod anthropic;
 pub mod google;
 #[cfg(feature = "openai")]
 pub mod openai;
+#[cfg(feature = "openai-compatible")]
+pub mod openai_compatible;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
@@ -15,3 +17,5 @@ pub use google::GoogleEmbeddings;
 pub use openai::OpenAI;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use openai::OpenAIEmbeddings;
+#[cfg(feature = "openai-compatible")]
+pub use openai_compatible::OpenAICompatible;

@@ -9,6 +9,7 @@ Current scope:
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
 - Providers:
   - OpenAI Responses API (generate + SSE streaming) and embeddings
+  - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.)
   - Anthropic Messages API (generate + SSE streaming)
   - Google GenAI (generate + SSE streaming) and embeddings
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
@@ -22,6 +23,7 @@ cargo run --example basic
 cargo run --example streaming
 cargo run --example tool_calling
 cargo run --example embeddings
+cargo run --example openai_compatible
 ```
 
 ## Development
