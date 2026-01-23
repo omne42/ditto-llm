@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
 - Provider builders accept a custom `reqwest::Client` via `with_http_client` (proxy/headers/timeout customization).
 - Provider config: `ProviderConfig.http_headers` to apply default HTTP headers when building clients from config (also used for `/models` discovery).
+- File upload helper for OpenAI and OpenAI-compatible providers: `upload_file` / `upload_file_with_purpose`.
 - Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`, `multimodal`.
 - Roadmap: `TODO.md` with a scoped capability checklist (LiteLLM / AI SDK aligned).
 - Optional integration smoke tests behind the `integration` feature (requires real API keys).
@@ -39,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI Responses: map `finish_reason` consistently (generate + stream), including tool-call completion.
 - OpenAI-compatible streaming: flush pending tool calls and always emit a final `FinishReason` even if the provider omits it.
 - JSON Schema → OpenAPI conversion: support common constraints and `additionalProperties` for tool schemas.
+- Tool call arguments: preserve raw JSON on parse failures, emit `Warning::Compatibility(tool_call.arguments)`, and avoid double-encoding when replaying assistant tool calls.
+- `collect_stream`: preserve chunk ordering (text/reasoning/tool calls) and warn on invalid tool-call argument JSON.
 
 ## [0.1.1] - 2026-01-23
 

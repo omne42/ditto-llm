@@ -64,6 +64,15 @@ let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
 When building providers from config, you can also set default headers via
 `ProviderConfig.http_headers`.
 
+## File Upload (Optional)
+
+If you want to send PDFs via `file_id` (instead of inlining base64), OpenAI and OpenAI-compatible
+providers expose a small upload helper:
+
+```rust
+let file_id = llm.upload_file("doc.pdf", pdf_bytes).await?;
+```
+
 ## Development
 
 Enable repo-local git hooks:

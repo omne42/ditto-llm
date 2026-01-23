@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::stream;
+use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -96,6 +97,61 @@ impl OpenAICompatible {
         }
     }
 
+    fn files_url(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if base.ends_with("/files") {
+            base.to_string()
+        } else {
+            format!("{base}/files")
+        }
+    }
+
+    pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {
+        self.upload_file_with_purpose(filename, bytes, "assistants", None)
+            .await
+    }
+
+    pub async fn upload_file_with_purpose(
+        &self,
+        filename: impl Into<String>,
+        bytes: Vec<u8>,
+        purpose: impl Into<String>,
+        media_type: Option<&str>,
+    ) -> Result<String> {
+        #[derive(Deserialize)]
+        struct FilesUploadResponse {
+            id: String,
+        }
+
+        let filename = filename.into();
+        let mut file_part = Part::bytes(bytes).file_name(filename);
+        if let Some(media_type) = media_type {
+            file_part = file_part.mime_str(media_type).map_err(|err| {
+                DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
+            })?;
+        }
+
+        let form = Form::new()
+            .text("purpose", purpose.into())
+            .part("file", file_part);
+
+        let url = self.files_url();
+        let mut req = self.http.post(url);
+        if !self.api_key.trim().is_empty() {
+            req = req.bearer_auth(&self.api_key);
+        }
+        let response = req.multipart(form).send().await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let parsed = response.json::<FilesUploadResponse>().await?;
+        Ok(parsed.id)
+    }
+
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
@@ -149,6 +205,20 @@ impl OpenAICompatible {
                 "type": "function",
                 "function": { "name": name }
             }),
+        }
+    }
+
+    fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
+        match arguments {
+            Value::String(raw) => {
+                let raw = raw.trim();
+                if raw.is_empty() {
+                    "{}".to_string()
+                } else {
+                    raw.to_string()
+                }
+            }
+            other => other.to_string(),
         }
     }
 
@@ -276,7 +346,7 @@ impl OpenAICompatible {
                                     "type": "function",
                                     "function": {
                                         "name": name,
-                                        "arguments": arguments.to_string(),
+                                        "arguments": Self::tool_call_arguments_to_openai_string(arguments),
                                     }
                                 }));
                             }
@@ -751,8 +821,18 @@ impl LanguageModel for OpenAICompatible {
         if let Some(tool_calls) = choice.message.tool_calls.as_ref() {
             for tool_call in tool_calls {
                 let arguments_raw = tool_call.function.arguments.as_str();
-                let arguments = serde_json::from_str::<Value>(arguments_raw)
-                    .unwrap_or_else(|_| Value::String(arguments_raw.to_string()));
+                let raw = arguments_raw.trim();
+                let raw_json = if raw.is_empty() { "{}" } else { raw };
+                let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
+                    warnings.push(Warning::Compatibility {
+                        feature: "tool_call.arguments".to_string(),
+                        details: format!(
+                            "failed to parse tool_call arguments as JSON for id={}: {err}; preserving raw string",
+                            tool_call.id
+                        ),
+                    });
+                    Value::String(arguments_raw.to_string())
+                });
                 content.push(ContentPart::ToolCall {
                     id: tool_call.id.clone(),
                     name: tool_call.function.name.clone(),
@@ -1015,6 +1095,35 @@ mod tests {
                 "content": "{\"ok\":true}",
             })]
         );
+    }
+
+    #[test]
+    fn preserves_raw_tool_call_arguments_string() {
+        let messages = vec![Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "call_1".to_string(),
+                name: "add".to_string(),
+                arguments: Value::String("{\"a\":1}".to_string()),
+            }],
+        }];
+
+        let (mapped, warnings) = OpenAICompatible::messages_to_chat_messages(&messages);
+        assert!(warnings.is_empty());
+        assert_eq!(mapped.len(), 1);
+
+        let tool_calls = mapped[0]
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .expect("tool_calls array");
+        assert_eq!(tool_calls.len(), 1);
+        let arguments = tool_calls[0]
+            .get("function")
+            .and_then(Value::as_object)
+            .and_then(|obj| obj.get("arguments"))
+            .and_then(Value::as_str)
+            .expect("tool_call arguments string");
+        assert_eq!(arguments, "{\"a\":1}");
     }
 
     #[test]

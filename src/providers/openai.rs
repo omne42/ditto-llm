@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::stream;
+use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -91,6 +92,61 @@ impl OpenAI {
         }
     }
 
+    fn files_url(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if base.ends_with("/files") {
+            base.to_string()
+        } else {
+            format!("{base}/files")
+        }
+    }
+
+    pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {
+        self.upload_file_with_purpose(filename, bytes, "assistants", None)
+            .await
+    }
+
+    pub async fn upload_file_with_purpose(
+        &self,
+        filename: impl Into<String>,
+        bytes: Vec<u8>,
+        purpose: impl Into<String>,
+        media_type: Option<&str>,
+    ) -> Result<String> {
+        #[derive(Deserialize)]
+        struct FilesUploadResponse {
+            id: String,
+        }
+
+        let filename = filename.into();
+        let mut file_part = Part::bytes(bytes).file_name(filename);
+        if let Some(media_type) = media_type {
+            file_part = file_part.mime_str(media_type).map_err(|err| {
+                DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
+            })?;
+        }
+
+        let form = Form::new()
+            .text("purpose", purpose.into())
+            .part("file", file_part);
+
+        let url = self.files_url();
+        let mut req = self.http.post(url);
+        if !self.api_key.trim().is_empty() {
+            req = req.bearer_auth(&self.api_key);
+        }
+        let response = req.multipart(form).send().await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let parsed = response.json::<FilesUploadResponse>().await?;
+        Ok(parsed.id)
+    }
+
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
@@ -127,6 +183,20 @@ impl OpenAI {
             ToolChoice::None => Value::String("none".to_string()),
             ToolChoice::Required => Value::String("required".to_string()),
             ToolChoice::Tool { name } => serde_json::json!({ "type": "function", "name": name }),
+        }
+    }
+
+    fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
+        match arguments {
+            Value::String(raw) => {
+                let raw = raw.trim();
+                if raw.is_empty() {
+                    "{}".to_string()
+                } else {
+                    raw.to_string()
+                }
+            }
+            other => other.to_string(),
         }
     }
 
@@ -241,7 +311,7 @@ impl OpenAI {
                                     "type": "function_call",
                                     "call_id": id,
                                     "name": name,
-                                    "arguments": arguments.to_string(),
+                                    "arguments": Self::tool_call_arguments_to_openai_string(arguments),
                                 }));
                             }
                             ContentPart::Reasoning { .. } => warnings.push(Warning::Unsupported {
@@ -397,7 +467,7 @@ fn finish_reason_for_final_event(
     map_responses_finish_reason(status, response_incomplete_reason, has_tool_calls)
 }
 
-fn parse_openai_output(output: &[Value]) -> Vec<ContentPart> {
+fn parse_openai_output(output: &[Value], warnings: &mut Vec<Warning>) -> Vec<ContentPart> {
     let mut content = Vec::<ContentPart>::new();
 
     for item in output {
@@ -432,8 +502,17 @@ fn parse_openai_output(output: &[Value]) -> Vec<ContentPart> {
                     continue;
                 };
                 let arguments_raw = item.get("arguments").and_then(Value::as_str).unwrap_or("");
-                let arguments = serde_json::from_str::<Value>(arguments_raw)
-                    .unwrap_or_else(|_| Value::String(arguments_raw.to_string()));
+                let raw = arguments_raw.trim();
+                let raw_json = if raw.is_empty() { "{}" } else { raw };
+                let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
+                    warnings.push(Warning::Compatibility {
+                        feature: "tool_call.arguments".to_string(),
+                        details: format!(
+                            "failed to parse tool_call arguments as JSON for id={call_id}: {err}; preserving raw string"
+                        ),
+                    });
+                    Value::String(arguments_raw.to_string())
+                });
                 content.push(ContentPart::ToolCall {
                     id: call_id.to_string(),
                     name: name.to_string(),
@@ -544,7 +623,7 @@ impl LanguageModel for OpenAI {
         }
 
         let parsed = response.json::<ResponsesApiResponse>().await?;
-        let content = parse_openai_output(&parsed.output);
+        let content = parse_openai_output(&parsed.output, &mut warnings);
         let has_tool_calls = content
             .iter()
             .any(|part| matches!(part, ContentPart::ToolCall { .. }));
@@ -976,6 +1055,7 @@ impl EmbeddingModel for OpenAIEmbeddings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use httpmock::{Method::POST, MockServer};
     use serde_json::json;
 
     #[tokio::test]
@@ -998,6 +1078,32 @@ mod tests {
         let client = OpenAI::from_config(&config, &env).await?;
         assert_eq!(client.provider(), "openai");
         assert_eq!(client.model_id(), "test-model");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_posts_to_files_endpoint() -> crate::Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .header("authorization", "Bearer sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let client = OpenAI::new("sk-test").with_base_url(server.url("/v1"));
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
         Ok(())
     }
 
@@ -1036,6 +1142,30 @@ mod tests {
         assert_eq!(
             input[3].get("type").and_then(Value::as_str),
             Some("function_call_output")
+        );
+    }
+
+    #[test]
+    fn preserves_raw_tool_call_arguments_string() {
+        let messages = vec![Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "c1".to_string(),
+                name: "add".to_string(),
+                arguments: Value::String("{\"a\":1}".to_string()),
+            }],
+        }];
+
+        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        assert!(warnings.is_empty());
+        assert_eq!(input.len(), 1);
+        assert_eq!(
+            input[0].get("type").and_then(Value::as_str),
+            Some("function_call")
+        );
+        assert_eq!(
+            input[0].get("arguments").and_then(Value::as_str),
+            Some("{\"a\":1}")
         );
     }
 
@@ -1084,8 +1214,10 @@ mod tests {
             "arguments": "{\"a\":1,\"b\":2}"
         })];
 
-        let parsed = parse_openai_output(&output);
+        let mut warnings = Vec::<Warning>::new();
+        let parsed = parse_openai_output(&output, &mut warnings);
         assert_eq!(parsed.len(), 1);
+        assert!(warnings.is_empty());
 
         match &parsed[0] {
             ContentPart::ToolCall {
@@ -1096,6 +1228,31 @@ mod tests {
                 assert_eq!(id, "c1");
                 assert_eq!(name, "add");
                 assert_eq!(arguments.get("a").and_then(Value::as_i64), Some(1));
+            }
+            other => panic!("unexpected part: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn preserves_invalid_tool_call_arguments_with_warning() {
+        let output = vec![serde_json::json!({
+            "type": "function_call",
+            "call_id": "c1",
+            "name": "add",
+            "arguments": "{\"a\":1"
+        })];
+
+        let mut warnings = Vec::<Warning>::new();
+        let parsed = parse_openai_output(&output, &mut warnings);
+        assert_eq!(parsed.len(), 1);
+        assert!(warnings.iter().any(|w| matches!(
+            w,
+            Warning::Compatibility { feature, .. } if feature == "tool_call.arguments"
+        )));
+
+        match &parsed[0] {
+            ContentPart::ToolCall { arguments, .. } => {
+                assert_eq!(arguments, &Value::String("{\"a\":1".to_string()));
             }
             other => panic!("unexpected part: {other:?}"),
         }

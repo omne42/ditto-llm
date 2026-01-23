@@ -61,12 +61,13 @@
 - [x] 非流式 `generate`（统一 response：content/finish_reason/usage/warnings）
 - [x] 流式 `stream`（统一 chunks：text/tool_call/usage/finish_reason/response_id/warnings）
 - [ ] （待确认）取消/中断语义：显式 `CancellationToken`/`AbortHandle`（当前依赖 drop stream）
-- [x] （可选）流式聚合器：`collect_stream(StreamResult) -> CollectedStream`（见 `src/stream.rs`）
+- [x] （可选）流式聚合器：`collect_stream(StreamResult) -> CollectedStream`（保序；仅合并相邻 text/reasoning；见 `src/stream.rs`）
 
 ### 2.2 Tools（function calling）
 
 - [x] `tools`/`tool_choice` 映射（含 `strict` 的兼容性处理与 warnings）
 - [x] tool call streaming：增量 args 拼接、多 tool_calls 处理
+- [x] tool_call arguments 的 JSON roundtrip：解析失败保留 raw string，并发出 `Warning::Compatibility(tool_call.arguments)`；回放到 OpenAI/OpenAI-compatible 时不会二次转义
 - [x] JSON Schema → OpenAPI schema（Google tool schema 子集转换）
 - [ ] （可选）工具 schema 的“严格子集”文档化：把支持/不支持关键字写成稳定契约（目前 README 有子集列表，但缺更强约束与测试矩阵）
 
@@ -82,7 +83,7 @@
 
 - [x] Image：url/base64
 - [x] PDF：url/base64/file_id（provider 视情况支持；不支持时 warnings）
-- [ ] （可选）文件上传 helper：把本地 PDF 上传为 `file_id`（OpenAI Files 或等价机制）并复用（避免反复 base64/大请求）
+- [x] （可选）文件上传 helper：把 bytes 上传为 `file_id`（OpenAI `/files`；`OpenAI::{upload_file, upload_file_with_purpose}` / `OpenAICompatible::{...}`）
 
 ### 2.5 Config / Routing（对齐 LiteLLM“代理接入”需求）
 
