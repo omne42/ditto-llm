@@ -452,13 +452,22 @@ impl LanguageModel for OpenAI {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let (input, _warnings) = Self::messages_to_input(&request.messages);
+            let (input, mut warnings) = Self::messages_to_input(&request.messages);
 
             let mut body = Map::<String, Value>::new();
             body.insert("model".to_string(), Value::String(model.to_string()));
             body.insert("input".to_string(), Value::Array(input));
             body.insert("stream".to_string(), Value::Bool(true));
             body.insert("store".to_string(), Value::Bool(false));
+
+            if request.stop_sequences.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "stop_sequences".to_string(),
+                    details: Some(
+                        "OpenAI Responses API stop sequences are not supported".to_string(),
+                    ),
+                });
+            }
 
             if let Some(temperature) = request.temperature {
                 body.insert(
@@ -491,6 +500,11 @@ impl LanguageModel for OpenAI {
                         .map(|t| Self::tool_to_openai(&t))
                         .collect();
                     body.insert("tools".to_string(), Value::Array(mapped));
+                } else {
+                    warnings.push(Warning::Unsupported {
+                        feature: "tools".to_string(),
+                        details: Some("ditto-llm built without tools feature".to_string()),
+                    });
                 }
             }
             if let Some(tool_choice) = request.tool_choice {
@@ -499,7 +513,19 @@ impl LanguageModel for OpenAI {
                         "tool_choice".to_string(),
                         Self::tool_choice_to_openai(&tool_choice),
                     );
+                } else {
+                    warnings.push(Warning::Unsupported {
+                        feature: "tool_choice".to_string(),
+                        details: Some("ditto-llm built without tools feature".to_string()),
+                    });
                 }
+            }
+
+            if request.provider_options.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "provider_options".to_string(),
+                    details: Some("provider_options is not supported yet".to_string()),
+                });
             }
 
             let url = self.responses_url();
@@ -519,9 +545,13 @@ impl LanguageModel for OpenAI {
             }
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
+            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
+            if !warnings.is_empty() {
+                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
+            }
 
             let stream = stream::unfold(
-                (data_stream, VecDeque::<Result<StreamChunk>>::new(), false),
+                (data_stream, buffer, false),
                 |(mut data_stream, mut buffer, mut done)| async move {
                     loop {
                         if let Some(item) = buffer.pop_front() {

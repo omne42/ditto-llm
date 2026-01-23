@@ -629,11 +629,15 @@ impl LanguageModel for Google {
             }
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
+            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
+            if !warnings.is_empty() {
+                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
+            }
 
             let stream = stream::unfold(
                 (
                     data_stream,
-                    VecDeque::<Result<StreamChunk>>::new(),
+                    buffer,
                     false,
                     String::new(),
                     false,
@@ -769,7 +773,6 @@ impl LanguageModel for Google {
                 },
             );
 
-            let _ = warnings;
             Ok(Box::pin(stream))
         }
     }

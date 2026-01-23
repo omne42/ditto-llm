@@ -645,7 +645,7 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let (messages, _warnings) = Self::messages_to_chat_messages(&request.messages);
+            let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
 
             let mut body = Map::<String, Value>::new();
             body.insert("model".to_string(), Value::String(model.to_string()));
@@ -685,22 +685,37 @@ impl LanguageModel for OpenAICompatible {
 
             if let Some(tools) = request.tools {
                 if cfg!(feature = "tools") {
-                    let mut warnings = Vec::<Warning>::new();
                     let mapped = tools
                         .iter()
                         .map(|t| Self::tool_to_openai(t, &mut warnings))
                         .collect();
                     body.insert("tools".to_string(), Value::Array(mapped));
+                } else {
+                    warnings.push(Warning::Unsupported {
+                        feature: "tools".to_string(),
+                        details: Some("ditto-llm built without tools feature".to_string()),
+                    });
                 }
             }
             if let Some(tool_choice) = request.tool_choice {
                 if cfg!(feature = "tools") {
-                    let mut warnings = Vec::<Warning>::new();
                     body.insert(
                         "tool_choice".to_string(),
                         Self::tool_choice_to_openai(&tool_choice, &mut warnings),
                     );
+                } else {
+                    warnings.push(Warning::Unsupported {
+                        feature: "tool_choice".to_string(),
+                        details: Some("ditto-llm built without tools feature".to_string()),
+                    });
                 }
+            }
+
+            if request.provider_options.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "provider_options".to_string(),
+                    details: Some("provider_options is not supported yet".to_string()),
+                });
             }
 
             let url = self.chat_completions_url();
@@ -721,13 +736,12 @@ impl LanguageModel for OpenAICompatible {
             }
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
+            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
+            if !warnings.is_empty() {
+                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
+            }
             let stream = stream::unfold(
-                (
-                    data_stream,
-                    VecDeque::<Result<StreamChunk>>::new(),
-                    StreamState::default(),
-                    false,
-                ),
+                (data_stream, buffer, StreamState::default(), false),
                 |(mut data_stream, mut buffer, mut state, mut done)| async move {
                     loop {
                         if let Some(item) = buffer.pop_front() {
