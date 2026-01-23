@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.).
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
+- Provider builders accept a custom `reqwest::Client` via `with_http_client` (proxy/headers/timeout customization).
 - Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`, `multimodal`.
 - Roadmap: `TODO.md` with a scoped capability checklist (LiteLLM / AI SDK aligned).
 - Optional integration smoke tests behind the `integration` feature (requires real API keys).

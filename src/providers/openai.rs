@@ -39,6 +39,11 @@ impl OpenAI {
         }
     }
 
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
+    }
+
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = base_url.into();
         self
@@ -852,6 +857,11 @@ impl OpenAIEmbeddings {
             api_key: api_key.into(),
             model: String::new(),
         }
+    }
+
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {

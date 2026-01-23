@@ -51,6 +51,16 @@ let collected = collect_stream(stream).await?;
 println!("{}", collected.response.text());
 ```
 
+## Custom HTTP Client
+
+Providers accept a custom `reqwest::Client` so you can configure timeouts, proxies, and default
+headers (e.g. enterprise gateways):
+
+```rust
+let http = reqwest::Client::builder().build()?;
+let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
+```
+
 ## Development
 
 Enable repo-local git hooks:

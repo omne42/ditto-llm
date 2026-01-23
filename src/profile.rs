@@ -243,6 +243,11 @@ impl OpenAiCompatibleClient {
         })
     }
 
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
+    }
+
     fn models_url(&self) -> String {
         let base = self.base_url.trim_end_matches('/');
         if base.ends_with("/models") {

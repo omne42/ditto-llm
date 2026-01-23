@@ -110,8 +110,8 @@
 - [ ] **ProviderAuth 扩展**（如果需要直连 Azure/企业网关/非 Bearer 兼容实现）
   - DoD：新增受控的 auth/header 表达（不要把它做成“无类型 JSON 垃圾桶”），并补齐单测覆盖
 
-- [ ] **HTTP client 可配置化**（timeout/custom headers/proxy）
-  - DoD：保持默认简单，但允许调用方（或 config）覆盖；有最小单测验证“覆盖生效”
+- [x] **HTTP client 可配置化（调用方注入）**：各 provider 提供 `with_http_client(reqwest::Client)`
+  - DoD：保持默认简单，但允许调用方覆盖（timeout/custom headers/proxy 等由 reqwest 负责）
 
 - [x] **Stream 聚合器（可选）**：`StreamChunk` → `GenerateResponse`
   - DoD：支持 text + tool_calls + usage + finish_reason + warnings；行为有单测（见 `src/stream.rs`）
