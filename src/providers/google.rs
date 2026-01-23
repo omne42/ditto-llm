@@ -888,3 +888,56 @@ impl EmbeddingModel for GoogleEmbeddings {
         Ok(parsed.embeddings.into_iter().map(|e| e.values).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn converts_system_to_system_instruction() -> crate::Result<()> {
+        let mut warnings = Vec::new();
+        let tool_names = HashMap::new();
+        let (contents, system) = Google::convert_messages(
+            "gemini-pro",
+            &[Message::system("sys"), Message::user("hi")],
+            &tool_names,
+            &mut warnings,
+        )?;
+        assert_eq!(warnings.len(), 0);
+        assert_eq!(contents.len(), 1);
+        assert!(system.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn tool_choice_maps_to_tool_config() {
+        let config = Google::tool_config(Some(&ToolChoice::Tool {
+            name: "add".to_string(),
+        }))
+        .expect("tool config");
+        assert_eq!(
+            config
+                .get("functionCallingConfig")
+                .and_then(|v| v.get("mode"))
+                .and_then(Value::as_str),
+            Some("ANY")
+        );
+    }
+
+    #[test]
+    fn tool_declaration_converts_schema() {
+        let tool = Tool {
+            name: "add".to_string(),
+            description: Some("add".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": { "a": { "type": "integer" } }
+            }),
+            strict: None,
+        };
+        let decl = Google::tool_to_google(tool);
+        assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
+        assert!(decl.get("parameters").is_some());
+    }
+}

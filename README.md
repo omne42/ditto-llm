@@ -2,11 +2,27 @@
 
 Standalone Rust crate extracted from CodePM.
 
+Ditto-LLM is a small Rust SDK that provides a unified interface for calling multiple LLM providers.
+
 Current scope:
 
-- Provider profile config (`base_url` / auth / model whitelist / capability flags)
-- OpenAI-compatible `GET /models` discovery
-- Model-level `thinking` config (mapped by consumers to `reasoning.effort`)
+- Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
+- Providers:
+  - OpenAI Responses API (generate + SSE streaming) and embeddings
+  - Anthropic Messages API (generate + SSE streaming)
+  - Google GenAI (generate + SSE streaming) and embeddings
+- Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
+
+## Examples
+
+Examples expect provider API keys in environment variables.
+
+```bash
+cargo run --example basic
+cargo run --example streaming
+cargo run --example tool_calling
+cargo run --example embeddings
+```
 
 ## Development
 

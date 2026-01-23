@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
+- Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
+- Streaming + tool calling support across providers (with compatibility warnings when unsupported).
+- Examples: `basic`, `streaming`, `tool_calling`, `embeddings`.
+- Utilities: generic SSE parsing and JSON Schema → OpenAPI schema conversion (for tool schemas).
+
 ### Changed
 
 - Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).

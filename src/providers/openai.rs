@@ -655,7 +655,7 @@ impl OpenAIEmbeddings {
         self
     }
 
-    fn resolve_model<'a>(&'a self) -> Result<&'a str> {
+    fn resolve_model(&self) -> Result<&str> {
         if !self.model.trim().is_empty() {
             return Ok(self.model.as_str());
         }
@@ -717,5 +717,75 @@ impl EmbeddingModel for OpenAIEmbeddings {
 
         let parsed = response.json::<EmbeddingsResponse>().await?;
         Ok(parsed.data.into_iter().map(|item| item.embedding).collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn converts_messages_to_responses_input() {
+        let messages = vec![
+            Message::system("sys"),
+            Message::user("hi"),
+            Message {
+                role: Role::Assistant,
+                content: vec![ContentPart::ToolCall {
+                    id: "c1".to_string(),
+                    name: "add".to_string(),
+                    arguments: json!({ "a": 1, "b": 2 }),
+                }],
+            },
+            Message {
+                role: Role::Tool,
+                content: vec![ContentPart::ToolResult {
+                    tool_call_id: "c1".to_string(),
+                    content: "{\"result\":3}".to_string(),
+                    is_error: None,
+                }],
+            },
+        ];
+
+        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        assert!(warnings.is_empty());
+        assert_eq!(input.len(), 4);
+        assert_eq!(input[0].get("role").and_then(Value::as_str), Some("system"));
+        assert_eq!(input[1].get("role").and_then(Value::as_str), Some("user"));
+        assert_eq!(
+            input[2].get("type").and_then(Value::as_str),
+            Some("function_call")
+        );
+        assert_eq!(
+            input[3].get("type").and_then(Value::as_str),
+            Some("function_call_output")
+        );
+    }
+
+    #[test]
+    fn parses_function_call_from_output() {
+        let output = vec![serde_json::json!({
+            "type": "function_call",
+            "call_id": "c1",
+            "name": "add",
+            "arguments": "{\"a\":1,\"b\":2}"
+        })];
+
+        let parsed = parse_openai_output(&output);
+        assert_eq!(parsed.len(), 1);
+
+        match &parsed[0] {
+            ContentPart::ToolCall {
+                id,
+                name,
+                arguments,
+            } => {
+                assert_eq!(id, "c1");
+                assert_eq!(name, "add");
+                assert_eq!(arguments.get("a").and_then(Value::as_i64), Some(1));
+            }
+            other => panic!("unexpected part: {other:?}"),
+        }
     }
 }

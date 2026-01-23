@@ -15,11 +15,10 @@ fn is_empty_object_schema(schema: &Value) -> bool {
     if properties_len != 0 {
         return false;
     }
-    match obj.get("additionalProperties") {
-        None => true,
-        Some(Value::Bool(false)) => true,
-        _ => false,
-    }
+    matches!(
+        obj.get("additionalProperties"),
+        None | Some(Value::Bool(false))
+    )
 }
 
 pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> Option<Value> {

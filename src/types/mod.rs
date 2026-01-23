@@ -102,7 +102,7 @@ pub enum ToolChoice {
     Tool { name: String },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum FinishReason {
     Stop,
@@ -110,13 +110,8 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     Error,
+    #[default]
     Unknown,
-}
-
-impl Default for FinishReason {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
