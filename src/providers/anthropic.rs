@@ -425,6 +425,14 @@ impl LanguageModel for Anthropic {
                 ),
             });
         }
+        if provider_options.parallel_tool_calls == Some(true) {
+            warnings.push(Warning::Unsupported {
+                feature: "parallel_tool_calls".to_string(),
+                details: Some(
+                    "Anthropic Messages API does not support parallel_tool_calls".to_string(),
+                ),
+            });
+        }
         let tool_names = Self::build_tool_name_map(&request.messages);
 
         let mut system = Vec::<String>::new();
@@ -577,6 +585,14 @@ impl LanguageModel for Anthropic {
                     feature: "response_format".to_string(),
                     details: Some(
                         "Anthropic Messages API does not support response_format".to_string(),
+                    ),
+                });
+            }
+            if provider_options.parallel_tool_calls == Some(true) {
+                warnings.push(Warning::Unsupported {
+                    feature: "parallel_tool_calls".to_string(),
+                    details: Some(
+                        "Anthropic Messages API does not support parallel_tool_calls".to_string(),
                     ),
                 });
             }

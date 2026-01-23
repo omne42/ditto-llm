@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming emits request conversion warnings via `StreamChunk::Warnings`.
 - Controlled request options via `ProviderOptions` (`reasoning_effort`, `response_format`).
 - Streaming emits response ids (when available) via `StreamChunk::ResponseId`.
+- OpenAI-only options via `ProviderOptions`: `parallel_tool_calls`.
 
 ### Changed
 

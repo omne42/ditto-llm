@@ -275,6 +275,12 @@ fn apply_provider_options(
             serde_json::to_value(response_format)?,
         );
     }
+    if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
+        body.insert(
+            "parallel_tool_calls".to_string(),
+            Value::Bool(parallel_tool_calls),
+        );
+    }
     Ok(())
 }
 
@@ -1018,6 +1024,7 @@ mod tests {
                     strict: Some(true),
                 },
             }),
+            parallel_tool_calls: Some(false),
         };
 
         apply_provider_options(&mut body, &options)?;
@@ -1034,6 +1041,7 @@ mod tests {
                 }
             }))
         );
+        assert_eq!(body.get("parallel_tool_calls"), Some(&json!(false)));
         Ok(())
     }
 

@@ -662,6 +662,12 @@ impl LanguageModel for OpenAICompatible {
                 serde_json::to_value(response_format)?,
             );
         }
+        if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
+            body.insert(
+                "parallel_tool_calls".to_string(),
+                Value::Bool(parallel_tool_calls),
+            );
+        }
 
         let url = self.chat_completions_url();
         let mut req = self.http.post(url);
@@ -806,6 +812,12 @@ impl LanguageModel for OpenAICompatible {
                 body.insert(
                     "response_format".to_string(),
                     serde_json::to_value(response_format)?,
+                );
+            }
+            if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
+                body.insert(
+                    "parallel_tool_calls".to_string(),
+                    Value::Bool(parallel_tool_calls),
                 );
             }
 

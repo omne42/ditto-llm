@@ -418,6 +418,12 @@ impl LanguageModel for Google {
                 details: Some("Google GenAI does not support response_format".to_string()),
             });
         }
+        if provider_options.parallel_tool_calls == Some(true) {
+            warnings.push(Warning::Unsupported {
+                feature: "parallel_tool_calls".to_string(),
+                details: Some("Google GenAI does not support parallel_tool_calls".to_string()),
+            });
+        }
         let tool_names = Self::build_tool_name_map(&request.messages);
         let (contents, system_instruction) =
             Self::convert_messages(&model, &request.messages, &tool_names, &mut warnings)?;
@@ -567,6 +573,12 @@ impl LanguageModel for Google {
                 warnings.push(Warning::Unsupported {
                     feature: "response_format".to_string(),
                     details: Some("Google GenAI does not support response_format".to_string()),
+                });
+            }
+            if provider_options.parallel_tool_calls == Some(true) {
+                warnings.push(Warning::Unsupported {
+                    feature: "parallel_tool_calls".to_string(),
+                    details: Some("Google GenAI does not support parallel_tool_calls".to_string()),
                 });
             }
             let tool_names = Self::build_tool_name_map(&request.messages);
