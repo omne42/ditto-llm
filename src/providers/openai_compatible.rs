@@ -53,7 +53,11 @@ impl OpenAICompatible {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &[
+            "OPENAI_COMPAT_API_KEY",
+            "OPENAI_API_KEY",
+            "CODE_PM_OPENAI_API_KEY",
+        ];
 
         let api_key = match config.auth.clone() {
             Some(auth) => resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?,
@@ -64,6 +68,12 @@ impl OpenAICompatible {
         };
 
         let mut out = Self::new(api_key);
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                std::time::Duration::from_secs(300),
+                &config.http_headers,
+            )?);
+        }
         if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
             out = out.with_base_url(base_url);
         }

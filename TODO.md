@@ -88,10 +88,8 @@
 
 - [x] `ProviderConfig`/`ProviderAuth`/`.env` 解析
 - [x] OpenAI-compatible `GET /models` 发现（用于模型列表与 allowlist）
-- [ ] （待确认）更通用的 auth/header：
-  - 支持非 Bearer header（例如 `api-key`）、query param、或自定义 header map
-  - 目的：减少“必须上 LiteLLM proxy 才能接某些 OpenAI-compatible/企业网关”的依赖
-- [ ] （可选）HTTP client 配置：timeout/proxy/custom headers（现在 timeout 固定 300s）
+- [x] 默认 HTTP headers：`ProviderConfig.http_headers`（from_config + `/models` 发现会应用）
+- [ ] （待确认）更通用的 auth 形态：非 Bearer header / query param（如果要直连某些企业网关）
 
 ---
 
@@ -112,6 +110,8 @@
 
 - [x] **HTTP client 可配置化（调用方注入）**：各 provider 提供 `with_http_client(reqwest::Client)`
   - DoD：保持默认简单，但允许调用方覆盖（timeout/custom headers/proxy 等由 reqwest 负责）
+
+- [x] **Config 默认 headers**：`ProviderConfig.http_headers`（无需写代码即可为网关/代理附加 header）
 
 - [x] **Stream 聚合器（可选）**：`StreamChunk` → `GenerateResponse`
   - DoD：支持 text + tool_calls + usage + finish_reason + warnings；行为有单测（见 `src/stream.rs`）

@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use async_trait::async_trait;
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 
 use crate::{DittoError, Result};
@@ -77,9 +79,48 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub model_whitelist: Vec<String>,
     #[serde(default)]
+    pub http_headers: BTreeMap<String, String>,
+    #[serde(default)]
     pub auth: Option<ProviderAuth>,
     #[serde(default)]
     pub capabilities: Option<ProviderCapabilities>,
+}
+
+fn header_map_from_pairs(headers: &BTreeMap<String, String>) -> Result<HeaderMap> {
+    let mut out = HeaderMap::new();
+    for (name, value) in headers {
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|err| {
+            DittoError::InvalidResponse(format!("invalid http header name {name:?}: {err}"))
+        })?;
+
+        let header_value = HeaderValue::from_str(value).map_err(|err| {
+            DittoError::InvalidResponse(format!(
+                "invalid http header value for {name:?} (value={value:?}): {err}"
+            ))
+        })?;
+
+        out.insert(header_name, header_value);
+    }
+    Ok(out)
+}
+
+pub(crate) fn build_http_client(
+    timeout: Duration,
+    headers: &BTreeMap<String, String>,
+) -> Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder().timeout(timeout);
+    if !headers.is_empty() {
+        builder = builder.default_headers(header_map_from_pairs(headers)?);
+    }
+    builder.build().map_err(DittoError::Http)
+}
+
+fn resolve_optional_env_token(env: &Env, keys: &[&str]) -> String {
+    keys.iter().find_map(|key| env.get(key)).unwrap_or_default()
 }
 
 #[async_trait]
@@ -96,6 +137,7 @@ pub struct OpenAiProvider {
     bearer_token: String,
     model_whitelist: Vec<String>,
     capabilities: ProviderCapabilities,
+    http: reqwest::Client,
 }
 
 impl OpenAiProvider {
@@ -104,14 +146,21 @@ impl OpenAiProvider {
         config: &ProviderConfig,
         env: &Env,
     ) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &[
+            "OPENAI_API_KEY",
+            "CODE_PM_OPENAI_API_KEY",
+            "OPENAI_COMPAT_API_KEY",
+        ];
+
         let base_url = config.base_url.as_deref().ok_or_else(|| {
             DittoError::InvalidResponse("provider base_url is missing".to_string())
         })?;
-        let auth = config
-            .auth
-            .clone()
-            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let bearer_token = resolve_auth_token(&auth, env).await?;
+        let bearer_token = match config.auth.clone() {
+            Some(auth) => resolve_auth_token(&auth, env).await?,
+            None => resolve_optional_env_token(env, DEFAULT_KEYS),
+        };
+
+        let http = build_http_client(Duration::from_secs(300), &config.http_headers)?;
 
         Ok(Self {
             name: name.into(),
@@ -121,6 +170,7 @@ impl OpenAiProvider {
             capabilities: config
                 .capabilities
                 .unwrap_or_else(ProviderCapabilities::openai_responses),
+            http,
         })
     }
 }
@@ -136,7 +186,8 @@ impl Provider for OpenAiProvider {
     }
 
     async fn list_models(&self) -> Result<Vec<String>> {
-        let client = OpenAiCompatibleClient::new(self.bearer_token.clone(), self.base_url.clone())?;
+        let client = OpenAiCompatibleClient::new(self.bearer_token.clone(), self.base_url.clone())?
+            .with_http_client(self.http.clone());
         let models = client.list_models().await?;
         Ok(filter_models_whitelist(models, &self.model_whitelist))
     }
@@ -270,12 +321,11 @@ impl OpenAiCompatibleClient {
         }
 
         let url = self.models_url();
-        let response = self
-            .http
-            .get(url)
-            .bearer_auth(&self.bearer_token)
-            .send()
-            .await?;
+        let mut req = self.http.get(url);
+        if !self.bearer_token.trim().is_empty() {
+            req = req.bearer_auth(&self.bearer_token);
+        }
+        let response = req.send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -314,16 +364,22 @@ pub fn filter_models_whitelist(models: Vec<String>, whitelist: &[String]) -> Vec
 }
 
 pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Result<Vec<String>> {
+    const DEFAULT_KEYS: &[&str] = &[
+        "OPENAI_API_KEY",
+        "CODE_PM_OPENAI_API_KEY",
+        "OPENAI_COMPAT_API_KEY",
+    ];
+
     let base_url = provider
         .base_url
         .as_deref()
         .ok_or_else(|| DittoError::InvalidResponse("provider base_url is missing".to_string()))?;
-    let auth = provider
-        .auth
-        .clone()
-        .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-    let token = resolve_auth_token(&auth, env).await?;
-    let client = OpenAiCompatibleClient::new(token, base_url.to_string())?;
+    let token = match provider.auth.clone() {
+        Some(auth) => resolve_auth_token(&auth, env).await?,
+        None => resolve_optional_env_token(env, DEFAULT_KEYS),
+    };
+    let http = build_http_client(Duration::from_secs(300), &provider.http_headers)?;
+    let client = OpenAiCompatibleClient::new(token, base_url.to_string())?.with_http_client(http);
     let models = client.list_models().await?;
     Ok(filter_models_whitelist(models, &provider.model_whitelist))
 }
@@ -427,6 +483,43 @@ EMPTY=
         );
         assert_eq!(parsed.get("FOO").map(String::as_str), Some("bar"));
         assert_eq!(parsed.get("EMPTY"), None);
+    }
+
+    #[test]
+    fn http_headers_accept_valid_pairs() -> Result<()> {
+        let headers = BTreeMap::from([
+            ("x-test".to_string(), "value".to_string()),
+            ("x-other".to_string(), "123".to_string()),
+        ]);
+        let parsed = header_map_from_pairs(&headers)?;
+        assert_eq!(
+            parsed
+                .get("x-test")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default(),
+            "value"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn http_headers_reject_invalid_name() {
+        let headers = BTreeMap::from([("bad header".to_string(), "value".to_string())]);
+        let err = header_map_from_pairs(&headers).expect_err("should reject invalid header name");
+        match err {
+            DittoError::InvalidResponse(_) => {}
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn http_headers_reject_invalid_value() {
+        let headers = BTreeMap::from([("x-test".to_string(), "bad\nvalue".to_string())]);
+        let err = header_map_from_pairs(&headers).expect_err("should reject invalid header value");
+        match err {
+            DittoError::InvalidResponse(_) => {}
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

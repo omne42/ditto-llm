@@ -61,6 +61,9 @@ let http = reqwest::Client::builder().build()?;
 let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
 ```
 
+When building providers from config, you can also set default headers via
+`ProviderConfig.http_headers`.
+
 ## Development
 
 Enable repo-local git hooks:

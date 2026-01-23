@@ -72,6 +72,12 @@ impl Anthropic {
         let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
 
         let mut out = Self::new(api_key);
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                std::time::Duration::from_secs(300),
+                &config.http_headers,
+            )?);
+        }
         if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
             out = out.with_base_url(base_url);
         }
