@@ -282,6 +282,10 @@ fn apply_provider_options(
 struct ResponsesApiResponse {
     id: String,
     #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    incomplete_details: Option<Value>,
+    #[serde(default)]
     output: Vec<Value>,
     #[serde(default)]
     usage: Option<Value>,
@@ -297,6 +301,52 @@ struct ResponsesStreamEvent {
     item: Option<Value>,
     #[serde(default)]
     delta: Option<String>,
+}
+
+fn map_responses_finish_reason(
+    status: Option<&str>,
+    incomplete_reason: Option<&str>,
+    has_tool_calls: bool,
+) -> FinishReason {
+    match status {
+        Some("completed") | Some("done") => {
+            if has_tool_calls {
+                FinishReason::ToolCalls
+            } else {
+                FinishReason::Stop
+            }
+        }
+        Some("incomplete") => match incomplete_reason {
+            Some("max_output_tokens") | Some("max_tokens") => FinishReason::Length,
+            Some("content_filter") | Some("content_filtered") => FinishReason::ContentFilter,
+            Some("tool_calls") => FinishReason::ToolCalls,
+            _ => FinishReason::Length,
+        },
+        Some("failed") | Some("cancelled") | Some("canceled") | Some("error") => {
+            FinishReason::Error
+        }
+        _ => FinishReason::Unknown,
+    }
+}
+
+fn finish_reason_for_final_event(
+    event_kind: &str,
+    response: Option<&Value>,
+    has_tool_calls: bool,
+) -> FinishReason {
+    let response_status = response.and_then(|resp| resp.get("status").and_then(Value::as_str));
+    let response_incomplete_reason = response
+        .and_then(|resp| resp.get("incomplete_details"))
+        .and_then(|details| details.get("reason"))
+        .and_then(Value::as_str);
+
+    let status = response_status.or(match event_kind {
+        "response.incomplete" => Some("incomplete"),
+        "response.completed" | "response.done" => Some("completed"),
+        _ => None,
+    });
+
+    map_responses_finish_reason(status, response_incomplete_reason, has_tool_calls)
 }
 
 fn parse_openai_output(output: &[Value]) -> Vec<ContentPart> {
@@ -447,15 +497,27 @@ impl LanguageModel for OpenAI {
 
         let parsed = response.json::<ResponsesApiResponse>().await?;
         let content = parse_openai_output(&parsed.output);
+        let has_tool_calls = content
+            .iter()
+            .any(|part| matches!(part, ContentPart::ToolCall { .. }));
         let usage = parsed
             .usage
             .as_ref()
             .map(Self::parse_usage)
             .unwrap_or_default();
+        let finish_reason = map_responses_finish_reason(
+            parsed.status.as_deref(),
+            parsed
+                .incomplete_details
+                .as_ref()
+                .and_then(|details| details.get("reason"))
+                .and_then(Value::as_str),
+            has_tool_calls,
+        );
 
         Ok(GenerateResponse {
             content,
-            finish_reason: FinishReason::Unknown,
+            finish_reason,
             usage,
             warnings,
             provider_metadata: Some(serde_json::json!({ "id": parsed.id })),
@@ -569,11 +631,11 @@ impl LanguageModel for OpenAI {
             }
 
             let stream = stream::unfold(
-                (data_stream, buffer, false),
-                |(mut data_stream, mut buffer, mut done)| async move {
+                (data_stream, buffer, false, false),
+                |(mut data_stream, mut buffer, mut done, mut has_tool_calls)| async move {
                     loop {
                         if let Some(item) = buffer.pop_front() {
-                            return Some((item, (data_stream, buffer, done)));
+                            return Some((item, (data_stream, buffer, done, has_tool_calls)));
                         }
 
                         if done {
@@ -608,6 +670,7 @@ impl LanguageModel for OpenAI {
                                             {
                                                 continue;
                                             }
+                                            has_tool_calls = true;
                                             let Some(call_id) =
                                                 item.get("call_id").and_then(Value::as_str)
                                             else {
@@ -653,18 +716,22 @@ impl LanguageModel for OpenAI {
                                                         Self::parse_usage(usage),
                                                     )));
                                                 }
-                                                let finish_reason =
-                                                    if event.kind == "response.incomplete" {
-                                                        FinishReason::Length
-                                                    } else {
-                                                        FinishReason::Stop
-                                                    };
+                                                let finish_reason = finish_reason_for_final_event(
+                                                    &event.kind,
+                                                    Some(&resp),
+                                                    has_tool_calls,
+                                                );
                                                 buffer.push_back(Ok(StreamChunk::FinishReason(
                                                     finish_reason,
                                                 )));
                                             } else {
+                                                let finish_reason = finish_reason_for_final_event(
+                                                    &event.kind,
+                                                    None,
+                                                    has_tool_calls,
+                                                );
                                                 buffer.push_back(Ok(StreamChunk::FinishReason(
-                                                    FinishReason::Stop,
+                                                    finish_reason,
                                                 )));
                                             }
                                         }
@@ -934,5 +1001,51 @@ mod tests {
             }))
         );
         Ok(())
+    }
+
+    #[test]
+    fn maps_responses_finish_reason_completed_to_stop_or_tool_calls() {
+        assert_eq!(
+            map_responses_finish_reason(Some("completed"), None, false),
+            FinishReason::Stop
+        );
+        assert_eq!(
+            map_responses_finish_reason(Some("completed"), None, true),
+            FinishReason::ToolCalls
+        );
+    }
+
+    #[test]
+    fn maps_responses_finish_reason_incomplete_reason() {
+        assert_eq!(
+            map_responses_finish_reason(Some("incomplete"), Some("max_output_tokens"), false),
+            FinishReason::Length
+        );
+        assert_eq!(
+            map_responses_finish_reason(Some("incomplete"), Some("content_filter"), false),
+            FinishReason::ContentFilter
+        );
+    }
+
+    #[test]
+    fn finish_reason_for_final_event_prefers_response_payload() {
+        let response = json!({
+            "status": "completed",
+            "incomplete_details": { "reason": "max_output_tokens" }
+        });
+
+        assert_eq!(
+            finish_reason_for_final_event("response.incomplete", Some(&response), false),
+            FinishReason::Stop
+        );
+    }
+
+    #[test]
+    fn finish_reason_for_final_event_marks_tool_calls() {
+        let response = json!({ "status": "completed" });
+        assert_eq!(
+            finish_reason_for_final_event("response.completed", Some(&response), true),
+            FinishReason::ToolCalls
+        );
     }
 }

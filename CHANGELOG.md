@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).
 - Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
 
+### Fixed
+
+- OpenAI Responses: map `finish_reason` consistently (generate + stream), including tool-call completion.
+- OpenAI-compatible streaming: flush pending tool calls and always emit a final `FinishReason` even if the provider omits it.
+
 ## [0.1.1] - 2026-01-23
 
 ### Added

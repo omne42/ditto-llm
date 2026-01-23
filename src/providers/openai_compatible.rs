@@ -416,6 +416,72 @@ struct StreamState {
 }
 
 #[cfg(feature = "streaming")]
+fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
+    let mut out = Vec::<StreamChunk>::new();
+    let mut warnings = Vec::<Warning>::new();
+
+    for (idx, slot) in state.tool_calls.iter_mut().enumerate() {
+        if slot.started {
+            continue;
+        }
+
+        let name = slot.name.as_deref().unwrap_or("").trim();
+        let has_any_data = slot.id.as_deref().is_some_and(|v| !v.trim().is_empty())
+            || !name.is_empty()
+            || !slot.pending_arguments.is_empty();
+
+        if !has_any_data {
+            continue;
+        }
+
+        let id = match slot.id.as_deref().filter(|v| !v.trim().is_empty()) {
+            Some(id) => id.to_string(),
+            None => {
+                let synthesized = format!("call_{idx}");
+                slot.id = Some(synthesized.clone());
+                warnings.push(Warning::Compatibility {
+                    feature: "tool_call.id".to_string(),
+                    details: format!(
+                        "stream ended before tool_call id was received; synthesizing {synthesized}"
+                    ),
+                });
+                synthesized
+            }
+        };
+
+        if name.is_empty() {
+            warnings.push(Warning::Compatibility {
+                feature: "tool_call.name".to_string(),
+                details: format!(
+                    "stream ended before tool_call name was received for id={id}; dropping tool call"
+                ),
+            });
+            slot.pending_arguments.clear();
+            continue;
+        }
+
+        out.push(StreamChunk::ToolCallStart {
+            id: id.clone(),
+            name: name.to_string(),
+        });
+        slot.started = true;
+
+        if !slot.pending_arguments.is_empty() {
+            out.push(StreamChunk::ToolCallDelta {
+                id,
+                arguments_delta: std::mem::take(&mut slot.pending_arguments),
+            });
+        }
+    }
+
+    if !warnings.is_empty() {
+        out.insert(0, StreamChunk::Warnings { warnings });
+    }
+
+    out
+}
+
+#[cfg(feature = "streaming")]
 fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamChunk>, bool)> {
     let chunk = serde_json::from_str::<ChatCompletionsChunk>(data)?;
     let mut out = Vec::<StreamChunk>::new();
@@ -487,6 +553,7 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     }
 
     if let Some(reason) = choice.finish_reason.as_deref() {
+        out.extend(finalize_stream_state(state));
         done = true;
         out.push(StreamChunk::FinishReason(
             OpenAICompatible::parse_finish_reason(Some(reason)),
@@ -786,7 +853,21 @@ impl LanguageModel for OpenAICompatible {
                                 done = true;
                                 buffer.push_back(Err(err));
                             }
-                            None => return None,
+                            None => {
+                                done = true;
+                                for chunk in finalize_stream_state(&mut state) {
+                                    buffer.push_back(Ok(chunk));
+                                }
+                                let has_tool_calls =
+                                    state.tool_calls.iter().any(|slot| slot.started);
+                                buffer.push_back(Ok(StreamChunk::FinishReason(
+                                    if has_tool_calls {
+                                        FinishReason::ToolCalls
+                                    } else {
+                                        FinishReason::Stop
+                                    },
+                                )));
+                            }
                         }
                     }
                 },
@@ -921,6 +1002,64 @@ mod tests {
             ]
         );
 
+        Ok(())
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn flushes_tool_call_without_id_on_finish_reason() -> Result<()> {
+        let mut state = StreamState::default();
+
+        let (chunks, done) = parse_stream_data(
+            &mut state,
+            &serde_json::json!({
+                "choices": [{
+                    "delta": {
+                        "tool_calls": [{
+                            "index": 0,
+                            "function": { "name": "add", "arguments": "{\"a\": 1" }
+                        }]
+                    }
+                }]
+            })
+            .to_string(),
+        )?;
+        assert!(!done);
+        assert!(chunks.is_empty());
+
+        let (chunks, done) = parse_stream_data(
+            &mut state,
+            &serde_json::json!({
+                "choices": [{
+                    "delta": {},
+                    "finish_reason": "tool_calls"
+                }]
+            })
+            .to_string(),
+        )?;
+        assert!(done);
+        assert!(
+            matches!(chunks.first(), Some(StreamChunk::Warnings { .. })),
+            "expected warnings for synthesized tool_call id"
+        );
+        assert!(
+            chunks
+                .iter()
+                .any(|c| matches!(c, StreamChunk::ToolCallStart { .. })),
+            "expected tool call start"
+        );
+        assert!(
+            chunks
+                .iter()
+                .any(|c| matches!(c, StreamChunk::ToolCallDelta { .. })),
+            "expected tool call delta"
+        );
+        assert!(
+            chunks
+                .iter()
+                .any(|c| matches!(c, StreamChunk::FinishReason(FinishReason::ToolCalls))),
+            "expected finish reason tool_calls"
+        );
         Ok(())
     }
 }
