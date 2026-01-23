@@ -214,12 +214,101 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
         out.insert("minLength".to_string(), Value::Number(min_length.into()));
     }
 
+    if let Some(max_length) = input.get("maxLength").and_then(Value::as_u64) {
+        out.insert("maxLength".to_string(), Value::Number(max_length.into()));
+    }
+
+    if let Some(pattern) = input.get("pattern").and_then(Value::as_str) {
+        out.insert("pattern".to_string(), Value::String(pattern.to_string()));
+    }
+
+    if let Some(min_items) = input.get("minItems").and_then(Value::as_u64) {
+        out.insert("minItems".to_string(), Value::Number(min_items.into()));
+    }
+
+    if let Some(max_items) = input.get("maxItems").and_then(Value::as_u64) {
+        out.insert("maxItems".to_string(), Value::Number(max_items.into()));
+    }
+
+    if let Some(unique_items) = input.get("uniqueItems").and_then(Value::as_bool) {
+        out.insert("uniqueItems".to_string(), Value::Bool(unique_items));
+    }
+
+    if let Some(min_properties) = input.get("minProperties").and_then(Value::as_u64) {
+        out.insert(
+            "minProperties".to_string(),
+            Value::Number(min_properties.into()),
+        );
+    }
+
+    if let Some(max_properties) = input.get("maxProperties").and_then(Value::as_u64) {
+        out.insert(
+            "maxProperties".to_string(),
+            Value::Number(max_properties.into()),
+        );
+    }
+
+    if let Some(additional_properties) = input.get("additionalProperties") {
+        let mapped = match additional_properties {
+            Value::Bool(value) => Value::Bool(*value),
+            Value::Object(_) | Value::Array(_) => {
+                convert_json_schema_to_openapi_schema(additional_properties, false)
+                    .unwrap_or(Value::Null)
+            }
+            other => other.clone(),
+        };
+        out.insert("additionalProperties".to_string(), mapped);
+    }
+
+    if let Some(default_value) = input.get("default") {
+        out.insert("default".to_string(), default_value.clone());
+    }
+
+    if let Some(title) = input.get("title").and_then(Value::as_str) {
+        out.insert("title".to_string(), Value::String(title.to_string()));
+    }
+
+    if let Some(Value::Number(n)) = input.get("minimum") {
+        out.insert("minimum".to_string(), Value::Number(n.clone()));
+    }
+
+    if let Some(Value::Number(n)) = input.get("maximum") {
+        out.insert("maximum".to_string(), Value::Number(n.clone()));
+    }
+
+    if let Some(Value::Number(n)) = input.get("multipleOf") {
+        out.insert("multipleOf".to_string(), Value::Number(n.clone()));
+    }
+
+    match input.get("exclusiveMinimum") {
+        Some(Value::Number(n)) => {
+            out.insert("exclusiveMinimum".to_string(), Value::Bool(true));
+            out.insert("minimum".to_string(), Value::Number(n.clone()));
+        }
+        Some(Value::Bool(v)) => {
+            out.insert("exclusiveMinimum".to_string(), Value::Bool(*v));
+        }
+        _ => {}
+    }
+
+    match input.get("exclusiveMaximum") {
+        Some(Value::Number(n)) => {
+            out.insert("exclusiveMaximum".to_string(), Value::Bool(true));
+            out.insert("maximum".to_string(), Value::Number(n.clone()));
+        }
+        Some(Value::Bool(v)) => {
+            out.insert("exclusiveMaximum".to_string(), Value::Bool(*v));
+        }
+        _ => {}
+    }
+
     Some(Value::Object(out))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn empty_object_schema_is_removed_at_root() {
@@ -239,6 +328,93 @@ mod tests {
         assert_eq!(
             convert_json_schema_to_openapi_schema(&schema, false),
             Some(serde_json::json!({ "type": "object" }))
+        );
+    }
+
+    #[test]
+    fn converts_string_constraints() {
+        let schema = json!({
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10,
+            "pattern": "^[a-z]+$"
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 10,
+                "pattern": "^[a-z]+$"
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_number_constraints_and_exclusive_bounds() {
+        let schema = json!({
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 5,
+            "multipleOf": 0.5
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "number",
+                "minimum": 0,
+                "maximum": 5,
+                "exclusiveMaximum": true,
+                "multipleOf": 0.5
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_object_constraints_and_additional_properties() {
+        let schema = json!({
+            "type": "object",
+            "title": "args",
+            "minProperties": 1,
+            "maxProperties": 2,
+            "properties": {
+                "a": { "type": "string", "default": "x" }
+            },
+            "additionalProperties": false
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "title": "args",
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 2,
+                "properties": {
+                    "a": { "type": "string", "default": "x" }
+                },
+                "additionalProperties": false
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_array_constraints() {
+        let schema = json!({
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1,
+                "maxItems": 3,
+                "uniqueItems": true
+            }))
         );
     }
 }

@@ -14,6 +14,16 @@ Current scope:
   - Google GenAI (generate + SSE streaming) and embeddings
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
 
+## Tool Schemas
+
+For Google function calling, Ditto-LLM converts tool parameter JSON Schema into an OpenAPI-style schema.
+
+Supported keywords (subset): `type`, `title`, `description`, `properties`, `required`, `items`,
+`additionalProperties`, `enum`, `const`, `format`, `allOf`, `anyOf`, `oneOf`, `default`,
+`minLength`/`maxLength`/`pattern`, `minItems`/`maxItems`/`uniqueItems`,
+`minProperties`/`maxProperties`, `minimum`/`maximum`/`multipleOf`,
+and `exclusiveMinimum`/`exclusiveMaximum` (number form → `minimum`/`maximum` + `exclusive* = true`).
+
 ## Examples
 
 Examples expect provider API keys in environment variables.
