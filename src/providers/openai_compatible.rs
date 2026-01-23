@@ -357,6 +357,8 @@ struct ChatToolFunction {
 #[derive(Debug, Deserialize, Default)]
 struct ChatCompletionsChunk {
     #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
     choices: Vec<ChatChoiceChunk>,
     #[serde(default)]
     usage: Option<Value>,
@@ -412,6 +414,7 @@ struct StreamToolCallState {
 #[cfg(feature = "streaming")]
 #[derive(Debug, Default)]
 struct StreamState {
+    response_id: Option<String>,
     tool_calls: Vec<StreamToolCallState>,
 }
 
@@ -486,6 +489,13 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     let chunk = serde_json::from_str::<ChatCompletionsChunk>(data)?;
     let mut out = Vec::<StreamChunk>::new();
     let mut done = false;
+
+    if state.response_id.is_none() {
+        if let Some(id) = chunk.id.as_deref().filter(|id| !id.trim().is_empty()) {
+            state.response_id = Some(id.to_string());
+            out.push(StreamChunk::ResponseId { id: id.to_string() });
+        }
+    }
 
     if let Some(usage) = chunk.usage.as_ref() {
         out.push(StreamChunk::Usage(OpenAICompatible::parse_usage(usage)));
@@ -1002,6 +1012,37 @@ mod tests {
             ]
         );
 
+        Ok(())
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn parses_streaming_response_id() -> Result<()> {
+        let mut state = StreamState::default();
+
+        let (chunks, done) = parse_stream_data(
+            &mut state,
+            &serde_json::json!({
+                "id": "resp_1",
+                "choices": [{
+                    "delta": { "content": "hi" }
+                }]
+            })
+            .to_string(),
+        )?;
+
+        assert!(!done);
+        assert_eq!(
+            chunks,
+            vec![
+                StreamChunk::ResponseId {
+                    id: "resp_1".to_string()
+                },
+                StreamChunk::TextDelta {
+                    text: "hi".to_string()
+                }
+            ]
+        );
         Ok(())
     }
 

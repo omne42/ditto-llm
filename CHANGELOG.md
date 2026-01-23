@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth helper: `resolve_auth_token_with_default_keys` (for provider-specific default env keys).
 - Streaming emits request conversion warnings via `StreamChunk::Warnings`.
 - Controlled request options via `ProviderOptions` (`reasoning_effort`, `response_format`).
+- Streaming emits response ids (when available) via `StreamChunk::ResponseId`.
 
 ### Changed
 

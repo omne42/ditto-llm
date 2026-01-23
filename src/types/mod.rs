@@ -284,6 +284,7 @@ impl GenerateResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StreamChunk {
     Warnings { warnings: Vec<Warning> },
+    ResponseId { id: String },
     TextDelta { text: String },
     ToolCallStart { id: String, name: String },
     ToolCallDelta { id: String, arguments_delta: String },
