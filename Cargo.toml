@@ -4,13 +4,30 @@ version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 
+[features]
+default = ["openai", "anthropic", "openai-compatible", "streaming", "tools", "embeddings"]
+
+# Providers
+openai = []
+anthropic = []
+google = []
+openai-compatible = ["openai"]
+
+# Optional capabilities
+streaming = []
+tools = []
+embeddings = []
+
 [dependencies]
 async-trait = "0.1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+bytes = "1"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
-tokio = { version = "1", features = ["process"] }
+tokio = { version = "1", features = ["io-util", "macros", "process", "rt", "rt-multi-thread"] }
+tokio-util = { version = "0.7", features = ["io"] }
 
 [dev-dependencies]
 tempfile = "3"

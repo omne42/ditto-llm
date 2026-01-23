@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Split `src/lib.rs` into `src/error.rs` and `src/profile.rs` (no behavior change).
+- Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).
+- Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
 
 ## [0.1.1] - 2026-01-23
 
