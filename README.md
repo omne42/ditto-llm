@@ -7,6 +7,7 @@ Ditto-LLM is a small Rust SDK that provides a unified interface for calling mult
 Current scope:
 
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
+- Multi-modal inputs: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
 - Providers:
   - OpenAI Responses API (generate + SSE streaming) and embeddings
   - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.)
@@ -34,6 +35,7 @@ cargo run --example streaming
 cargo run --example tool_calling
 cargo run --example embeddings
 cargo run --example openai_compatible
+cargo run --example multimodal -- ./image.png ./doc.pdf
 ```
 
 ## Development

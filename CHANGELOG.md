@@ -10,10 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
+- Multi-modal message parts: `ContentPart::Image` (images) and `ContentPart::File` (PDFs) with `FileSource` support.
 - Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.).
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
-- Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`.
+- Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`, `multimodal`.
 - Optional integration smoke tests behind the `integration` feature (requires real API keys).
 - Utilities: generic SSE parsing and JSON Schema → OpenAPI schema conversion (for tool schemas).
 - Provider clients can be built from config: `*::from_config(&ProviderConfig, &Env)`.

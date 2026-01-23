@@ -9,13 +9,14 @@ use serde_json::{Map, Value};
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
-    StreamChunk, Tool, ToolChoice, Usage, Warning,
+    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
 };
 use crate::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const DEFAULT_VERSION: &str = "2023-06-01";
+const BETA_PDFS_2024_09_25: &str = "pdfs-2024-09-25";
 
 #[derive(Clone)]
 pub struct Anthropic {
@@ -200,6 +201,50 @@ impl Anthropic {
                             };
                             blocks.push(serde_json::json!({ "type": "image", "source": src }));
                         }
+                        ContentPart::File {
+                            filename,
+                            media_type,
+                            source,
+                        } => {
+                            if media_type != "application/pdf" {
+                                warnings.push(Warning::Unsupported {
+                                    feature: "file".to_string(),
+                                    details: Some(format!(
+                                        "unsupported file media type for Anthropic Messages: {media_type}"
+                                    )),
+                                });
+                                continue;
+                            }
+
+                            let src = match source {
+                                FileSource::Url { url } => serde_json::json!({
+                                    "type": "url",
+                                    "url": url,
+                                }),
+                                FileSource::Base64 { data } => serde_json::json!({
+                                    "type": "base64",
+                                    "media_type": "application/pdf",
+                                    "data": data,
+                                }),
+                                FileSource::FileId { file_id } => {
+                                    warnings.push(Warning::Unsupported {
+                                        feature: "file_id".to_string(),
+                                        details: Some(format!(
+                                            "Anthropic Messages does not support OpenAI file ids (file_id={file_id})"
+                                        )),
+                                    });
+                                    continue;
+                                }
+                            };
+
+                            let mut doc = serde_json::json!({ "type": "document", "source": src });
+                            if let Some(title) = filename.clone().filter(|s| !s.trim().is_empty()) {
+                                if let Some(obj) = doc.as_object_mut() {
+                                    obj.insert("title".to_string(), Value::String(title));
+                                }
+                            }
+                            blocks.push(doc);
+                        }
                         other => warnings.push(Warning::Unsupported {
                             feature: "user_content_part".to_string(),
                             details: Some(format!("unsupported user content part: {other:?}")),
@@ -299,6 +344,23 @@ impl Anthropic {
                 }
             }
         }
+    }
+
+    fn required_betas(messages: &[Message]) -> Vec<&'static str> {
+        let has_pdf = messages.iter().any(|message| {
+            message.content.iter().any(|part| {
+                matches!(
+                    part,
+                    ContentPart::File { media_type, .. } if media_type == "application/pdf"
+                )
+            })
+        });
+
+        let mut out = Vec::<&'static str>::new();
+        if has_pdf {
+            out.push(BETA_PDFS_2024_09_25);
+        }
+        out
     }
 
     fn build_tool_name_map(messages: &[Message]) -> HashMap<String, String> {
@@ -524,14 +586,17 @@ impl LanguageModel for Anthropic {
         }
 
         let url = self.messages_url();
-        let response = self
+        let mut request_builder = self
             .http
             .post(url)
             .header("x-api-key", &self.api_key)
-            .header("anthropic-version", &self.version)
-            .json(&body)
-            .send()
-            .await?;
+            .header("anthropic-version", &self.version);
+        let betas = Self::required_betas(&request.messages);
+        if !betas.is_empty() {
+            request_builder = request_builder.header("anthropic-beta", betas.join(","));
+        }
+
+        let response = request_builder.json(&body).send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -679,15 +744,18 @@ impl LanguageModel for Anthropic {
             }
 
             let url = self.messages_url();
-            let response = self
+            let mut request_builder = self
                 .http
                 .post(url)
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", &self.version)
-                .header("Accept", "text/event-stream")
-                .json(&body)
-                .send()
-                .await?;
+                .header("Accept", "text/event-stream");
+            let betas = Self::required_betas(&request.messages);
+            if !betas.is_empty() {
+                request_builder = request_builder.header("anthropic-beta", betas.join(","));
+            }
+
+            let response = request_builder.json(&body).send().await?;
 
             let status = response.status();
             if !status.is_success() {
@@ -907,6 +975,62 @@ impl LanguageModel for Anthropic {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn converts_pdf_file_part_to_document_block() {
+        let tool_names = HashMap::new();
+        let message = Message {
+            role: Role::User,
+            content: vec![ContentPart::File {
+                filename: Some("doc.pdf".to_string()),
+                media_type: "application/pdf".to_string(),
+                source: FileSource::Base64 {
+                    data: "AQIDBAU=".to_string(),
+                },
+            }],
+        };
+
+        let mut warnings = Vec::new();
+        let out = Anthropic::message_to_anthropic_blocks(&message, &tool_names, &mut warnings)
+            .expect("blocks");
+        assert_eq!(out.0, "user");
+        assert_eq!(out.1.len(), 1);
+        assert_eq!(
+            out.1[0].get("type").and_then(Value::as_str),
+            Some("document")
+        );
+        assert_eq!(
+            out.1[0].get("title").and_then(Value::as_str),
+            Some("doc.pdf")
+        );
+        assert_eq!(
+            out.1[0]
+                .get("source")
+                .and_then(Value::as_object)
+                .and_then(|o| o.get("type"))
+                .and_then(Value::as_str),
+            Some("base64")
+        );
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn required_betas_includes_pdfs() {
+        let messages = vec![Message {
+            role: Role::User,
+            content: vec![ContentPart::File {
+                filename: None,
+                media_type: "application/pdf".to_string(),
+                source: FileSource::Url {
+                    url: "https://example.com/doc.pdf".to_string(),
+                },
+            }],
+        }];
+        assert_eq!(
+            Anthropic::required_betas(&messages),
+            vec![BETA_PDFS_2024_09_25]
+        );
+    }
 
     #[test]
     fn converts_tool_result_to_tool_block() {

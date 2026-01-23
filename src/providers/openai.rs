@@ -11,8 +11,8 @@ use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
-    StreamChunk, Tool, ToolChoice, Usage, Warning,
+    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
 };
 use crate::{DittoError, Result};
 
@@ -163,6 +163,36 @@ impl OpenAI {
                                     }
                                 };
                                 content.push(serde_json::json!({ "type": "input_image", "image_url": image_url }));
+                            }
+                            ContentPart::File {
+                                filename,
+                                media_type,
+                                source,
+                            } => {
+                                if media_type != "application/pdf" {
+                                    warnings.push(Warning::Unsupported {
+                                        feature: "file".to_string(),
+                                        details: Some(format!(
+                                            "unsupported file media type for OpenAI Responses: {media_type}"
+                                        )),
+                                    });
+                                    continue;
+                                }
+
+                                let item = match source {
+                                    FileSource::Url { url } => {
+                                        serde_json::json!({ "type": "input_file", "file_url": url })
+                                    }
+                                    FileSource::Base64 { data } => serde_json::json!({
+                                        "type": "input_file",
+                                        "filename": filename.clone().unwrap_or_else(|| "file.pdf".to_string()),
+                                        "file_data": format!("data:{media_type};base64,{data}"),
+                                    }),
+                                    FileSource::FileId { file_id } => {
+                                        serde_json::json!({ "type": "input_file", "file_id": file_id })
+                                    }
+                                };
+                                content.push(item);
                             }
                             other => warnings.push(Warning::Unsupported {
                                 feature: "user_content_part".to_string(),
@@ -984,6 +1014,42 @@ mod tests {
         assert_eq!(
             input[3].get("type").and_then(Value::as_str),
             Some("function_call_output")
+        );
+    }
+
+    #[test]
+    fn converts_pdf_file_part_to_input_file() {
+        let messages = vec![Message {
+            role: Role::User,
+            content: vec![ContentPart::File {
+                filename: Some("doc.pdf".to_string()),
+                media_type: "application/pdf".to_string(),
+                source: FileSource::Base64 {
+                    data: "AQIDBAU=".to_string(),
+                },
+            }],
+        }];
+
+        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        assert!(warnings.is_empty());
+        assert_eq!(input.len(), 1);
+        assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
+        let content = input[0]
+            .get("content")
+            .and_then(Value::as_array)
+            .expect("content array");
+        assert_eq!(content.len(), 1);
+        assert_eq!(
+            content[0].get("type").and_then(Value::as_str),
+            Some("input_file")
+        );
+        assert_eq!(
+            content[0].get("filename").and_then(Value::as_str),
+            Some("doc.pdf")
+        );
+        assert_eq!(
+            content[0].get("file_data").and_then(Value::as_str),
+            Some("data:application/pdf;base64,AQIDBAU=")
         );
     }
 

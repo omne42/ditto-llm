@@ -9,8 +9,8 @@ use serde_json::{Map, Value};
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
-    StreamChunk, Tool, ToolChoice, Usage, Warning,
+    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
 };
 use crate::{DittoError, Result};
 
@@ -174,6 +174,24 @@ impl Google {
                                         "inlineData": { "mimeType": media_type, "data": data }
                                     }))
                                 }
+                            },
+                            ContentPart::File {
+                                media_type,
+                                source,
+                                ..
+                            } => match source {
+                                FileSource::Url { url } => parts.push(serde_json::json!({
+                                    "fileData": { "mimeType": media_type, "fileUri": url }
+                                })),
+                                FileSource::Base64 { data } => parts.push(serde_json::json!({
+                                    "inlineData": { "mimeType": media_type, "data": data }
+                                })),
+                                FileSource::FileId { file_id } => warnings.push(Warning::Unsupported {
+                                    feature: "file_id".to_string(),
+                                    details: Some(format!(
+                                        "google provider does not support OpenAI file ids (file_id={file_id})"
+                                    )),
+                                }),
                             },
                             other => warnings.push(Warning::Unsupported {
                                 feature: "user_content_part".to_string(),
@@ -1027,5 +1045,42 @@ mod tests {
         let decl = Google::tool_to_google(tool);
         assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
         assert!(decl.get("parameters").is_some());
+    }
+
+    #[test]
+    fn converts_pdf_file_part_to_inline_data() -> crate::Result<()> {
+        let mut warnings = Vec::new();
+        let tool_names = HashMap::new();
+        let (contents, _system) = Google::convert_messages(
+            "gemini-pro",
+            &[Message {
+                role: Role::User,
+                content: vec![ContentPart::File {
+                    filename: Some("doc.pdf".to_string()),
+                    media_type: "application/pdf".to_string(),
+                    source: FileSource::Base64 {
+                        data: "AQIDBAU=".to_string(),
+                    },
+                }],
+            }],
+            &tool_names,
+            &mut warnings,
+        )?;
+        assert!(warnings.is_empty());
+        assert_eq!(contents.len(), 1);
+        let parts = contents[0]
+            .get("parts")
+            .and_then(Value::as_array)
+            .expect("parts array");
+        assert_eq!(parts.len(), 1);
+        assert_eq!(
+            parts[0]
+                .get("inlineData")
+                .and_then(Value::as_object)
+                .and_then(|o| o.get("mimeType"))
+                .and_then(Value::as_str),
+            Some("application/pdf")
+        );
+        Ok(())
     }
 }
