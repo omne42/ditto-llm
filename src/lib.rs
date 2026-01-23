@@ -12,7 +12,7 @@ pub use profile::{
     Env, ModelConfig, OpenAiCompatibleClient, OpenAiProvider, Provider, ProviderAuth,
     ProviderCapabilities, ProviderConfig, ThinkingIntensity, filter_models_whitelist,
     list_available_models, normalize_string_list, parse_dotenv, resolve_auth_token,
-    select_model_config,
+    resolve_auth_token_with_default_keys, select_model_config,
 };
 
 pub use embedding::EmbeddingModel;

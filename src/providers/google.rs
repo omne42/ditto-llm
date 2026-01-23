@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
+use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
     StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -49,6 +50,29 @@ impl Google {
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.default_model = model.into();
         self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] =
+            &["GOOGLE_API_KEY", "GEMINI_API_KEY", "CODE_PM_GOOGLE_API_KEY"];
+        let auth = config
+            .auth
+            .clone()
+            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
+        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+
+        let mut out = Self::new(api_key);
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
@@ -784,6 +808,29 @@ impl GoogleEmbeddings {
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] =
+            &["GOOGLE_API_KEY", "GEMINI_API_KEY", "CODE_PM_GOOGLE_API_KEY"];
+        let auth = config
+            .auth
+            .clone()
+            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
+        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+
+        let mut out = Self::new(api_key);
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
     }
 
     fn resolve_model(&self) -> Result<&str> {

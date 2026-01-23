@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
+use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
     StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -46,6 +47,28 @@ impl OpenAI {
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.default_model = model.into();
         self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+        let auth = config
+            .auth
+            .clone()
+            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
+        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+
+        let mut out = Self::new(api_key);
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
     }
 
     fn responses_url(&self) -> String {
@@ -655,6 +678,28 @@ impl OpenAIEmbeddings {
         self
     }
 
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+        let auth = config
+            .auth
+            .clone()
+            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
+        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+
+        let mut out = Self::new(api_key);
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
+    }
+
     fn resolve_model(&self) -> Result<&str> {
         if !self.model.trim().is_empty() {
             return Ok(self.model.as_str());
@@ -724,6 +769,29 @@ impl EmbeddingModel for OpenAIEmbeddings {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn from_config_resolves_api_key_and_model() -> crate::Result<()> {
+        let config = ProviderConfig {
+            base_url: Some("http://localhost:1234/v1".to_string()),
+            default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+                keys: vec!["CODEPM_TEST_OPENAI_KEY".to_string()],
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: std::collections::BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAI::from_config(&config, &env).await?;
+        assert_eq!(client.provider(), "openai");
+        assert_eq!(client.model_id(), "test-model");
+        Ok(())
+    }
 
     #[test]
     fn converts_messages_to_responses_input() {

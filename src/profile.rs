@@ -324,18 +324,26 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
 }
 
 pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String> {
+    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+    resolve_auth_token_with_default_keys(auth, env, DEFAULT_KEYS).await
+}
+
+pub async fn resolve_auth_token_with_default_keys(
+    auth: &ProviderAuth,
+    env: &Env,
+    default_keys: &[&str],
+) -> Result<String> {
     match auth {
         ProviderAuth::ApiKeyEnv { keys } => {
-            const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
             if keys.is_empty() {
-                for key in DEFAULT_KEYS {
+                for key in default_keys {
                     if let Some(value) = env.get(key) {
                         return Ok(value);
                     }
                 }
                 return Err(DittoError::AuthCommand(format!(
                     "missing api key env (tried: {})",
-                    DEFAULT_KEYS.join(", ")
+                    default_keys.join(", ")
                 )));
             }
             for key in keys {
@@ -386,6 +394,17 @@ pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn resolves_auth_token_with_custom_default_keys() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["CODEPM_TEST_KEY"]).await?;
+        assert_eq!(token, "sk-test");
+        Ok(())
+    }
 
     #[test]
     fn parses_dotenv_basic() {

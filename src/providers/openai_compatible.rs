@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
+use crate::profile::{Env, ProviderConfig, resolve_auth_token_with_default_keys};
 use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
     StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -44,6 +45,31 @@ impl OpenAICompatible {
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.default_model = model.into();
         self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+
+        let api_key = match config.auth.clone() {
+            Some(auth) => resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?,
+            None => DEFAULT_KEYS
+                .iter()
+                .find_map(|key| env.get(key))
+                .unwrap_or_default(),
+        };
+
+        let mut out = Self::new(api_key);
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
     }
 
     fn chat_completions_url(&self) -> String {
@@ -746,6 +772,29 @@ impl LanguageModel for OpenAICompatible {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn from_config_resolves_api_key_and_model() -> Result<()> {
+        let config = ProviderConfig {
+            base_url: Some("http://localhost:1234/v1".to_string()),
+            default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: std::collections::BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatible::from_config(&config, &env).await?;
+        assert_eq!(client.provider(), "openai-compatible");
+        assert_eq!(client.model_id(), "test-model");
+        Ok(())
+    }
 
     #[test]
     fn tool_choice_required_maps_to_auto() {
