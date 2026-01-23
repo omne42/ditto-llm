@@ -65,6 +65,8 @@ pub struct ProviderConfig {
     pub model_whitelist: Vec<String>,
     #[serde(default)]
     pub auth: Option<ProviderAuth>,
+    #[serde(default)]
+    pub capabilities: Option<ProviderCapabilities>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -129,7 +131,9 @@ impl OpenAiProvider {
             base_url: base_url.to_string(),
             bearer_token,
             model_whitelist: config.model_whitelist.clone(),
-            capabilities: ProviderCapabilities::openai_responses(),
+            capabilities: config
+                .capabilities
+                .unwrap_or_else(ProviderCapabilities::openai_responses),
         })
     }
 }
@@ -443,6 +447,33 @@ EMPTY=
         assert_eq!(
             select_model_config(&models, "other").map(|c| c.thinking),
             Some(ThinkingIntensity::High)
+        );
+    }
+
+    #[test]
+    fn parses_provider_capabilities_from_toml() {
+        let parsed = toml::from_str::<ProviderConfig>(
+            r#"
+base_url = "https://example.com/v1"
+
+[capabilities]
+tools = true
+vision = false
+reasoning = true
+json_schema = true
+streaming = false
+"#,
+        )
+        .expect("parse toml");
+        assert_eq!(
+            parsed.capabilities,
+            Some(ProviderCapabilities {
+                tools: true,
+                vision: false,
+                reasoning: true,
+                json_schema: true,
+                streaming: false,
+            })
         );
     }
 }
