@@ -508,6 +508,7 @@ impl LanguageModel for OpenAICompatible {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
+        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
         let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
 
         let mut body = Map::<String, Value>::new();
@@ -572,11 +573,17 @@ impl LanguageModel for OpenAICompatible {
             }
         }
 
-        if request.provider_options.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "provider_options".to_string(),
-                details: Some("provider_options is not supported yet".to_string()),
-            });
+        if let Some(effort) = provider_options.reasoning_effort {
+            body.insert(
+                "reasoning_effort".to_string(),
+                serde_json::to_value(effort)?,
+            );
+        }
+        if let Some(response_format) = provider_options.response_format.as_ref() {
+            body.insert(
+                "response_format".to_string(),
+                serde_json::to_value(response_format)?,
+            );
         }
 
         let url = self.chat_completions_url();
@@ -645,6 +652,7 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
+            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
             let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
 
             let mut body = Map::<String, Value>::new();
@@ -711,11 +719,17 @@ impl LanguageModel for OpenAICompatible {
                 }
             }
 
-            if request.provider_options.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "provider_options".to_string(),
-                    details: Some("provider_options is not supported yet".to_string()),
-                });
+            if let Some(effort) = provider_options.reasoning_effort {
+                body.insert(
+                    "reasoning_effort".to_string(),
+                    serde_json::to_value(effort)?,
+                );
+            }
+            if let Some(response_format) = provider_options.response_format.as_ref() {
+                body.insert(
+                    "response_format".to_string(),
+                    serde_json::to_value(response_format)?,
+                );
             }
 
             let url = self.chat_completions_url();

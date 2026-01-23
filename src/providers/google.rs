@@ -403,8 +403,21 @@ impl LanguageModel for Google {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?.to_string();
+        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
+        if provider_options.reasoning_effort.is_some() {
+            warnings.push(Warning::Unsupported {
+                feature: "reasoning_effort".to_string(),
+                details: Some("Google GenAI does not support reasoning_effort".to_string()),
+            });
+        }
+        if provider_options.response_format.is_some() {
+            warnings.push(Warning::Unsupported {
+                feature: "response_format".to_string(),
+                details: Some("Google GenAI does not support response_format".to_string()),
+            });
+        }
         let tool_names = Self::build_tool_name_map(&request.messages);
         let (contents, system_instruction) =
             Self::convert_messages(&model, &request.messages, &tool_names, &mut warnings)?;
@@ -541,8 +554,21 @@ impl LanguageModel for Google {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?.to_string();
+            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
+            if provider_options.reasoning_effort.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "reasoning_effort".to_string(),
+                    details: Some("Google GenAI does not support reasoning_effort".to_string()),
+                });
+            }
+            if provider_options.response_format.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "response_format".to_string(),
+                    details: Some("Google GenAI does not support response_format".to_string()),
+                });
+            }
             let tool_names = Self::build_tool_name_map(&request.messages);
             let (contents, system_instruction) =
                 Self::convert_messages(&model, &request.messages, &tool_names, &mut warnings)?;

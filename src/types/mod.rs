@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::{DittoError, Result};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -157,6 +159,47 @@ pub enum Warning {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+    #[serde(rename = "xhigh")]
+    XHigh,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct JsonSchemaFormat {
+    pub name: String,
+    pub schema: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strict: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResponseFormat {
+    JsonSchema { json_schema: JsonSchemaFormat },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderOptions {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<ReasoningEffort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_format: Option<ResponseFormat>,
+}
+
+impl ProviderOptions {
+    pub fn from_value(value: &Value) -> Result<Self> {
+        serde_json::from_value::<Self>(value.clone())
+            .map_err(|err| DittoError::InvalidResponse(format!("invalid provider_options: {err}")))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateRequest {
     pub messages: Vec<Message>,
@@ -179,6 +222,20 @@ pub struct GenerateRequest {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_options: Option<Value>,
+}
+
+impl GenerateRequest {
+    pub fn with_provider_options(mut self, options: ProviderOptions) -> Result<Self> {
+        self.provider_options = Some(serde_json::to_value(options)?);
+        Ok(self)
+    }
+
+    pub fn parsed_provider_options(&self) -> Result<Option<ProviderOptions>> {
+        self.provider_options
+            .as_ref()
+            .map(ProviderOptions::from_value)
+            .transpose()
+    }
 }
 
 impl From<Vec<Message>> for GenerateRequest {
@@ -233,4 +290,39 @@ pub enum StreamChunk {
     ReasoningDelta { text: String },
     FinishReason(FinishReason),
     Usage(Usage),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn provider_options_roundtrip() -> Result<()> {
+        let options = ProviderOptions {
+            reasoning_effort: Some(ReasoningEffort::Medium),
+            response_format: Some(ResponseFormat::JsonSchema {
+                json_schema: JsonSchemaFormat {
+                    name: "unit_test".to_string(),
+                    schema: json!({ "type": "object" }),
+                    strict: None,
+                },
+            }),
+        };
+
+        let raw = serde_json::to_value(&options)?;
+        let parsed = ProviderOptions::from_value(&raw)?;
+        assert_eq!(parsed, options);
+        Ok(())
+    }
+
+    #[test]
+    fn provider_options_rejects_unknown_fields() {
+        let raw = json!({ "unknown": true });
+        let err = ProviderOptions::from_value(&raw).expect_err("should reject unknown fields");
+        match err {
+            DittoError::InvalidResponse(_) => {}
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
 }

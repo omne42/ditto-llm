@@ -18,8 +18,9 @@ pub use profile::{
 pub use embedding::EmbeddingModel;
 pub use model::{LanguageModel, StreamResult};
 pub use types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message, Role,
-    StreamChunk, Tool, ToolChoice, Usage, Warning,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, JsonSchemaFormat,
+    Message, ProviderOptions, ReasoningEffort, ResponseFormat, Role, StreamChunk, Tool, ToolChoice,
+    Usage, Warning,
 };
 
 #[cfg(feature = "anthropic")]

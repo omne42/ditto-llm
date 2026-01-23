@@ -406,8 +406,25 @@ impl LanguageModel for Anthropic {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
+        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
+        if provider_options.reasoning_effort.is_some() {
+            warnings.push(Warning::Unsupported {
+                feature: "reasoning_effort".to_string(),
+                details: Some(
+                    "Anthropic Messages API does not support reasoning_effort".to_string(),
+                ),
+            });
+        }
+        if provider_options.response_format.is_some() {
+            warnings.push(Warning::Unsupported {
+                feature: "response_format".to_string(),
+                details: Some(
+                    "Anthropic Messages API does not support response_format".to_string(),
+                ),
+            });
+        }
         let tool_names = Self::build_tool_name_map(&request.messages);
 
         let mut system = Vec::<String>::new();
@@ -544,8 +561,25 @@ impl LanguageModel for Anthropic {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
+            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
+            if provider_options.reasoning_effort.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "reasoning_effort".to_string(),
+                    details: Some(
+                        "Anthropic Messages API does not support reasoning_effort".to_string(),
+                    ),
+                });
+            }
+            if provider_options.response_format.is_some() {
+                warnings.push(Warning::Unsupported {
+                    feature: "response_format".to_string(),
+                    details: Some(
+                        "Anthropic Messages API does not support response_format".to_string(),
+                    ),
+                });
+            }
             let tool_names = Self::build_tool_name_map(&request.messages);
 
             let mut system = Vec::<String>::new();

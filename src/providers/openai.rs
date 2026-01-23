@@ -259,6 +259,25 @@ impl OpenAI {
     }
 }
 
+fn apply_provider_options(
+    body: &mut Map<String, Value>,
+    provider_options: &crate::types::ProviderOptions,
+) -> Result<()> {
+    if let Some(effort) = provider_options.reasoning_effort {
+        body.insert(
+            "reasoning".to_string(),
+            serde_json::json!({ "effort": effort }),
+        );
+    }
+    if let Some(response_format) = provider_options.response_format.as_ref() {
+        body.insert(
+            "response_format".to_string(),
+            serde_json::to_value(response_format)?,
+        );
+    }
+    Ok(())
+}
+
 #[derive(Debug, Deserialize)]
 struct ResponsesApiResponse {
     id: String,
@@ -342,6 +361,7 @@ impl LanguageModel for OpenAI {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
+        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
         let (input, mut warnings) = Self::messages_to_input(&request.messages);
 
         if request.stop_sequences.is_some() {
@@ -408,6 +428,8 @@ impl LanguageModel for OpenAI {
             }
         }
 
+        apply_provider_options(&mut body, &provider_options)?;
+
         let url = self.responses_url();
         let response = self
             .http
@@ -452,6 +474,7 @@ impl LanguageModel for OpenAI {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
+            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
             let (input, mut warnings) = Self::messages_to_input(&request.messages);
 
             let mut body = Map::<String, Value>::new();
@@ -521,12 +544,7 @@ impl LanguageModel for OpenAI {
                 }
             }
 
-            if request.provider_options.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "provider_options".to_string(),
-                    details: Some("provider_options is not supported yet".to_string()),
-                });
-            }
+            apply_provider_options(&mut body, &provider_options)?;
 
             let url = self.responses_url();
             let response = self
@@ -885,5 +903,36 @@ mod tests {
             }
             other => panic!("unexpected part: {other:?}"),
         }
+    }
+
+    #[test]
+    fn apply_provider_options_maps_reasoning_and_response_format() -> crate::Result<()> {
+        let mut body = Map::<String, Value>::new();
+        let options = crate::ProviderOptions {
+            reasoning_effort: Some(crate::ReasoningEffort::High),
+            response_format: Some(crate::ResponseFormat::JsonSchema {
+                json_schema: crate::JsonSchemaFormat {
+                    name: "unit_test".to_string(),
+                    schema: json!({ "type": "object" }),
+                    strict: Some(true),
+                },
+            }),
+        };
+
+        apply_provider_options(&mut body, &options)?;
+
+        assert_eq!(body.get("reasoning"), Some(&json!({ "effort": "high" })));
+        assert_eq!(
+            body.get("response_format"),
+            Some(&json!({
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "unit_test",
+                    "schema": { "type": "object" },
+                    "strict": true
+                }
+            }))
+        );
+        Ok(())
     }
 }
