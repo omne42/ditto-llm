@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.).
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`.
+- Optional integration smoke tests behind the `integration` feature (requires real API keys).
 - Utilities: generic SSE parsing and JSON Schema → OpenAPI schema conversion (for tool schemas).
 - Provider clients can be built from config: `*::from_config(&ProviderConfig, &Env)`.
 - Auth helper: `resolve_auth_token_with_default_keys` (for provider-specific default env keys).

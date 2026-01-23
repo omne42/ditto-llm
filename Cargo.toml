@@ -18,6 +18,8 @@ streaming = []
 tools = []
 embeddings = []
 
+integration = []
+
 [dependencies]
 async-trait = "0.1"
 bytes = "1"

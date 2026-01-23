@@ -45,3 +45,16 @@ git config core.hooksPath githooks
 ```
 
 This enforces Conventional Commits and requires each commit to include `CHANGELOG.md`.
+
+### Integration Tests (Optional)
+
+Enable the `integration` feature and set real credentials:
+
+- OpenAI Responses: `OPENAI_API_KEY` + `OPENAI_MODEL`
+- OpenAI-compatible: `OPENAI_COMPAT_BASE_URL` + `OPENAI_COMPAT_MODEL` (+ `OPENAI_COMPAT_API_KEY` optional)
+
+Then run:
+
+```bash
+cargo test --all-features
+```
