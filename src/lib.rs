@@ -1,5 +1,6 @@
 mod error;
 mod profile;
+mod stream;
 
 pub mod embedding;
 pub mod model;
@@ -17,6 +18,7 @@ pub use profile::{
 
 pub use embedding::EmbeddingModel;
 pub use model::{LanguageModel, StreamResult};
+pub use stream::{CollectedStream, collect_stream};
 pub use types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
     JsonSchemaFormat, Message, ProviderOptions, ReasoningEffort, ResponseFormat, Role, StreamChunk,

@@ -38,6 +38,19 @@ cargo run --example openai_compatible
 cargo run --example multimodal -- ./image.png ./doc.pdf
 ```
 
+## Stream Collection
+
+If you want to consume a streaming response but still produce a final unified `GenerateResponse`,
+use `collect_stream`:
+
+```rust
+use ditto_llm::{collect_stream, GenerateRequest, LanguageModel};
+
+let stream = llm.stream(GenerateRequest::from(messages)).await?;
+let collected = collect_stream(stream).await?;
+println!("{}", collected.response.text());
+```
+
 ## Development
 
 Enable repo-local git hooks:
