@@ -23,6 +23,7 @@ schema.
 Contract:
 
 - Conversion is best-effort and lossy: unsupported keywords are ignored (dropped), not errors.
+- Unsupported keywords may emit `Warning::Compatibility(tool.parameters.unsupported_keywords)` to avoid silent data loss.
 - `$ref` is best-effort: local refs (`#/...`) are resolved; unresolvable refs are ignored and a `Warning::Compatibility(tool.parameters.$ref)` is emitted.
 - Root empty-object schemas (no properties + `additionalProperties` missing/false) are treated as
   "no parameters" and omitted.

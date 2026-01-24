@@ -338,6 +338,7 @@ impl Google {
 
     fn tool_to_google(tool: Tool, warnings: &mut Vec<Warning>) -> Value {
         Self::warn_on_unresolvable_json_schema_refs(&tool.name, &tool.parameters, warnings);
+        Self::warn_on_unsupported_json_schema_keywords(&tool.name, &tool.parameters, warnings);
         let mut out = Map::<String, Value>::new();
         out.insert("name".to_string(), Value::String(tool.name));
         out.insert(
@@ -350,6 +351,33 @@ impl Google {
             out.insert("parameters".to_string(), parameters);
         }
         Value::Object(out)
+    }
+
+    fn warn_on_unsupported_json_schema_keywords(
+        tool_name: &str,
+        schema: &Value,
+        warnings: &mut Vec<Warning>,
+    ) {
+        let keywords = crate::utils::json_schema::collect_unsupported_keywords(schema);
+        if keywords.is_empty() {
+            return;
+        }
+
+        let shown = keywords.iter().take(5).cloned().collect::<Vec<_>>();
+        let extra = keywords.len().saturating_sub(shown.len());
+
+        warnings.push(Warning::Compatibility {
+            feature: "tool.parameters.unsupported_keywords".to_string(),
+            details: format!(
+                "tool {tool_name} uses JSON Schema keywords that are not supported by ditto-llm's Google tool schema conversion and will be ignored (e.g. {}{})",
+                shown.join(", "),
+                if extra == 0 {
+                    String::new()
+                } else {
+                    format!(", +{extra} more")
+                }
+            ),
+        });
     }
 
     fn warn_on_unresolvable_json_schema_refs(
@@ -1218,6 +1246,27 @@ mod tests {
         assert!(warnings.iter().any(|w| {
             matches!(w, Warning::Compatibility { feature, .. } if feature == "tool.parameters.$ref")
         }));
+    }
+
+    #[test]
+    fn tool_schema_unsupported_keywords_emit_warning() {
+        let tool = Tool {
+            name: "add".to_string(),
+            description: Some("add".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": { "a": { "type": "integer" } },
+                "not": { "type": "object" }
+            }),
+            strict: None,
+        };
+        let mut warnings = Vec::new();
+        let decl = Google::tool_to_google(tool, &mut warnings);
+        assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
+        assert!(warnings.iter().any(|w| matches!(
+            w,
+            Warning::Compatibility { feature, details } if feature == "tool.parameters.unsupported_keywords" && details.contains("not")
+        )));
     }
 
     #[test]

@@ -1,5 +1,36 @@
 use serde_json::{Map, Value};
 use std::borrow::Cow;
+use std::collections::BTreeSet;
+
+const SUPPORTED_KEYWORDS: &[&str] = &[
+    "type",
+    "title",
+    "description",
+    "properties",
+    "required",
+    "items",
+    "additionalProperties",
+    "enum",
+    "const",
+    "format",
+    "allOf",
+    "anyOf",
+    "oneOf",
+    "default",
+    "minLength",
+    "maxLength",
+    "pattern",
+    "minItems",
+    "maxItems",
+    "uniqueItems",
+    "minProperties",
+    "maxProperties",
+    "minimum",
+    "maximum",
+    "multipleOf",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+];
 
 fn is_empty_object_schema(schema: &Value) -> bool {
     let Value::Object(obj) = schema else {
@@ -28,6 +59,81 @@ fn is_empty_object_schema(schema: &Value) -> bool {
 pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> Option<Value> {
     let mut visited_refs = Vec::<String>::new();
     convert_json_schema_to_openapi_schema_impl(schema, schema, is_root, &mut visited_refs)
+}
+
+pub(crate) fn collect_unsupported_keywords(schema: &Value) -> Vec<String> {
+    let mut out = BTreeSet::<String>::new();
+    collect_unsupported_keywords_impl(schema, &mut out);
+    out.into_iter().collect()
+}
+
+fn collect_unsupported_keywords_impl(schema: &Value, out: &mut BTreeSet<String>) {
+    match schema {
+        Value::Object(obj) => {
+            for (key, value) in obj {
+                if key.starts_with('$') {
+                    if key == "$defs" {
+                        if let Value::Object(map) = value {
+                            for schema in map.values() {
+                                collect_unsupported_keywords_impl(schema, out);
+                            }
+                        }
+                    }
+                    continue;
+                }
+
+                if key == "definitions" {
+                    if let Value::Object(map) = value {
+                        for schema in map.values() {
+                            collect_unsupported_keywords_impl(schema, out);
+                        }
+                    }
+                    continue;
+                }
+
+                if !SUPPORTED_KEYWORDS.iter().any(|supported| supported == key) {
+                    out.insert(key.clone());
+                }
+
+                match key.as_str() {
+                    "properties" => {
+                        if let Value::Object(map) = value {
+                            for schema in map.values() {
+                                collect_unsupported_keywords_impl(schema, out);
+                            }
+                        }
+                    }
+                    "items" => match value {
+                        Value::Array(values) => {
+                            for schema in values {
+                                collect_unsupported_keywords_impl(schema, out);
+                            }
+                        }
+                        _ => collect_unsupported_keywords_impl(value, out),
+                    },
+                    "allOf" | "anyOf" | "oneOf" => {
+                        if let Value::Array(values) = value {
+                            for schema in values {
+                                collect_unsupported_keywords_impl(schema, out);
+                            }
+                        }
+                    }
+                    "additionalProperties" => {
+                        if matches!(value, Value::Object(_) | Value::Array(_)) {
+                            collect_unsupported_keywords_impl(value, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_unsupported_keywords_impl(value, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn convert_json_schema_to_openapi_schema_impl(
