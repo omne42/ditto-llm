@@ -436,6 +436,7 @@ impl OpenAICompatible {
             Some("stop") => FinishReason::Stop,
             Some("length") => FinishReason::Length,
             Some("tool_calls") => FinishReason::ToolCalls,
+            Some("function_call") => FinishReason::ToolCalls,
             Some("content_filter") => FinishReason::ContentFilter,
             Some("error") => FinishReason::Error,
             _ => FinishReason::Unknown,
@@ -479,6 +480,16 @@ struct ChatMessage {
     content: Option<String>,
     #[serde(default)]
     tool_calls: Option<Vec<ChatToolCall>>,
+    #[serde(default)]
+    function_call: Option<ChatFunctionCall>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct ChatFunctionCall {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    arguments: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -524,6 +535,17 @@ struct ChatDelta {
     content: Option<String>,
     #[serde(default)]
     tool_calls: Option<Vec<ChatToolCallDelta>>,
+    #[serde(default)]
+    function_call: Option<ChatFunctionCallDelta>,
+}
+
+#[cfg(feature = "streaming")]
+#[derive(Debug, Deserialize, Default)]
+struct ChatFunctionCallDelta {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    arguments: Option<String>,
 }
 
 #[cfg(feature = "streaming")]
@@ -706,6 +728,63 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
         }
     }
 
+    if let Some(function_call) = choice.delta.function_call.as_ref() {
+        let mut warnings = Vec::<Warning>::new();
+        while state.tool_calls.is_empty() {
+            state.tool_calls.push(StreamToolCallState::default());
+        }
+        let slot = &mut state.tool_calls[0];
+        if slot.id.is_none() {
+            slot.id = Some("call_0".to_string());
+            warnings.push(Warning::Compatibility {
+                feature: "tool_call.id".to_string(),
+                details: "legacy function_call does not provide tool_call ids; synthesizing call_0"
+                    .to_string(),
+            });
+        }
+        if !warnings.is_empty() {
+            out.push(StreamChunk::Warnings { warnings });
+        }
+
+        if let Some(name) = function_call
+            .name
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+        {
+            slot.name = Some(name.to_string());
+        }
+
+        let arguments = function_call.arguments.as_deref().unwrap_or("");
+        if !arguments.is_empty() {
+            if slot.started {
+                if let Some(id) = slot.id.as_deref() {
+                    out.push(StreamChunk::ToolCallDelta {
+                        id: id.to_string(),
+                        arguments_delta: arguments.to_string(),
+                    });
+                }
+            } else {
+                slot.pending_arguments.push_str(arguments);
+            }
+        }
+
+        if !slot.started {
+            if let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
+                out.push(StreamChunk::ToolCallStart {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                });
+                slot.started = true;
+                if !slot.pending_arguments.is_empty() {
+                    out.push(StreamChunk::ToolCallDelta {
+                        id: id.to_string(),
+                        arguments_delta: std::mem::take(&mut slot.pending_arguments),
+                    });
+                }
+            }
+        }
+    }
+
     if let Some(reason) = choice.finish_reason.as_deref() {
         out.extend(finalize_stream_state(state));
         done = true;
@@ -841,26 +920,64 @@ impl LanguageModel for OpenAICompatible {
                 text: text.to_string(),
             });
         }
-        if let Some(tool_calls) = choice.message.tool_calls.as_ref() {
-            for tool_call in tool_calls {
-                let arguments_raw = tool_call.function.arguments.as_str();
-                let raw = arguments_raw.trim();
-                let raw_json = if raw.is_empty() { "{}" } else { raw };
-                let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
+        match choice.message.tool_calls.as_ref() {
+            Some(tool_calls) if !tool_calls.is_empty() => {
+                for tool_call in tool_calls {
+                    let arguments_raw = tool_call.function.arguments.as_str();
+                    let raw = arguments_raw.trim();
+                    let raw_json = if raw.is_empty() { "{}" } else { raw };
+                    let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
+                        warnings.push(Warning::Compatibility {
+                            feature: "tool_call.arguments".to_string(),
+                            details: format!(
+                                "failed to parse tool_call arguments as JSON for id={}: {err}; preserving raw string",
+                                tool_call.id
+                            ),
+                        });
+                        Value::String(arguments_raw.to_string())
+                    });
+                    content.push(ContentPart::ToolCall {
+                        id: tool_call.id.clone(),
+                        name: tool_call.function.name.clone(),
+                        arguments,
+                    });
+                }
+            }
+            _ => {
+                if let Some(function_call) = choice.message.function_call.as_ref() {
+                    warnings.push(Warning::Compatibility {
+                feature: "tool_call.id".to_string(),
+                details:
+                    "legacy function_call does not provide tool_call ids; synthesizing call_0"
+                        .to_string(),
+            });
+
+                    let name = function_call.name.trim();
+                    if !name.is_empty() {
+                        let arguments_raw = function_call.arguments.as_str();
+                        let raw = arguments_raw.trim();
+                        let raw_json = if raw.is_empty() { "{}" } else { raw };
+                        let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
                     warnings.push(Warning::Compatibility {
                         feature: "tool_call.arguments".to_string(),
                         details: format!(
-                            "failed to parse tool_call arguments as JSON for id={}: {err}; preserving raw string",
-                            tool_call.id
+                            "failed to parse function_call arguments as JSON for name={name}: {err}; preserving raw string",
                         ),
                     });
                     Value::String(arguments_raw.to_string())
                 });
-                content.push(ContentPart::ToolCall {
-                    id: tool_call.id.clone(),
-                    name: tool_call.function.name.clone(),
-                    arguments,
-                });
+                        content.push(ContentPart::ToolCall {
+                            id: "call_0".to_string(),
+                            name: name.to_string(),
+                            arguments,
+                        });
+                    } else {
+                        warnings.push(Warning::Compatibility {
+                            feature: "tool_call.name".to_string(),
+                            details: "function_call.name is empty; dropping tool call".to_string(),
+                        });
+                    }
+                }
             }
         }
 
@@ -1561,6 +1678,132 @@ mod tests {
             vec![
                 StreamChunk::ToolCallDelta {
                     id: "call_1".to_string(),
+                    arguments_delta: ", \"b\": 2}".to_string(),
+                },
+                StreamChunk::FinishReason(FinishReason::ToolCalls),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn generate_supports_legacy_function_call() -> Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/v1/chat/completions");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(
+                        serde_json::json!({
+                            "id": "cmpl_1",
+                            "model": "test-model",
+                            "choices": [{
+                                "message": {
+                                    "role": "assistant",
+                                    "content": null,
+                                    "function_call": {
+                                        "name": "add",
+                                        "arguments": "{\"a\":1,\"b\":2}"
+                                    }
+                                },
+                                "finish_reason": "function_call"
+                            }],
+                            "usage": {
+                                "prompt_tokens": 1,
+                                "completion_tokens": 2,
+                                "total_tokens": 3
+                            }
+                        })
+                        .to_string(),
+                    );
+            })
+            .await;
+
+        let client = OpenAICompatible::new("")
+            .with_base_url(server.url("/v1"))
+            .with_model("test-model");
+
+        let response = client.generate(vec![Message::user("hi")].into()).await?;
+        mock.assert_async().await;
+
+        assert_eq!(response.finish_reason, FinishReason::ToolCalls);
+        assert!(
+            response.warnings.iter().any(
+                |w| matches!(w, Warning::Compatibility { feature, .. } if feature == "tool_call.id")
+            ),
+            "expected compatibility warning for synthesized tool_call id"
+        );
+        assert_eq!(response.content.len(), 1);
+        match &response.content[0] {
+            ContentPart::ToolCall {
+                id,
+                name,
+                arguments,
+            } => {
+                assert_eq!(id, "call_0");
+                assert_eq!(name, "add");
+                assert_eq!(arguments, &serde_json::json!({ "a": 1, "b": 2 }));
+            }
+            other => panic!("unexpected content part: {other:?}"),
+        }
+        assert_eq!(response.usage.total_tokens, Some(3));
+        Ok(())
+    }
+
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn parses_streaming_legacy_function_call_deltas() -> Result<()> {
+        let mut state = StreamState::default();
+
+        let (chunks, done) = parse_stream_data(
+            &mut state,
+            &serde_json::json!({
+                "choices": [{
+                    "delta": {
+                        "function_call": { "name": "add", "arguments": "{\"a\": 4" }
+                    }
+                }]
+            })
+            .to_string(),
+        )?;
+        assert!(!done);
+        assert!(
+            matches!(chunks.first(), Some(StreamChunk::Warnings { .. })),
+            "expected warnings for synthesized tool_call id"
+        );
+        assert!(
+            chunks
+                .iter()
+                .any(|c| matches!(c, StreamChunk::ToolCallStart { id, name } if id == "call_0" && name == "add")),
+            "expected tool call start"
+        );
+        assert!(
+            chunks
+                .iter()
+                .any(|c| matches!(c, StreamChunk::ToolCallDelta { id, arguments_delta } if id == "call_0" && arguments_delta == "{\"a\": 4")),
+            "expected tool call delta"
+        );
+
+        let (chunks, done) = parse_stream_data(
+            &mut state,
+            &serde_json::json!({
+                "choices": [{
+                    "delta": {
+                        "function_call": { "arguments": ", \"b\": 2}" }
+                    },
+                    "finish_reason": "function_call"
+                }]
+            })
+            .to_string(),
+        )?;
+        assert!(done);
+        assert_eq!(
+            chunks,
+            vec![
+                StreamChunk::ToolCallDelta {
+                    id: "call_0".to_string(),
                     arguments_delta: ", \"b\": 2}".to_string(),
                 },
                 StreamChunk::FinishReason(FinishReason::ToolCalls),
