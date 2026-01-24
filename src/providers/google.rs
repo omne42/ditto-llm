@@ -585,20 +585,26 @@ impl LanguageModel for Google {
             );
         }
         if let Some(temperature) = request.temperature {
-            generation_config.insert(
-                "temperature".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(temperature as f64).unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "temperature",
+                temperature,
+                0.0,
+                2.0,
+                &mut warnings,
+            ) {
+                generation_config.insert("temperature".to_string(), Value::Number(value));
+            }
         }
         if let Some(top_p) = request.top_p {
-            generation_config.insert(
-                "topP".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "top_p",
+                top_p,
+                0.0,
+                1.0,
+                &mut warnings,
+            ) {
+                generation_config.insert("topP".to_string(), Value::Number(value));
+            }
         }
         if let Some(stop_sequences) = request.stop_sequences {
             generation_config.insert(
@@ -737,21 +743,26 @@ impl LanguageModel for Google {
                 );
             }
             if let Some(temperature) = request.temperature {
-                generation_config.insert(
-                    "temperature".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(temperature as f64)
-                            .unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "temperature",
+                    temperature,
+                    0.0,
+                    2.0,
+                    &mut warnings,
+                ) {
+                    generation_config.insert("temperature".to_string(), Value::Number(value));
+                }
             }
             if let Some(top_p) = request.top_p {
-                generation_config.insert(
-                    "topP".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "top_p",
+                    top_p,
+                    0.0,
+                    1.0,
+                    &mut warnings,
+                ) {
+                    generation_config.insert("topP".to_string(), Value::Number(value));
+                }
             }
             if let Some(stop_sequences) = request.stop_sequences {
                 generation_config.insert(

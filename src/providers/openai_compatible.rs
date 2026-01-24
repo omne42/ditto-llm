@@ -744,23 +744,29 @@ impl LanguageModel for OpenAICompatible {
         body.insert("messages".to_string(), Value::Array(messages));
 
         if let Some(temperature) = request.temperature {
-            body.insert(
-                "temperature".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(temperature as f64).unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "temperature",
+                temperature,
+                0.0,
+                2.0,
+                &mut warnings,
+            ) {
+                body.insert("temperature".to_string(), Value::Number(value));
+            }
         }
         if let Some(max_tokens) = request.max_tokens {
             body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
         }
         if let Some(top_p) = request.top_p {
-            body.insert(
-                "top_p".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "top_p",
+                top_p,
+                0.0,
+                1.0,
+                &mut warnings,
+            ) {
+                body.insert("top_p".to_string(), Value::Number(value));
+            }
         }
         if let Some(stops) = request.stop_sequences.as_ref() {
             let stops = stops
@@ -903,24 +909,29 @@ impl LanguageModel for OpenAICompatible {
             body.insert("stream".to_string(), Value::Bool(true));
 
             if let Some(temperature) = request.temperature {
-                body.insert(
-                    "temperature".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(temperature as f64)
-                            .unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "temperature",
+                    temperature,
+                    0.0,
+                    2.0,
+                    &mut warnings,
+                ) {
+                    body.insert("temperature".to_string(), Value::Number(value));
+                }
             }
             if let Some(max_tokens) = request.max_tokens {
                 body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
             }
             if let Some(top_p) = request.top_p {
-                body.insert(
-                    "top_p".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "top_p",
+                    top_p,
+                    0.0,
+                    1.0,
+                    &mut warnings,
+                ) {
+                    body.insert("top_p".to_string(), Value::Number(value));
+                }
             }
             if let Some(stops) = request.stop_sequences.as_ref() {
                 let stops = stops

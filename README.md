@@ -8,6 +8,7 @@ Current scope:
 
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
 - Multi-modal inputs: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
+- Parameter hygiene: `temperature`/`top_p` are clamped to provider ranges; non-finite values are dropped (with warnings).
 - Providers:
   - OpenAI Responses API (generate + SSE streaming) and embeddings
   - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.) and embeddings

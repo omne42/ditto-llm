@@ -134,26 +134,6 @@ impl Anthropic {
         ))
     }
 
-    fn clamp_temperature(temperature: f32, warnings: &mut Vec<Warning>) -> f32 {
-        if temperature > 1.0 {
-            warnings.push(Warning::Clamped {
-                parameter: "temperature".to_string(),
-                original: temperature,
-                clamped_to: 1.0,
-            });
-            return 1.0;
-        }
-        if temperature < 0.0 {
-            warnings.push(Warning::Clamped {
-                parameter: "temperature".to_string(),
-                original: temperature,
-                clamped_to: 0.0,
-            });
-            return 0.0;
-        }
-        temperature
-    }
-
     fn tool_to_anthropic(tool: &Tool, warnings: &mut Vec<Warning>) -> Value {
         if tool.strict.is_some() {
             warnings.push(Warning::Unsupported {
@@ -563,23 +543,26 @@ impl LanguageModel for Anthropic {
         }
 
         if let Some(temperature) = request.temperature {
-            body.insert(
-                "temperature".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(
-                        Self::clamp_temperature(temperature, &mut warnings) as f64,
-                    )
-                    .unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "temperature",
+                temperature,
+                0.0,
+                1.0,
+                &mut warnings,
+            ) {
+                body.insert("temperature".to_string(), Value::Number(value));
+            }
         }
         if let Some(top_p) = request.top_p {
-            body.insert(
-                "top_p".to_string(),
-                Value::Number(
-                    serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                ),
-            );
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "top_p",
+                top_p,
+                0.0,
+                1.0,
+                &mut warnings,
+            ) {
+                body.insert("top_p".to_string(), Value::Number(value));
+            }
         }
         if let Some(stop_sequences) = request.stop_sequences {
             body.insert(
@@ -730,24 +713,26 @@ impl LanguageModel for Anthropic {
             }
 
             if let Some(temperature) = request.temperature {
-                body.insert(
-                    "temperature".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(Self::clamp_temperature(
-                            temperature,
-                            &mut warnings,
-                        ) as f64)
-                        .unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "temperature",
+                    temperature,
+                    0.0,
+                    1.0,
+                    &mut warnings,
+                ) {
+                    body.insert("temperature".to_string(), Value::Number(value));
+                }
             }
             if let Some(top_p) = request.top_p {
-                body.insert(
-                    "top_p".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(top_p as f64).unwrap_or_else(|| 0.into()),
-                    ),
-                );
+                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                    "top_p",
+                    top_p,
+                    0.0,
+                    1.0,
+                    &mut warnings,
+                ) {
+                    body.insert("top_p".to_string(), Value::Number(value));
+                }
             }
             if let Some(stop_sequences) = request.stop_sequences {
                 body.insert(
