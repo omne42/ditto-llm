@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - OpenAI Responses: map `finish_reason` consistently (generate + stream), including tool-call completion.
 - OpenAI-compatible streaming: flush pending tool calls and always emit a final `FinishReason` even if the provider omits it.
-- Google tool schemas: emit `Warning::Compatibility(tool.parameters.$ref)` when tool parameter JSON Schema uses `$ref` (refs are ignored).
+- Google tool schemas: resolve local JSON Schema `$ref`; emit `Warning::Compatibility(tool.parameters.$ref)` only for unresolvable refs.
 - JSON Schema → OpenAPI conversion: support common constraints and `additionalProperties` for tool schemas.
 - Tool call arguments: preserve raw JSON on parse failures, emit `Warning::Compatibility(tool_call.arguments)`, and avoid double-encoding when replaying assistant tool calls.
 - `collect_stream`: preserve chunk ordering (text/reasoning/tool calls) and warn on invalid tool-call argument JSON.

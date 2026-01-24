@@ -1,9 +1,13 @@
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 
 fn is_empty_object_schema(schema: &Value) -> bool {
     let Value::Object(obj) = schema else {
         return false;
     };
+    if obj.contains_key("$ref") {
+        return false;
+    }
     if obj.get("type").and_then(Value::as_str) != Some("object") {
         return false;
     }
@@ -22,8 +26,61 @@ fn is_empty_object_schema(schema: &Value) -> bool {
 }
 
 pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> Option<Value> {
+    let mut visited_refs = Vec::<String>::new();
+    convert_json_schema_to_openapi_schema_impl(schema, schema, is_root, &mut visited_refs)
+}
+
+fn convert_json_schema_to_openapi_schema_impl(
+    schema: &Value,
+    root: &Value,
+    is_root: bool,
+    visited_refs: &mut Vec<String>,
+) -> Option<Value> {
     if schema.is_null() {
         return None;
+    }
+
+    if let Value::Bool(_) = schema {
+        if is_root {
+            return None;
+        }
+        return Some(Value::Object(Map::new()));
+    }
+
+    if let Value::Object(input) = schema {
+        if let Some(Value::String(reference)) = input.get("$ref") {
+            if let Some(resolved) = resolve_json_schema_ref(root, reference) {
+                if visited_refs.iter().any(|r| r == reference) {
+                    if is_root {
+                        return None;
+                    }
+                    return Some(Value::Object(Map::new()));
+                }
+
+                visited_refs.push(reference.clone());
+                let mut converted = convert_json_schema_to_openapi_schema_impl(
+                    resolved,
+                    root,
+                    is_root,
+                    visited_refs,
+                );
+                visited_refs.pop();
+
+                if let Some(Value::Object(obj)) = converted.as_mut() {
+                    if let Some(description) = input.get("description").and_then(Value::as_str) {
+                        obj.insert(
+                            "description".to_string(),
+                            Value::String(description.to_string()),
+                        );
+                    }
+                    if let Some(title) = input.get("title").and_then(Value::as_str) {
+                        obj.insert("title".to_string(), Value::String(title.to_string()));
+                    }
+                }
+
+                return converted;
+            }
+        }
     }
 
     if is_empty_object_schema(schema) {
@@ -39,13 +96,6 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
             );
         }
         return Some(Value::Object(out));
-    }
-
-    if let Value::Bool(_) = schema {
-        if is_root {
-            return None;
-        }
-        return Some(Value::Object(Map::new()));
     }
 
     let Value::Object(input) = schema else {
@@ -110,7 +160,8 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
         let mut mapped = Map::<String, Value>::new();
         for (key, value) in properties {
             let converted =
-                convert_json_schema_to_openapi_schema(value, false).unwrap_or(Value::Null);
+                convert_json_schema_to_openapi_schema_impl(value, root, false, visited_refs)
+                    .unwrap_or(Value::Null);
             mapped.insert(key.clone(), converted);
         }
         out.insert("properties".to_string(), Value::Object(mapped));
@@ -122,11 +173,13 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                 values
                     .iter()
                     .map(|item| {
-                        convert_json_schema_to_openapi_schema(item, false).unwrap_or(Value::Null)
+                        convert_json_schema_to_openapi_schema_impl(item, root, false, visited_refs)
+                            .unwrap_or(Value::Null)
                     })
                     .collect(),
             ),
-            _ => convert_json_schema_to_openapi_schema(items, false).unwrap_or(Value::Null),
+            _ => convert_json_schema_to_openapi_schema_impl(items, root, false, visited_refs)
+                .unwrap_or(Value::Null),
         };
         out.insert("items".to_string(), mapped);
     }
@@ -138,7 +191,8 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                 all_of
                     .iter()
                     .map(|item| {
-                        convert_json_schema_to_openapi_schema(item, false).unwrap_or(Value::Null)
+                        convert_json_schema_to_openapi_schema_impl(item, root, false, visited_refs)
+                            .unwrap_or(Value::Null)
                     })
                     .collect(),
             ),
@@ -160,9 +214,12 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                 .collect::<Vec<_>>();
 
             if non_null_schemas.len() == 1 {
-                if let Some(Value::Object(obj)) =
-                    convert_json_schema_to_openapi_schema(non_null_schemas[0], false)
-                {
+                if let Some(Value::Object(obj)) = convert_json_schema_to_openapi_schema_impl(
+                    non_null_schemas[0],
+                    root,
+                    false,
+                    visited_refs,
+                ) {
                     out.insert("nullable".to_string(), Value::Bool(true));
                     for (k, v) in obj {
                         out.insert(k, v);
@@ -175,8 +232,13 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                         non_null_schemas
                             .into_iter()
                             .map(|item| {
-                                convert_json_schema_to_openapi_schema(item, false)
-                                    .unwrap_or(Value::Null)
+                                convert_json_schema_to_openapi_schema_impl(
+                                    item,
+                                    root,
+                                    false,
+                                    visited_refs,
+                                )
+                                .unwrap_or(Value::Null)
                             })
                             .collect(),
                     ),
@@ -190,8 +252,13 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                     any_of
                         .iter()
                         .map(|item| {
-                            convert_json_schema_to_openapi_schema(item, false)
-                                .unwrap_or(Value::Null)
+                            convert_json_schema_to_openapi_schema_impl(
+                                item,
+                                root,
+                                false,
+                                visited_refs,
+                            )
+                            .unwrap_or(Value::Null)
                         })
                         .collect(),
                 ),
@@ -206,7 +273,8 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
                 one_of
                     .iter()
                     .map(|item| {
-                        convert_json_schema_to_openapi_schema(item, false).unwrap_or(Value::Null)
+                        convert_json_schema_to_openapi_schema_impl(item, root, false, visited_refs)
+                            .unwrap_or(Value::Null)
                     })
                     .collect(),
             ),
@@ -254,10 +322,13 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
     if let Some(additional_properties) = input.get("additionalProperties") {
         let mapped = match additional_properties {
             Value::Bool(value) => Value::Bool(*value),
-            Value::Object(_) | Value::Array(_) => {
-                convert_json_schema_to_openapi_schema(additional_properties, false)
-                    .unwrap_or(Value::Null)
-            }
+            Value::Object(_) | Value::Array(_) => convert_json_schema_to_openapi_schema_impl(
+                additional_properties,
+                root,
+                false,
+                visited_refs,
+            )
+            .unwrap_or(Value::Null),
             other => other.clone(),
         };
         out.insert("additionalProperties".to_string(), mapped);
@@ -306,6 +377,53 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
     }
 
     Some(Value::Object(out))
+}
+
+fn unescape_json_pointer_segment(segment: &str) -> Option<Cow<'_, str>> {
+    if !segment.contains('~') {
+        return Some(Cow::Borrowed(segment));
+    }
+
+    let mut out = String::with_capacity(segment.len());
+    let mut chars = segment.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '~' {
+            out.push(ch);
+            continue;
+        }
+
+        match chars.next() {
+            Some('0') => out.push('~'),
+            Some('1') => out.push('/'),
+            _ => return None,
+        }
+    }
+    Some(Cow::Owned(out))
+}
+
+pub(crate) fn resolve_json_schema_ref<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
+    let reference = reference.trim();
+    let fragment = reference.strip_prefix('#')?;
+
+    if fragment.is_empty() {
+        return Some(root);
+    }
+
+    let pointer = fragment.strip_prefix('/')?;
+
+    let mut current = root;
+    for raw in pointer.split('/') {
+        let segment = unescape_json_pointer_segment(raw)?;
+        match current {
+            Value::Object(obj) => current = obj.get(segment.as_ref())?,
+            Value::Array(values) => {
+                let idx: usize = segment.as_ref().parse().ok()?;
+                current = values.get(idx)?;
+            }
+            _ => return None,
+        }
+    }
+    Some(current)
 }
 
 #[cfg(test)]
@@ -508,6 +626,50 @@ mod tests {
                     { "type": "string" },
                     { "type": "number" }
                 ]
+            }))
+        );
+    }
+
+    #[test]
+    fn resolves_local_ref_at_root() {
+        let schema = json!({
+            "$ref": "#/$defs/Args",
+            "$defs": {
+                "Args": {
+                    "type": "object",
+                    "properties": { "a": { "type": "integer" } },
+                    "required": ["a"]
+                }
+            }
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "object",
+                "properties": { "a": { "type": "integer" } },
+                "required": ["a"]
+            }))
+        );
+    }
+
+    #[test]
+    fn resolves_local_ref_in_nested_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "a": { "$ref": "#/$defs/A" }
+            },
+            "$defs": {
+                "A": { "type": "string", "minLength": 1 }
+            }
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "object",
+                "properties": {
+                    "a": { "type": "string", "minLength": 1 }
+                }
             }))
         );
     }

@@ -337,7 +337,7 @@ impl Google {
     }
 
     fn tool_to_google(tool: Tool, warnings: &mut Vec<Warning>) -> Value {
-        Self::warn_on_json_schema_refs(&tool.name, &tool.parameters, warnings);
+        Self::warn_on_unresolvable_json_schema_refs(&tool.name, &tool.parameters, warnings);
         let mut out = Map::<String, Value>::new();
         out.insert("name".to_string(), Value::String(tool.name));
         out.insert(
@@ -352,7 +352,11 @@ impl Google {
         Value::Object(out)
     }
 
-    fn warn_on_json_schema_refs(tool_name: &str, schema: &Value, warnings: &mut Vec<Warning>) {
+    fn warn_on_unresolvable_json_schema_refs(
+        tool_name: &str,
+        schema: &Value,
+        warnings: &mut Vec<Warning>,
+    ) {
         fn collect_refs(value: &Value, out: &mut Vec<String>) {
             match value {
                 Value::Object(obj) => {
@@ -379,17 +383,22 @@ impl Google {
         refs.sort();
         refs.dedup();
 
-        if refs.is_empty() {
+        let unresolved = refs
+            .into_iter()
+            .filter(|r| crate::utils::json_schema::resolve_json_schema_ref(schema, r).is_none())
+            .collect::<Vec<_>>();
+
+        if unresolved.is_empty() {
             return;
         }
 
-        let shown = refs.iter().take(3).cloned().collect::<Vec<_>>();
-        let extra = refs.len().saturating_sub(shown.len());
+        let shown = unresolved.iter().take(3).cloned().collect::<Vec<_>>();
+        let extra = unresolved.len().saturating_sub(shown.len());
 
         warnings.push(Warning::Compatibility {
             feature: "tool.parameters.$ref".to_string(),
             details: format!(
-                "tool {tool_name} uses JSON Schema $ref which is not supported for Google tool schemas; refs will be ignored (e.g. {}{})",
+                "tool {tool_name} uses unresolvable JSON Schema $ref for Google tool schemas; refs will be ignored (e.g. {}{})",
                 shown.join(", "),
                 if extra == 0 {
                     String::new()
@@ -1164,7 +1173,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_schema_ref_emits_warning() {
+    fn tool_schema_ref_is_resolved_without_warning() {
         let tool = Tool {
             name: "add".to_string(),
             description: Some("add".to_string()),
@@ -1179,7 +1188,36 @@ mod tests {
         let mut warnings = Vec::new();
         let decl = Google::tool_to_google(tool, &mut warnings);
         assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
-        assert!(warnings.iter().any(|w| matches!(w, Warning::Compatibility { feature, .. } if feature == "tool.parameters.$ref")));
+        assert!(warnings.is_empty());
+        assert_eq!(
+            decl.get("parameters"),
+            Some(&json!({
+                "type": "object",
+                "properties": { "a": { "type": "integer" } }
+            }))
+        );
+    }
+
+    #[test]
+    fn tool_schema_unresolvable_ref_emits_warning() {
+        let tool = Tool {
+            name: "add".to_string(),
+            description: Some("add".to_string()),
+            parameters: json!({
+                "$ref": "#/$defs/Missing",
+                "$defs": {
+                    "Args": { "type": "object", "properties": { "a": { "type": "integer" } } }
+                }
+            }),
+            strict: None,
+        };
+        let mut warnings = Vec::new();
+        let decl = Google::tool_to_google(tool, &mut warnings);
+        assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
+        assert_eq!(decl.get("parameters"), Some(&json!({})));
+        assert!(warnings.iter().any(|w| {
+            matches!(w, Warning::Compatibility { feature, .. } if feature == "tool.parameters.$ref")
+        }));
     }
 
     #[test]
