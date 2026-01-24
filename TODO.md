@@ -46,7 +46,7 @@
 - [x] 多模态输入：`ContentPart::Image` / `ContentPart::File(PDF)`（providers + `examples/multimodal.rs`）
 - [x] 受控扩展点：`ProviderOptions`（`reasoning_effort` / `response_format(json_schema)` / `parallel_tool_calls`）（`src/types/mod.rs`）
 - [x] 路由/配置层：`ProviderConfig` / `ProviderAuth` / `.env` 解析 / `GET /models` 发现（`src/profile.rs`）
-- [x] Examples：`basic`/`streaming`/`tool_calling`/`embeddings`/`openai_compatible`/`multimodal`（`examples/`）
+- [x] Examples：`basic`/`streaming`/`tool_calling`/`embeddings`/`openai_compatible`/`openai_compatible_embeddings`/`multimodal`（`examples/`）
 - [x] 集成 smoke tests（feature `integration`）（`tests/integration_smoke.rs`）
 - [x] Repo 级 githooks（Conventional Commits + changelog 绑定）（`githooks/`）
 

@@ -49,6 +49,7 @@ cargo run --example streaming
 cargo run --example tool_calling
 cargo run --example embeddings
 cargo run --example openai_compatible
+cargo run --example openai_compatible_embeddings
 cargo run --example multimodal -- ./image.png ./doc.pdf
 ```
 
