@@ -8,7 +8,8 @@ use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    resolve_request_auth_with_default_keys,
 };
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
@@ -24,7 +25,7 @@ const BETA_PDFS_2024_09_25: &str = "pdfs-2024-09-25";
 pub struct Anthropic {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     default_model: String,
     version: String,
 }
@@ -40,7 +41,9 @@ impl Anthropic {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::header_value("x-api-key", None, &api_key).ok()
+            HttpAuth::header_value("x-api-key", None, &api_key)
+                .ok()
+                .map(RequestAuth::Http)
         };
 
         Self {
@@ -79,7 +82,7 @@ impl Anthropic {
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
         let auth_header =
-            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-api-key", None)
+            resolve_request_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-api-key", None)
                 .await?;
 
         let mut out = Self::new("");

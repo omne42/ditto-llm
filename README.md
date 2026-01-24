@@ -64,7 +64,7 @@ let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
 When building providers from config, you can also set default headers via
 `ProviderConfig.http_headers`.
 
-## Provider Auth (Custom Headers)
+## Provider Auth (Custom Headers / Query Params)
 
 Providers apply their standard auth headers by default (OpenAI/OpenAI-compatible: bearer token;
 Anthropic: `x-api-key`; Google: `x-goog-api-key`).
@@ -73,6 +73,12 @@ If you need a non-standard auth header (e.g. Azure / enterprise gateways), use:
 
 ```toml
 auth = { type = "http_header_env", header = "api-key", keys = ["AZURE_OPENAI_API_KEY"] }
+```
+
+If your gateway expects auth in a query param (e.g. `...?api_key=...`), use:
+
+```toml
+auth = { type = "query_param_env", param = "api_key", keys = ["GATEWAY_API_KEY"] }
 ```
 
 ## File Upload (Optional)

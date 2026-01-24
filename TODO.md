@@ -91,7 +91,7 @@
 - [x] OpenAI-compatible `GET /models` 发现（用于模型列表与 allowlist）
 - [x] 默认 HTTP headers：`ProviderConfig.http_headers`（from_config + `/models` 发现会应用）
 - [x] 更通用的 auth header：支持非 Bearer 头（如 `api-key`），见 `ProviderAuth::HttpHeaderEnv` / `ProviderAuth::HttpHeaderCommand`
-- [ ] （待确认）auth query param（如果要直连某些企业网关）
+- [x] auth query param（企业网关要求 token 在 query string）
 
 ---
 

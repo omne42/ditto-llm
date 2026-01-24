@@ -11,7 +11,8 @@ use serde_json::{Map, Value};
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    resolve_request_auth_with_default_keys,
 };
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
@@ -23,7 +24,7 @@ use crate::{DittoError, Result};
 pub struct OpenAI {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     default_model: String,
 }
 
@@ -38,7 +39,7 @@ impl OpenAI {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::bearer(&api_key).ok()
+            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
         };
 
         Self {
@@ -70,7 +71,7 @@ impl OpenAI {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header = resolve_http_auth_with_default_keys(
+        let auth_header = resolve_request_auth_with_default_keys(
             &auth,
             env,
             DEFAULT_KEYS,
@@ -940,7 +941,7 @@ impl LanguageModel for OpenAI {
 pub struct OpenAIEmbeddings {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     model: String,
 }
 
@@ -956,7 +957,7 @@ impl OpenAIEmbeddings {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::bearer(&api_key).ok()
+            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
         };
 
         Self {
@@ -988,7 +989,7 @@ impl OpenAIEmbeddings {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header = resolve_http_auth_with_default_keys(
+        let auth_header = resolve_request_auth_with_default_keys(
             &auth,
             env,
             DEFAULT_KEYS,
@@ -1094,6 +1095,7 @@ mod tests {
     use super::*;
     use httpmock::{Method::POST, MockServer};
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     #[tokio::test]
     async fn from_config_resolves_api_key_and_model() -> crate::Result<()> {
@@ -1137,6 +1139,46 @@ mod tests {
             .await;
 
         let client = OpenAI::new("sk-test").with_base_url(server.url("/v1"));
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_uses_query_param_auth() -> crate::Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .query_param("api_key", "sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::QueryParamEnv {
+                param: "api_key".to_string(),
+                keys: vec!["CODEPM_TEST_OPENAI_KEY".to_string()],
+                prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([("CODEPM_TEST_OPENAI_KEY".to_string(), "sk-test".to_string())]),
+        };
+
+        let client = OpenAI::from_config(&config, &env).await?;
         let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
 
         mock.assert_async().await;

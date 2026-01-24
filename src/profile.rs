@@ -48,6 +48,62 @@ impl HttpAuth {
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct QueryParamAuth {
+    pub(crate) param: String,
+    pub(crate) value: String,
+}
+
+impl std::fmt::Debug for QueryParamAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QueryParamAuth")
+            .field("param", &self.param)
+            .field("value", &"<redacted>")
+            .finish()
+    }
+}
+
+impl QueryParamAuth {
+    pub(crate) fn new(param: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
+        let param = param.trim();
+        if param.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "auth query param name must be non-empty".to_string(),
+            ));
+        }
+
+        let mut value = String::new();
+        if let Some(prefix) = prefix {
+            value.push_str(prefix);
+        }
+        value.push_str(token);
+
+        Ok(Self {
+            param: param.to_string(),
+            value,
+        })
+    }
+
+    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        req.query(&[(self.param.as_str(), self.value.as_str())])
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum RequestAuth {
+    Http(HttpAuth),
+    QueryParam(QueryParamAuth),
+}
+
+impl RequestAuth {
+    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self {
+            Self::Http(auth) => auth.apply(req),
+            Self::QueryParam(auth) => auth.apply(req),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ThinkingIntensity {
@@ -94,6 +150,21 @@ pub enum ProviderAuth {
     #[serde(alias = "header_command")]
     HttpHeaderCommand {
         header: String,
+        command: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prefix: Option<String>,
+    },
+    #[serde(alias = "query_env", alias = "query_param")]
+    QueryParamEnv {
+        param: String,
+        #[serde(default)]
+        keys: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prefix: Option<String>,
+    },
+    #[serde(alias = "query_command")]
+    QueryParamCommand {
+        param: String,
         command: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
@@ -179,25 +250,28 @@ fn resolve_optional_env_token(env: &Env, keys: &[&str]) -> String {
     keys.iter().find_map(|key| env.get(key)).unwrap_or_default()
 }
 
-pub(crate) async fn resolve_http_auth_with_default_keys(
+pub(crate) async fn resolve_request_auth_with_default_keys(
     auth: &ProviderAuth,
     env: &Env,
     default_keys: &[&str],
     default_header: &str,
     default_prefix: Option<&str>,
-) -> Result<HttpAuth> {
+) -> Result<RequestAuth> {
     let token = resolve_auth_token_with_default_keys(auth, env, default_keys).await?;
-    let (header, prefix) = match auth {
-        ProviderAuth::HttpHeaderEnv { header, prefix, .. }
-        | ProviderAuth::HttpHeaderCommand { header, prefix, .. } => {
-            (header.as_str(), prefix.as_deref())
-        }
-        ProviderAuth::ApiKeyEnv { .. } | ProviderAuth::Command { .. } => {
-            (default_header, default_prefix)
-        }
-    };
 
-    HttpAuth::header_value(header, prefix, &token)
+    match auth {
+        ProviderAuth::HttpHeaderEnv { header, prefix, .. }
+        | ProviderAuth::HttpHeaderCommand { header, prefix, .. } => Ok(RequestAuth::Http(
+            HttpAuth::header_value(header.as_str(), prefix.as_deref(), &token)?,
+        )),
+        ProviderAuth::QueryParamEnv { param, prefix, .. }
+        | ProviderAuth::QueryParamCommand { param, prefix, .. } => Ok(RequestAuth::QueryParam(
+            QueryParamAuth::new(param.as_str(), prefix.as_deref(), &token)?,
+        )),
+        ProviderAuth::ApiKeyEnv { .. } | ProviderAuth::Command { .. } => Ok(RequestAuth::Http(
+            HttpAuth::header_value(default_header, default_prefix, &token)?,
+        )),
+    }
 }
 
 #[async_trait]
@@ -211,7 +285,7 @@ pub trait Provider: Send + Sync {
 pub struct OpenAiProvider {
     name: String,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     model_whitelist: Vec<String>,
     capabilities: ProviderCapabilities,
     http: reqwest::Client,
@@ -234,7 +308,7 @@ impl OpenAiProvider {
         })?;
         let auth = match config.auth.clone() {
             Some(auth) => Some(
-                resolve_http_auth_with_default_keys(
+                resolve_request_auth_with_default_keys(
                     &auth,
                     env,
                     DEFAULT_KEYS,
@@ -245,7 +319,7 @@ impl OpenAiProvider {
             ),
             None => match resolve_optional_env_token(env, DEFAULT_KEYS) {
                 token if token.trim().is_empty() => None,
-                token => Some(HttpAuth::bearer(&token)?),
+                token => Some(RequestAuth::Http(HttpAuth::bearer(&token)?)),
             },
         };
 
@@ -371,7 +445,7 @@ pub fn select_model_config<'a>(
 pub struct OpenAiCompatibleClient {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
 }
 
 impl OpenAiCompatibleClient {
@@ -379,12 +453,12 @@ impl OpenAiCompatibleClient {
         let auth = if bearer_token.trim().is_empty() {
             None
         } else {
-            Some(HttpAuth::bearer(&bearer_token)?)
+            Some(RequestAuth::Http(HttpAuth::bearer(&bearer_token)?))
         };
         Self::new_with_auth(auth, base_url)
     }
 
-    pub(crate) fn new_with_auth(auth: Option<HttpAuth>, base_url: String) -> Result<Self> {
+    pub(crate) fn new_with_auth(auth: Option<RequestAuth>, base_url: String) -> Result<Self> {
         let http = reqwest::Client::builder().build()?;
         Ok(Self {
             http,
@@ -475,7 +549,7 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
         .ok_or_else(|| DittoError::InvalidResponse("provider base_url is missing".to_string()))?;
     let auth = match provider.auth.clone() {
         Some(auth) => Some(
-            resolve_http_auth_with_default_keys(
+            resolve_request_auth_with_default_keys(
                 &auth,
                 env,
                 DEFAULT_KEYS,
@@ -486,7 +560,7 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
         ),
         None => match resolve_optional_env_token(env, DEFAULT_KEYS) {
             token if token.trim().is_empty() => None,
-            token => Some(HttpAuth::bearer(&token)?),
+            token => Some(RequestAuth::Http(HttpAuth::bearer(&token)?)),
         },
     };
     let http = build_http_client(Duration::from_secs(300), &provider.http_headers)?;
@@ -507,7 +581,9 @@ pub async fn resolve_auth_token_with_default_keys(
     default_keys: &[&str],
 ) -> Result<String> {
     match auth {
-        ProviderAuth::ApiKeyEnv { keys } | ProviderAuth::HttpHeaderEnv { keys, .. } => {
+        ProviderAuth::ApiKeyEnv { keys }
+        | ProviderAuth::HttpHeaderEnv { keys, .. }
+        | ProviderAuth::QueryParamEnv { keys, .. } => {
             if keys.is_empty() {
                 for key in default_keys {
                     if let Some(value) = env.get(key) {
@@ -529,7 +605,9 @@ pub async fn resolve_auth_token_with_default_keys(
                 keys.join(", "),
             )))
         }
-        ProviderAuth::Command { command } | ProviderAuth::HttpHeaderCommand { command, .. } => {
+        ProviderAuth::Command { command }
+        | ProviderAuth::HttpHeaderCommand { command, .. }
+        | ProviderAuth::QueryParamCommand { command, .. } => {
             let (program, args) = command
                 .split_first()
                 .ok_or_else(|| DittoError::AuthCommand("command is empty".to_string()))?;
@@ -589,7 +667,7 @@ mod tests {
             keys: vec!["CODEPM_TEST_KEY".to_string()],
             prefix: None,
         };
-        let resolved = resolve_http_auth_with_default_keys(
+        let resolved = resolve_request_auth_with_default_keys(
             &auth,
             &env,
             &["CODEPM_TEST_KEY"],
@@ -597,8 +675,37 @@ mod tests {
             Some("Bearer "),
         )
         .await?;
+        let RequestAuth::Http(resolved) = resolved else {
+            panic!("expected http header auth");
+        };
         assert_eq!(resolved.header.as_str(), "api-key");
         assert_eq!(resolved.value.to_str().unwrap_or_default(), "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_query_param_env_auth() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::QueryParamEnv {
+            param: "api_key".to_string(),
+            keys: vec!["CODEPM_TEST_KEY".to_string()],
+            prefix: None,
+        };
+        let resolved = resolve_request_auth_with_default_keys(
+            &auth,
+            &env,
+            &["CODEPM_TEST_KEY"],
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let RequestAuth::QueryParam(resolved) = resolved else {
+            panic!("expected query param auth");
+        };
+        assert_eq!(resolved.param, "api_key");
+        assert_eq!(resolved.value, "sk-test");
         Ok(())
     }
 

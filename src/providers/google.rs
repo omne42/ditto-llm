@@ -8,7 +8,8 @@ use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    resolve_request_auth_with_default_keys,
 };
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
@@ -25,7 +26,7 @@ const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta
 pub struct Google {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     default_model: String,
 }
 
@@ -40,7 +41,9 @@ impl Google {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::header_value("x-goog-api-key", None, &api_key).ok()
+            HttpAuth::header_value("x-goog-api-key", None, &api_key)
+                .ok()
+                .map(RequestAuth::Http)
         };
 
         Self {
@@ -73,9 +76,14 @@ impl Google {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header =
-            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-goog-api-key", None)
-                .await?;
+        let auth_header = resolve_request_auth_with_default_keys(
+            &auth,
+            env,
+            DEFAULT_KEYS,
+            "x-goog-api-key",
+            None,
+        )
+        .await?;
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
@@ -863,7 +871,7 @@ impl LanguageModel for Google {
 pub struct GoogleEmbeddings {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     model: String,
 }
 
@@ -879,7 +887,9 @@ impl GoogleEmbeddings {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::header_value("x-goog-api-key", None, &api_key).ok()
+            HttpAuth::header_value("x-goog-api-key", None, &api_key)
+                .ok()
+                .map(RequestAuth::Http)
         };
 
         Self {
@@ -912,9 +922,14 @@ impl GoogleEmbeddings {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header =
-            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-goog-api-key", None)
-                .await?;
+        let auth_header = resolve_request_auth_with_default_keys(
+            &auth,
+            env,
+            DEFAULT_KEYS,
+            "x-goog-api-key",
+            None,
+        )
+        .await?;
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);

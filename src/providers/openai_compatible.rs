@@ -8,7 +8,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, HttpAuth, ProviderConfig, resolve_http_auth_with_default_keys};
+use crate::profile::{
+    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_request_auth_with_default_keys,
+};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -19,7 +21,7 @@ use crate::{DittoError, Result};
 pub struct OpenAICompatible {
     http: reqwest::Client,
     base_url: String,
-    auth: Option<HttpAuth>,
+    auth: Option<RequestAuth>,
     default_model: String,
 }
 
@@ -34,7 +36,7 @@ impl OpenAICompatible {
         let auth = if api_key.trim().is_empty() {
             None
         } else {
-            HttpAuth::bearer(&api_key).ok()
+            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
         };
 
         Self {
@@ -69,7 +71,7 @@ impl OpenAICompatible {
 
         let auth = match config.auth.clone() {
             Some(auth) => Some(
-                resolve_http_auth_with_default_keys(
+                resolve_request_auth_with_default_keys(
                     &auth,
                     env,
                     DEFAULT_KEYS,
@@ -81,7 +83,7 @@ impl OpenAICompatible {
             None => DEFAULT_KEYS
                 .iter()
                 .find_map(|key| env.get(key))
-                .and_then(|token| HttpAuth::bearer(&token).ok()),
+                .and_then(|token| HttpAuth::bearer(&token).ok().map(RequestAuth::Http)),
         };
 
         let mut out = Self::new("");
@@ -1104,6 +1106,49 @@ mod tests {
             default_model: Some("test-model".to_string()),
             auth: Some(crate::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatible::from_config(&config, &env).await?;
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_uses_query_param_auth() -> Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .query_param("api_key", "sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::QueryParamEnv {
+                param: "api_key".to_string(),
                 keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
             }),
