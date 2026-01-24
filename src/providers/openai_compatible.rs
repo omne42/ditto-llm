@@ -762,13 +762,13 @@ impl LanguageModel for OpenAICompatible {
             }
         }
         if let Some(stops) = request.stop_sequences.as_ref() {
-            let stops = stops
-                .iter()
-                .filter(|s| !s.trim().is_empty())
-                .map(|s| Value::String(s.clone()))
-                .collect::<Vec<_>>();
+            let stops =
+                crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
             if !stops.is_empty() {
-                body.insert("stop".to_string(), Value::Array(stops));
+                body.insert(
+                    "stop".to_string(),
+                    Value::Array(stops.into_iter().map(Value::String).collect()),
+                );
             }
         }
 
@@ -927,13 +927,13 @@ impl LanguageModel for OpenAICompatible {
                 }
             }
             if let Some(stops) = request.stop_sequences.as_ref() {
-                let stops = stops
-                    .iter()
-                    .filter(|s| !s.trim().is_empty())
-                    .map(|s| Value::String(s.clone()))
-                    .collect::<Vec<_>>();
+                let stops =
+                    crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
                 if !stops.is_empty() {
-                    body.insert("stop".to_string(), Value::Array(stops));
+                    body.insert(
+                        "stop".to_string(),
+                        Value::Array(stops.into_iter().map(Value::String).collect()),
+                    );
                 }
             }
 

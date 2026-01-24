@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI-compatible streaming: flush pending tool calls and always emit a final `FinishReason` even if the provider omits it.
 - OpenAI-compatible: map `ToolChoice::Required` to `tool_choice=\"required\"` (instead of silently degrading to `auto`).
 - Parameter conversion: clamp out-of-range `temperature`/`top_p` and drop non-finite values with warnings (avoid silently sending `0`).
+- Stop sequences: drop empty/duplicate entries; truncate to 4 for OpenAI-compatible + Anthropic with a warning (Google preserves count).
 - Google tool schemas: resolve local JSON Schema `$ref`; emit `Warning::Compatibility(tool.parameters.$ref)` only for unresolvable refs.
 - Google tool schemas: emit `Warning::Compatibility(tool.parameters.unsupported_keywords)` when tool parameter JSON Schema uses unsupported keywords (they are ignored).
 - JSON Schema → OpenAPI conversion: support common constraints and `additionalProperties` for tool schemas.

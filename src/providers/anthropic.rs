@@ -565,10 +565,17 @@ impl LanguageModel for Anthropic {
             }
         }
         if let Some(stop_sequences) = request.stop_sequences {
-            body.insert(
-                "stop_sequences".to_string(),
-                Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+            let stop_sequences = crate::utils::params::sanitize_stop_sequences(
+                &stop_sequences,
+                Some(4),
+                &mut warnings,
             );
+            if !stop_sequences.is_empty() {
+                body.insert(
+                    "stop_sequences".to_string(),
+                    Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                );
+            }
         }
 
         if let Some(tools) = request.tools {
@@ -735,10 +742,17 @@ impl LanguageModel for Anthropic {
                 }
             }
             if let Some(stop_sequences) = request.stop_sequences {
-                body.insert(
-                    "stop_sequences".to_string(),
-                    Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                let stop_sequences = crate::utils::params::sanitize_stop_sequences(
+                    &stop_sequences,
+                    Some(4),
+                    &mut warnings,
                 );
+                if !stop_sequences.is_empty() {
+                    body.insert(
+                        "stop_sequences".to_string(),
+                        Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                    );
+                }
             }
 
             if let Some(tools) = request.tools {

@@ -607,10 +607,14 @@ impl LanguageModel for Google {
             }
         }
         if let Some(stop_sequences) = request.stop_sequences {
-            generation_config.insert(
-                "stopSequences".to_string(),
-                Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
-            );
+            let stop_sequences =
+                crate::utils::params::sanitize_stop_sequences(&stop_sequences, None, &mut warnings);
+            if !stop_sequences.is_empty() {
+                generation_config.insert(
+                    "stopSequences".to_string(),
+                    Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                );
+            }
         }
         if !generation_config.is_empty() {
             body.insert(
@@ -765,10 +769,17 @@ impl LanguageModel for Google {
                 }
             }
             if let Some(stop_sequences) = request.stop_sequences {
-                generation_config.insert(
-                    "stopSequences".to_string(),
-                    Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                let stop_sequences = crate::utils::params::sanitize_stop_sequences(
+                    &stop_sequences,
+                    None,
+                    &mut warnings,
                 );
+                if !stop_sequences.is_empty() {
+                    generation_config.insert(
+                        "stopSequences".to_string(),
+                        Value::Array(stop_sequences.into_iter().map(Value::String).collect()),
+                    );
+                }
             }
             if !generation_config.is_empty() {
                 body.insert(

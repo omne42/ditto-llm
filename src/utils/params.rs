@@ -1,5 +1,7 @@
 use serde_json::Number;
 
+use std::collections::HashSet;
+
 use crate::types::Warning;
 
 pub(crate) fn clamped_number_from_f32(
@@ -37,6 +39,40 @@ pub(crate) fn clamped_number_from_f32(
     Number::from_f64(clamped as f64)
 }
 
+pub(crate) fn sanitize_stop_sequences(
+    sequences: &[String],
+    max: Option<usize>,
+    warnings: &mut Vec<Warning>,
+) -> Vec<String> {
+    let mut out = Vec::<String>::new();
+    let mut seen = HashSet::<String>::new();
+
+    for seq in sequences {
+        let trimmed = seq.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if seen.insert(trimmed.to_string()) {
+            out.push(trimmed.to_string());
+        }
+    }
+
+    if let Some(max) = max {
+        if out.len() > max {
+            warnings.push(Warning::Compatibility {
+                feature: "stop_sequences".to_string(),
+                details: format!(
+                    "provider supports at most {max} stop sequences; truncating from {} to {max}",
+                    out.len()
+                ),
+            });
+            out.truncate(max);
+        }
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -61,6 +97,53 @@ mod tests {
         assert!(warnings.iter().any(|w| matches!(
             w,
             Warning::Compatibility { feature, .. } if feature == "temperature"
+        )));
+    }
+
+    #[test]
+    fn stop_sequences_sanitizes_and_dedups() {
+        let mut warnings = Vec::new();
+        let out = sanitize_stop_sequences(
+            &[
+                " a ".to_string(),
+                "a".to_string(),
+                "".to_string(),
+                " ".to_string(),
+                "b".to_string(),
+            ],
+            None,
+            &mut warnings,
+        );
+        assert_eq!(out, vec!["a".to_string(), "b".to_string()]);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn stop_sequences_truncates_with_warning() {
+        let mut warnings = Vec::new();
+        let out = sanitize_stop_sequences(
+            &[
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+                "e".to_string(),
+            ],
+            Some(4),
+            &mut warnings,
+        );
+        assert_eq!(
+            out,
+            vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string()
+            ]
+        );
+        assert!(warnings.iter().any(|w| matches!(
+            w,
+            Warning::Compatibility { feature, .. } if feature == "stop_sequences"
         )));
     }
 }
