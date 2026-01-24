@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
 - Multi-modal message parts: `ContentPart::Image` (images) and `ContentPart::File` (PDFs) with `FileSource` support.
 - Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
-- Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.).
+- Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.) and embeddings.
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
 - Provider builders accept a custom `reqwest::Client` via `with_http_client` (proxy/headers/timeout customization).

@@ -7,6 +7,8 @@ use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+#[cfg(feature = "embeddings")]
+use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
     Env, HttpAuth, ProviderConfig, RequestAuth, resolve_request_auth_with_default_keys,
@@ -1054,6 +1056,171 @@ impl LanguageModel for OpenAICompatible {
     }
 }
 
+#[cfg(feature = "embeddings")]
+#[derive(Clone)]
+pub struct OpenAICompatibleEmbeddings {
+    http: reqwest::Client,
+    base_url: String,
+    auth: Option<RequestAuth>,
+    model: String,
+}
+
+#[cfg(feature = "embeddings")]
+impl OpenAICompatibleEmbeddings {
+    pub fn new(api_key: impl Into<String>) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .expect("reqwest client build should not fail");
+
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
+        };
+
+        Self {
+            http,
+            base_url: "https://api.openai.com/v1".to_string(),
+            auth,
+            model: String::new(),
+        }
+    }
+
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
+    }
+
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &[
+            "OPENAI_COMPAT_API_KEY",
+            "OPENAI_API_KEY",
+            "CODE_PM_OPENAI_API_KEY",
+        ];
+
+        let auth = match config.auth.clone() {
+            Some(auth) => Some(
+                resolve_request_auth_with_default_keys(
+                    &auth,
+                    env,
+                    DEFAULT_KEYS,
+                    "authorization",
+                    Some("Bearer "),
+                )
+                .await?,
+            ),
+            None => DEFAULT_KEYS
+                .iter()
+                .find_map(|key| env.get(key))
+                .and_then(|token| HttpAuth::bearer(&token).ok().map(RequestAuth::Http)),
+        };
+
+        let mut out = Self::new("");
+        out.auth = auth;
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                std::time::Duration::from_secs(300),
+                &config.http_headers,
+            )?);
+        }
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
+    }
+
+    fn embeddings_url(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if base.ends_with("/embeddings") {
+            base.to_string()
+        } else {
+            format!("{base}/embeddings")
+        }
+    }
+
+    fn resolve_model(&self) -> Result<&str> {
+        if !self.model.trim().is_empty() {
+            return Ok(self.model.as_str());
+        }
+        Err(DittoError::InvalidResponse(
+            "openai-compatible embedding model is not set (set OpenAICompatibleEmbeddings::with_model)"
+                .to_string(),
+        ))
+    }
+}
+
+#[cfg(feature = "embeddings")]
+#[derive(Debug, Deserialize)]
+struct EmbeddingsResponse {
+    #[serde(default)]
+    data: Vec<EmbeddingsItem>,
+}
+
+#[cfg(feature = "embeddings")]
+#[derive(Debug, Deserialize)]
+struct EmbeddingsItem {
+    embedding: Vec<f32>,
+}
+
+#[cfg(feature = "embeddings")]
+#[async_trait]
+impl EmbeddingModel for OpenAICompatibleEmbeddings {
+    fn provider(&self) -> &str {
+        "openai-compatible"
+    }
+
+    fn model_id(&self) -> &str {
+        self.model.as_str()
+    }
+
+    async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
+        let model = self.resolve_model()?;
+        let url = self.embeddings_url();
+
+        let req = self.http.post(url);
+        let response = self
+            .apply_auth(req)
+            .json(&serde_json::json!({ "model": model, "input": texts }))
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let parsed = response.json::<EmbeddingsResponse>().await?;
+        Ok(parsed.data.into_iter().map(|item| item.embedding).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1166,6 +1333,72 @@ mod tests {
 
         mock.assert_async().await;
         assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[tokio::test]
+    async fn embeddings_from_config_resolves_model() -> Result<()> {
+        let config = ProviderConfig {
+            base_url: Some("http://localhost:1234/v1".to_string()),
+            default_model: Some("test-embed-model".to_string()),
+            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: std::collections::BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatibleEmbeddings::from_config(&config, &env).await?;
+        assert_eq!(client.provider(), "openai-compatible");
+        assert_eq!(client.model_id(), "test-embed-model");
+        Ok(())
+    }
+
+    #[cfg(feature = "embeddings")]
+    #[tokio::test]
+    async fn embeddings_embed_posts_to_embeddings_endpoint_with_query_param_auth() -> Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/embeddings")
+                    .query_param("api_key", "sk-test")
+                    .body_includes("\"model\":\"test-embed-model\"")
+                    .body_includes("\"input\":[\"hello\"]");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"data\":[{\"embedding\":[1.0,2.0]}]}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-embed-model".to_string()),
+            auth: Some(crate::ProviderAuth::QueryParamEnv {
+                param: "api_key".to_string(),
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatibleEmbeddings::from_config(&config, &env).await?;
+        let out = client.embed(vec!["hello".to_string()]).await?;
+
+        mock.assert_async().await;
+        assert_eq!(out, vec![vec![1.0, 2.0]]);
         Ok(())
     }
 

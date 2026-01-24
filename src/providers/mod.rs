@@ -19,3 +19,5 @@ pub use openai::OpenAI;
 pub use openai::OpenAIEmbeddings;
 #[cfg(feature = "openai-compatible")]
 pub use openai_compatible::OpenAICompatible;
+#[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+pub use openai_compatible::OpenAICompatibleEmbeddings;

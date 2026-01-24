@@ -38,7 +38,7 @@
 - [x] 统一 traits：`LanguageModel`、`EmbeddingModel`（`src/model.rs`、`src/embedding.rs`）
 - [x] Providers：
   - [x] OpenAI Responses + embeddings（`src/providers/openai.rs`）
-  - [x] OpenAI-compatible Chat Completions（`src/providers/openai_compatible.rs`）
+  - [x] OpenAI-compatible Chat Completions + embeddings（`src/providers/openai_compatible.rs`）
   - [x] Anthropic Messages（`src/providers/anthropic.rs`）
   - [x] Google GenAI + embeddings（`src/providers/google.rs`，feature `google`）
 - [x] Streaming：通用 SSE 解析 + providers 的 event 兼容处理（`src/utils/sse.rs` + 各 provider）

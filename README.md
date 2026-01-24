@@ -10,7 +10,7 @@ Current scope:
 - Multi-modal inputs: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
 - Providers:
   - OpenAI Responses API (generate + SSE streaming) and embeddings
-  - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.)
+  - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.) and embeddings
   - Anthropic Messages API (generate + SSE streaming)
   - Google GenAI (generate + SSE streaming) and embeddings
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.

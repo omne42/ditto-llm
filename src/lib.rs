@@ -35,5 +35,7 @@ pub use providers::GoogleEmbeddings;
 pub use providers::OpenAI;
 #[cfg(feature = "openai-compatible")]
 pub use providers::OpenAICompatible;
+#[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+pub use providers::OpenAICompatibleEmbeddings;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use providers::OpenAIEmbeddings;
