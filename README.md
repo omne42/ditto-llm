@@ -23,6 +23,7 @@ schema.
 Contract:
 
 - Conversion is best-effort and lossy: unsupported keywords are ignored (dropped), not errors.
+- `$ref` is not supported: refs are ignored and a `Warning::Compatibility(tool.parameters.$ref)` is emitted.
 - Root empty-object schemas (no properties + `additionalProperties` missing/false) are treated as
   "no parameters" and omitted.
 - Boolean schemas (`true`/`false`) are treated as unconstrained schemas; at the root they are

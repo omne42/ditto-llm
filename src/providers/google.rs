@@ -336,7 +336,8 @@ impl Google {
         Ok((contents, system_instruction))
     }
 
-    fn tool_to_google(tool: Tool) -> Value {
+    fn tool_to_google(tool: Tool, warnings: &mut Vec<Warning>) -> Value {
+        Self::warn_on_json_schema_refs(&tool.name, &tool.parameters, warnings);
         let mut out = Map::<String, Value>::new();
         out.insert("name".to_string(), Value::String(tool.name));
         out.insert(
@@ -349,6 +350,54 @@ impl Google {
             out.insert("parameters".to_string(), parameters);
         }
         Value::Object(out)
+    }
+
+    fn warn_on_json_schema_refs(tool_name: &str, schema: &Value, warnings: &mut Vec<Warning>) {
+        fn collect_refs(value: &Value, out: &mut Vec<String>) {
+            match value {
+                Value::Object(obj) => {
+                    if let Some(Value::String(r)) = obj.get("$ref") {
+                        if !r.trim().is_empty() {
+                            out.push(r.to_string());
+                        }
+                    }
+                    for v in obj.values() {
+                        collect_refs(v, out);
+                    }
+                }
+                Value::Array(values) => {
+                    for v in values {
+                        collect_refs(v, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut refs = Vec::<String>::new();
+        collect_refs(schema, &mut refs);
+        refs.sort();
+        refs.dedup();
+
+        if refs.is_empty() {
+            return;
+        }
+
+        let shown = refs.iter().take(3).cloned().collect::<Vec<_>>();
+        let extra = refs.len().saturating_sub(shown.len());
+
+        warnings.push(Warning::Compatibility {
+            feature: "tool.parameters.$ref".to_string(),
+            details: format!(
+                "tool {tool_name} uses JSON Schema $ref which is not supported for Google tool schemas; refs will be ignored (e.g. {}{})",
+                shown.join(", "),
+                if extra == 0 {
+                    String::new()
+                } else {
+                    format!(", +{extra} more")
+                }
+            ),
+        });
     }
 
     fn tool_config(choice: Option<&ToolChoice>) -> Option<Value> {
@@ -531,7 +580,7 @@ impl LanguageModel for Google {
             if cfg!(feature = "tools") {
                 let decls = tools
                     .into_iter()
-                    .map(Self::tool_to_google)
+                    .map(|tool| Self::tool_to_google(tool, &mut warnings))
                     .collect::<Vec<_>>();
                 body.insert(
                     "tools".to_string(),
@@ -684,7 +733,7 @@ impl LanguageModel for Google {
                 if cfg!(feature = "tools") {
                     let decls = tools
                         .into_iter()
-                        .map(Self::tool_to_google)
+                        .map(|tool| Self::tool_to_google(tool, &mut warnings))
                         .collect::<Vec<_>>();
                     body.insert(
                         "tools".to_string(),
@@ -1107,9 +1156,30 @@ mod tests {
             }),
             strict: None,
         };
-        let decl = Google::tool_to_google(tool);
+        let mut warnings = Vec::new();
+        let decl = Google::tool_to_google(tool, &mut warnings);
+        assert!(warnings.is_empty());
         assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
         assert!(decl.get("parameters").is_some());
+    }
+
+    #[test]
+    fn tool_schema_ref_emits_warning() {
+        let tool = Tool {
+            name: "add".to_string(),
+            description: Some("add".to_string()),
+            parameters: json!({
+                "$ref": "#/$defs/Args",
+                "$defs": {
+                    "Args": { "type": "object", "properties": { "a": { "type": "integer" } } }
+                }
+            }),
+            strict: None,
+        };
+        let mut warnings = Vec::new();
+        let decl = Google::tool_to_google(tool, &mut warnings);
+        assert_eq!(decl.get("name").and_then(Value::as_str), Some("add"));
+        assert!(warnings.iter().any(|w| matches!(w, Warning::Compatibility { feature, .. } if feature == "tool.parameters.$ref")));
     }
 
     #[test]

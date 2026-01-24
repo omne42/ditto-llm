@@ -75,9 +75,7 @@
 
 - [x] OpenAI Responses：`response_format(json_schema)`（`ProviderOptions`）
 - [x] OpenAI-compatible：`response_format` 透传 + 不支持时 warnings（取决于上游实现）
-- [ ] （待确认）Anthropic/Google 的“结构化输出”对齐策略：
-  - A) 原生支持则映射（若 API 有等价能力）
-  - B) 否则 SDK 侧 fallback（prompt 注入 + JSON 校验/重试）——这会引入 validator 依赖与复杂度
+- [x] Anthropic/Google：当前不做 SDK 侧 fallback；不支持则发 `Warning::Unsupported(response_format)`（保持简单可审计）
 
 ### 2.4 多模态输入（image / PDF）
 
@@ -99,10 +97,10 @@
 
 ### P0（必须先做：范围决策，不然全是幻觉）
 
-- [ ] **确认 Ditto-LLM 的端点范围**：是否需要覆盖 LiteLLM 的 `/audio`、`/images`、`/batches`、`/rerank`、`/moderations`
+- [x] **确认 Ditto-LLM 的端点范围**：只做 CodePM/agent “需要”的核心端点；其它端点进入 P2（按真实需求再启用）
   - DoD：在本文 §3.4 里把“必须/可选/不做”勾死，并给出每项 1 句使用场景（别写空话）
 
-- [ ] **确认 structured output 的跨 provider 口径**（§2.3）
+- [x] **确认 structured output 的跨 provider 口径**（§2.3）
   - DoD：选 A 或 B，并写清楚失败模式（warnings vs hard error vs retry）
 
 ### P1（强烈建议：减少接入成本/踩坑）
@@ -130,14 +128,14 @@
 
 ### 3.4 LiteLLM 端点范围勾选（P0 输出）
 
-- [ ] 必须：`/chat/completions` + streaming + tools + multimodal（输入侧） + usage/finish_reason
-- [ ] 必须：`/responses`（如果我们要把 LiteLLM 当成“Responses 网关”）
-- [ ] 可选：`/embeddings`
-- [ ] 可选：`/audio/transcriptions`、`/audio/speech`
-- [ ] 可选：`/image/generations`
-- [ ] 可选：`/batches`
-- [ ] 可选：`/rerank`
-- [ ] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）
+- [x] 必须：`/chat/completions` + streaming + tools + multimodal（输入侧） + usage/finish_reason（对接 LiteLLM/DeepSeek/Qwen 等）
+- [x] 必须：`/responses`（直连 OpenAI Responses；LiteLLM 作为 Responses 网关是可选路径）
+- [x] 必须：`/embeddings`（用于记忆/检索等 agent 基础能力）
+- [ ] 可选：`/audio/transcriptions`、`/audio/speech`（只有当 agent 需要语音 I/O 时才加）
+- [ ] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
+- [ ] 可选：`/batches`（批处理是平台能力；先保持 SDK 简单）
+- [ ] 可选：`/rerank`（检索质量提升项；等真实需求再做）
+- [x] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）
 
 ---
 
