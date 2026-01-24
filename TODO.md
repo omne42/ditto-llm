@@ -60,7 +60,7 @@
 
 - [x] 非流式 `generate`（统一 response：content/finish_reason/usage/warnings）
 - [x] 流式 `stream`（统一 chunks：text/tool_call/usage/finish_reason/response_id/warnings）
-- [ ] （待确认）取消/中断语义：显式 `CancellationToken`/`AbortHandle`（当前依赖 drop stream）
+- [x] 取消/中断语义：显式 `StreamAbortHandle`（`abortable_stream` / `LanguageModelExt::stream_abortable`）
 - [x] （可选）流式聚合器：`collect_stream(StreamResult) -> CollectedStream`（保序；仅合并相邻 text/reasoning；见 `src/stream.rs`）
 
 ### 2.2 Tools（function calling）

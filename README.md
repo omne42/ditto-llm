@@ -65,6 +65,18 @@ let collected = collect_stream(stream).await?;
 println!("{}", collected.response.text());
 ```
 
+## Streaming Cancellation
+
+If you need an explicit abort handle (instead of relying on drop semantics), wrap the stream:
+
+```rust
+use ditto_llm::{abortable_stream, GenerateRequest, LanguageModel};
+
+let stream = llm.stream(GenerateRequest::from(messages)).await?;
+let abortable = abortable_stream(stream);
+abortable.handle.abort();
+```
+
 ## Custom HTTP Client
 
 Providers accept a custom `reqwest::Client` so you can configure timeouts, proxies, and default

@@ -1,8 +1,17 @@
 use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll};
 
+use futures_util::Stream;
 use futures_util::StreamExt;
+use futures_util::stream;
+use futures_util::task::AtomicWaker;
 use serde_json::Value;
 
+use crate::model::LanguageModel;
+use crate::types::GenerateRequest;
 use crate::types::{ContentPart, FinishReason, GenerateResponse, StreamChunk, Usage, Warning};
 use crate::{Result, StreamResult};
 
@@ -24,6 +33,61 @@ struct ToolCallBuffer {
     name: Option<String>,
     arguments: String,
 }
+
+#[derive(Debug, Clone)]
+pub struct StreamAbortHandle {
+    aborted: Arc<AtomicBool>,
+    waker: Arc<AtomicWaker>,
+}
+
+impl StreamAbortHandle {
+    pub fn abort(&self) {
+        self.aborted.store(true, Ordering::SeqCst);
+        self.waker.wake();
+    }
+}
+
+pub struct AbortableStream {
+    pub handle: StreamAbortHandle,
+    pub stream: StreamResult,
+}
+
+pub fn abortable_stream(stream: StreamResult) -> AbortableStream {
+    let aborted = Arc::new(AtomicBool::new(false));
+    let waker = Arc::new(AtomicWaker::new());
+    let handle = StreamAbortHandle {
+        aborted: aborted.clone(),
+        waker: waker.clone(),
+    };
+
+    let mut inner = Some(stream);
+    let stream = stream::poll_fn(move |cx: &mut Context<'_>| {
+        waker.register(cx.waker());
+
+        if aborted.load(Ordering::SeqCst) {
+            inner.take();
+            return Poll::Ready(None);
+        }
+
+        let Some(stream) = inner.as_mut() else {
+            return Poll::Ready(None);
+        };
+        Pin::new(stream).poll_next(cx)
+    })
+    .boxed();
+
+    AbortableStream { handle, stream }
+}
+
+#[async_trait::async_trait]
+pub trait LanguageModelExt: LanguageModel {
+    async fn stream_abortable(&self, request: GenerateRequest) -> Result<AbortableStream> {
+        let stream = self.stream(request).await?;
+        Ok(abortable_stream(stream))
+    }
+}
+
+impl<T> LanguageModelExt for T where T: LanguageModel + ?Sized {}
 
 pub async fn collect_stream(mut stream: StreamResult) -> Result<CollectedStream> {
     let mut warnings = Vec::<Warning>::new();
@@ -180,6 +244,7 @@ pub async fn collect_stream(mut stream: StreamResult) -> Result<CollectedStream>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::FutureExt;
     use futures_util::stream;
 
     #[tokio::test]
@@ -351,5 +416,25 @@ mod tests {
         )));
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn abortable_stream_stops_stream() -> Result<()> {
+        let pending = stream::pending::<Result<StreamChunk>>().boxed();
+        let AbortableStream { handle, mut stream } = abortable_stream(pending);
+
+        handle.abort();
+        assert!(stream.next().await.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn abort_handle_drop_does_not_stop_stream() {
+        let pending = stream::pending::<Result<StreamChunk>>().boxed();
+        let AbortableStream { handle, mut stream } = abortable_stream(pending);
+        drop(handle);
+
+        assert!(stream.next().now_or_never().is_none());
     }
 }

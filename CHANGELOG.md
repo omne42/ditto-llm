@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.) and embeddings.
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
+- Streaming: `abortable_stream(StreamResult) -> AbortableStream` with `StreamAbortHandle`.
 - Provider builders accept a custom `reqwest::Client` via `with_http_client` (proxy/headers/timeout customization).
 - Provider config: `ProviderConfig.http_headers` to apply default HTTP headers when building clients from config (also used for `/models` discovery).
 - File upload helper for OpenAI and OpenAI-compatible providers: `upload_file` / `upload_file_with_purpose`.
