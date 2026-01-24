@@ -69,7 +69,7 @@
 - [x] tool call streaming：增量 args 拼接、多 tool_calls 处理
 - [x] tool_call arguments 的 JSON roundtrip：解析失败保留 raw string，并发出 `Warning::Compatibility(tool_call.arguments)`；回放到 OpenAI/OpenAI-compatible 时不会二次转义
 - [x] JSON Schema → OpenAPI schema（Google tool schema 子集转换）
-- [ ] （可选）工具 schema 的“严格子集”文档化：把支持/不支持关键字写成稳定契约（目前 README 有子集列表，但缺更强约束与测试矩阵）
+- [x] （可选）工具 schema 的“严格子集”文档化：把支持/不支持关键字写成稳定契约，并用测试矩阵固化
 
 ### 2.3 Structured Output（对齐 AI SDK 的 generateObject 思路）
 

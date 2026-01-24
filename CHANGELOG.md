@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Roadmap: `TODO.md` with a scoped capability checklist (LiteLLM / AI SDK aligned).
 - Optional integration smoke tests behind the `integration` feature (requires real API keys).
 - Utilities: generic SSE parsing and JSON Schema → OpenAPI schema conversion (for tool schemas).
+- Tool schemas: document the supported JSON Schema subset contract and add regression coverage.
 - Provider clients can be built from config: `*::from_config(&ProviderConfig, &Env)`.
 - Auth helper: `resolve_auth_token_with_default_keys` (for provider-specific default env keys).
 - Provider auth: `ProviderAuth::HttpHeaderEnv` / `ProviderAuth::HttpHeaderCommand` for non-standard auth headers (e.g. `api-key` gateways).

@@ -17,7 +17,21 @@ Current scope:
 
 ## Tool Schemas
 
-For Google function calling, Ditto-LLM converts tool parameter JSON Schema into an OpenAPI-style schema.
+For Google function calling, Ditto-LLM converts tool parameter JSON Schema into an OpenAPI-style
+schema.
+
+Contract:
+
+- Conversion is best-effort and lossy: unsupported keywords are ignored (dropped), not errors.
+- Root empty-object schemas (no properties + `additionalProperties` missing/false) are treated as
+  "no parameters" and omitted.
+- Boolean schemas (`true`/`false`) are treated as unconstrained schemas; at the root they are
+  omitted.
+- Nullable unions:
+  - `type: ["string", "null"]` becomes `anyOf: [{ "type": "string" }]` + `nullable: true`
+  - `anyOf: [{...}, {"type":"null"}]` becomes the same shape (single branch is flattened)
+- `const` becomes `enum: [<const>]`.
+- `additionalProperties` supports boolean and nested schemas.
 
 Supported keywords (subset): `type`, `title`, `description`, `properties`, `required`, `items`,
 `additionalProperties`, `enum`, `const`, `format`, `allOf`, `anyOf`, `oneOf`, `default`,

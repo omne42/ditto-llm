@@ -42,7 +42,10 @@ pub fn convert_json_schema_to_openapi_schema(schema: &Value, is_root: bool) -> O
     }
 
     if let Value::Bool(_) = schema {
-        return Some(serde_json::json!({ "type": "boolean", "properties": {} }));
+        if is_root {
+            return None;
+        }
+        return Some(Value::Object(Map::new()));
     }
 
     let Value::Object(input) = schema else {
@@ -414,6 +417,97 @@ mod tests {
                 "minItems": 1,
                 "maxItems": 3,
                 "uniqueItems": true
+            }))
+        );
+    }
+
+    #[test]
+    fn bool_schema_is_omitted_at_root_and_empty_object_nested() {
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&Value::Bool(true), true),
+            None
+        );
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&Value::Bool(false), true),
+            None
+        );
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&Value::Bool(true), false),
+            Some(json!({}))
+        );
+    }
+
+    #[test]
+    fn converts_const_to_singleton_enum() {
+        let schema = json!({ "type": "string", "const": "x" });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({ "type": "string", "enum": ["x"] }))
+        );
+    }
+
+    #[test]
+    fn converts_nullable_type_union() {
+        let schema = json!({ "type": ["string", "null"] });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "anyOf": [{ "type": "string" }],
+                "nullable": true
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_anyof_with_null_flattens_single_branch() {
+        let schema = json!({
+            "anyOf": [
+                { "type": "string", "minLength": 1 },
+                { "type": "null" }
+            ]
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "string",
+                "minLength": 1,
+                "nullable": true
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_additional_properties_schema() {
+        let schema = json!({
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "object",
+                "additionalProperties": { "type": "string" }
+            }))
+        );
+    }
+
+    #[test]
+    fn converts_tuple_items() {
+        let schema = json!({
+            "type": "array",
+            "items": [
+                { "type": "string" },
+                { "type": "number" }
+            ]
+        });
+        assert_eq!(
+            convert_json_schema_to_openapi_schema(&schema, true),
+            Some(json!({
+                "type": "array",
+                "items": [
+                    { "type": "string" },
+                    { "type": "number" }
+                ]
             }))
         );
     }
