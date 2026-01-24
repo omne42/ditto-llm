@@ -123,7 +123,7 @@
   - [x] `ImageGenerationModel`（/images）
   - [x] `AudioTranscriptionModel` / `SpeechModel`（/audio）
   - [ ] `RerankModel`（/rerank）
-  - [ ] `ModerationModel`（/moderations）
+  - [x] `ModerationModel`（/moderations）
   - [ ] `BatchClient`（/batches）
   - DoD：每个 trait 至少一个 provider 先跑通（OpenAI 或 OpenAI-compatible），并给出 examples + 单测（mock）
 
@@ -134,6 +134,7 @@
 - [x] 必须：`/embeddings`（用于记忆/检索等 agent 基础能力）
 - [x] 可选：`/audio/transcriptions`、`/audio/speech`（只有当 agent 需要语音 I/O 时才加）
 - [x] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
+- [x] 可选：`/moderations`（内容安全端点；已实现 OpenAI/OpenAI-compatible）
 - [ ] 可选：`/batches`（批处理是平台能力；先保持 SDK 简单）
 - [ ] 可选：`/rerank`（检索质量提升项；等真实需求再做）
 - [x] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）

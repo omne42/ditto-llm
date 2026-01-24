@@ -19,6 +19,7 @@ tools = []
 embeddings = []
 images = []
 audio = []
+moderations = []
 
 integration = []
 

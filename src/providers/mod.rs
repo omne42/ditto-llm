@@ -12,8 +12,12 @@ pub mod openai_compatible;
 pub mod openai_compatible_audio;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub mod openai_compatible_images;
+#[cfg(all(feature = "moderations", feature = "openai-compatible"))]
+pub mod openai_compatible_moderations;
 #[cfg(all(feature = "images", feature = "openai"))]
 pub mod openai_images;
+#[cfg(all(feature = "moderations", feature = "openai"))]
+pub mod openai_moderations;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
@@ -35,5 +39,9 @@ pub use openai_compatible::OpenAICompatibleEmbeddings;
 pub use openai_compatible_audio::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub use openai_compatible_images::OpenAICompatibleImages;
+#[cfg(all(feature = "moderations", feature = "openai-compatible"))]
+pub use openai_compatible_moderations::OpenAICompatibleModerations;
 #[cfg(all(feature = "images", feature = "openai"))]
 pub use openai_images::OpenAIImages;
+#[cfg(all(feature = "moderations", feature = "openai"))]
+pub use openai_moderations::OpenAIModerations;

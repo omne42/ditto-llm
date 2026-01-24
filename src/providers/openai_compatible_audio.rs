@@ -227,8 +227,9 @@ impl AudioTranscriptionModel for OpenAICompatibleAudioTranscription {
             .await?;
 
         let status = response.status();
+        let body = response.bytes().await?;
         if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
+            let text = String::from_utf8_lossy(&body).to_string();
             return Err(DittoError::Api { status, body: text });
         }
 
@@ -238,13 +239,20 @@ impl AudioTranscriptionModel for OpenAICompatibleAudioTranscription {
         let text = match format {
             TranscriptionResponseFormat::Text
             | TranscriptionResponseFormat::Srt
-            | TranscriptionResponseFormat::Vtt => response.text().await.unwrap_or_default(),
+            | TranscriptionResponseFormat::Vtt => String::from_utf8_lossy(&body).to_string(),
             TranscriptionResponseFormat::Json | TranscriptionResponseFormat::VerboseJson => {
-                response
-                    .json::<TranscriptionJsonResponse>()
-                    .await
-                    .map(|parsed| parsed.text)
-                    .unwrap_or_default()
+                match serde_json::from_slice::<TranscriptionJsonResponse>(&body) {
+                    Ok(parsed) => parsed.text,
+                    Err(err) => {
+                        warnings.push(Warning::Compatibility {
+                            feature: "audio.transcription.json".to_string(),
+                            details: format!(
+                                "failed to parse transcription JSON response; falling back to text: {err}"
+                            ),
+                        });
+                        String::from_utf8_lossy(&body).to_string()
+                    }
+                }
             }
         };
 
@@ -532,6 +540,52 @@ mod tests {
 
         mock.assert_async().await;
         assert_eq!(response.text, "ok");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn transcribe_json_parse_falls_back_to_text_with_warning() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/audio/transcriptions")
+                    .body_includes("name=\"model\"")
+                    .body_includes("whisper-1")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "text/plain")
+                    .body("not json");
+            })
+            .await;
+
+        let client = OpenAICompatibleAudioTranscription::new("")
+            .with_base_url(server.url("/v1"))
+            .with_model("whisper-1");
+        let response = client
+            .transcribe(AudioTranscriptionRequest {
+                audio: b"hello".to_vec(),
+                filename: "audio.wav".to_string(),
+                media_type: Some("audio/wav".to_string()),
+                model: None,
+                language: None,
+                prompt: None,
+                response_format: Some(TranscriptionResponseFormat::Json),
+                temperature: None,
+                provider_options: None,
+            })
+            .await?;
+
+        mock.assert_async().await;
+        assert_eq!(response.text, "not json");
+        assert!(response.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, .. } if feature == "audio.transcription.json"
+        )));
         Ok(())
     }
 

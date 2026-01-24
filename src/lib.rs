@@ -1,6 +1,7 @@
 pub mod audio;
 mod error;
 pub mod image;
+pub mod moderation;
 mod profile;
 mod stream;
 
@@ -22,6 +23,7 @@ pub use audio::{AudioTranscriptionModel, SpeechModel};
 pub use embedding::EmbeddingModel;
 pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
+pub use moderation::ModerationModel;
 pub use stream::{
     AbortableStream, CollectedStream, LanguageModelExt, StreamAbortHandle, abortable_stream,
     collect_stream,
@@ -29,7 +31,8 @@ pub use stream::{
 pub use types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FileSource, FinishReason,
     GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
-    ImageResponseFormat, ImageSource, JsonSchemaFormat, Message, ProviderOptions, ReasoningEffort,
+    ImageResponseFormat, ImageSource, JsonSchemaFormat, Message, ModerationInput,
+    ModerationRequest, ModerationResponse, ModerationResult, ProviderOptions, ReasoningEffort,
     ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool,
     ToolChoice, TranscriptionResponseFormat, Usage, Warning,
 };
@@ -48,10 +51,14 @@ pub use providers::OpenAICompatible;
 pub use providers::OpenAICompatibleEmbeddings;
 #[cfg(all(feature = "openai-compatible", feature = "images"))]
 pub use providers::OpenAICompatibleImages;
+#[cfg(all(feature = "openai-compatible", feature = "moderations"))]
+pub use providers::OpenAICompatibleModerations;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use providers::OpenAIEmbeddings;
 #[cfg(all(feature = "openai", feature = "images"))]
 pub use providers::OpenAIImages;
+#[cfg(all(feature = "openai", feature = "moderations"))]
+pub use providers::OpenAIModerations;
 #[cfg(all(feature = "openai", feature = "audio"))]
 pub use providers::{OpenAIAudioTranscription, OpenAISpeech};
 #[cfg(all(feature = "openai-compatible", feature = "audio"))]

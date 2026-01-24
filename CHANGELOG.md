@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI Responses tool schemas default to `strict=true` when omitted.
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
+- Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
 
 ### Changed
 
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON Schema → OpenAPI conversion: support common constraints and `additionalProperties` for tool schemas.
 - Tool call arguments: preserve raw JSON on parse failures, emit `Warning::Compatibility(tool_call.arguments)`, and avoid double-encoding when replaying assistant tool calls.
 - `collect_stream`: preserve chunk ordering (text/reasoning/tool calls) and warn on invalid tool-call argument JSON.
+- Audio transcriptions: fall back to text with a warning if JSON response parsing fails (avoid silently swallowing errors).
 
 ## [0.1.1] - 2026-01-23
 
