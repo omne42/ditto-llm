@@ -64,6 +64,17 @@ let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
 When building providers from config, you can also set default headers via
 `ProviderConfig.http_headers`.
 
+## Provider Auth (Custom Headers)
+
+Providers apply their standard auth headers by default (OpenAI/OpenAI-compatible: bearer token;
+Anthropic: `x-api-key`; Google: `x-goog-api-key`).
+
+If you need a non-standard auth header (e.g. Azure / enterprise gateways), use:
+
+```toml
+auth = { type = "http_header_env", header = "api-key", keys = ["AZURE_OPENAI_API_KEY"] }
+```
+
 ## File Upload (Optional)
 
 If you want to send PDFs via `file_id` (instead of inlining base64), OpenAI and OpenAI-compatible

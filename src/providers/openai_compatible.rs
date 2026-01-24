@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderConfig, resolve_auth_token_with_default_keys};
+use crate::profile::{Env, HttpAuth, ProviderConfig, resolve_http_auth_with_default_keys};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -19,7 +19,7 @@ use crate::{DittoError, Result};
 pub struct OpenAICompatible {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     default_model: String,
 }
 
@@ -30,10 +30,17 @@ impl OpenAICompatible {
             .build()
             .expect("reqwest client build should not fail");
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::bearer(&api_key).ok()
+        };
+
         Self {
             http,
             base_url: "https://api.openai.com/v1".to_string(),
-            api_key: api_key.into(),
+            auth,
             default_model: String::new(),
         }
     }
@@ -60,15 +67,25 @@ impl OpenAICompatible {
             "CODE_PM_OPENAI_API_KEY",
         ];
 
-        let api_key = match config.auth.clone() {
-            Some(auth) => resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?,
+        let auth = match config.auth.clone() {
+            Some(auth) => Some(
+                resolve_http_auth_with_default_keys(
+                    &auth,
+                    env,
+                    DEFAULT_KEYS,
+                    "authorization",
+                    Some("Bearer "),
+                )
+                .await?,
+            ),
             None => DEFAULT_KEYS
                 .iter()
                 .find_map(|key| env.get(key))
-                .unwrap_or_default(),
+                .and_then(|token| HttpAuth::bearer(&token).ok()),
         };
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = auth;
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -86,6 +103,13 @@ impl OpenAICompatible {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn chat_completions_url(&self) -> String {
@@ -137,9 +161,7 @@ impl OpenAICompatible {
 
         let url = self.files_url();
         let mut req = self.http.post(url);
-        if !self.api_key.trim().is_empty() {
-            req = req.bearer_auth(&self.api_key);
-        }
+        req = self.apply_auth(req);
         let response = req.multipart(form).send().await?;
 
         let status = response.status();
@@ -796,9 +818,7 @@ impl LanguageModel for OpenAICompatible {
 
         let url = self.chat_completions_url();
         let mut req = self.http.post(url);
-        if !self.api_key.trim().is_empty() {
-            req = req.bearer_auth(&self.api_key);
-        }
+        req = self.apply_auth(req);
         let response = req.json(&body).send().await?;
 
         let status = response.status();
@@ -957,15 +977,12 @@ impl LanguageModel for OpenAICompatible {
             }
 
             let url = self.chat_completions_url();
-            let mut req = self
+            let req = self
                 .http
                 .post(url)
                 .header("Accept", "text/event-stream")
                 .json(&body);
-            if !self.api_key.trim().is_empty() {
-                req = req.bearer_auth(&self.api_key);
-            }
-            let response = req.send().await?;
+            let response = self.apply_auth(req).send().await?;
 
             let status = response.status();
             if !status.is_success() {
@@ -1038,6 +1055,8 @@ impl LanguageModel for OpenAICompatible {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use httpmock::{Method::POST, MockServer};
+    use std::collections::BTreeMap;
 
     #[tokio::test]
     async fn from_config_resolves_api_key_and_model() -> Result<()> {
@@ -1059,6 +1078,49 @@ mod tests {
         let client = OpenAICompatible::from_config(&config, &env).await?;
         assert_eq!(client.provider(), "openai-compatible");
         assert_eq!(client.model_id(), "test-model");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_uses_custom_auth_header() -> Result<()> {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .header("api-key", "sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::HttpHeaderEnv {
+                header: "api-key".to_string(),
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatible::from_config(&config, &env).await?;
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
         Ok(())
     }
 

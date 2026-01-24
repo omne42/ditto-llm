@@ -7,7 +7,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
+use crate::profile::{
+    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -23,7 +25,7 @@ const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta
 pub struct Google {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     default_model: String,
 }
 
@@ -34,10 +36,17 @@ impl Google {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::header_value("x-goog-api-key", None, &api_key).ok()
+        };
+
         Self {
             http,
             base_url: DEFAULT_BASE_URL.to_string(),
-            api_key: api_key.into(),
+            auth,
             default_model: String::new(),
         }
     }
@@ -64,9 +73,12 @@ impl Google {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+        let auth_header =
+            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-goog-api-key", None)
+                .await?;
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -84,6 +96,13 @@ impl Google {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
@@ -527,13 +546,8 @@ impl LanguageModel for Google {
         }
 
         let url = self.generate_url(&model);
-        let response = self
-            .http
-            .post(url)
-            .header("x-goog-api-key", &self.api_key)
-            .json(&body)
-            .send()
-            .await?;
+        let req = self.http.post(url);
+        let response = self.apply_auth(req).json(&body).send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -680,10 +694,9 @@ impl LanguageModel for Google {
             }
 
             let url = self.stream_url(&model);
+            let req = self.http.post(url);
             let response = self
-                .http
-                .post(url)
-                .header("x-goog-api-key", &self.api_key)
+                .apply_auth(req)
                 .header("Accept", "text/event-stream")
                 .json(&body)
                 .send()
@@ -850,7 +863,7 @@ impl LanguageModel for Google {
 pub struct GoogleEmbeddings {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     model: String,
 }
 
@@ -862,10 +875,17 @@ impl GoogleEmbeddings {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::header_value("x-goog-api-key", None, &api_key).ok()
+        };
+
         Self {
             http,
             base_url: DEFAULT_BASE_URL.to_string(),
-            api_key: api_key.into(),
+            auth,
             model: String::new(),
         }
     }
@@ -892,9 +912,12 @@ impl GoogleEmbeddings {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+        let auth_header =
+            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-goog-api-key", None)
+                .await?;
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -912,6 +935,13 @@ impl GoogleEmbeddings {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn resolve_model(&self) -> Result<&str> {
@@ -966,10 +996,9 @@ impl EmbeddingModel for GoogleEmbeddings {
 
         if texts.len() == 1 {
             let url = self.embed_url("embedContent");
+            let req = self.http.post(url);
             let response = self
-                .http
-                .post(url)
-                .header("x-goog-api-key", &self.api_key)
+                .apply_auth(req)
                 .json(&serde_json::json!({
                     "model": Google::model_path(self.model.as_str()),
                     "content": { "parts": [{ "text": texts[0] }] }
@@ -998,10 +1027,9 @@ impl EmbeddingModel for GoogleEmbeddings {
             })
             .collect::<Vec<_>>();
 
+        let req = self.http.post(url);
         let response = self
-            .http
-            .post(url)
-            .header("x-goog-api-key", &self.api_key)
+            .apply_auth(req)
             .json(&serde_json::json!({ "requests": requests }))
             .send()
             .await?;

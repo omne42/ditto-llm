@@ -7,7 +7,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
+use crate::profile::{
+    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -22,7 +24,7 @@ const BETA_PDFS_2024_09_25: &str = "pdfs-2024-09-25";
 pub struct Anthropic {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     default_model: String,
     version: String,
 }
@@ -34,10 +36,17 @@ impl Anthropic {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::header_value("x-api-key", None, &api_key).ok()
+        };
+
         Self {
             http,
             base_url: DEFAULT_BASE_URL.to_string(),
-            api_key: api_key.into(),
+            auth,
             default_model: String::new(),
             version: DEFAULT_VERSION.to_string(),
         }
@@ -69,9 +78,12 @@ impl Anthropic {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+        let auth_header =
+            resolve_http_auth_with_default_keys(&auth, env, DEFAULT_KEYS, "x-api-key", None)
+                .await?;
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -89,6 +101,13 @@ impl Anthropic {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn messages_url(&self) -> String {
@@ -600,8 +619,8 @@ impl LanguageModel for Anthropic {
         let mut request_builder = self
             .http
             .post(url)
-            .header("x-api-key", &self.api_key)
             .header("anthropic-version", &self.version);
+        request_builder = self.apply_auth(request_builder);
         let betas = Self::required_betas(&request.messages);
         if !betas.is_empty() {
             request_builder = request_builder.header("anthropic-beta", betas.join(","));
@@ -758,9 +777,9 @@ impl LanguageModel for Anthropic {
             let mut request_builder = self
                 .http
                 .post(url)
-                .header("x-api-key", &self.api_key)
                 .header("anthropic-version", &self.version)
                 .header("Accept", "text/event-stream");
+            request_builder = self.apply_auth(request_builder);
             let betas = Self::required_betas(&request.messages);
             if !betas.is_empty() {
                 request_builder = request_builder.header("anthropic-beta", betas.join(","));

@@ -7,6 +7,47 @@ use serde::{Deserialize, Serialize};
 
 use crate::{DittoError, Result};
 
+#[derive(Debug, Clone)]
+pub(crate) struct HttpAuth {
+    pub(crate) header: HeaderName,
+    pub(crate) value: HeaderValue,
+}
+
+impl HttpAuth {
+    pub(crate) fn bearer(token: &str) -> Result<Self> {
+        Self::header_value("authorization", Some("Bearer "), token)
+    }
+
+    pub(crate) fn header_value(header: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
+        let header = header.trim();
+        if header.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "auth header name must be non-empty".to_string(),
+            ));
+        }
+
+        let header = HeaderName::from_bytes(header.as_bytes()).map_err(|err| {
+            DittoError::InvalidResponse(format!("invalid auth header name {header:?}: {err}"))
+        })?;
+
+        let mut out = String::new();
+        if let Some(prefix) = prefix {
+            out.push_str(prefix);
+        }
+        out.push_str(token);
+        let mut value = HeaderValue::from_str(&out).map_err(|err| {
+            DittoError::InvalidResponse(format!("invalid auth header value for {header:?}: {err}"))
+        })?;
+        value.set_sensitive(true);
+
+        Ok(Self { header, value })
+    }
+
+    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        req.header(self.header.clone(), self.value.clone())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ThinkingIntensity {
@@ -42,6 +83,21 @@ pub enum ProviderAuth {
     },
     #[serde(alias = "auth_command")]
     Command { command: Vec<String> },
+    #[serde(alias = "header_env")]
+    HttpHeaderEnv {
+        header: String,
+        #[serde(default)]
+        keys: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prefix: Option<String>,
+    },
+    #[serde(alias = "header_command")]
+    HttpHeaderCommand {
+        header: String,
+        command: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prefix: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -123,6 +179,27 @@ fn resolve_optional_env_token(env: &Env, keys: &[&str]) -> String {
     keys.iter().find_map(|key| env.get(key)).unwrap_or_default()
 }
 
+pub(crate) async fn resolve_http_auth_with_default_keys(
+    auth: &ProviderAuth,
+    env: &Env,
+    default_keys: &[&str],
+    default_header: &str,
+    default_prefix: Option<&str>,
+) -> Result<HttpAuth> {
+    let token = resolve_auth_token_with_default_keys(auth, env, default_keys).await?;
+    let (header, prefix) = match auth {
+        ProviderAuth::HttpHeaderEnv { header, prefix, .. }
+        | ProviderAuth::HttpHeaderCommand { header, prefix, .. } => {
+            (header.as_str(), prefix.as_deref())
+        }
+        ProviderAuth::ApiKeyEnv { .. } | ProviderAuth::Command { .. } => {
+            (default_header, default_prefix)
+        }
+    };
+
+    HttpAuth::header_value(header, prefix, &token)
+}
+
 #[async_trait]
 pub trait Provider: Send + Sync {
     fn name(&self) -> &str;
@@ -134,7 +211,7 @@ pub trait Provider: Send + Sync {
 pub struct OpenAiProvider {
     name: String,
     base_url: String,
-    bearer_token: String,
+    auth: Option<HttpAuth>,
     model_whitelist: Vec<String>,
     capabilities: ProviderCapabilities,
     http: reqwest::Client,
@@ -155,9 +232,21 @@ impl OpenAiProvider {
         let base_url = config.base_url.as_deref().ok_or_else(|| {
             DittoError::InvalidResponse("provider base_url is missing".to_string())
         })?;
-        let bearer_token = match config.auth.clone() {
-            Some(auth) => resolve_auth_token(&auth, env).await?,
-            None => resolve_optional_env_token(env, DEFAULT_KEYS),
+        let auth = match config.auth.clone() {
+            Some(auth) => Some(
+                resolve_http_auth_with_default_keys(
+                    &auth,
+                    env,
+                    DEFAULT_KEYS,
+                    "authorization",
+                    Some("Bearer "),
+                )
+                .await?,
+            ),
+            None => match resolve_optional_env_token(env, DEFAULT_KEYS) {
+                token if token.trim().is_empty() => None,
+                token => Some(HttpAuth::bearer(&token)?),
+            },
         };
 
         let http = build_http_client(Duration::from_secs(300), &config.http_headers)?;
@@ -165,7 +254,7 @@ impl OpenAiProvider {
         Ok(Self {
             name: name.into(),
             base_url: base_url.to_string(),
-            bearer_token,
+            auth,
             model_whitelist: config.model_whitelist.clone(),
             capabilities: config
                 .capabilities
@@ -186,8 +275,9 @@ impl Provider for OpenAiProvider {
     }
 
     async fn list_models(&self) -> Result<Vec<String>> {
-        let client = OpenAiCompatibleClient::new(self.bearer_token.clone(), self.base_url.clone())?
-            .with_http_client(self.http.clone());
+        let client =
+            OpenAiCompatibleClient::new_with_auth(self.auth.clone(), self.base_url.clone())?
+                .with_http_client(self.http.clone());
         let models = client.list_models().await?;
         Ok(filter_models_whitelist(models, &self.model_whitelist))
     }
@@ -281,16 +371,25 @@ pub fn select_model_config<'a>(
 pub struct OpenAiCompatibleClient {
     http: reqwest::Client,
     base_url: String,
-    bearer_token: String,
+    auth: Option<HttpAuth>,
 }
 
 impl OpenAiCompatibleClient {
     pub fn new(bearer_token: String, base_url: String) -> Result<Self> {
+        let auth = if bearer_token.trim().is_empty() {
+            None
+        } else {
+            Some(HttpAuth::bearer(&bearer_token)?)
+        };
+        Self::new_with_auth(auth, base_url)
+    }
+
+    pub(crate) fn new_with_auth(auth: Option<HttpAuth>, base_url: String) -> Result<Self> {
         let http = reqwest::Client::builder().build()?;
         Ok(Self {
             http,
             base_url,
-            bearer_token,
+            auth,
         })
     }
 
@@ -322,8 +421,8 @@ impl OpenAiCompatibleClient {
 
         let url = self.models_url();
         let mut req = self.http.get(url);
-        if !self.bearer_token.trim().is_empty() {
-            req = req.bearer_auth(&self.bearer_token);
+        if let Some(auth) = self.auth.as_ref() {
+            req = auth.apply(req);
         }
         let response = req.send().await?;
 
@@ -374,12 +473,25 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
         .base_url
         .as_deref()
         .ok_or_else(|| DittoError::InvalidResponse("provider base_url is missing".to_string()))?;
-    let token = match provider.auth.clone() {
-        Some(auth) => resolve_auth_token(&auth, env).await?,
-        None => resolve_optional_env_token(env, DEFAULT_KEYS),
+    let auth = match provider.auth.clone() {
+        Some(auth) => Some(
+            resolve_http_auth_with_default_keys(
+                &auth,
+                env,
+                DEFAULT_KEYS,
+                "authorization",
+                Some("Bearer "),
+            )
+            .await?,
+        ),
+        None => match resolve_optional_env_token(env, DEFAULT_KEYS) {
+            token if token.trim().is_empty() => None,
+            token => Some(HttpAuth::bearer(&token)?),
+        },
     };
     let http = build_http_client(Duration::from_secs(300), &provider.http_headers)?;
-    let client = OpenAiCompatibleClient::new(token, base_url.to_string())?.with_http_client(http);
+    let client =
+        OpenAiCompatibleClient::new_with_auth(auth, base_url.to_string())?.with_http_client(http);
     let models = client.list_models().await?;
     Ok(filter_models_whitelist(models, &provider.model_whitelist))
 }
@@ -395,7 +507,7 @@ pub async fn resolve_auth_token_with_default_keys(
     default_keys: &[&str],
 ) -> Result<String> {
     match auth {
-        ProviderAuth::ApiKeyEnv { keys } => {
+        ProviderAuth::ApiKeyEnv { keys } | ProviderAuth::HttpHeaderEnv { keys, .. } => {
             if keys.is_empty() {
                 for key in default_keys {
                     if let Some(value) = env.get(key) {
@@ -417,7 +529,7 @@ pub async fn resolve_auth_token_with_default_keys(
                 keys.join(", "),
             )))
         }
-        ProviderAuth::Command { command } => {
+        ProviderAuth::Command { command } | ProviderAuth::HttpHeaderCommand { command, .. } => {
             let (program, args) = command
                 .split_first()
                 .ok_or_else(|| DittoError::AuthCommand("command is empty".to_string()))?;
@@ -464,6 +576,29 @@ mod tests {
         let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
         let token = resolve_auth_token_with_default_keys(&auth, &env, &["CODEPM_TEST_KEY"]).await?;
         assert_eq!(token, "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_http_header_env_auth() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::HttpHeaderEnv {
+            header: "api-key".to_string(),
+            keys: vec!["CODEPM_TEST_KEY".to_string()],
+            prefix: None,
+        };
+        let resolved = resolve_http_auth_with_default_keys(
+            &auth,
+            &env,
+            &["CODEPM_TEST_KEY"],
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        assert_eq!(resolved.header.as_str(), "api-key");
+        assert_eq!(resolved.value.to_str().unwrap_or_default(), "sk-test");
         Ok(())
     }
 

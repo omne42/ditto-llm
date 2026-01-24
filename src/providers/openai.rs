@@ -10,7 +10,9 @@ use serde_json::{Map, Value};
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderAuth, ProviderConfig, resolve_auth_token_with_default_keys};
+use crate::profile::{
+    Env, HttpAuth, ProviderAuth, ProviderConfig, resolve_http_auth_with_default_keys,
+};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -21,7 +23,7 @@ use crate::{DittoError, Result};
 pub struct OpenAI {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     default_model: String,
 }
 
@@ -32,10 +34,17 @@ impl OpenAI {
             .build()
             .expect("reqwest client build should not fail");
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::bearer(&api_key).ok()
+        };
+
         Self {
             http,
             base_url: "https://api.openai.com/v1".to_string(),
-            api_key: api_key.into(),
+            auth,
             default_model: String::new(),
         }
     }
@@ -61,9 +70,17 @@ impl OpenAI {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+        let auth_header = resolve_http_auth_with_default_keys(
+            &auth,
+            env,
+            DEFAULT_KEYS,
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -81,6 +98,13 @@ impl OpenAI {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn responses_url(&self) -> String {
@@ -132,9 +156,7 @@ impl OpenAI {
 
         let url = self.files_url();
         let mut req = self.http.post(url);
-        if !self.api_key.trim().is_empty() {
-            req = req.bearer_auth(&self.api_key);
-        }
+        req = self.apply_auth(req);
         let response = req.multipart(form).send().await?;
 
         let status = response.status();
@@ -608,13 +630,8 @@ impl LanguageModel for OpenAI {
         apply_provider_options(&mut body, &provider_options)?;
 
         let url = self.responses_url();
-        let response = self
-            .http
-            .post(url)
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?;
+        let req = self.http.post(url);
+        let response = self.apply_auth(req).json(&body).send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -736,10 +753,9 @@ impl LanguageModel for OpenAI {
             apply_provider_options(&mut body, &provider_options)?;
 
             let url = self.responses_url();
+            let req = self.http.post(url);
             let response = self
-                .http
-                .post(url)
-                .bearer_auth(&self.api_key)
+                .apply_auth(req)
                 .header("Accept", "text/event-stream")
                 .json(&body)
                 .send()
@@ -924,7 +940,7 @@ impl LanguageModel for OpenAI {
 pub struct OpenAIEmbeddings {
     http: reqwest::Client,
     base_url: String,
-    api_key: String,
+    auth: Option<HttpAuth>,
     model: String,
 }
 
@@ -936,10 +952,17 @@ impl OpenAIEmbeddings {
             .build()
             .expect("reqwest client build should not fail");
 
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::bearer(&api_key).ok()
+        };
+
         Self {
             http,
             base_url: "https://api.openai.com/v1".to_string(),
-            api_key: api_key.into(),
+            auth,
             model: String::new(),
         }
     }
@@ -965,9 +988,17 @@ impl OpenAIEmbeddings {
             .auth
             .clone()
             .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let api_key = resolve_auth_token_with_default_keys(&auth, env, DEFAULT_KEYS).await?;
+        let auth_header = resolve_http_auth_with_default_keys(
+            &auth,
+            env,
+            DEFAULT_KEYS,
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
 
-        let mut out = Self::new(api_key);
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -985,6 +1016,13 @@ impl OpenAIEmbeddings {
             out = out.with_model(model);
         }
         Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        }
     }
 
     fn resolve_model(&self) -> Result<&str> {
@@ -1033,10 +1071,9 @@ impl EmbeddingModel for OpenAIEmbeddings {
             }
         };
 
+        let req = self.http.post(url);
         let response = self
-            .http
-            .post(url)
-            .bearer_auth(&self.api_key)
+            .apply_auth(req)
             .json(&serde_json::json!({ "model": model, "input": texts }))
             .send()
             .await?;
