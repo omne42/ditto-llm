@@ -120,11 +120,11 @@
 ### P2（扩面：只有在“我们真需要”时才做）
 
 - [ ] **新增 endpoints traits（如果 P0 决策为需要）**
-  - `ImageGenerationModel`（/images）
-  - `AudioTranscriptionModel` / `SpeechModel`（/audio）
-  - `RerankModel`（/rerank）
-  - `ModerationModel`（/moderations）
-  - `BatchClient`（/batches）
+  - [x] `ImageGenerationModel`（/images）
+  - [ ] `AudioTranscriptionModel` / `SpeechModel`（/audio）
+  - [ ] `RerankModel`（/rerank）
+  - [ ] `ModerationModel`（/moderations）
+  - [ ] `BatchClient`（/batches）
   - DoD：每个 trait 至少一个 provider 先跑通（OpenAI 或 OpenAI-compatible），并给出 examples + 单测（mock）
 
 ### 3.4 LiteLLM 端点范围勾选（P0 输出）
@@ -133,7 +133,7 @@
 - [x] 必须：`/responses`（直连 OpenAI Responses；LiteLLM 作为 Responses 网关是可选路径）
 - [x] 必须：`/embeddings`（用于记忆/检索等 agent 基础能力）
 - [ ] 可选：`/audio/transcriptions`、`/audio/speech`（只有当 agent 需要语音 I/O 时才加）
-- [ ] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
+- [x] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
 - [ ] 可选：`/batches`（批处理是平台能力；先保持 SDK 简单）
 - [ ] 可选：`/rerank`（检索质量提升项；等真实需求再做）
 - [x] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）

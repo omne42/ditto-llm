@@ -17,6 +17,7 @@ openai-compatible = ["openai"]
 streaming = []
 tools = []
 embeddings = []
+images = []
 
 integration = []
 

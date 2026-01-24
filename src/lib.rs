@@ -1,4 +1,5 @@
 mod error;
+pub mod image;
 mod profile;
 mod stream;
 
@@ -17,13 +18,15 @@ pub use profile::{
 };
 
 pub use embedding::EmbeddingModel;
+pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
 pub use stream::{
     AbortableStream, CollectedStream, LanguageModelExt, StreamAbortHandle, abortable_stream,
     collect_stream,
 };
 pub use types::{
-    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
+    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse,
+    ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat, ImageSource,
     JsonSchemaFormat, Message, ProviderOptions, ReasoningEffort, ResponseFormat, Role, StreamChunk,
     Tool, ToolChoice, Usage, Warning,
 };
@@ -40,5 +43,9 @@ pub use providers::OpenAI;
 pub use providers::OpenAICompatible;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
 pub use providers::OpenAICompatibleEmbeddings;
+#[cfg(all(feature = "openai-compatible", feature = "images"))]
+pub use providers::OpenAICompatibleImages;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use providers::OpenAIEmbeddings;
+#[cfg(all(feature = "openai", feature = "images"))]
+pub use providers::OpenAIImages;
