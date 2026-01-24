@@ -4,8 +4,12 @@ pub mod anthropic;
 pub mod google;
 #[cfg(feature = "openai")]
 pub mod openai;
+#[cfg(all(feature = "audio", feature = "openai"))]
+pub mod openai_audio;
 #[cfg(feature = "openai-compatible")]
 pub mod openai_compatible;
+#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+pub mod openai_compatible_audio;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub mod openai_compatible_images;
 #[cfg(all(feature = "images", feature = "openai"))]
@@ -21,10 +25,14 @@ pub use google::GoogleEmbeddings;
 pub use openai::OpenAI;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use openai::OpenAIEmbeddings;
+#[cfg(all(feature = "audio", feature = "openai"))]
+pub use openai_audio::{OpenAIAudioTranscription, OpenAISpeech};
 #[cfg(feature = "openai-compatible")]
 pub use openai_compatible::OpenAICompatible;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
 pub use openai_compatible::OpenAICompatibleEmbeddings;
+#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+pub use openai_compatible_audio::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub use openai_compatible_images::OpenAICompatibleImages;
 #[cfg(all(feature = "images", feature = "openai"))]

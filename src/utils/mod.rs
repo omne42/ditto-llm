@@ -5,3 +5,6 @@ pub mod sse;
 pub mod json_schema;
 
 pub mod params;
+
+#[cfg(test)]
+pub mod test_support;

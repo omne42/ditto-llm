@@ -1,3 +1,4 @@
+pub mod audio;
 mod error;
 pub mod image;
 mod profile;
@@ -17,6 +18,7 @@ pub use profile::{
     resolve_auth_token_with_default_keys, select_model_config,
 };
 
+pub use audio::{AudioTranscriptionModel, SpeechModel};
 pub use embedding::EmbeddingModel;
 pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
@@ -25,10 +27,11 @@ pub use stream::{
     collect_stream,
 };
 pub use types::{
-    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse,
-    ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat, ImageSource,
-    JsonSchemaFormat, Message, ProviderOptions, ReasoningEffort, ResponseFormat, Role, StreamChunk,
-    Tool, ToolChoice, Usage, Warning,
+    AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FileSource, FinishReason,
+    GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
+    ImageResponseFormat, ImageSource, JsonSchemaFormat, Message, ProviderOptions, ReasoningEffort,
+    ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool,
+    ToolChoice, TranscriptionResponseFormat, Usage, Warning,
 };
 
 #[cfg(feature = "anthropic")]
@@ -49,3 +52,7 @@ pub use providers::OpenAICompatibleImages;
 pub use providers::OpenAIEmbeddings;
 #[cfg(all(feature = "openai", feature = "images"))]
 pub use providers::OpenAIImages;
+#[cfg(all(feature = "openai", feature = "audio"))]
+pub use providers::{OpenAIAudioTranscription, OpenAISpeech};
+#[cfg(all(feature = "openai-compatible", feature = "audio"))]
+pub use providers::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};

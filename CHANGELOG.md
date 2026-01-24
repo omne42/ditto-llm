@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI-only options via `ProviderOptions`: `parallel_tool_calls`.
 - OpenAI Responses tool schemas default to `strict=true` when omitted.
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
+- Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 
 ### Changed
 

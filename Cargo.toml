@@ -18,6 +18,7 @@ streaming = []
 tools = []
 embeddings = []
 images = []
+audio = []
 
 integration = []
 

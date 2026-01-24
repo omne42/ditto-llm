@@ -1373,6 +1373,9 @@ mod tests {
 
     #[tokio::test]
     async fn upload_file_uses_custom_auth_header() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {
@@ -1416,6 +1419,9 @@ mod tests {
 
     #[tokio::test]
     async fn upload_file_uses_query_param_auth() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {
@@ -1484,6 +1490,9 @@ mod tests {
     #[cfg(feature = "embeddings")]
     #[tokio::test]
     async fn embeddings_embed_posts_to_embeddings_endpoint_with_query_param_auth() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {
@@ -1689,6 +1698,9 @@ mod tests {
 
     #[tokio::test]
     async fn generate_supports_legacy_function_call() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {

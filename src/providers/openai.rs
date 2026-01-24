@@ -1133,6 +1133,9 @@ mod tests {
 
     #[tokio::test]
     async fn upload_file_posts_to_files_endpoint() -> crate::Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {
@@ -1159,6 +1162,9 @@ mod tests {
 
     #[tokio::test]
     async fn upload_file_uses_query_param_auth() -> crate::Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
         let server = MockServer::start_async().await;
         let mock = server
             .mock_async(|when, then| {
