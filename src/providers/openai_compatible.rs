@@ -215,18 +215,11 @@ impl OpenAICompatible {
         Value::Object(out)
     }
 
-    fn tool_choice_to_openai(choice: &ToolChoice, warnings: &mut Vec<Warning>) -> Value {
+    fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
         match choice {
             ToolChoice::Auto => Value::String("auto".to_string()),
             ToolChoice::None => Value::String("none".to_string()),
-            ToolChoice::Required => {
-                warnings.push(Warning::Compatibility {
-                    feature: "tool_choice.required".to_string(),
-                    details: "chat/completions does not support `required`; using `auto`"
-                        .to_string(),
-                });
-                Value::String("auto".to_string())
-            }
+            ToolChoice::Required => Value::String("required".to_string()),
             ToolChoice::Tool { name } => serde_json::json!({
                 "type": "function",
                 "function": { "name": name }
@@ -797,7 +790,7 @@ impl LanguageModel for OpenAICompatible {
             if cfg!(feature = "tools") {
                 body.insert(
                     "tool_choice".to_string(),
-                    Self::tool_choice_to_openai(&tool_choice, &mut warnings),
+                    Self::tool_choice_to_openai(&tool_choice),
                 );
             } else {
                 warnings.push(Warning::Unsupported {
@@ -962,7 +955,7 @@ impl LanguageModel for OpenAICompatible {
                 if cfg!(feature = "tools") {
                     body.insert(
                         "tool_choice".to_string(),
-                        Self::tool_choice_to_openai(&tool_choice, &mut warnings),
+                        Self::tool_choice_to_openai(&tool_choice),
                     );
                 } else {
                     warnings.push(Warning::Unsupported {
@@ -1414,15 +1407,9 @@ mod tests {
     }
 
     #[test]
-    fn tool_choice_required_maps_to_auto() {
-        let mut warnings = Vec::<Warning>::new();
-        let mapped = OpenAICompatible::tool_choice_to_openai(&ToolChoice::Required, &mut warnings);
-        assert_eq!(mapped, Value::String("auto".to_string()));
-        assert!(
-            warnings
-                .iter()
-                .any(|w| matches!(w, Warning::Compatibility { .. }))
-        );
+    fn tool_choice_required_maps_to_required() {
+        let mapped = OpenAICompatible::tool_choice_to_openai(&ToolChoice::Required);
+        assert_eq!(mapped, Value::String("required".to_string()));
     }
 
     #[test]
