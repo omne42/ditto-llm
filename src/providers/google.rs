@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
@@ -28,6 +28,7 @@ pub struct Google {
     base_url: String,
     auth: Option<RequestAuth>,
     default_model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl Google {
@@ -51,6 +52,7 @@ impl Google {
             base_url: DEFAULT_BASE_URL.to_string(),
             auth,
             default_model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -87,6 +89,7 @@ impl Google {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -107,10 +110,11 @@ impl Google {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
@@ -545,7 +549,12 @@ impl LanguageModel for Google {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?.to_string();
-        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = selected_provider_options
+            .as_ref()
+            .map(crate::types::ProviderOptions::from_value)
+            .transpose()?
+            .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
         if provider_options.reasoning_effort.is_some() {
@@ -649,6 +658,14 @@ impl LanguageModel for Google {
             }
         }
 
+        crate::types::merge_provider_options_into_body(
+            &mut body,
+            selected_provider_options.as_ref(),
+            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            "generate.provider_options",
+            &mut warnings,
+        );
+
         let url = self.generate_url(&model);
         let req = self.http.post(url);
         let response = self.apply_auth(req).json(&body).send().await?;
@@ -707,7 +724,12 @@ impl LanguageModel for Google {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?.to_string();
-            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let provider_options = selected_provider_options
+                .as_ref()
+                .map(crate::types::ProviderOptions::from_value)
+                .transpose()?
+                .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
             if provider_options.reasoning_effort.is_some() {
@@ -808,6 +830,14 @@ impl LanguageModel for Google {
                     }
                 }
             }
+
+            crate::types::merge_provider_options_into_body(
+                &mut body,
+                selected_provider_options.as_ref(),
+                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                "stream.provider_options",
+                &mut warnings,
+            );
 
             let url = self.stream_url(&model);
             let req = self.http.post(url);
@@ -981,6 +1011,7 @@ pub struct GoogleEmbeddings {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 #[cfg(feature = "embeddings")]
@@ -1005,6 +1036,7 @@ impl GoogleEmbeddings {
             base_url: DEFAULT_BASE_URL.to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -1041,6 +1073,7 @@ impl GoogleEmbeddings {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -1061,10 +1094,11 @@ impl GoogleEmbeddings {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn resolve_model(&self) -> Result<&str> {

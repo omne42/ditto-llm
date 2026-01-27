@@ -12,6 +12,7 @@ openai = []
 anthropic = []
 google = []
 openai-compatible = ["openai"]
+cohere = []
 
 # Optional capabilities
 streaming = []
@@ -20,6 +21,13 @@ embeddings = []
 images = []
 audio = []
 moderations = []
+rerank = []
+batches = []
+
+# Bundles
+all-providers = ["openai", "anthropic", "google", "openai-compatible", "cohere"]
+all-capabilities = ["streaming", "tools", "embeddings", "images", "audio", "moderations", "rerank", "batches"]
+all = ["all-providers", "all-capabilities"]
 
 integration = []
 

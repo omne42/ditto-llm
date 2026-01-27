@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
+- AI SDK-aligned helpers: `generate_text` / `stream_text`, `generate_object_json` / `stream_object` (structured outputs), and `embed_many` aliases.
+- Structured output options: `ObjectOptions` (`output=Object|Array`, `strategy=Auto|NativeSchema|ToolCall|TextJson`) and streaming `element_stream` for array outputs.
 - Multi-modal message parts: `ContentPart::Image` (images) and `ContentPart::File` (PDFs) with `FileSource` support.
 - Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.) and embeddings.
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming: `abortable_stream(StreamResult) -> AbortableStream` with `StreamAbortHandle`.
 - Provider builders accept a custom `reqwest::Client` via `with_http_client` (proxy/headers/timeout customization).
 - Provider config: `ProviderConfig.http_headers` to apply default HTTP headers when building clients from config (also used for `/models` discovery).
+- Provider config: `ProviderConfig.http_query_params` to apply default HTTP query params when building clients from config (also used for `/models` discovery).
 - File upload helper for OpenAI and OpenAI-compatible providers: `upload_file` / `upload_file_with_purpose`.
 - Examples: `basic`, `streaming`, `tool_calling`, `embeddings`, `openai_compatible`, `openai_compatible_embeddings`, `multimodal`.
 - Roadmap: `TODO.md` with a scoped capability checklist (LiteLLM / AI SDK aligned).
@@ -36,11 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
+- Rerank: `RerankModel` + Cohere `/rerank`.
 
 ### Changed
 
 - Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).
 - Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
+- `provider_options` supports per-provider buckets (`"*"` + provider ids) and passes through additional provider-specific keys where supported (conflicts are ignored with warnings).
 
 ### Fixed
 

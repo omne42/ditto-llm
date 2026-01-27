@@ -208,6 +208,8 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub http_headers: BTreeMap<String, String>,
     #[serde(default)]
+    pub http_query_params: BTreeMap<String, String>,
+    #[serde(default)]
     pub auth: Option<ProviderAuth>,
     #[serde(default)]
     pub capabilities: Option<ProviderCapabilities>,
@@ -244,6 +246,20 @@ pub(crate) fn build_http_client(
         builder = builder.default_headers(header_map_from_pairs(headers)?);
     }
     builder.build().map_err(DittoError::Http)
+}
+
+pub(crate) fn apply_http_query_params(
+    mut req: reqwest::RequestBuilder,
+    params: &BTreeMap<String, String>,
+) -> reqwest::RequestBuilder {
+    for (name, value) in params {
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        req = req.query(&[(name, value)]);
+    }
+    req
 }
 
 fn resolve_optional_env_token(env: &Env, keys: &[&str]) -> String {
@@ -289,6 +305,7 @@ pub struct OpenAiProvider {
     model_whitelist: Vec<String>,
     capabilities: ProviderCapabilities,
     http: reqwest::Client,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAiProvider {
@@ -334,6 +351,7 @@ impl OpenAiProvider {
                 .capabilities
                 .unwrap_or_else(ProviderCapabilities::openai_responses),
             http,
+            http_query_params: config.http_query_params.clone(),
         })
     }
 }
@@ -351,6 +369,7 @@ impl Provider for OpenAiProvider {
     async fn list_models(&self) -> Result<Vec<String>> {
         let client =
             OpenAiCompatibleClient::new_with_auth(self.auth.clone(), self.base_url.clone())?
+                .with_http_query_params(self.http_query_params.clone())
                 .with_http_client(self.http.clone());
         let models = client.list_models().await?;
         Ok(filter_models_whitelist(models, &self.model_whitelist))
@@ -446,6 +465,7 @@ pub struct OpenAiCompatibleClient {
     http: reqwest::Client,
     base_url: String,
     auth: Option<RequestAuth>,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAiCompatibleClient {
@@ -464,11 +484,17 @@ impl OpenAiCompatibleClient {
             http,
             base_url,
             auth,
+            http_query_params: BTreeMap::new(),
         })
     }
 
     pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
         self.http = http;
+        self
+    }
+
+    pub fn with_http_query_params(mut self, params: BTreeMap<String, String>) -> Self {
+        self.http_query_params = params;
         self
     }
 
@@ -498,6 +524,7 @@ impl OpenAiCompatibleClient {
         if let Some(auth) = self.auth.as_ref() {
             req = auth.apply(req);
         }
+        req = apply_http_query_params(req, &self.http_query_params);
         let response = req.send().await?;
 
         let status = response.status();
@@ -564,8 +591,9 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
         },
     };
     let http = build_http_client(Duration::from_secs(300), &provider.http_headers)?;
-    let client =
-        OpenAiCompatibleClient::new_with_auth(auth, base_url.to_string())?.with_http_client(http);
+    let client = OpenAiCompatibleClient::new_with_auth(auth, base_url.to_string())?
+        .with_http_query_params(provider.http_query_params.clone())
+        .with_http_client(http);
     let models = client.list_models().await?;
     Ok(filter_models_whitelist(models, &provider.model_whitelist))
 }

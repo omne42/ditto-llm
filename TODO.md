@@ -122,7 +122,7 @@
 - [ ] **新增 endpoints traits（如果 P0 决策为需要）**
   - [x] `ImageGenerationModel`（/images）
   - [x] `AudioTranscriptionModel` / `SpeechModel`（/audio）
-  - [ ] `RerankModel`（/rerank）
+  - [x] `RerankModel`（/rerank，Cohere）
   - [x] `ModerationModel`（/moderations）
   - [ ] `BatchClient`（/batches）
   - DoD：每个 trait 至少一个 provider 先跑通（OpenAI 或 OpenAI-compatible），并给出 examples + 单测（mock）

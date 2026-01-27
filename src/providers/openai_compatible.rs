@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -11,7 +11,8 @@ use serde_json::{Map, Value};
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_request_auth_with_default_keys,
+    Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
+    resolve_request_auth_with_default_keys,
 };
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
@@ -25,6 +26,7 @@ pub struct OpenAICompatible {
     base_url: String,
     auth: Option<RequestAuth>,
     default_model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAICompatible {
@@ -46,6 +48,7 @@ impl OpenAICompatible {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             default_model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -90,6 +93,7 @@ impl OpenAICompatible {
 
         let mut out = Self::new("");
         out.auth = auth;
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -110,10 +114,11 @@ impl OpenAICompatible {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn chat_completions_url(&self) -> String {
@@ -808,12 +813,18 @@ impl LanguageModel for OpenAICompatible {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = selected_provider_options
+            .as_ref()
+            .map(crate::types::ProviderOptions::from_value)
+            .transpose()?
+            .unwrap_or_default();
         let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
 
         let mut body = Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));
         body.insert("messages".to_string(), Value::Array(messages));
+        body.insert("stream".to_string(), Value::Bool(false));
 
         if let Some(temperature) = request.temperature {
             if let Some(value) = crate::utils::params::clamped_number_from_f32(
@@ -897,6 +908,14 @@ impl LanguageModel for OpenAICompatible {
                 Value::Bool(parallel_tool_calls),
             );
         }
+
+        crate::types::merge_provider_options_into_body(
+            &mut body,
+            selected_provider_options.as_ref(),
+            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            "generate.provider_options",
+            &mut warnings,
+        );
 
         let url = self.chat_completions_url();
         let mut req = self.http.post(url);
@@ -1010,7 +1029,12 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let provider_options = selected_provider_options
+                .as_ref()
+                .map(crate::types::ProviderOptions::from_value)
+                .transpose()?
+                .unwrap_or_default();
             let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
 
             let mut body = Map::<String, Value>::new();
@@ -1101,6 +1125,14 @@ impl LanguageModel for OpenAICompatible {
                 );
             }
 
+            crate::types::merge_provider_options_into_body(
+                &mut body,
+                selected_provider_options.as_ref(),
+                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                "stream.provider_options",
+                &mut warnings,
+            );
+
             let url = self.chat_completions_url();
             let req = self
                 .http
@@ -1184,6 +1216,7 @@ pub struct OpenAICompatibleEmbeddings {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 #[cfg(feature = "embeddings")]
@@ -1206,6 +1239,7 @@ impl OpenAICompatibleEmbeddings {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -1250,6 +1284,7 @@ impl OpenAICompatibleEmbeddings {
 
         let mut out = Self::new("");
         out.auth = auth;
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -1270,10 +1305,11 @@ impl OpenAICompatibleEmbeddings {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn embeddings_url(&self) -> String {
@@ -1346,6 +1382,7 @@ impl EmbeddingModel for OpenAICompatibleEmbeddings {
 mod tests {
     use super::*;
     use httpmock::{Method::POST, MockServer};
+    use serde_json::json;
     use std::collections::BTreeMap;
 
     #[tokio::test]
@@ -1395,6 +1432,57 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v1")),
             default_model: Some("test-model".to_string()),
+            auth: Some(crate::ProviderAuth::HttpHeaderEnv {
+                header: "api-key".to_string(),
+                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([(
+                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
+        };
+
+        let client = OpenAICompatible::from_config(&config, &env).await?;
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_includes_default_query_params() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .query_param("api-version", "2024-02-01")
+                    .header("api-key", "sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-model".to_string()),
+            http_query_params: BTreeMap::from([(
+                "api-version".to_string(),
+                "2024-02-01".to_string(),
+            )]),
             auth: Some(crate::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
                 keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
@@ -1536,6 +1624,60 @@ mod tests {
     fn tool_choice_required_maps_to_required() {
         let mapped = OpenAICompatible::tool_choice_to_openai(&ToolChoice::Required);
         assert_eq!(mapped, Value::String("required".to_string()));
+    }
+
+    #[tokio::test]
+    async fn generate_sends_stream_false_and_ignores_provider_override() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/chat/completions")
+                    .body_includes("\"stream\":false")
+                    .body_includes("\"model\":\"test-model\"")
+                    .body_includes("\"messages\":[");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(
+                    json!({
+                        "id": "chatcmpl_123",
+                        "model": "test-model",
+                        "choices": [
+                            {
+                                "message": { "content": "hi" },
+                                "finish_reason": "stop"
+                            }
+                        ],
+                        "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
+                    })
+                    .to_string(),
+                );
+            })
+            .await;
+
+        let client = OpenAICompatible::new("sk-test")
+            .with_base_url(server.url("/v1"))
+            .with_model("test-model");
+
+        let mut request = GenerateRequest::from(vec![Message::user("hi")]);
+        request.provider_options = Some(json!({
+            "openai-compatible": { "stream": true }
+        }));
+
+        let response = client.generate(request).await?;
+
+        mock.assert_async().await;
+        assert_eq!(response.text(), "hi".to_string());
+        assert!(response.warnings.iter().any(|w| matches!(
+            w,
+            Warning::Compatibility { feature, details }
+                if feature == "generate.provider_options" && details.contains("overrides stream")
+        )));
+        Ok(())
     }
 
     #[test]

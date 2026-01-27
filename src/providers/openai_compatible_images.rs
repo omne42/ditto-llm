@@ -1,10 +1,12 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 
 use crate::image::ImageGenerationModel;
 use crate::profile::{
-    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_request_auth_with_default_keys,
+    Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
+    resolve_request_auth_with_default_keys,
 };
 use crate::types::{ImageGenerationRequest, ImageGenerationResponse, ImageSource, Usage, Warning};
 use crate::{DittoError, Result};
@@ -15,6 +17,7 @@ pub struct OpenAICompatibleImages {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAICompatibleImages {
@@ -36,6 +39,7 @@ impl OpenAICompatibleImages {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -80,6 +84,7 @@ impl OpenAICompatibleImages {
 
         let mut out = Self::new("");
         out.auth = auth;
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -100,10 +105,11 @@ impl OpenAICompatibleImages {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn images_url(&self) -> String {
@@ -200,6 +206,10 @@ impl ImageGenerationModel for OpenAICompatibleImages {
 
     async fn generate(&self, request: ImageGenerationRequest) -> Result<ImageGenerationResponse> {
         let model = self.resolve_model(&request)?.to_string();
+        let selected_provider_options = crate::types::select_provider_options_value(
+            request.provider_options.as_ref(),
+            self.provider(),
+        )?;
         let mut warnings = Vec::<Warning>::new();
 
         let mut body = Map::<String, Value>::new();
@@ -215,7 +225,7 @@ impl ImageGenerationModel for OpenAICompatibleImages {
             body.insert("response_format".to_string(), serde_json::to_value(format)?);
         }
 
-        Self::merge_provider_options(&mut body, request.provider_options.as_ref(), &mut warnings);
+        Self::merge_provider_options(&mut body, selected_provider_options.as_ref(), &mut warnings);
 
         let url = self.images_url();
         let response = self

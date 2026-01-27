@@ -17,3 +17,16 @@ pub trait EmbeddingModel: Send + Sync {
             .ok_or_else(|| crate::DittoError::InvalidResponse("embedding response is empty".into()))
     }
 }
+
+#[async_trait]
+pub trait EmbeddingModelExt: EmbeddingModel {
+    async fn embed_many(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
+        self.embed(texts).await
+    }
+
+    async fn embed_one(&self, text: String) -> Result<Vec<f32>> {
+        self.embed_single(text).await
+    }
+}
+
+impl<T> EmbeddingModelExt for T where T: EmbeddingModel + ?Sized {}

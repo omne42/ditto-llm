@@ -2,10 +2,11 @@ use async_trait::async_trait;
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 
 use crate::audio::{AudioTranscriptionModel, SpeechModel};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
@@ -20,6 +21,7 @@ pub struct OpenAIAudioTranscription {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAIAudioTranscription {
@@ -41,6 +43,7 @@ impl OpenAIAudioTranscription {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -76,6 +79,7 @@ impl OpenAIAudioTranscription {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -96,10 +100,11 @@ impl OpenAIAudioTranscription {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn transcriptions_url(&self) -> String {
@@ -173,6 +178,10 @@ impl AudioTranscriptionModel for OpenAIAudioTranscription {
         request: AudioTranscriptionRequest,
     ) -> Result<AudioTranscriptionResponse> {
         let model = self.resolve_model(&request)?.to_string();
+        let selected_provider_options = crate::types::select_provider_options_value(
+            request.provider_options.as_ref(),
+            self.provider(),
+        )?;
         let mut warnings = Vec::<Warning>::new();
 
         let mut file_part = Part::bytes(request.audio).file_name(request.filename);
@@ -209,7 +218,8 @@ impl AudioTranscriptionModel for OpenAIAudioTranscription {
             }
         }
 
-        form = Self::merge_provider_options(form, request.provider_options.as_ref(), &mut warnings);
+        form =
+            Self::merge_provider_options(form, selected_provider_options.as_ref(), &mut warnings);
 
         let url = self.transcriptions_url();
         let response = self
@@ -264,6 +274,7 @@ pub struct OpenAISpeech {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAISpeech {
@@ -285,6 +296,7 @@ impl OpenAISpeech {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -320,6 +332,7 @@ impl OpenAISpeech {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -340,10 +353,11 @@ impl OpenAISpeech {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn speech_url(&self) -> String {
@@ -420,6 +434,10 @@ impl SpeechModel for OpenAISpeech {
 
     async fn speak(&self, request: SpeechRequest) -> Result<SpeechResponse> {
         let model = self.resolve_model(&request)?.to_string();
+        let selected_provider_options = crate::types::select_provider_options_value(
+            request.provider_options.as_ref(),
+            self.provider(),
+        )?;
         let mut warnings = Vec::<Warning>::new();
 
         let mut body = Map::<String, Value>::new();
@@ -448,7 +466,7 @@ impl SpeechModel for OpenAISpeech {
             }
         }
 
-        Self::merge_provider_options(&mut body, request.provider_options.as_ref(), &mut warnings);
+        Self::merge_provider_options(&mut body, selected_provider_options.as_ref(), &mut warnings);
 
         let url = self.speech_url();
         let response = self

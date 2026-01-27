@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
@@ -28,6 +28,7 @@ pub struct Anthropic {
     auth: Option<RequestAuth>,
     default_model: String,
     version: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl Anthropic {
@@ -52,6 +53,7 @@ impl Anthropic {
             auth,
             default_model: String::new(),
             version: DEFAULT_VERSION.to_string(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -87,6 +89,7 @@ impl Anthropic {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -107,10 +110,11 @@ impl Anthropic {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn messages_url(&self) -> String {
@@ -481,7 +485,12 @@ impl LanguageModel for Anthropic {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = selected_provider_options
+            .as_ref()
+            .map(crate::types::ProviderOptions::from_value)
+            .transpose()?
+            .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
         if provider_options.reasoning_effort.is_some() {
@@ -537,6 +546,7 @@ impl LanguageModel for Anthropic {
             "max_tokens".to_string(),
             Value::Number(request.max_tokens.unwrap_or(1024).into()),
         );
+        body.insert("stream".to_string(), Value::Bool(false));
 
         if !system.is_empty() {
             body.insert("system".to_string(), Value::String(system.join("\n\n")));
@@ -608,6 +618,14 @@ impl LanguageModel for Anthropic {
             }
         }
 
+        crate::types::merge_provider_options_into_body(
+            &mut body,
+            selected_provider_options.as_ref(),
+            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            "generate.provider_options",
+            &mut warnings,
+        );
+
         let url = self.messages_url();
         let mut request_builder = self
             .http
@@ -657,7 +675,12 @@ impl LanguageModel for Anthropic {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let provider_options = selected_provider_options
+                .as_ref()
+                .map(crate::types::ProviderOptions::from_value)
+                .transpose()?
+                .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
             if provider_options.reasoning_effort.is_some() {
@@ -774,6 +797,14 @@ impl LanguageModel for Anthropic {
                     }
                 }
             }
+
+            crate::types::merge_provider_options_into_body(
+                &mut body,
+                selected_provider_options.as_ref(),
+                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                "stream.provider_options",
+                &mut warnings,
+            );
 
             let url = self.messages_url();
             let mut request_builder = self

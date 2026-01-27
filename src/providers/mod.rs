@@ -1,5 +1,7 @@
 #[cfg(feature = "anthropic")]
 pub mod anthropic;
+#[cfg(feature = "cohere")]
+pub mod cohere;
 #[cfg(feature = "google")]
 pub mod google;
 #[cfg(feature = "openai")]
@@ -21,6 +23,10 @@ pub mod openai_moderations;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
+#[cfg(all(feature = "cohere", feature = "embeddings"))]
+pub use cohere::CohereEmbeddings;
+#[cfg(all(feature = "cohere", feature = "rerank"))]
+pub use cohere::CohereRerank;
 #[cfg(feature = "google")]
 pub use google::Google;
 #[cfg(all(feature = "google", feature = "embeddings"))]

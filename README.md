@@ -7,6 +7,8 @@ Ditto-LLM is a small Rust SDK that provides a unified interface for calling mult
 Current scope:
 
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
+- Text helpers: `generate_text` / `stream_text` (AI SDK-style `generateText` / `streamText`).
+- Structured outputs: `generate_object_json` / `stream_object` (AI SDK-style `generateObject` / `streamObject`).
 - Multi-modal inputs: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
 - Parameter hygiene: `temperature`/`top_p` are clamped to provider ranges; non-finite values are dropped (with warnings).
 - Providers:
@@ -14,7 +16,11 @@ Current scope:
   - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.) and embeddings
   - Anthropic Messages API (generate + SSE streaming)
   - Google GenAI (generate + SSE streaming) and embeddings
+  - Cohere embeddings and rerank (feature-gated)
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
+
+See `PROVIDERS.md` for a pragmatic provider/capability matrix (native adapters + OpenAI-compatible
+gateway coverage).
 
 ## Tool Schemas
 
@@ -69,6 +75,95 @@ let collected = collect_stream(stream).await?;
 println!("{}", collected.response.text());
 ```
 
+## Text (generateText / streamText)
+
+Single-step text helpers (no tool execution loop):
+
+```rust
+use ditto_llm::{GenerateRequest, LanguageModelTextExt};
+
+let out = llm.generate_text(GenerateRequest::from(messages)).await?;
+println!("{}", out.text);
+```
+
+Streaming:
+
+```rust
+use futures_util::StreamExt;
+use ditto_llm::{GenerateRequest, LanguageModelTextExt};
+
+let mut result = llm.stream_text(GenerateRequest::from(messages)).await?;
+while let Some(delta) = result.text_stream.next().await {
+    print!("{}", delta?);
+}
+let final_text = result.final_text()?.unwrap();
+println!("\nfinal={final_text}");
+```
+
+## Structured Output (generateObject / streamObject)
+
+Use `LanguageModelObjectExt` to request structured output (AI SDK-style `generateObject` / `streamObject`).
+
+Defaults (`ObjectOptions::default()`):
+
+- `strategy = Auto`:
+  - `openai` → JSON Schema via `response_format` (native)
+  - other providers (incl. `openai-compatible`) → tool-call enforced JSON (wraps output under `{"value": ...}`)
+  - always falls back to extracting JSON from text if needed
+- `output = Object` (top-level object)
+
+```rust
+use ditto_llm::{GenerateRequest, JsonSchemaFormat, LanguageModelObjectExt, Message};
+use serde_json::json;
+
+let schema = JsonSchemaFormat {
+    name: "recipe".to_string(),
+    schema: json!({ "type": "object" }),
+    strict: None,
+};
+
+let out = llm
+    .generate_object_json(GenerateRequest::from(vec![Message::user("hi")]), schema)
+    .await?;
+
+println!("{}", out.object);
+```
+
+Streaming (partial objects):
+
+```rust
+use futures_util::StreamExt;
+
+let mut result = llm.stream_object(GenerateRequest::from(messages), schema).await?;
+while let Some(partial) = result.partial_object_stream.next().await {
+    println!("{:?}", partial?);
+}
+let final_obj = result.final_json()?.unwrap();
+println!("{final_obj}");
+```
+
+Streaming arrays (AI SDK `elementStream`):
+
+```rust
+use ditto_llm::{ObjectOptions, ObjectOutput};
+use futures_util::StreamExt;
+
+let mut result = llm
+    .stream_object_with(
+        GenerateRequest::from(messages),
+        schema, // schema for a single element; ditto wraps it as {type:"array", items: ...}
+        ObjectOptions {
+            output: ObjectOutput::Array,
+            ..ObjectOptions::default()
+        },
+    )
+    .await?;
+
+while let Some(element) = result.element_stream.next().await {
+    println!("element = {}", element?);
+}
+```
+
 ## Streaming Cancellation
 
 If you need an explicit abort handle (instead of relying on drop semantics), wrap the stream:
@@ -79,6 +174,17 @@ use ditto_llm::{abortable_stream, GenerateRequest, LanguageModel};
 let stream = llm.stream(GenerateRequest::from(messages)).await?;
 let abortable = abortable_stream(stream);
 abortable.handle.abort();
+```
+
+## Embeddings
+
+`EmbeddingModelExt` provides AI SDK-style aliases:
+
+```rust
+use ditto_llm::EmbeddingModelExt;
+
+let vectors = embeddings.embed_many(vec!["hello".to_string(), "world".to_string()]).await?;
+let one = embeddings.embed_one("hi".to_string()).await?;
 ```
 
 ## Custom HTTP Client
@@ -110,6 +216,39 @@ If your gateway expects auth in a query param (e.g. `...?api_key=...`), use:
 ```toml
 auth = { type = "query_param_env", param = "api_key", keys = ["GATEWAY_API_KEY"] }
 ```
+
+## Provider Query Params (Optional)
+
+If your provider requires additional fixed query params on every request (e.g. Azure OpenAI
+`api-version`), set `ProviderConfig.http_query_params`:
+
+```toml
+base_url = "https://{resource}.openai.azure.com/openai/deployments/{deployment}"
+http_query_params = { "api-version" = "2024-02-01" }
+auth = { type = "http_header_env", header = "api-key", keys = ["AZURE_OPENAI_API_KEY"] }
+```
+
+## Provider Options (Per Provider)
+
+Requests that support `provider_options` accept either:
+
+- **Legacy (flat)**: a single JSON object applied to the current provider.
+- **Bucketed**: a JSON object keyed by provider id (optionally with a `"*"` default bucket).
+
+Bucketed example:
+
+```json
+{
+  "provider_options": {
+    "*": { "parallel_tool_calls": false },
+    "openai": { "reasoning_effort": "high" },
+    "openai-compatible": { "response_format": { "type": "json_schema", "json_schema": { "name": "answer", "schema": { "type": "object" } } } }
+  }
+}
+```
+
+Precedence is `"*"` (base) → provider bucket (override). Provider ids are: `openai`,
+`openai-compatible`, `anthropic`, `google`, `cohere`.
 
 ## File Upload (Optional)
 

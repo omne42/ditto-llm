@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -11,7 +11,7 @@ use serde_json::{Map, Value};
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth,
+    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
@@ -26,6 +26,7 @@ pub struct OpenAI {
     base_url: String,
     auth: Option<RequestAuth>,
     default_model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 impl OpenAI {
@@ -47,6 +48,7 @@ impl OpenAI {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             default_model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -82,6 +84,7 @@ impl OpenAI {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -102,10 +105,11 @@ impl OpenAI {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn responses_url(&self) -> String {
@@ -561,7 +565,12 @@ impl LanguageModel for OpenAI {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = selected_provider_options
+            .as_ref()
+            .map(crate::types::ProviderOptions::from_value)
+            .transpose()?
+            .unwrap_or_default();
         let (input, mut warnings) = Self::messages_to_input(&request.messages);
 
         if request.stop_sequences.is_some() {
@@ -635,6 +644,13 @@ impl LanguageModel for OpenAI {
         }
 
         apply_provider_options(&mut body, &provider_options)?;
+        crate::types::merge_provider_options_into_body(
+            &mut body,
+            selected_provider_options.as_ref(),
+            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            "generate.provider_options",
+            &mut warnings,
+        );
 
         let url = self.responses_url();
         let req = self.http.post(url);
@@ -687,7 +703,12 @@ impl LanguageModel for OpenAI {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let provider_options = request.parsed_provider_options()?.unwrap_or_default();
+            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let provider_options = selected_provider_options
+                .as_ref()
+                .map(crate::types::ProviderOptions::from_value)
+                .transpose()?
+                .unwrap_or_default();
             let (input, mut warnings) = Self::messages_to_input(&request.messages);
 
             let mut body = Map::<String, Value>::new();
@@ -763,6 +784,13 @@ impl LanguageModel for OpenAI {
             }
 
             apply_provider_options(&mut body, &provider_options)?;
+            crate::types::merge_provider_options_into_body(
+                &mut body,
+                selected_provider_options.as_ref(),
+                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                "stream.provider_options",
+                &mut warnings,
+            );
 
             let url = self.responses_url();
             let req = self.http.post(url);
@@ -954,6 +982,7 @@ pub struct OpenAIEmbeddings {
     base_url: String,
     auth: Option<RequestAuth>,
     model: String,
+    http_query_params: BTreeMap<String, String>,
 }
 
 #[cfg(feature = "embeddings")]
@@ -976,6 +1005,7 @@ impl OpenAIEmbeddings {
             base_url: "https://api.openai.com/v1".to_string(),
             auth,
             model: String::new(),
+            http_query_params: BTreeMap::new(),
         }
     }
 
@@ -1011,6 +1041,7 @@ impl OpenAIEmbeddings {
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
                 std::time::Duration::from_secs(300),
@@ -1031,10 +1062,11 @@ impl OpenAIEmbeddings {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self.auth.as_ref() {
+        let req = match self.auth.as_ref() {
             Some(auth) => auth.apply(req),
             None => req,
-        }
+        };
+        apply_http_query_params(req, &self.http_query_params)
     }
 
     fn resolve_model(&self) -> Result<&str> {
@@ -1188,6 +1220,52 @@ mod tests {
                 param: "api_key".to_string(),
                 keys: vec!["CODEPM_TEST_OPENAI_KEY".to_string()],
                 prefix: None,
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env {
+            dotenv: BTreeMap::from([("CODEPM_TEST_OPENAI_KEY".to_string(), "sk-test".to_string())]),
+        };
+
+        let client = OpenAI::from_config(&config, &env).await?;
+        let id = client.upload_file("hello.txt", b"hello".to_vec()).await?;
+
+        mock.assert_async().await;
+        assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn upload_file_includes_default_query_params() -> crate::Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/files")
+                    .query_param("api-version", "2024-02-01")
+                    .header("authorization", "Bearer sk-test")
+                    .body_includes("name=\"purpose\"")
+                    .body_includes("assistants")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"id\":\"file_123\"}");
+            })
+            .await;
+
+        let config = ProviderConfig {
+            base_url: Some(server.url("/v1")),
+            default_model: Some("test-model".to_string()),
+            http_query_params: BTreeMap::from([(
+                "api-version".to_string(),
+                "2024-02-01".to_string(),
+            )]),
+            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+                keys: vec!["CODEPM_TEST_OPENAI_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
