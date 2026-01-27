@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod batch;
 mod error;
 pub mod image;
 pub mod moderation;
@@ -23,6 +24,7 @@ pub use profile::{
 };
 
 pub use audio::{AudioTranscriptionModel, SpeechModel};
+pub use batch::BatchClient;
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
 pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
@@ -38,12 +40,13 @@ pub use stream::{
 };
 pub use text::{GenerateTextResponse, LanguageModelTextExt, StreamTextFinal, StreamTextResult};
 pub use types::{
-    AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FileSource, FinishReason,
-    GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
-    ImageResponseFormat, ImageSource, JsonSchemaFormat, Message, ModerationInput,
-    ModerationRequest, ModerationResponse, ModerationResult, ProviderOptions, ReasoningEffort,
-    RerankDocument, RerankRequest, RerankResponse, RerankResult, ResponseFormat, Role,
-    SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool, ToolChoice,
+    AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
+    BatchListResponse, BatchRequestCounts, BatchResponse, BatchStatus, ContentPart, FileSource,
+    FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
+    ImageGenerationResponse, ImageResponseFormat, ImageSource, JsonSchemaFormat, Message,
+    ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, ProviderOptions,
+    ReasoningEffort, RerankDocument, RerankRequest, RerankResponse, RerankResult, ResponseFormat,
+    Role, SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool, ToolChoice,
     TranscriptionResponseFormat, Usage, Warning,
 };
 
@@ -59,8 +62,12 @@ pub use providers::Google;
 pub use providers::GoogleEmbeddings;
 #[cfg(feature = "openai")]
 pub use providers::OpenAI;
+#[cfg(all(feature = "openai", feature = "batches"))]
+pub use providers::OpenAIBatches;
 #[cfg(feature = "openai-compatible")]
 pub use providers::OpenAICompatible;
+#[cfg(all(feature = "openai-compatible", feature = "batches"))]
+pub use providers::OpenAICompatibleBatches;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
 pub use providers::OpenAICompatibleEmbeddings;
 #[cfg(all(feature = "openai-compatible", feature = "images"))]

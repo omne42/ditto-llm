@@ -8,10 +8,14 @@ pub mod google;
 pub mod openai;
 #[cfg(all(feature = "audio", feature = "openai"))]
 pub mod openai_audio;
+#[cfg(all(feature = "batches", feature = "openai"))]
+pub mod openai_batches;
 #[cfg(feature = "openai-compatible")]
 pub mod openai_compatible;
 #[cfg(all(feature = "audio", feature = "openai-compatible"))]
 pub mod openai_compatible_audio;
+#[cfg(all(feature = "batches", feature = "openai-compatible"))]
+pub mod openai_compatible_batches;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub mod openai_compatible_images;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]
@@ -37,12 +41,16 @@ pub use openai::OpenAI;
 pub use openai::OpenAIEmbeddings;
 #[cfg(all(feature = "audio", feature = "openai"))]
 pub use openai_audio::{OpenAIAudioTranscription, OpenAISpeech};
+#[cfg(all(feature = "batches", feature = "openai"))]
+pub use openai_batches::OpenAIBatches;
 #[cfg(feature = "openai-compatible")]
 pub use openai_compatible::OpenAICompatible;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
 pub use openai_compatible::OpenAICompatibleEmbeddings;
 #[cfg(all(feature = "audio", feature = "openai-compatible"))]
 pub use openai_compatible_audio::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
+#[cfg(all(feature = "batches", feature = "openai-compatible"))]
+pub use openai_compatible_batches::OpenAICompatibleBatches;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub use openai_compatible_images::OpenAICompatibleImages;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]

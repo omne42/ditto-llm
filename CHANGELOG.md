@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
 - Rerank: `RerankModel` + Cohere `/rerank`.
+- Batches: `BatchClient` + OpenAI/OpenAI-compatible `/batches`.
 
 ### Changed
 

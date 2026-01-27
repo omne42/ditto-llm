@@ -21,7 +21,7 @@ This file tracks coverage using two paths:
 | Audio | `AudioTranscriptionModel` / `SpeechModel` | OpenAI | `/audio/*` |
 | Moderations | `ModerationModel::moderate` | OpenAI | `/moderations` |
 | Rerank | `RerankModel::rerank` | Cohere | (gateway-dependent) |
-| Batches | (planned) | — | (planned) |
+| Batches | `BatchClient::{create,retrieve,cancel,list}` | OpenAI | `/batches` |
 
 ## Provider Coverage (pragmatic)
 
@@ -41,4 +41,3 @@ This file tracks coverage using two paths:
 - `--features all`: all providers + all optional endpoint traits
 - `--features all-providers`: all provider adapters
 - `--features all-capabilities`: all optional endpoint traits
-

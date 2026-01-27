@@ -17,6 +17,7 @@ Current scope:
   - Anthropic Messages API (generate + SSE streaming)
   - Google GenAI (generate + SSE streaming) and embeddings
   - Cohere embeddings and rerank (feature-gated)
+- Batches: `BatchClient` for OpenAI/OpenAI-compatible `/batches` (feature `batches`).
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
 
 See `PROVIDERS.md` for a pragmatic provider/capability matrix (native adapters + OpenAI-compatible
@@ -60,6 +61,7 @@ cargo run --example embeddings
 cargo run --example openai_compatible
 cargo run --example openai_compatible_embeddings
 cargo run --example multimodal -- ./image.png ./doc.pdf
+cargo run --example batches --features batches -- ./requests.jsonl
 ```
 
 ## Stream Collection

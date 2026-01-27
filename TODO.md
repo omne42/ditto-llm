@@ -123,8 +123,8 @@
   - [x] `ImageGenerationModel`（/images）
   - [x] `AudioTranscriptionModel` / `SpeechModel`（/audio）
   - [x] `RerankModel`（/rerank，Cohere）
-  - [x] `ModerationModel`（/moderations）
-  - [ ] `BatchClient`（/batches）
+- [x] `ModerationModel`（/moderations）
+- [x] `BatchClient`（/batches）
   - DoD：每个 trait 至少一个 provider 先跑通（OpenAI 或 OpenAI-compatible），并给出 examples + 单测（mock）
 
 ### 3.4 LiteLLM 端点范围勾选（P0 输出）
@@ -135,7 +135,7 @@
 - [x] 可选：`/audio/transcriptions`、`/audio/speech`（只有当 agent 需要语音 I/O 时才加）
 - [x] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
 - [x] 可选：`/moderations`（内容安全端点；已实现 OpenAI/OpenAI-compatible）
-- [ ] 可选：`/batches`（批处理是平台能力；先保持 SDK 简单）
+- [x] 可选：`/batches`（批处理是平台能力；已实现 `BatchClient` + OpenAI/OpenAI-compatible）
 - [ ] 可选：`/rerank`（检索质量提升项；等真实需求再做）
 - [x] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）
 
