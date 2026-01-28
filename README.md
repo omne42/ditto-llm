@@ -20,6 +20,13 @@ Current scope:
 - Batches: `BatchClient` for OpenAI/OpenAI-compatible `/batches` (feature `batches`).
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
 
+Non-goals (for now):
+
+- This crate is not an API gateway/proxy or control plane (virtual keys, multi-tenant teams/orgs, RPM/TPM limits, caching, budgets, routing/health checks, observability callbacks, prompt management, guardrails, pass-through endpoints, etc.).
+- It does not run an agent/tool execution loop (ToolLoopAgent-style `stopWhen`, approvals, etc.); helpers are single-step and return tool calls to the caller.
+- It is not a UI SDK (no stream protocol, frontend hooks, middleware/telemetry/devtools/MCP ecosystem).
+- Native auth adapters for providers like Bedrock (SigV4) and Vertex AI (OAuth/service accounts) are not implemented yet; use an OpenAI-compatible gateway for now.
+
 See `PROVIDERS.md` for a pragmatic provider/capability matrix (native adapters + OpenAI-compatible
 gateway coverage).
 

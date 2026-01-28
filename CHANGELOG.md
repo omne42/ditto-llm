@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
 - Rerank: `RerankModel` + Cohere `/rerank`.
 - Batches: `BatchClient` + OpenAI/OpenAI-compatible `/batches`.
+- Document non-goals and optional future scope (gateway/control-plane features, agent loop, UI SDK surface, native auth adapters).
 
 ### Changed
 
