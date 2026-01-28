@@ -33,8 +33,8 @@ This file tracks coverage using two paths:
 | Google | Native | `generateContent` + streaming/tools; embeddings (feature-gated) |
 | Cohere | Native (partial) | embeddings + rerank; chat adapter TBD |
 | Azure OpenAI | OpenAI-compatible | Needs `http_query_params = { \"api-version\" = \"...\" }` + `api-key` header |
-| Amazon Bedrock | Gateway-first | Native SigV4 adapter TBD; use a gateway for now |
-| Google Vertex | Gateway-first | Native auth adapter TBD; use a gateway for now |
+| Amazon Bedrock | Native (minimal) | SigV4 auth + basic invoke adapter (feature `bedrock`) |
+| Google Vertex | Native (minimal) | OAuth client-credentials + basic generateContent adapter (feature `vertex`) |
 
 ## Feature Bundles
 

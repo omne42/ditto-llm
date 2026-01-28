@@ -1,5 +1,7 @@
 #[cfg(feature = "anthropic")]
 pub mod anthropic;
+#[cfg(feature = "bedrock")]
+pub mod bedrock;
 #[cfg(feature = "cohere")]
 pub mod cohere;
 #[cfg(feature = "google")]
@@ -24,9 +26,13 @@ pub mod openai_compatible_moderations;
 pub mod openai_images;
 #[cfg(all(feature = "moderations", feature = "openai"))]
 pub mod openai_moderations;
+#[cfg(feature = "vertex")]
+pub mod vertex;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
+#[cfg(feature = "bedrock")]
+pub use bedrock::Bedrock;
 #[cfg(all(feature = "cohere", feature = "embeddings"))]
 pub use cohere::CohereEmbeddings;
 #[cfg(all(feature = "cohere", feature = "rerank"))]
@@ -59,3 +65,5 @@ pub use openai_compatible_moderations::OpenAICompatibleModerations;
 pub use openai_images::OpenAIImages;
 #[cfg(all(feature = "moderations", feature = "openai"))]
 pub use openai_moderations::OpenAIModerations;
+#[cfg(feature = "vertex")]
+pub use vertex::Vertex;

@@ -169,6 +169,35 @@ pub enum ProviderAuth {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
     },
+    #[serde(rename = "sigv4", alias = "sig_v4")]
+    SigV4 {
+        #[serde(default)]
+        access_keys: Vec<String>,
+        #[serde(default)]
+        secret_keys: Vec<String>,
+        #[serde(default)]
+        session_token_keys: Vec<String>,
+        region: String,
+        service: String,
+    },
+    #[serde(rename = "oauth_client_credentials", alias = "oauth")]
+    OAuthClientCredentials {
+        token_url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_secret: Option<String>,
+        #[serde(default)]
+        client_id_keys: Vec<String>,
+        #[serde(default)]
+        client_secret_keys: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scope: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audience: Option<String>,
+        #[serde(default)]
+        extra_params: BTreeMap<String, String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -287,6 +316,11 @@ pub(crate) async fn resolve_request_auth_with_default_keys(
         ProviderAuth::ApiKeyEnv { .. } | ProviderAuth::Command { .. } => Ok(RequestAuth::Http(
             HttpAuth::header_value(default_header, default_prefix, &token)?,
         )),
+        ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
+            Err(DittoError::InvalidResponse(
+                "sigv4/oauth auth cannot be resolved to a static request header".to_string(),
+            ))
+        }
     }
 }
 
@@ -666,6 +700,11 @@ pub async fn resolve_auth_token_with_default_keys(
                 .or(parsed.token)
                 .filter(|s| !s.trim().is_empty())
                 .ok_or_else(|| DittoError::AuthCommand("json missing api_key/token".to_string()))
+        }
+        ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
+            Err(DittoError::InvalidResponse(
+                "sigv4/oauth auth cannot be resolved to a token string".to_string(),
+            ))
         }
     }
 }

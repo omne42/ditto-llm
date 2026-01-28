@@ -15,6 +15,15 @@ pub mod providers;
 pub mod types;
 pub mod utils;
 
+#[cfg(feature = "agent")]
+pub mod agent;
+#[cfg(feature = "auth")]
+pub mod auth;
+#[cfg(feature = "gateway")]
+pub mod gateway;
+#[cfg(feature = "sdk")]
+pub mod sdk;
+
 pub use error::{DittoError, Result};
 pub use profile::{
     Env, ModelConfig, OpenAiCompatibleClient, OpenAiProvider, Provider, ProviderAuth,
@@ -52,6 +61,8 @@ pub use types::{
 
 #[cfg(feature = "anthropic")]
 pub use providers::Anthropic;
+#[cfg(feature = "bedrock")]
+pub use providers::Bedrock;
 #[cfg(all(feature = "cohere", feature = "embeddings"))]
 pub use providers::CohereEmbeddings;
 #[cfg(all(feature = "cohere", feature = "rerank"))]
@@ -80,6 +91,8 @@ pub use providers::OpenAIEmbeddings;
 pub use providers::OpenAIImages;
 #[cfg(all(feature = "openai", feature = "moderations"))]
 pub use providers::OpenAIModerations;
+#[cfg(feature = "vertex")]
+pub use providers::Vertex;
 #[cfg(all(feature = "openai", feature = "audio"))]
 pub use providers::{OpenAIAudioTranscription, OpenAISpeech};
 #[cfg(all(feature = "openai-compatible", feature = "audio"))]

@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rerank: `RerankModel` + Cohere `/rerank`.
 - Batches: `BatchClient` + OpenAI/OpenAI-compatible `/batches`.
 - Document non-goals and optional future scope (gateway/control-plane features, agent loop, UI SDK surface, native auth adapters).
+- Agent tool loop: `ToolLoopAgent` + `ToolExecutor`, stop hooks, approvals, and tool-result backfill (feature `agent`).
+- Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
+- Providers: Bedrock (SigV4) and Vertex (OAuth) minimal adapters (features `bedrock`, `vertex`).
+- SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
+- Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, and `ditto-gateway` stub binary (feature `gateway`).
+- Docs: clarify Bedrock/Vertex scope for minimal adapters.
 
 ### Changed
 
