@@ -5,12 +5,23 @@ use serde::Deserialize;
 use crate::profile::{Env, ProviderAuth};
 use crate::{DittoError, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct OAuthToken {
     pub access_token: String,
     pub token_type: String,
     pub expires_in: Option<u64>,
     pub scope: Option<String>,
+}
+
+impl std::fmt::Debug for OAuthToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthToken")
+            .field("access_token", &"<redacted>")
+            .field("token_type", &self.token_type)
+            .field("expires_in", &self.expires_in)
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 impl OAuthToken {
@@ -19,7 +30,7 @@ impl OAuthToken {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct OAuthClientCredentials {
     pub token_url: String,
     pub client_id: String,
@@ -27,6 +38,21 @@ pub struct OAuthClientCredentials {
     pub scope: Option<String>,
     pub audience: Option<String>,
     pub extra_params: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for OAuthClientCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let extra_param_keys: Vec<&str> =
+            self.extra_params.keys().map(|key| key.as_str()).collect();
+        f.debug_struct("OAuthClientCredentials")
+            .field("token_url", &self.token_url)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"<redacted>")
+            .field("scope", &self.scope)
+            .field("audience", &self.audience)
+            .field("extra_params", &extra_param_keys)
+            .finish()
+    }
 }
 
 impl OAuthClientCredentials {

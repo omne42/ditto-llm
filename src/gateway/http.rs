@@ -67,16 +67,21 @@ struct HealthResponse {
 }
 
 pub fn router(state: GatewayHttpState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
-        .route("/v1/gateway", post(handle_gateway))
-        .route("/admin/keys", get(list_keys).post(upsert_key))
-        .route(
-            "/admin/keys/:id",
-            put(upsert_key_with_id).delete(delete_key),
-        )
-        .with_state(state)
+        .route("/v1/gateway", post(handle_gateway));
+
+    if state.admin_token.is_some() {
+        router = router
+            .route("/admin/keys", get(list_keys).post(upsert_key))
+            .route(
+                "/admin/keys/:id",
+                put(upsert_key_with_id).delete(delete_key),
+            );
+    }
+
+    router.with_state(state)
 }
 
 async fn health() -> Json<HealthResponse> {

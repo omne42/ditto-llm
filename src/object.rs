@@ -14,30 +14,20 @@ use crate::types::{
 };
 use crate::{DittoError, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObjectOutput {
+    #[default]
     Object,
     Array,
 }
 
-impl Default for ObjectOutput {
-    fn default() -> Self {
-        Self::Object
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObjectStrategy {
+    #[default]
     Auto,
     NativeSchema,
     ToolCall,
     TextJson,
-}
-
-impl Default for ObjectStrategy {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +84,14 @@ pub struct StreamObjectResult {
     state: Arc<Mutex<StreamObjectState>>,
     pub partial_object_stream: stream::BoxStream<'static, Result<Value>>,
     pub element_stream: stream::BoxStream<'static, Result<Value>>,
+}
+
+struct TaskAbortOnDrop(tokio::task::AbortHandle);
+
+impl Drop for TaskAbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl StreamObjectResult {
@@ -323,7 +321,7 @@ fn stream_object_from_stream_with_config(
 
     let state_task = state.clone();
 
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let mut inner = stream;
 
         while let Some(next) = inner.next().await {
@@ -507,13 +505,16 @@ fn stream_object_from_stream_with_config(
         }
     });
 
-    let partial_object_stream = stream::unfold(partial_rx, |mut rx| async move {
-        rx.recv().await.map(|item| (item, rx))
-    })
+    let aborter = Arc::new(TaskAbortOnDrop(task.abort_handle()));
+
+    let partial_object_stream = stream::unfold(
+        (partial_rx, aborter.clone()),
+        |(mut rx, aborter)| async move { rx.recv().await.map(|item| (item, (rx, aborter))) },
+    )
     .boxed();
 
-    let element_stream = stream::unfold(element_rx, |mut rx| async move {
-        rx.recv().await.map(|item| (item, rx))
+    let element_stream = stream::unfold((element_rx, aborter), |(mut rx, aborter)| async move {
+        rx.recv().await.map(|item| (item, (rx, aborter)))
     })
     .boxed();
 
@@ -558,8 +559,7 @@ fn parse_final_object(
                         )
                     })
                 })?;
-                let extracted = extract_tool_call_value(&parsed).unwrap_or(parsed);
-                extracted
+                extract_tool_call_value(&parsed).unwrap_or(parsed)
             } else {
                 let (parsed, warn) = parse_json_from_response_text(text)?;
                 if let Some(warn) = warn {
@@ -853,7 +853,7 @@ fn extract_code_fence(text: &str) -> Option<String> {
 }
 
 fn extract_balanced_json(text: &str) -> Option<&str> {
-    let start = text.find(|c| c == '{' || c == '[')?;
+    let start = text.find(['{', '['])?;
     let bytes = text.as_bytes();
     let mut in_string = false;
     let mut escape = false;
@@ -894,7 +894,7 @@ fn extract_balanced_json(text: &str) -> Option<&str> {
 }
 
 fn parse_partial_json(text: &str) -> Option<Value> {
-    let start = text.find(|c| c == '{' || c == '[')?;
+    let start = text.find(['{', '['])?;
     let bytes = text.as_bytes();
     let mut in_string = false;
     let mut escape = false;
@@ -965,6 +965,28 @@ mod tests {
     use super::*;
     use futures_util::StreamExt;
     use serde_json::json;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::task::{Context, Poll};
+
+    struct DropFlagStream {
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl futures_util::Stream for DropFlagStream {
+        type Item = Result<StreamChunk>;
+
+        fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Poll::Pending
+        }
+    }
+
+    impl Drop for DropFlagStream {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
 
     struct FakeModel {
         provider: &'static str,
@@ -1110,6 +1132,34 @@ mod tests {
         let (value, warn) = parse_json_from_response_text(text)?;
         assert_eq!(value, json!({"a":1}));
         assert!(warn.is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dropping_streams_aborts_background_task() -> Result<()> {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let inner: StreamResult = Box::pin(DropFlagStream {
+            dropped: dropped.clone(),
+        })
+        .boxed();
+
+        let StreamObjectResult {
+            partial_object_stream,
+            element_stream,
+            ..
+        } = stream_object_from_stream(inner);
+
+        drop(partial_object_stream);
+        drop(element_stream);
+
+        for _ in 0..16 {
+            if dropped.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        assert!(dropped.load(Ordering::SeqCst));
         Ok(())
     }
 }

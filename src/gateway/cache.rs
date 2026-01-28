@@ -4,19 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use super::GatewayResponse;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct CacheConfig {
     pub enabled: bool,
     pub ttl_seconds: Option<u64>,
-}
-
-impl Default for CacheConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            ttl_seconds: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

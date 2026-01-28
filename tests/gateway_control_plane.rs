@@ -160,8 +160,8 @@ async fn cache_hit_skips_backend() {
     let first = gateway.handle(request.clone()).await.unwrap();
     let second = gateway.handle(request).await.unwrap();
 
-    assert_eq!(first.cached, false);
-    assert_eq!(second.cached, true);
+    assert!(!first.cached);
+    assert!(second.cached);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 

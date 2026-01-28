@@ -13,8 +13,8 @@ use crate::profile::{
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
-    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, StreamChunk, Tool,
+    ToolChoice, Usage, Warning,
 };
 use crate::{DittoError, Result};
 
@@ -865,6 +865,7 @@ impl EmbeddingModel for GoogleEmbeddings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{FileSource, Role};
     use serde_json::json;
 
     #[test]

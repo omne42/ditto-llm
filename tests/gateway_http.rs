@@ -164,3 +164,22 @@ async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_llm::Res
 
     Ok(())
 }
+
+#[tokio::test]
+async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_llm::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/admin/keys")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}

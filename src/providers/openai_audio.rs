@@ -29,7 +29,7 @@ impl OpenAIAudioTranscription {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()
-            .expect("reqwest client build should not fail");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         let api_key = api_key.into();
         let auth = if api_key.trim().is_empty() {
@@ -282,7 +282,7 @@ impl OpenAISpeech {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()
-            .expect("reqwest client build should not fail");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         let api_key = api_key.into();
         let auth = if api_key.trim().is_empty() {

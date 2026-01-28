@@ -7,10 +7,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::{DittoError, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct HttpAuth {
     pub(crate) header: HeaderName,
     pub(crate) value: HeaderValue,
+}
+
+impl std::fmt::Debug for HttpAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpAuth")
+            .field("header", &self.header)
+            .field("value", &"<redacted>")
+            .finish()
+    }
 }
 
 impl HttpAuth {
@@ -129,7 +138,7 @@ pub struct ModelConfig {
     pub thinking: ThinkingIntensity,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderAuth {
     #[serde(rename = "api_key_env", alias = "env", alias = "api_key")]
@@ -198,6 +207,99 @@ pub enum ProviderAuth {
         #[serde(default)]
         extra_params: BTreeMap<String, String>,
     },
+}
+
+impl std::fmt::Debug for ProviderAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProviderAuth::ApiKeyEnv { keys } => {
+                f.debug_struct("ApiKeyEnv").field("keys", keys).finish()
+            }
+            ProviderAuth::Command { command } => {
+                f.debug_struct("Command").field("command", command).finish()
+            }
+            ProviderAuth::HttpHeaderEnv {
+                header,
+                keys,
+                prefix,
+            } => f
+                .debug_struct("HttpHeaderEnv")
+                .field("header", header)
+                .field("keys", keys)
+                .field("prefix", prefix)
+                .finish(),
+            ProviderAuth::HttpHeaderCommand {
+                header,
+                command,
+                prefix,
+            } => f
+                .debug_struct("HttpHeaderCommand")
+                .field("header", header)
+                .field("command", command)
+                .field("prefix", prefix)
+                .finish(),
+            ProviderAuth::QueryParamEnv {
+                param,
+                keys,
+                prefix,
+            } => f
+                .debug_struct("QueryParamEnv")
+                .field("param", param)
+                .field("keys", keys)
+                .field("prefix", prefix)
+                .finish(),
+            ProviderAuth::QueryParamCommand {
+                param,
+                command,
+                prefix,
+            } => f
+                .debug_struct("QueryParamCommand")
+                .field("param", param)
+                .field("command", command)
+                .field("prefix", prefix)
+                .finish(),
+            ProviderAuth::SigV4 {
+                access_keys,
+                secret_keys,
+                session_token_keys,
+                region,
+                service,
+            } => f
+                .debug_struct("SigV4")
+                .field("access_keys", access_keys)
+                .field("secret_keys", secret_keys)
+                .field("session_token_keys", session_token_keys)
+                .field("region", region)
+                .field("service", service)
+                .finish(),
+            ProviderAuth::OAuthClientCredentials {
+                token_url,
+                client_id,
+                client_secret,
+                client_id_keys,
+                client_secret_keys,
+                scope,
+                audience,
+                extra_params,
+            } => {
+                let extra_param_keys: Vec<&str> =
+                    extra_params.keys().map(|key| key.as_str()).collect();
+                f.debug_struct("OAuthClientCredentials")
+                    .field("token_url", token_url)
+                    .field("client_id", client_id)
+                    .field(
+                        "client_secret",
+                        &client_secret.as_ref().map(|_| "<redacted>"),
+                    )
+                    .field("client_id_keys", client_id_keys)
+                    .field("client_secret_keys", client_secret_keys)
+                    .field("scope", scope)
+                    .field("audience", audience)
+                    .field("extra_params", &extra_param_keys)
+                    .finish()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -410,9 +512,16 @@ impl Provider for OpenAiProvider {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Env {
     pub dotenv: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for Env {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let keys: Vec<&str> = self.dotenv.keys().map(|key| key.as_str()).collect();
+        f.debug_struct("Env").field("dotenv_keys", &keys).finish()
+    }
 }
 
 impl Env {

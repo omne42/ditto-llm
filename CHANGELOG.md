@@ -62,7 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: do not mount `/admin/*` routes unless an admin token is configured.
+- Streaming: abort background stream tasks when the consumer streams are dropped.
+- Providers: avoid panicking if the default `reqwest::Client` build fails (fall back to `reqwest::Client::new()`).
+- Security: redact sensitive fields in `Debug` for gateway key config and auth-related types.
+- Tests: make Vertex `generateContent` mock matching robust to float serialization differences.
 - OpenAI Responses: map `finish_reason` consistently (generate + stream), including tool-call completion.
+- OpenAI Responses: include `instructions` (from system messages) to satisfy providers that require it.
 - OpenAI-compatible streaming: flush pending tool calls and always emit a final `FinishReason` even if the provider omits it.
 - OpenAI-compatible: support legacy `function_call` (generate + stream) and map `finish_reason=\"function_call\"` to `ToolCalls`.
 - OpenAI-compatible: map `ToolChoice::Required` to `tool_choice=\"required\"` (instead of silently degrading to `auto`).

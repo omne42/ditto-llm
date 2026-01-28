@@ -19,7 +19,7 @@ pub struct SigV4Timestamp {
 impl SigV4Timestamp {
     pub fn now() -> Result<Self> {
         let now = OffsetDateTime::now_utc();
-        Ok(Self::from_datetime(now)?)
+        Self::from_datetime(now)
     }
 
     pub fn from_datetime(datetime: OffsetDateTime) -> Result<Self> {
@@ -50,13 +50,28 @@ impl SigV4Timestamp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SigV4Signer {
     access_key: String,
     secret_key: String,
     session_token: Option<String>,
     region: String,
     service: String,
+}
+
+impl std::fmt::Debug for SigV4Signer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SigV4Signer")
+            .field("access_key", &"<redacted>")
+            .field("secret_key", &"<redacted>")
+            .field(
+                "session_token",
+                &self.session_token.as_ref().map(|_| "<redacted>"),
+            )
+            .field("region", &self.region)
+            .field("service", &self.service)
+            .finish()
+    }
 }
 
 impl SigV4Signer {

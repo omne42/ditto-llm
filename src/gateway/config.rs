@@ -10,7 +10,7 @@ pub struct GatewayConfig {
     pub router: RouterConfig,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VirtualKeyConfig {
     pub id: String,
     pub token: String,
@@ -21,6 +21,22 @@ pub struct VirtualKeyConfig {
     pub guardrails: GuardrailsConfig,
     pub passthrough: PassthroughConfig,
     pub route: Option<String>,
+}
+
+impl std::fmt::Debug for VirtualKeyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtualKeyConfig")
+            .field("id", &self.id)
+            .field("token", &"<redacted>")
+            .field("enabled", &self.enabled)
+            .field("limits", &self.limits)
+            .field("budget", &self.budget)
+            .field("cache", &self.cache)
+            .field("guardrails", &self.guardrails)
+            .field("passthrough", &self.passthrough)
+            .field("route", &self.route)
+            .finish()
+    }
 }
 
 impl VirtualKeyConfig {

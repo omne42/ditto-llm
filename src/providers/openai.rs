@@ -34,7 +34,7 @@ impl OpenAI {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()
-            .expect("reqwest client build should not fail");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         let api_key = api_key.into();
         let auth = if api_key.trim().is_empty() {
@@ -227,8 +227,9 @@ impl OpenAI {
         }
     }
 
-    fn messages_to_input(messages: &[Message]) -> (Vec<Value>, Vec<Warning>) {
+    fn messages_to_input(messages: &[Message]) -> (Option<String>, Vec<Value>, Vec<Warning>) {
         let mut input = Vec::<Value>::new();
+        let mut instructions = Vec::<String>::new();
         let mut warnings = Vec::<Warning>::new();
 
         for message in messages {
@@ -246,10 +247,10 @@ impl OpenAI {
                             }),
                         }
                     }
-                    if text.trim().is_empty() {
-                        continue;
+                    let text = text.trim();
+                    if !text.is_empty() {
+                        instructions.push(text.to_string());
                     }
-                    input.push(serde_json::json!({ "role": "system", "content": text }));
                 }
                 Role::User => {
                     let mut content = Vec::<Value>::new();
@@ -383,7 +384,12 @@ impl OpenAI {
             }
         }
 
-        (input, warnings)
+        let instructions = if instructions.is_empty() {
+            None
+        } else {
+            Some(instructions.join("\n\n"))
+        };
+        (instructions, input, warnings)
     }
 
     fn parse_usage(value: &Value) -> Usage {
@@ -571,7 +577,7 @@ impl LanguageModel for OpenAI {
             .map(crate::types::ProviderOptions::from_value)
             .transpose()?
             .unwrap_or_default();
-        let (input, mut warnings) = Self::messages_to_input(&request.messages);
+        let (instructions, input, mut warnings) = Self::messages_to_input(&request.messages);
 
         if request.stop_sequences.is_some() {
             warnings.push(Warning::Unsupported {
@@ -582,6 +588,9 @@ impl LanguageModel for OpenAI {
 
         let mut body = Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));
+        if let Some(instructions) = instructions {
+            body.insert("instructions".to_string(), Value::String(instructions));
+        }
         body.insert("input".to_string(), Value::Array(input));
         body.insert("stream".to_string(), Value::Bool(false));
         body.insert("store".to_string(), Value::Bool(false));
@@ -709,10 +718,13 @@ impl LanguageModel for OpenAI {
                 .map(crate::types::ProviderOptions::from_value)
                 .transpose()?
                 .unwrap_or_default();
-            let (input, mut warnings) = Self::messages_to_input(&request.messages);
+            let (instructions, input, mut warnings) = Self::messages_to_input(&request.messages);
 
             let mut body = Map::<String, Value>::new();
             body.insert("model".to_string(), Value::String(model.to_string()));
+            if let Some(instructions) = instructions {
+                body.insert("instructions".to_string(), Value::String(instructions));
+            }
             body.insert("input".to_string(), Value::Array(input));
             body.insert("stream".to_string(), Value::Bool(true));
             body.insert("store".to_string(), Value::Bool(false));
@@ -991,7 +1003,7 @@ impl OpenAIEmbeddings {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
             .build()
-            .expect("reqwest client build should not fail");
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         let api_key = api_key.into();
         let auth = if api_key.trim().is_empty() {
@@ -1304,17 +1316,17 @@ mod tests {
             },
         ];
 
-        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
         assert!(warnings.is_empty());
-        assert_eq!(input.len(), 4);
-        assert_eq!(input[0].get("role").and_then(Value::as_str), Some("system"));
-        assert_eq!(input[1].get("role").and_then(Value::as_str), Some("user"));
+        assert_eq!(instructions.as_deref(), Some("sys"));
+        assert_eq!(input.len(), 3);
+        assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
         assert_eq!(
-            input[2].get("type").and_then(Value::as_str),
+            input[1].get("type").and_then(Value::as_str),
             Some("function_call")
         );
         assert_eq!(
-            input[3].get("type").and_then(Value::as_str),
+            input[2].get("type").and_then(Value::as_str),
             Some("function_call_output")
         );
     }
@@ -1330,8 +1342,9 @@ mod tests {
             }],
         }];
 
-        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
         assert!(warnings.is_empty());
+        assert!(instructions.is_none());
         assert_eq!(input.len(), 1);
         assert_eq!(
             input[0].get("type").and_then(Value::as_str),
@@ -1356,8 +1369,9 @@ mod tests {
             }],
         }];
 
-        let (input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
         assert!(warnings.is_empty());
+        assert!(instructions.is_none());
         assert_eq!(input.len(), 1);
         assert_eq!(input[0].get("role").and_then(Value::as_str), Some("user"));
         let content = input[0]

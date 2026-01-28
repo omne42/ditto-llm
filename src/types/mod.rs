@@ -227,11 +227,8 @@ const PROVIDER_OPTIONS_BUCKETS: &[&str] = &[
 ];
 
 fn is_bucketed_provider_options(obj: &Map<String, Value>) -> bool {
-    obj.keys().any(|key| {
-        PROVIDER_OPTIONS_BUCKETS
-            .iter()
-            .any(|bucket| *bucket == key.as_str())
-    })
+    obj.keys()
+        .any(|key| PROVIDER_OPTIONS_BUCKETS.contains(&key.as_str()))
 }
 
 pub(crate) fn provider_options_object_is_bucketed(obj: &Map<String, Value>) -> bool {
@@ -329,10 +326,7 @@ pub(crate) fn merge_provider_options_into_body(
     };
 
     for (key, value) in obj {
-        if reserved_keys
-            .iter()
-            .any(|&reserved| reserved == key.as_str())
-        {
+        if reserved_keys.contains(&key.as_str()) {
             continue;
         }
 

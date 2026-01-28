@@ -41,6 +41,14 @@ pub struct StreamTextResult {
     pub full_stream: stream::BoxStream<'static, Result<StreamChunk>>,
 }
 
+struct TaskAbortOnDrop(tokio::task::AbortHandle);
+
+impl Drop for TaskAbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 impl StreamTextResult {
     pub fn is_done(&self) -> bool {
         self.state.lock().map(|s| s.done).unwrap_or(false)
@@ -108,7 +116,7 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let (text_tx, text_rx) = mpsc::unbounded_channel::<Result<String>>();
     let (full_tx, full_rx) = mpsc::unbounded_channel::<Result<StreamChunk>>();
 
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let mut inner = stream;
 
         let mut warnings = Vec::<Warning>::new();
@@ -276,13 +284,15 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
         }
     });
 
-    let text_stream = stream::unfold(text_rx, |mut rx| async move {
-        rx.recv().await.map(|item| (item, rx))
+    let aborter = Arc::new(TaskAbortOnDrop(task.abort_handle()));
+
+    let text_stream = stream::unfold((text_rx, aborter.clone()), |(mut rx, aborter)| async move {
+        rx.recv().await.map(|item| (item, (rx, aborter)))
     })
     .boxed();
 
-    let full_stream = stream::unfold(full_rx, |mut rx| async move {
-        rx.recv().await.map(|item| (item, rx))
+    let full_stream = stream::unfold((full_rx, aborter), |(mut rx, aborter)| async move {
+        rx.recv().await.map(|item| (item, (rx, aborter)))
     })
     .boxed();
 
@@ -311,6 +321,28 @@ mod tests {
     use super::*;
     use futures_util::StreamExt;
     use serde_json::json;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::task::{Context, Poll};
+
+    struct DropFlagStream {
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl futures_util::Stream for DropFlagStream {
+        type Item = Result<StreamChunk>;
+
+        fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Poll::Pending
+        }
+    }
+
+    impl Drop for DropFlagStream {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
 
     struct FakeModel {
         provider: &'static str,
@@ -420,6 +452,34 @@ mod tests {
             part,
             ContentPart::ToolCall { id, name, arguments } if id == "call_1" && name == "add" && arguments == &json!({"a":1})
         )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dropping_streams_aborts_background_task() -> Result<()> {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let inner: StreamResult = Box::pin(DropFlagStream {
+            dropped: dropped.clone(),
+        })
+        .boxed();
+
+        let StreamTextResult {
+            text_stream,
+            full_stream,
+            ..
+        } = stream_text_from_stream(inner);
+
+        drop(text_stream);
+        drop(full_stream);
+
+        for _ in 0..16 {
+            if dropped.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        assert!(dropped.load(Ordering::SeqCst));
         Ok(())
     }
 }
