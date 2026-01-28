@@ -471,7 +471,7 @@ impl Bedrock {
 
     fn build_bedrock_body(
         request: &GenerateRequest,
-        model: &str,
+        _model: &str,
         warnings: &mut Vec<Warning>,
     ) -> Result<Value> {
         let tool_names = Self::build_tool_name_map(&request.messages);
@@ -580,11 +580,6 @@ impl Bedrock {
         let betas = Self::required_betas(&request.messages);
         if !betas.is_empty() {
             body.insert("anthropic_beta".to_string(), Value::String(betas.join(",")));
-        }
-
-        if model.to_lowercase().contains("sonnet") {
-            body.entry("anthropic_beta".to_string())
-                .or_insert(Value::String("context-1m-2025-08-07".to_string()));
         }
 
         Ok(Value::Object(body))
@@ -1038,25 +1033,38 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
             DittoError::InvalidResponse("eventstream header missing type".to_string())
         })?;
         idx += 1;
+        let ensure_len = |idx: usize, needed: usize, label: &str| -> Result<()> {
+            if idx + needed > bytes.len() {
+                return Err(DittoError::InvalidResponse(format!(
+                    "eventstream header value truncated ({label})"
+                )));
+            }
+            Ok(())
+        };
+
         match value_type {
             0 | 1 => {}
-            2 => idx += 1,
-            3 => idx += 2,
-            4 => idx += 4,
-            5 => idx += 8,
+            2 => {
+                ensure_len(idx, 1, "byte")?;
+                idx += 1;
+            }
+            3 => {
+                ensure_len(idx, 2, "short")?;
+                idx += 2;
+            }
+            4 => {
+                ensure_len(idx, 4, "int")?;
+                idx += 4;
+            }
+            5 => {
+                ensure_len(idx, 8, "long")?;
+                idx += 8;
+            }
             6 | 7 => {
-                if idx + 2 > bytes.len() {
-                    return Err(DittoError::InvalidResponse(
-                        "eventstream header length truncated".to_string(),
-                    ));
-                }
+                ensure_len(idx, 2, "length")?;
                 let len = u16::from_be_bytes([bytes[idx], bytes[idx + 1]]) as usize;
                 idx += 2;
-                if idx + len > bytes.len() {
-                    return Err(DittoError::InvalidResponse(
-                        "eventstream header value truncated".to_string(),
-                    ));
-                }
+                ensure_len(idx, len, "bytes")?;
                 if value_type == 7 {
                     let value = std::str::from_utf8(&bytes[idx..idx + len]).map_err(|err| {
                         DittoError::InvalidResponse(format!(
@@ -1067,8 +1075,14 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
                 }
                 idx += len;
             }
-            8 => idx += 8,
-            9 => idx += 16,
+            8 => {
+                ensure_len(idx, 8, "timestamp")?;
+                idx += 8;
+            }
+            9 => {
+                ensure_len(idx, 16, "uuid")?;
+                idx += 16;
+            }
             other => {
                 return Err(DittoError::InvalidResponse(format!(
                     "eventstream unsupported header type {other}"

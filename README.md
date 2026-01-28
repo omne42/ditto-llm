@@ -75,7 +75,7 @@ cargo run --example tool_calling
 cargo run --example embeddings
 cargo run --example openai_compatible
 cargo run --example openai_compatible_embeddings
-cargo run --example multimodal -- ./image.png ./doc.pdf
+cargo run --example multimodal --features base64 -- ./image.png ./doc.pdf
 cargo run --example batches --features batches -- ./requests.jsonl
 ```
 
@@ -92,7 +92,7 @@ Endpoints:
 - `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`
-- `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured).
+- `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured). `GET /admin/keys` redacts tokens unless `?include_tokens=true`.
 
 ## Stream Collection
 

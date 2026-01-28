@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bedrock: Anthropic Messages-on-Bedrock generate + streaming + tools support (feature `bedrock`).
 - Vertex: GenAI generateContent + streamGenerateContent (SSE) + tools support (feature `vertex`).
 - Gateway: `ditto-gateway` HTTP server with `/v1/gateway`, `/health`, `/metrics`, and `/admin/keys` (feature `gateway`).
+- Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
+- Multimodal example requires `--features base64` to enable base64 encoding dependency.
 
 ### Changed
 
@@ -72,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool call arguments: preserve raw JSON on parse failures, emit `Warning::Compatibility(tool_call.arguments)`, and avoid double-encoding when replaying assistant tool calls.
 - `collect_stream`: preserve chunk ordering (text/reasoning/tool calls) and warn on invalid tool-call argument JSON.
 - Audio transcriptions: fall back to text with a warning if JSON response parsing fails (avoid silently swallowing errors).
+- Bedrock eventstream header parsing validates header value lengths for all types.
 
 ## [0.1.1] - 2026-01-23
 

@@ -6,4 +6,5 @@ pub mod json_schema;
 
 pub mod params;
 
+#[doc(hidden)]
 pub mod test_support;

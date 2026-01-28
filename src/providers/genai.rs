@@ -36,7 +36,7 @@ pub(crate) fn convert_messages(
             Role::System => {
                 if !system_messages_allowed {
                     return Err(DittoError::InvalidResponse(
-                        "system messages are only supported at the beginning for google provider"
+                        "system messages are only supported at the beginning for GenAI providers"
                             .to_string(),
                     ));
                 }

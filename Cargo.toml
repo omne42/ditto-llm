@@ -12,6 +12,7 @@ agent = []
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
 gateway = ["dep:axum"]
+base64 = ["dep:base64"]
 
 # Providers
 openai = []
@@ -19,7 +20,7 @@ anthropic = []
 google = []
 openai-compatible = ["openai"]
 cohere = []
-bedrock = ["auth"]
+bedrock = ["auth", "base64"]
 vertex = ["auth"]
 
 # Optional capabilities
@@ -42,7 +43,7 @@ integration = []
 [dependencies]
 async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
-base64 = "0.22"
+base64 = { version = "0.22", optional = true }
 bytes = "1"
 futures-util = "0.3"
 hmac = { version = "0.12", optional = true }
@@ -60,3 +61,7 @@ httpmock = "0.8.2"
 tempfile = "3"
 toml = "0.8"
 tower = { version = "0.5", features = ["util"] }
+
+[[example]]
+name = "multimodal"
+required-features = ["base64"]

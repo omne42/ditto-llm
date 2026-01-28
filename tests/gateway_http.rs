@@ -132,7 +132,26 @@ async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_llm::Res
         .await
         .unwrap();
     let keys: Vec<VirtualKeyConfig> = serde_json::from_slice(&list_body)?;
-    assert!(keys.iter().any(|key| key.id == "key-2"));
+    let created = keys.iter().find(|key| key.id == "key-2").expect("key-2");
+    assert_eq!(created.token, "redacted");
+
+    let list_with_tokens = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?include_tokens=true")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_with_tokens_response = app.clone().oneshot(list_with_tokens).await.unwrap();
+    assert_eq!(list_with_tokens_response.status(), StatusCode::OK);
+    let list_with_tokens_body = to_bytes(list_with_tokens_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let keys_with_tokens: Vec<VirtualKeyConfig> = serde_json::from_slice(&list_with_tokens_body)?;
+    let created_with_tokens = keys_with_tokens
+        .iter()
+        .find(|key| key.id == "key-2")
+        .expect("key-2");
+    assert_eq!(created_with_tokens.token, "vk-2");
 
     let delete = Request::builder()
         .method("DELETE")

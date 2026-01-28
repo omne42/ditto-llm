@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post, put};
@@ -42,6 +42,12 @@ struct GatewayHttpRequest {
     max_output_tokens: u32,
     #[serde(default)]
     passthrough: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListKeysQuery {
+    #[serde(default)]
+    include_tokens: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,10 +124,17 @@ async fn handle_gateway(
 async fn list_keys(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
+    Query(query): Query<ListKeysQuery>,
 ) -> Result<Json<Vec<VirtualKeyConfig>>, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(&state, &headers)?;
     let gateway = state.gateway.lock().await;
-    Ok(Json(gateway.list_virtual_keys()))
+    let mut keys = gateway.list_virtual_keys();
+    if !query.include_tokens {
+        for key in &mut keys {
+            key.token = "redacted".to_string();
+        }
+    }
+    Ok(Json(keys))
 }
 
 async fn upsert_key(
@@ -208,18 +221,14 @@ fn extract_header(headers: &HeaderMap, name: &str) -> Option<String> {
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     let auth = headers
         .get("authorization")
-        .and_then(|value| value.to_str().ok())?;
-    let trimmed = auth.trim();
-    if let Some(rest) = trimmed.strip_prefix("Bearer ") {
-        return Some(rest.trim().to_string());
-    }
-    if let Some(rest) = trimmed.strip_prefix("bearer ") {
-        return Some(rest.trim().to_string());
-    }
-    if !trimmed.is_empty() {
-        return Some(trimmed.to_string());
-    }
-    None
+        .and_then(|value| value.to_str().ok())?
+        .trim()
+        .to_string();
+    let rest = auth
+        .strip_prefix("Bearer ")
+        .or_else(|| auth.strip_prefix("bearer "))?;
+    let token = rest.trim();
+    (!token.is_empty()).then(|| token.to_string())
 }
 
 fn map_gateway_error(err: GatewayError) -> (StatusCode, Json<ErrorResponse>) {
