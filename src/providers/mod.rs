@@ -4,6 +4,8 @@ pub mod anthropic;
 pub mod bedrock;
 #[cfg(feature = "cohere")]
 pub mod cohere;
+#[cfg(any(feature = "google", feature = "vertex"))]
+mod genai;
 #[cfg(feature = "google")]
 pub mod google;
 #[cfg(feature = "openai")]

@@ -1,10 +1,9 @@
 #[cfg(feature = "streaming")]
 pub mod sse;
 
-#[cfg(feature = "google")]
+#[cfg(any(feature = "google", feature = "vertex"))]
 pub mod json_schema;
 
 pub mod params;
 
-#[cfg(test)]
 pub mod test_support;

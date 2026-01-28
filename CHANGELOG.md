@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, and `ditto-gateway` stub binary (feature `gateway`).
 - Docs: clarify Bedrock/Vertex scope for minimal adapters.
+- Bedrock: Anthropic Messages-on-Bedrock generate + streaming + tools support (feature `bedrock`).
+- Vertex: GenAI generateContent + streamGenerateContent (SSE) + tools support (feature `vertex`).
+- Gateway: `ditto-gateway` HTTP server with `/v1/gateway`, `/health`, `/metrics`, and `/admin/keys` (feature `gateway`).
 
 ### Changed
 

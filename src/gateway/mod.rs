@@ -4,6 +4,8 @@ pub mod budget;
 pub mod cache;
 pub mod config;
 pub mod guardrails;
+pub mod http;
+pub mod http_backend;
 pub mod limits;
 pub mod observability;
 pub mod passthrough;
@@ -26,6 +28,8 @@ pub use budget::BudgetConfig;
 pub use cache::CacheConfig;
 pub use config::{GatewayConfig, VirtualKeyConfig};
 pub use guardrails::GuardrailsConfig;
+pub use http::GatewayHttpState;
+pub use http_backend::HttpBackend;
 pub use limits::LimitsConfig;
 pub use passthrough::PassthroughConfig;
 pub use router::{RouteRule, RouterConfig};
@@ -136,6 +140,25 @@ impl Gateway {
 
     pub fn observability(&self) -> ObservabilitySnapshot {
         self.observability.snapshot()
+    }
+
+    pub fn list_virtual_keys(&self) -> Vec<VirtualKeyConfig> {
+        self.config.virtual_keys.clone()
+    }
+
+    pub fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
+        if let Some(existing) = self.config.virtual_keys.iter_mut().find(|k| k.id == key.id) {
+            *existing = key;
+            false
+        } else {
+            self.config.virtual_keys.push(key);
+            true
+        }
+    }
+
+    pub fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
+        let index = self.config.virtual_keys.iter().position(|k| k.id == id)?;
+        Some(self.config.virtual_keys.remove(index))
     }
 
     pub async fn handle(

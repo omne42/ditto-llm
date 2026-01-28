@@ -24,16 +24,16 @@ Optional feature-gated modules:
 
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor` (feature `agent`).
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
-- Providers: Bedrock (SigV4) and Vertex (OAuth) minimal adapters (features `bedrock`, `vertex`).
+- Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
-- Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a stub `ditto-gateway` binary (feature `gateway`).
+- Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
 
 Non-goals (for now):
 
-- This crate is not an API gateway/proxy or control plane (virtual keys, multi-tenant teams/orgs, RPM/TPM limits, caching, budgets, routing/health checks, observability callbacks, prompt management, guardrails, pass-through endpoints, etc.).
-- It does not run an agent/tool execution loop (ToolLoopAgent-style `stopWhen`, approvals, etc.); helpers are single-step and return tool calls to the caller.
-- It is not a UI SDK (no stream protocol, frontend hooks, middleware/telemetry/devtools/MCP ecosystem).
-- Full Bedrock/Vertex APIs and service-account OAuth flows are not implemented yet; current adapters are minimal and may require a gateway for broader coverage.
+- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service, but multi-tenant teams/orgs, upstream health checks, observability callbacks, prompt management, and full pass-through endpoints remain out of scope.
+- Core helpers are single-step and return tool calls to the caller; the `agent` feature offers an opt-in tool loop, but it is not enabled by default.
+- It is not a full UI SDK (no frontend hooks or middleware ecosystem); the `sdk` feature only provides protocol/telemetry/devtools/MCP utilities.
+- Bedrock support targets Anthropic Messages-on-Bedrock; other Bedrock model families and Vertex service-account JWT flows are not covered yet.
 
 See `PROVIDERS.md` for a pragmatic provider/capability matrix (native adapters + OpenAI-compatible
 gateway coverage).
@@ -78,6 +78,21 @@ cargo run --example openai_compatible_embeddings
 cargo run --example multimodal -- ./image.png ./doc.pdf
 cargo run --example batches --features batches -- ./requests.jsonl
 ```
+
+## Gateway (optional)
+
+Run the HTTP gateway (feature `gateway`):
+
+```bash
+cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080 --backend primary=http://localhost:9001
+```
+
+Endpoints:
+
+- `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
+- `GET /health`
+- `GET /metrics`
+- `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured).
 
 ## Stream Collection
 
