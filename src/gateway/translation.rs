@@ -9,10 +9,14 @@ use serde_json::{Map, Value};
 use tokio::sync::Mutex;
 
 use crate::embedding::EmbeddingModel;
+use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
+use crate::moderation::ModerationModel;
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    ProviderOptions, ReasoningEffort, ResponseFormat, Role, Tool, ToolChoice, Usage,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
+    ImageGenerationResponse, ImageSource, Message, ModerationInput, ModerationRequest,
+    ModerationResponse, ProviderOptions, ReasoningEffort, ResponseFormat, Role, Tool, ToolChoice,
+    Usage,
 };
 use crate::{DittoError, Env, ProviderConfig};
 
@@ -23,10 +27,14 @@ type IoResult<T> = std::result::Result<T, std::io::Error>;
 pub struct TranslationBackend {
     pub model: Arc<dyn LanguageModel>,
     pub embedding_model: Option<Arc<dyn EmbeddingModel>>,
+    pub image_generation_model: Option<Arc<dyn ImageGenerationModel>>,
+    pub moderation_model: Option<Arc<dyn ModerationModel>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
     provider_config: ProviderConfig,
     embedding_cache: Arc<Mutex<HashMap<String, Arc<dyn EmbeddingModel>>>>,
+    moderation_cache: Arc<Mutex<Option<Arc<dyn ModerationModel>>>>,
+    image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
 }
 
 impl TranslationBackend {
@@ -34,10 +42,14 @@ impl TranslationBackend {
         Self {
             model,
             embedding_model: None,
+            image_generation_model: None,
+            moderation_model: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
             provider_config: ProviderConfig::default(),
             embedding_cache: Arc::new(Mutex::new(HashMap::new())),
+            moderation_cache: Arc::new(Mutex::new(None)),
+            image_generation_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -53,6 +65,19 @@ impl TranslationBackend {
 
     pub fn with_embedding_model(mut self, embedding_model: Arc<dyn EmbeddingModel>) -> Self {
         self.embedding_model = Some(embedding_model);
+        self
+    }
+
+    pub fn with_image_generation_model(
+        mut self,
+        image_generation_model: Arc<dyn ImageGenerationModel>,
+    ) -> Self {
+        self.image_generation_model = Some(image_generation_model);
+        self
+    }
+
+    pub fn with_moderation_model(mut self, moderation_model: Arc<dyn ModerationModel>) -> Self {
+        self.moderation_model = Some(moderation_model);
         self
     }
 
@@ -111,6 +136,71 @@ impl TranslationBackend {
         }
 
         model_impl.embed(texts).await
+    }
+
+    pub async fn moderate(&self, request: ModerationRequest) -> crate::Result<ModerationResponse> {
+        if let Some(model_impl) = self.moderation_model.as_ref() {
+            return model_impl.moderate(request).await;
+        }
+
+        let cached = self.moderation_cache.lock().await.clone();
+        if let Some(model_impl) = cached {
+            return model_impl.moderate(request).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl =
+            build_moderation_model(self.provider.as_str(), &self.provider_config, &env)
+                .await?
+                .ok_or_else(|| {
+                    DittoError::InvalidResponse(format!(
+                        "provider backend does not support moderations: {}",
+                        self.provider
+                    ))
+                })?;
+
+        {
+            let mut cache = self.moderation_cache.lock().await;
+            *cache = Some(model_impl.clone());
+        }
+
+        model_impl.moderate(request).await
+    }
+
+    pub async fn generate_image(
+        &self,
+        request: ImageGenerationRequest,
+    ) -> crate::Result<ImageGenerationResponse> {
+        if let Some(model_impl) = self.image_generation_model.as_ref() {
+            return model_impl.generate(request).await;
+        }
+
+        let cached = self.image_generation_cache.lock().await.clone();
+        if let Some(model_impl) = cached {
+            return model_impl.generate(request).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl =
+            build_image_generation_model(self.provider.as_str(), &self.provider_config, &env)
+                .await?
+                .ok_or_else(|| {
+                    DittoError::InvalidResponse(format!(
+                        "provider backend does not support images: {}",
+                        self.provider
+                    ))
+                })?;
+
+        {
+            let mut cache = self.image_generation_cache.lock().await;
+            *cache = Some(model_impl.clone());
+        }
+
+        model_impl.generate(request).await
     }
 }
 
@@ -260,6 +350,78 @@ pub async fn build_embedding_model(
     }
 }
 
+pub async fn build_moderation_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn ModerationModel>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "moderations"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAIModerations::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "moderations")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "moderations"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleModerations::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "moderations")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+pub async fn build_image_generation_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn ImageGenerationModel>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "images"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAIImages::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "images")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "images"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleImages::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "images")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -282,6 +444,22 @@ pub fn is_embeddings_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/embeddings" || path == "/v1/embeddings/"
+}
+
+pub fn is_moderations_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/moderations" || path == "/v1/moderations/"
+}
+
+pub fn is_images_generations_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/images/generations" || path == "/v1/images/generations/"
 }
 
 pub fn chat_completions_request_to_generate_request(
@@ -379,6 +557,106 @@ pub fn embeddings_request_to_texts(request: &Value) -> ParseResult<Vec<String>> 
         }
         _ => Err("embeddings request input must be a string or array of strings".to_string()),
     }
+}
+
+pub fn moderations_request_to_request(request: &Value) -> ParseResult<ModerationRequest> {
+    let obj = request
+        .as_object()
+        .ok_or_else(|| "moderations request must be a JSON object".to_string())?;
+
+    let input = obj
+        .get("input")
+        .ok_or_else(|| "moderations request missing input".to_string())?;
+
+    let input = match input {
+        Value::String(text) => ModerationInput::Text(text.clone()),
+        Value::Array(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for (idx, item) in items.iter().enumerate() {
+                let text = item
+                    .as_str()
+                    .ok_or_else(|| format!("moderations input[{idx}] must be a string"))?;
+                out.push(text.to_string());
+            }
+            ModerationInput::TextArray(out)
+        }
+        other => ModerationInput::Raw(other.clone()),
+    };
+
+    let model = obj
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(ToString::to_string);
+
+    Ok(ModerationRequest {
+        input,
+        model,
+        provider_options: None,
+    })
+}
+
+pub fn moderation_response_to_openai(response: &ModerationResponse, fallback_id: &str) -> Value {
+    let results = response
+        .results
+        .iter()
+        .map(|result| {
+            serde_json::json!({
+                "flagged": result.flagged,
+                "categories": result.categories,
+                "category_scores": result.category_scores,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let mut out = Map::<String, Value>::new();
+    out.insert(
+        "id".to_string(),
+        Value::String(
+            response
+                .id
+                .as_deref()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or(fallback_id)
+                .to_string(),
+        ),
+    );
+    if let Some(model) = response.model.as_deref().filter(|v| !v.trim().is_empty()) {
+        out.insert("model".to_string(), Value::String(model.to_string()));
+    }
+    out.insert("results".to_string(), Value::Array(results));
+    Value::Object(out)
+}
+
+pub fn images_generation_request_to_request(
+    request: &Value,
+) -> ParseResult<ImageGenerationRequest> {
+    serde_json::from_value::<ImageGenerationRequest>(request.clone()).map_err(|err| {
+        format!("images/generations request cannot be parsed as ImageGenerationRequest: {err}")
+    })
+}
+
+pub fn image_generation_response_to_openai(
+    response: &ImageGenerationResponse,
+    created: u64,
+) -> Value {
+    let mut out = Map::<String, Value>::new();
+    out.insert(
+        "created".to_string(),
+        Value::Number((created as i64).into()),
+    );
+
+    let data = response
+        .images
+        .iter()
+        .map(|image| match image {
+            ImageSource::Url { url } => serde_json::json!({ "url": url }),
+            ImageSource::Base64 { data, .. } => serde_json::json!({ "b64_json": data }),
+        })
+        .collect::<Vec<_>>();
+    out.insert("data".to_string(), Value::Array(data));
+    Value::Object(out)
 }
 
 pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<GenerateRequest> {

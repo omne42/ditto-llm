@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: OpenAI-compatible passthrough proxy for `ANY /v1/*` (incl. streaming) with per-backend header injection and optional devtools JSONL logging (feature `gateway-devtools`).
 - Gateway: add `gateway-translation` feature to serve `POST /v1/chat/completions` and `POST /v1/responses` via native Ditto providers (configured via backend `provider` + `provider_config`).
 - Gateway: translation backends can also serve `POST /v1/embeddings` (best-effort OpenAI shape).
+- Gateway: translation backends can also serve `POST /v1/moderations` and `POST /v1/images/generations` (best-effort OpenAI shapes).
 - Gateway: when upstream does not implement `POST /v1/responses` (404/405/501), automatically fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (`x-ditto-shim: responses_via_chat_completions`).
 - Gateway: `--state PATH` persists admin virtual-key mutations to a JSON state file; proxy responses include `x-ditto-request-id`.
 - Gateway: router supports weighted backends (`default_backends` / `rules[].backends`) and falls back on network errors when proxying.

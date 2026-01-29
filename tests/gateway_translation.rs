@@ -10,9 +10,13 @@ use ditto_llm::embedding::EmbeddingModel;
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouterConfig, TranslationBackend,
 };
+use ditto_llm::image::ImageGenerationModel;
 use ditto_llm::model::{LanguageModel, StreamResult};
+use ditto_llm::moderation::ModerationModel;
 use ditto_llm::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Usage,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
+    ImageGenerationResponse, ImageSource, ModerationInput, ModerationRequest, ModerationResponse,
+    ModerationResult, StreamChunk, Usage,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -88,6 +92,74 @@ impl EmbeddingModel for FakeEmbeddingModel {
     }
 }
 
+#[derive(Clone)]
+struct FakeModerationModel;
+
+#[async_trait]
+impl ModerationModel for FakeModerationModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-moderation"
+    }
+
+    async fn moderate(&self, request: ModerationRequest) -> ditto_llm::Result<ModerationResponse> {
+        let flagged = matches!(request.input, ModerationInput::Text(ref text) if text == "bad");
+        Ok(ModerationResponse {
+            id: Some("modr_fake".to_string()),
+            model: Some(
+                request
+                    .model
+                    .unwrap_or_else(|| "omni-moderation-latest".to_string()),
+            ),
+            results: vec![ModerationResult {
+                flagged,
+                categories: Default::default(),
+                category_scores: Default::default(),
+                provider_metadata: None,
+            }],
+            warnings: Vec::new(),
+            provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeImageModel;
+
+#[async_trait]
+impl ImageGenerationModel for FakeImageModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-image"
+    }
+
+    async fn generate(
+        &self,
+        _request: ImageGenerationRequest,
+    ) -> ditto_llm::Result<ImageGenerationResponse> {
+        Ok(ImageGenerationResponse {
+            images: vec![
+                ImageSource::Url {
+                    url: "https://example.com/image.png".to_string(),
+                },
+                ImageSource::Base64 {
+                    media_type: "image/png".to_string(),
+                    data: "aGVsbG8=".to_string(),
+                },
+            ],
+            usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        })
+    }
+}
+
 fn base_gateway() -> Gateway {
     Gateway::new(GatewayConfig {
         backends: Vec::new(),
@@ -107,7 +179,9 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_llm::Resu
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -159,7 +233,9 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_llm::Result<(
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -196,7 +272,9 @@ async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> 
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -235,7 +313,9 @@ async fn gateway_translation_responses_streaming() -> ditto_llm::Result<()> {
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -273,7 +353,9 @@ async fn gateway_translation_embeddings_non_streaming() -> ditto_llm::Result<()>
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -309,6 +391,109 @@ async fn gateway_translation_embeddings_non_streaming() -> ditto_llm::Result<()>
         Some("text-embedding-3-small")
     );
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("list"));
+    assert_eq!(
+        parsed
+            .get("data")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len()),
+        Some(2)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_moderations_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "input": "bad"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/moderations")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("modr_fake"));
+    assert_eq!(
+        parsed
+            .get("results")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("flagged"))
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_images_generations_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "prompt": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/images/generations")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert!(parsed.get("created").and_then(|v| v.as_u64()).is_some());
     assert_eq!(
         parsed
             .get("data")

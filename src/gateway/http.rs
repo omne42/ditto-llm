@@ -1316,47 +1316,59 @@ async fn handle_openai_compat_proxy(
         if let Some(translation_backend) = state.translation_backends.get(&backend_name).cloned() {
             let supported_path = translation::is_chat_completions_path(path_and_query)
                 || translation::is_responses_create_path(path_and_query)
-                || translation::is_embeddings_path(path_and_query);
-            if parts.method == axum::http::Method::POST && supported_path {
-                let Some(parsed_json) = parsed_json.as_ref() else {
-                    last_err = Some(openai_error(
-                        StatusCode::BAD_REQUEST,
-                        "invalid_request_error",
-                        Some("invalid_request"),
-                        "request body must be application/json",
-                    ));
-                    continue;
-                };
+                || translation::is_embeddings_path(path_and_query)
+                || translation::is_moderations_path(path_and_query)
+                || translation::is_images_generations_path(path_and_query);
+            if parts.method != axum::http::Method::POST || !supported_path {
+                last_err = Some(openai_error(
+                    StatusCode::NOT_IMPLEMENTED,
+                    "invalid_request_error",
+                    Some("unsupported_endpoint"),
+                    format!(
+                        "translation backend does not support {} {}",
+                        parts.method, path_and_query
+                    ),
+                ));
+                continue;
+            }
 
-                {
-                    let mut gateway = state.gateway.lock().await;
-                    gateway.observability.record_backend_call();
-                }
+            let Some(parsed_json) = parsed_json.as_ref() else {
+                last_err = Some(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_request"),
+                    "request body must be application/json",
+                ));
+                continue;
+            };
 
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    metrics
-                        .lock()
-                        .await
-                        .record_proxy_backend_attempt(&backend_name);
-                }
+            {
+                let mut gateway = state.gateway.lock().await;
+                gateway.observability.record_backend_call();
+            }
 
-                let original_model = model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
-                if mapped_model.trim().is_empty() {
-                    last_err = Some(openai_error(
-                        StatusCode::BAD_REQUEST,
-                        "invalid_request_error",
-                        Some("invalid_request"),
-                        "missing model",
-                    ));
-                    continue;
-                }
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                metrics
+                    .lock()
+                    .await
+                    .record_proxy_backend_attempt(&backend_name);
+            }
 
-                let result: Result<
-                    axum::response::Response,
-                    (StatusCode, Json<OpenAiErrorResponse>),
-                > = if translation::is_embeddings_path(path_and_query) {
+            let original_model = model.clone().unwrap_or_default();
+            let mapped_model = translation_backend.map_model(&original_model);
+
+            let result: Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> =
+                if translation::is_embeddings_path(path_and_query) {
+                    if mapped_model.trim().is_empty() {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    }
                     if _stream_requested {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,
@@ -1411,7 +1423,141 @@ async fn handle_openai_compat_proxy(
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok(response)
+                } else if translation::is_moderations_path(path_and_query) {
+                    if _stream_requested {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "moderations endpoint does not support stream=true",
+                        ));
+                        continue;
+                    }
+
+                    let mut request = match translation::moderations_request_to_request(parsed_json)
+                    {
+                        Ok(request) => request,
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
+
+                    if !mapped_model.trim().is_empty() {
+                        request.model = Some(mapped_model);
+                    }
+
+                    let moderated = match translation_backend.moderate(request).await {
+                        Ok(moderated) => moderated,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            last_err = Some(openai_error(status, kind, code, message));
+                            continue;
+                        }
+                    };
+
+                    let fallback_id = format!("modr_{request_id}");
+                    let value =
+                        translation::moderation_response_to_openai(&moderated, &fallback_id);
+
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok(response)
+                } else if translation::is_images_generations_path(path_and_query) {
+                    if _stream_requested {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "images endpoint does not support stream=true",
+                        ));
+                        continue;
+                    }
+
+                    let mut request =
+                        match translation::images_generation_request_to_request(parsed_json) {
+                            Ok(request) => request,
+                            Err(err) => {
+                                last_err = Some(openai_error(
+                                    StatusCode::BAD_REQUEST,
+                                    "invalid_request_error",
+                                    Some("invalid_request"),
+                                    err,
+                                ));
+                                continue;
+                            }
+                        };
+
+                    if !mapped_model.trim().is_empty() {
+                        request.model = Some(mapped_model);
+                    }
+
+                    let generated = match translation_backend.generate_image(request).await {
+                        Ok(generated) => generated,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            last_err = Some(openai_error(status, kind, code, message));
+                            continue;
+                        }
+                    };
+
+                    let value = translation::image_generation_response_to_openai(
+                        &generated,
+                        _now_epoch_seconds,
+                    );
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok(response)
                 } else {
+                    if mapped_model.trim().is_empty() {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    }
+
                     let generate_request = if translation::is_chat_completions_path(path_and_query)
                     {
                         translation::chat_completions_request_to_generate_request(parsed_json)
@@ -1543,73 +1689,49 @@ async fn handle_openai_compat_proxy(
                     }
                 };
 
-                let status = StatusCode::OK;
-                let spend_tokens = true;
+            let status = StatusCode::OK;
+            let spend_tokens = true;
 
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    let mut metrics = metrics.lock().await;
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let mut metrics = metrics.lock().await;
+                if spend_tokens {
+                    metrics.record_proxy_backend_success(&backend_name);
+                } else {
+                    metrics.record_proxy_backend_failure(&backend_name);
+                }
+                metrics.record_proxy_response_status(status.as_u16());
+            }
+
+            #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+            if _token_budget_reserved {
+                #[cfg(feature = "gateway-store-sqlite")]
+                if let Some(store) = state.sqlite_store.as_ref() {
                     if spend_tokens {
-                        metrics.record_proxy_backend_success(&backend_name);
+                        let _ = store.commit_budget_reservation(&request_id).await;
                     } else {
-                        metrics.record_proxy_backend_failure(&backend_name);
-                    }
-                    metrics.record_proxy_response_status(status.as_u16());
-                }
-
-                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-                if _token_budget_reserved {
-                    #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.sqlite_store.as_ref() {
-                        if spend_tokens {
-                            let _ = store.commit_budget_reservation(&request_id).await;
-                        } else {
-                            let _ = store.rollback_budget_reservation(&request_id).await;
-                        }
-                    }
-                    #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.redis_store.as_ref() {
-                        if spend_tokens {
-                            let _ = store.commit_budget_reservation(&request_id).await;
-                        } else {
-                            let _ = store.rollback_budget_reservation(&request_id).await;
-                        }
-                    }
-                } else if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
-                    if spend_tokens {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway
-                            .budget
-                            .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
-
-                        #[cfg(feature = "gateway-costing")]
-                        if !use_persistent_budget {
-                            if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                                gateway.budget.spend_cost_usd_micros(
-                                    &virtual_key_id,
-                                    &budget,
-                                    charge_cost_usd_micros,
-                                );
-                            }
-                        }
+                        let _ = store.rollback_budget_reservation(&request_id).await;
                     }
                 }
-                #[cfg(not(any(
-                    feature = "gateway-store-sqlite",
-                    feature = "gateway-store-redis"
-                )))]
-                if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
+                #[cfg(feature = "gateway-store-redis")]
+                if let Some(store) = state.redis_store.as_ref() {
                     if spend_tokens {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway
-                            .budget
-                            .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
+                        let _ = store.commit_budget_reservation(&request_id).await;
+                    } else {
+                        let _ = store.rollback_budget_reservation(&request_id).await;
+                    }
+                }
+            } else if let (Some(virtual_key_id), Some(budget)) =
+                (virtual_key_id.clone(), budget.clone())
+            {
+                if spend_tokens {
+                    let mut gateway = state.gateway.lock().await;
+                    gateway
+                        .budget
+                        .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
 
-                        #[cfg(feature = "gateway-costing")]
+                    #[cfg(feature = "gateway-costing")]
+                    if !use_persistent_budget {
                         if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
                             gateway.budget.spend_cost_usd_micros(
                                 &virtual_key_id,
@@ -1619,118 +1741,130 @@ async fn handle_openai_compat_proxy(
                         }
                     }
                 }
+            }
+            #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
+                if spend_tokens {
+                    let mut gateway = state.gateway.lock().await;
+                    gateway
+                        .budget
+                        .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
 
-                #[cfg(all(
-                    feature = "gateway-costing",
-                    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
-                ))]
-                if _cost_budget_reserved {
-                    #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.sqlite_store.as_ref() {
-                        if spend_tokens {
-                            let _ = store.commit_cost_reservation(&request_id).await;
-                        } else {
-                            let _ = store.rollback_cost_reservation(&request_id).await;
-                        }
-                    }
-                    #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.redis_store.as_ref() {
-                        if spend_tokens {
-                            let _ = store.commit_cost_reservation(&request_id).await;
-                        } else {
-                            let _ = store.rollback_cost_reservation(&request_id).await;
-                        }
+                    #[cfg(feature = "gateway-costing")]
+                    if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+                        gateway.budget.spend_cost_usd_micros(
+                            &virtual_key_id,
+                            &budget,
+                            charge_cost_usd_micros,
+                        );
                     }
                 }
+            }
 
-                #[cfg(all(
-                    feature = "gateway-costing",
-                    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
-                ))]
-                if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
-                    if let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
-                        (virtual_key_id.as_deref(), charge_cost_usd_micros)
-                    {
-                        #[cfg(feature = "gateway-store-sqlite")]
-                        if let Some(store) = state.sqlite_store.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(
-                                    virtual_key_id,
-                                    charge_cost_usd_micros,
-                                )
-                                .await;
-                        }
-                        #[cfg(feature = "gateway-store-redis")]
-                        if let Some(store) = state.redis_store.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(
-                                    virtual_key_id,
-                                    charge_cost_usd_micros,
-                                )
-                                .await;
-                        }
+            #[cfg(all(
+                feature = "gateway-costing",
+                any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+            ))]
+            if _cost_budget_reserved {
+                #[cfg(feature = "gateway-store-sqlite")]
+                if let Some(store) = state.sqlite_store.as_ref() {
+                    if spend_tokens {
+                        let _ = store.commit_cost_reservation(&request_id).await;
+                    } else {
+                        let _ = store.rollback_cost_reservation(&request_id).await;
                     }
                 }
+                #[cfg(feature = "gateway-store-redis")]
+                if let Some(store) = state.redis_store.as_ref() {
+                    if spend_tokens {
+                        let _ = store.commit_cost_reservation(&request_id).await;
+                    } else {
+                        let _ = store.rollback_cost_reservation(&request_id).await;
+                    }
+                }
+            }
 
-                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+            #[cfg(all(
+                feature = "gateway-costing",
+                any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+            ))]
+            if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
+                if let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
+                    (virtual_key_id.as_deref(), charge_cost_usd_micros)
                 {
-                    let payload = serde_json::json!({
-                        "request_id": &request_id,
-                        "virtual_key_id": virtual_key_id.as_deref(),
-                        "backend": &backend_name,
-                        "attempted_backends": &attempted_backends,
-                        "method": parts.method.as_str(),
-                        "path": path_and_query,
-                        "model": &model,
-                        "status": status.as_u16(),
-                        "charge_tokens": charge_tokens,
-                        "charge_cost_usd_micros": charge_cost_usd_micros,
-                        "body_len": body.len(),
-                        "mode": "translation",
-                    });
-
                     #[cfg(feature = "gateway-store-sqlite")]
                     if let Some(store) = state.sqlite_store.as_ref() {
-                        let _ = store.append_audit_log("proxy", payload.clone()).await;
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
                     }
                     #[cfg(feature = "gateway-store-redis")]
                     if let Some(store) = state.redis_store.as_ref() {
-                        let _ = store.append_audit_log("proxy", payload.clone()).await;
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
                     }
                 }
+            }
 
-                emit_json_log(
-                    &state,
+            #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+            {
+                let payload = serde_json::json!({
+                    "request_id": &request_id,
+                    "virtual_key_id": virtual_key_id.as_deref(),
+                    "backend": &backend_name,
+                    "attempted_backends": &attempted_backends,
+                    "method": parts.method.as_str(),
+                    "path": path_and_query,
+                    "model": &model,
+                    "status": status.as_u16(),
+                    "charge_tokens": charge_tokens,
+                    "charge_cost_usd_micros": charge_cost_usd_micros,
+                    "body_len": body.len(),
+                    "mode": "translation",
+                });
+
+                #[cfg(feature = "gateway-store-sqlite")]
+                if let Some(store) = state.sqlite_store.as_ref() {
+                    let _ = store.append_audit_log("proxy", payload.clone()).await;
+                }
+                #[cfg(feature = "gateway-store-redis")]
+                if let Some(store) = state.redis_store.as_ref() {
+                    let _ = store.append_audit_log("proxy", payload.clone()).await;
+                }
+            }
+
+            emit_json_log(
+                &state,
+                "proxy.response",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "backend": &backend_name,
+                    "status": status.as_u16(),
+                    "attempted_backends": &attempted_backends,
+                    "mode": "translation",
+                }),
+            );
+
+            #[cfg(feature = "sdk")]
+            if let Some(logger) = state.devtools.as_ref() {
+                let _ = logger.log_event(
                     "proxy.response",
                     serde_json::json!({
                         "request_id": &request_id,
-                        "backend": &backend_name,
                         "status": status.as_u16(),
-                        "attempted_backends": &attempted_backends,
+                        "path": path_and_query,
+                        "backend": &backend_name,
                         "mode": "translation",
                     }),
                 );
+            }
 
-                #[cfg(feature = "sdk")]
-                if let Some(logger) = state.devtools.as_ref() {
-                    let _ = logger.log_event(
-                        "proxy.response",
-                        serde_json::json!({
-                            "request_id": &request_id,
-                            "status": status.as_u16(),
-                            "path": path_and_query,
-                            "backend": &backend_name,
-                            "mode": "translation",
-                        }),
-                    );
-                }
-
-                match result {
-                    Ok(response) => return Ok(response),
-                    Err(err) => {
-                        last_err = Some(err);
-                        continue;
-                    }
+            match result {
+                Ok(response) => return Ok(response),
+                Err(err) => {
+                    last_err = Some(err);
+                    continue;
                 }
             }
         }

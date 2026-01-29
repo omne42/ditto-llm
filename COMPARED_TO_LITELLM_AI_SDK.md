@@ -40,7 +40,7 @@
 - OpenAI-compatible proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header injection
 - virtual keys（可选启用）+ rpm/tpm limits + token/USD budget + guardrails
 - OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”（含 streaming + tool_calls）
-- Translation proxy：OpenAI in/out 的 `POST /v1/chat/completions` + `POST /v1/responses` + `POST /v1/embeddings`（backend 配置 `provider`；feature `gateway-translation`）
+- Translation proxy：OpenAI in/out 的 `POST /v1/chat/completions` + `POST /v1/responses` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations`（backend 配置 `provider`；feature `gateway-translation`）
 - admin key 管理端点（可选启用）+ state/sqlite/redis 持久化 virtual keys + budgets/audit logs
 - 可选 devtools JSONL 事件日志（`--features gateway-devtools`）+ 可选 JSON logs（`--json-logs`）
 - 可选 proxy cache（`--features gateway-proxy-cache`）+ 可选 Prometheus metrics（`--features gateway-metrics-prometheus`）
@@ -55,7 +55,7 @@
 - 成本：缺 **真实 token 计数**（tiktoken 等价）与 **usage-based settle**（目前可选 pricing table + USD budgets，但 token 仍是预估）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；缺 redis cache、streaming cache、cache invalidation 策略
-- Translation：当前覆盖 `POST /v1/chat/completions`/`POST /v1/responses`/`POST /v1/embeddings`；其余 OpenAI 端点（images/audio/batches 等）的 translation 仍需扩面
+- Translation：当前覆盖 `POST /v1/chat/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`；其余 OpenAI 端点（audio/batches 等）的 translation 仍需扩面
 
 ---
 
