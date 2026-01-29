@@ -81,9 +81,11 @@ fn base_key() -> VirtualKeyConfig {
 
 fn base_config(key: VirtualKeyConfig) -> GatewayConfig {
     GatewayConfig {
+        backends: Vec::new(),
         virtual_keys: vec![key],
         router: RouterConfig {
             default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
             rules: Vec::new(),
         },
     }
@@ -170,6 +172,7 @@ async fn budget_limit_blocks_request() {
     let mut key = base_key();
     key.budget = BudgetConfig {
         total_tokens: Some(5),
+        total_usd_micros: None,
     };
     let config = base_config(key);
     let clock = Box::new(FixedClock { now: 360 });
@@ -188,9 +191,11 @@ async fn router_switches_backend_by_model_prefix() {
     let mut config = base_config(base_key());
     config.router = RouterConfig {
         default_backend: "primary".to_string(),
+        default_backends: Vec::new(),
         rules: vec![RouteRule {
             model_prefix: "gpt-4".to_string(),
             backend: "secondary".to_string(),
+            backends: Vec::new(),
         }],
     };
     let clock = Box::new(FixedClock { now: 420 });

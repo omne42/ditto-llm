@@ -1,6 +1,12 @@
-# Ditto-LLM TODO（LiteLLM / AI SDK：我们“需要”的能力清单）
+# Ditto-LLM TODO（目标：成为 LiteLLM + AI SDK 的能力超集）
 
-本文是 `ditto-llm` 的**能力口径 + 全量待办清单**。目标不是 1:1 复刻 LiteLLM / Vercel AI SDK，而是把 CodePM/agent 需要的那部分能力做成稳定、可测试的 Rust SDK。
+本文是 `ditto-llm` 的能力口径 + 全量待办清单。
+
+目标（Superset）：
+
+- **SDK（AI SDK-like）**：覆盖 Vercel AI SDK 的核心开发体验（generate/stream/tools/structured output/agent loop），并保持 Rust 侧的可测试/可审计特性（warnings、严格的错误边界、最小依赖）。
+- **Gateway（LiteLLM-like）**：覆盖 LiteLLM Proxy 的核心平台能力（OpenAI-compatible HTTP surface、virtual keys、limits/budget/cache/routing、日志/指标），并提供“passthrough/translation”两种模式。
+- **不变形直通（OpenAI Responses）**：对 OpenAI `/responses`（含 `/responses/compact`）提供 raw passthrough，保证 items round-trip（CodePM parity 要求）。
 
 在 CodePM monorepo 内的相关背景文档（从本文件位置出发的相对路径）：
 
@@ -8,146 +14,130 @@
 - `../../docs/special_directives.md`
 - `../../docs/model_routing.md`
 
+本仓库内相关文档：
+
+- `COMPARED_TO_LITELLM_AI_SDK.md`（对比口径）
+
 ---
 
-## 0) 需求口径（先钉死范围，避免“全都要”）
+## 0) 原则与范围（先钉死“超集”的口径）
 
-根据现有文档与仓库实现，我把“我们需要”的最小集定义为：
+“超集”不是指 1:1 复刻 UI/hooks 或某个云产品的全部企业功能，而是指 **能力覆盖 + 组合方式**：
 
-- 统一 **语言模型** 语义层：`LanguageModel::{generate, stream}`
-- 统一 **Embeddings**：`EmbeddingModel::{embed, embed_single}`
-- **Streaming**：text delta + tool_call delta + finish_reason + usage + response_id
-- **Tools (function calling)**：`tools`/`tool_choice`，并且差异用 `Warning` 显式暴露
-- **多模态输入（输入侧）**：image + PDF（url/base64；有能力差异就发 `Warning`）
-- **多 provider**（满足 CodePM 路由/兼容需求）：
-  - OpenAI Responses（`/responses`）
-  - OpenAI-compatible Chat Completions（`/chat/completions`，用于对接 LiteLLM/DeepSeek/Qwen 等）
-  - Anthropic Messages（`/messages`）（可选但已实现）
-  - Google GenAI（`generateContent`）（可选但已实现）
+- Ditto 必须能同时以 4 种形态工作：
+  1. **SDK**：库内直接调用 provider adapters（OpenAI/Anthropic/Google/...）
+  2. **Gateway**：提供 OpenAI-compatible HTTP 服务（面向多语言/多团队）
+  3. **Passthrough Proxy**：payload 不变形直通（对接 OpenAI-compatible upstream）
+  4. **Translation Proxy**：把 OpenAI 请求翻译到 non-OpenAI provider，再翻译回 OpenAI 响应（减少“必须先上 LiteLLM”依赖）
 
-如果你希望把 LiteLLM 的这些端点也纳入“必须做”，请在本文 §3.4 勾选并确认优先级：
-`/audio/*`、`/images/*`、`/batches`、`/rerank`、`/moderations`。
+硬约束（长期不变）：
+
+- OpenAI `/responses` 直连场景必须支持 raw passthrough + history compaction（用于 agent loop / prompt cache key / items replay）。
+- 差异必须显式：SDK 层用 `Warning`；Gateway 层用 OpenAI-style error shape + `x-ditto-*` headers。
 
 ---
 
 ## 1) Done（当前仓库已具备的能力）
 
-以下条目在 `bitto-llm/ditto-llm` 里已落地（以代码与 examples 为准）：
+### 1.1 SDK（AI SDK-like）
 
-- [x] 统一 types：`Message`/`ContentPart`/`Tool`/`ToolChoice`/`Usage`/`FinishReason`/`Warning`（`src/types/mod.rs`）
-- [x] 统一 traits：`LanguageModel`、`EmbeddingModel`（`src/model.rs`、`src/embedding.rs`）
-- [x] Providers：
-  - [x] OpenAI Responses + embeddings（`src/providers/openai.rs`）
-  - [x] OpenAI-compatible Chat Completions + embeddings（`src/providers/openai_compatible.rs`）
-  - [x] Anthropic Messages（`src/providers/anthropic.rs`）
-  - [x] Google GenAI + embeddings（`src/providers/google.rs`，feature `google`）
-- [x] Streaming：通用 SSE 解析 + providers 的 event 兼容处理（`src/utils/sse.rs` + 各 provider）
-- [x] Tools：generate + stream tool deltas（含多 tool_calls 拼接与 warnings）（providers）
-- [x] 多模态输入：`ContentPart::Image` / `ContentPart::File(PDF)`（providers + `examples/multimodal.rs`）
-- [x] 受控扩展点：`ProviderOptions`（`reasoning_effort` / `response_format(json_schema)` / `parallel_tool_calls`）（`src/types/mod.rs`）
-- [x] 路由/配置层：`ProviderConfig` / `ProviderAuth` / `.env` 解析 / `GET /models` 发现（`src/profile.rs`）
-- [x] Examples：`basic`/`streaming`/`tool_calling`/`embeddings`/`openai_compatible`/`openai_compatible_embeddings`/`multimodal`（`examples/`）
-- [x] 集成 smoke tests（feature `integration`）（`tests/integration_smoke.rs`）
-- [x] Repo 级 githooks（Conventional Commits + changelog 绑定）（`githooks/`）
+- [x] Unified types + traits：`LanguageModel` / `EmbeddingModel` + `Message`/`ContentPart`/`Tool`/`StreamChunk`/`Warning`
+- [x] Text helpers：`generate_text` / `stream_text`
+- [x] Structured output：`generate_object_json` / `stream_object`
+- [x] Tool loop agent（feature `agent`）
+- [x] Providers：OpenAI `/responses`，OpenAI-compatible `/chat/completions`，Anthropic `/messages`，Google GenAI，Cohere（部分能力 feature-gated）
+- [x] Raw OpenAI Responses passthrough + `/responses/compact`（items round-trip，CodePM parity）
+- [x] SDK utilities（feature `sdk`）：stream protocol v1、telemetry、devtools JSONL logger、MCP tool adapter
 
----
+### 1.2 Gateway（LiteLLM-like，feature `gateway`）
 
-## 2) 能力清单（对齐 LiteLLM / AI SDK 的“我们需要”部分）
-
-> 这里的 checkbox 口径：**我们是否需要 + 是否已实现**。如果不需要，就写进“不做”，别留成“以后再说”。
-
-### 2.1 生成与流式（LanguageModel）
-
-- [x] 非流式 `generate`（统一 response：content/finish_reason/usage/warnings）
-- [x] 流式 `stream`（统一 chunks：text/tool_call/usage/finish_reason/response_id/warnings）
-- [x] 取消/中断语义：显式 `StreamAbortHandle`（`abortable_stream` / `LanguageModelExt::stream_abortable`）
-- [x] （可选）流式聚合器：`collect_stream(StreamResult) -> CollectedStream`（保序；仅合并相邻 text/reasoning；见 `src/stream.rs`）
-
-### 2.2 Tools（function calling）
-
-- [x] `tools`/`tool_choice` 映射（含 `strict` 的兼容性处理与 warnings）
-- [x] tool call streaming：增量 args 拼接、多 tool_calls 处理
-- [x] OpenAI-compatible：兼容 legacy `function_call`（非流式 + streaming），并将 `finish_reason="function_call"` 视为 `ToolCalls`
-- [x] tool_call arguments 的 JSON roundtrip：解析失败保留 raw string，并发出 `Warning::Compatibility(tool_call.arguments)`；回放到 OpenAI/OpenAI-compatible 时不会二次转义
-- [x] JSON Schema → OpenAPI schema（Google tool schema 子集转换）
-- [x] （可选）工具 schema 的“严格子集”文档化：把支持/不支持关键字写成稳定契约，并用测试矩阵固化
-
-### 2.3 Structured Output（对齐 AI SDK 的 generateObject 思路）
-
-- [x] OpenAI Responses：`response_format(json_schema)`（`ProviderOptions`）
-- [x] OpenAI-compatible：`response_format` 透传 + 不支持时 warnings（取决于上游实现）
-- [x] Anthropic/Google：当前不做 SDK 侧 fallback；不支持则发 `Warning::Unsupported(response_format)`（保持简单可审计）
-
-### 2.4 多模态输入（image / PDF）
-
-- [x] Image：url/base64
-- [x] PDF：url/base64/file_id（provider 视情况支持；不支持时 warnings）
-- [x] （可选）文件上传 helper：把 bytes 上传为 `file_id`（OpenAI `/files`；`OpenAI::{upload_file, upload_file_with_purpose}` / `OpenAICompatible::{...}`）
-
-### 2.5 Config / Routing（对齐 LiteLLM“代理接入”需求）
-
-- [x] `ProviderConfig`/`ProviderAuth`/`.env` 解析
-- [x] OpenAI-compatible `GET /models` 发现（用于模型列表与 allowlist）
-- [x] 默认 HTTP headers：`ProviderConfig.http_headers`（from_config + `/models` 发现会应用）
-- [x] 更通用的 auth header：支持非 Bearer 头（如 `api-key`），见 `ProviderAuth::HttpHeaderEnv` / `ProviderAuth::HttpHeaderCommand`
-- [x] auth query param（企业网关要求 token 在 query string）
+- [x] Control-plane primitives：virtual keys、rpm/tpm limits、token budget、simple cache、routing rules、guardrails
+- [x] Routing (basic)：weighted backends（`default_backends` / `rules[].backends`）+ proxy network-error fallback
+- [x] HTTP server：`/health`、`/metrics`、`/admin/keys`、`POST /v1/gateway`
+- [x] OpenAI-compatible passthrough proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header injection
+- [x] OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”输出（含 streaming + tool_calls）
+- [x] State file persistence：`--state <path>` 持久化 admin virtual-key mutations（`GatewayStateFile`）
+- [x] Optional sqlite persistence：`--sqlite <path>`（feature `gateway-store-sqlite`）
+- [x] Optional redis persistence：`--redis <url>`（feature `gateway-store-redis`）
+- [x] Optional devtools JSONL logging（`--devtools`，feature `gateway-devtools`）
+- [x] Optional JSON logs（`--json-logs`）
+- [x] Optional proxy cache for OpenAI-compatible passthrough（`--proxy-cache*`，feature `gateway-proxy-cache`）
+- [x] Optional Prometheus metrics（`--prometheus-metrics`，feature `gateway-metrics-prometheus`）
+- [x] Optional proxy retry/circuit breaker（`--proxy-retry*`/`--proxy-circuit-breaker*`，feature `gateway-routing-advanced`）
+- [x] Optional pricing table + USD budgets（`--pricing-litellm <path>`，feature `gateway-costing`）
+- [x] Optional OpenTelemetry tracing（`--otel*`，feature `gateway-otel`）
 
 ---
 
-## 3) Backlog（按优先级推进）
+## 2) 能力清单（“超集”路径拆开：SDK / Gateway / 互操作）
 
-### P0（必须先做：范围决策，不然全是幻觉）
+> checkbox 口径：**我们是否需要 + 是否已实现**。如果“不做”，就写清楚原因/替代方案，不留悬案。
 
-- [x] **确认 Ditto-LLM 的端点范围**：只做 CodePM/agent “需要”的核心端点；其它端点进入 P2（按真实需求再启用）
-  - DoD：在本文 §3.4 里把“必须/可选/不做”勾死，并给出每项 1 句使用场景（别写空话）
+### 2.1 SDK：AI SDK parity（Rust 口径）
 
-- [x] **确认 structured output 的跨 provider 口径**（§2.3）
-  - DoD：选 A 或 B，并写清楚失败模式（warnings vs hard error vs retry）
+- [x] `generate` / `stream`：text delta + tool_call delta + finish_reason + usage + response_id + warnings
+- [x] Abort/cancel primitives：`StreamAbortHandle`（`abortable_stream` / `LanguageModelExt::stream_abortable`）
+- [x] stream 聚合器：`collect_stream(StreamResult) -> CollectedStream`
+- [x] Structured output：OpenAI 原生 JSON schema；其它 provider 走 tool-call enforced JSON（并显式 warnings）
+- [ ] “UI/HTTP 适配层”（AI SDK UI-like）：提供 `axum`/`tower` helpers，把 Ditto 的 stream protocol 以 SSE/NDJSON 形式输出（Rust 侧提供 primitives，而非 React hooks）
+- [ ] 常用工具 wrappers（可选模块）：shell/fs/http 等“本地工具”封装（对齐 AI SDK `ToolLoopAgent` 的可组合体验）
 
-### P1（强烈建议：减少接入成本/踩坑）
+### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）
 
-- [x] **ProviderAuth 扩展**（直连 Azure/企业网关/非 Bearer 兼容实现）
-  - DoD：新增受控的 auth/header 表达（`http_header_env`/`http_header_command`），并补齐单测覆盖
+- [x] Passthrough proxy endpoints：`ANY /v1/*`（含 `/v1/responses`、`/v1/chat/completions`、`/v1/embeddings`、`/v1/models`）
+- [x] `/v1/responses` shim（OpenAI-compatible upstream）：当 upstream 仅支持 `/v1/chat/completions` 时，gateway 自动 fallback 并返回“Responses-like”（best-effort，仍属于变形路径）
+- [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
+- [x] 路由（basic）：weighted backends（seeded）+ network-error fallback
+- [x] 路由（advanced）：retry + circuit breaker（feature `gateway-routing-advanced`；health checks 暂不包含主动探测）
+- [ ] 成本口径：真实 token 计数（tiktoken 等价）+ usage-based settle（目前为 bytes/token 预估 + 可选 pricing table + USD budget）
+- [x] 存储（basic）：virtual keys 持久化（`--state` file / `--sqlite`）
+- [x] 存储（advanced）：budgets / audit logs 持久化（sqlite/redis 可选，支持多进程/多副本）
+- [x] 观测（core）：request_id 贯穿（`x-ditto-request-id`/`x-request-id`）
+- [ ] 观测（extended）
+  - [x] structured JSON logs（`--json-logs`）
+  - [x] OpenTelemetry traces（feature `gateway-otel`）
+  - [x] per-key metrics 标签（Prometheus counters by `virtual_key_id`/`model`）
+- [x] Proxy caching（non-streaming deterministic requests；streaming 默认不开启）
+- [ ] 更丰富的 guardrails/策略扩展（regex、PII、schema 校验、allow/deny lists、per-route policy）
 
-- [x] **HTTP client 可配置化（调用方注入）**：各 provider 提供 `with_http_client(reqwest::Client)`
-  - DoD：保持默认简单，但允许调用方覆盖（timeout/custom headers/proxy 等由 reqwest 负责）
+### 2.3 Interop：不变形与多协议互转
 
-- [x] **Config 默认 headers**：`ProviderConfig.http_headers`（无需写代码即可为网关/代理附加 header）
+- [x] OpenAI `/responses` raw passthrough items round-trip（含 `/responses/compact`）
+- [ ] OpenAI-compatible ↔ Claude Code / Gemini CLI 格式互转（仅当 CodePM/上层需要；否则保持 scope 小）
+- [x] Gateway “passthrough vs translation” per-route 策略（同一个 gateway 可混用两种模式；以 backend config 的 `base_url` vs `provider` 区分）
 
-- [x] **Stream 聚合器（可选）**：`StreamChunk` → `GenerateResponse`
-  - DoD：支持 text + tool_calls + usage + finish_reason + warnings；行为有单测（见 `src/stream.rs`）
+---
 
-### P2（扩面：只有在“我们真需要”时才做）
+## 3) Roadmap（按优先级推进）
 
-- [ ] **新增 endpoints traits（如果 P0 决策为需要）**
-  - [x] `ImageGenerationModel`（/images）
-  - [x] `AudioTranscriptionModel` / `SpeechModel`（/audio）
-  - [x] `RerankModel`（/rerank，Cohere）
-- [x] `ModerationModel`（/moderations）
-- [x] `BatchClient`（/batches）
-  - DoD：每个 trait 至少一个 provider 先跑通（OpenAI 或 OpenAI-compatible），并给出 examples + 单测（mock）
+### P0（让 Gateway 达到 LiteLLM 的“可替换”）
 
-### 3.4 LiteLLM 端点范围勾选（P0 输出）
+- [x] Gateway 代理路径：基础持久化（virtual keys via `--state` or `--sqlite`）
+- [ ] Gateway 代理路径：持久化存储（virtual keys / budgets / audit logs；sqlite/redis 可选）
+- [ ] 路由：retry/fallback + weighted load balancing + health checks/circuit breaker
+- [ ] 成本：token 计数 + pricing + spend（按 project/user/key）+ 预算控制（USD 口径）
+- [ ] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做，per-key tags 未做）
+- [x] Proxy caching（非流式请求；并提供显式绕过）
 
-- [x] 必须：`/chat/completions` + streaming + tools + multimodal（输入侧） + usage/finish_reason（对接 LiteLLM/DeepSeek/Qwen 等）
-- [x] 必须：`/responses`（直连 OpenAI Responses；LiteLLM 作为 Responses 网关是可选路径）
-- [x] 必须：`/embeddings`（用于记忆/检索等 agent 基础能力）
-- [x] 可选：`/audio/transcriptions`、`/audio/speech`（只有当 agent 需要语音 I/O 时才加）
-- [x] 可选：`/image/generations`（属于生成类媒体端点；当前不在 CodePM 核心）
-- [x] 可选：`/moderations`（内容安全端点；已实现 OpenAI/OpenAI-compatible）
-- [x] 可选：`/batches`（批处理是平台能力；已实现 `BatchClient` + OpenAI/OpenAI-compatible）
-- [ ] 可选：`/rerank`（检索质量提升项；等真实需求再做）
-- [x] 不做：`/a2a`（这属于 agent gateway，不是 LLM SDK 核心）
+### P1（让 Ditto 成为“超集”，而不是“替代品”）
+
+- [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex；feature `gateway-translation`）
+- [ ] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（可独立 crate）
+
+### P2（扩面端点）
+
+- [ ] Gateway translation：`/images` `/audio` `/moderations` `/batches` `/rerank`
+- [ ] 更强的策略/缓存/背压（backpressure）控制（适配高并发与长连接 streaming）
 
 ---
 
 ## 4) 验证（本仓库内可复制）
 
 ```bash
-cd bitto-llm/ditto-llm
+cd ditto-llm
 
 cargo fmt -- --check
-cargo test --all-features
+cargo test --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 

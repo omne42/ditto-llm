@@ -3,13 +3,33 @@
 pub mod budget;
 pub mod cache;
 pub mod config;
+#[cfg(feature = "gateway-costing")]
+pub mod costing;
 pub mod guardrails;
 pub mod http;
 pub mod http_backend;
 pub mod limits;
+#[cfg(feature = "gateway-metrics-prometheus")]
+pub mod metrics_prometheus;
 pub mod observability;
+#[cfg(feature = "gateway-otel")]
+pub mod otel;
 pub mod passthrough;
+pub mod proxy_backend;
+#[cfg(feature = "gateway-proxy-cache")]
+pub mod proxy_cache;
+#[cfg(feature = "gateway-routing-advanced")]
+pub mod proxy_routing;
+#[cfg(feature = "gateway-store-redis")]
+pub mod redis_store;
+mod responses_shim;
 pub mod router;
+#[cfg(feature = "gateway-store-sqlite")]
+pub mod sqlite_store;
+pub mod state_file;
+pub mod store_types;
+#[cfg(feature = "gateway-translation")]
+pub mod translation;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,13 +46,30 @@ use router::Router;
 
 pub use budget::BudgetConfig;
 pub use cache::CacheConfig;
-pub use config::{GatewayConfig, VirtualKeyConfig};
+pub use config::{BackendConfig, GatewayConfig, VirtualKeyConfig};
+#[cfg(feature = "gateway-costing")]
+pub use costing::{PricingTable, PricingTableError};
 pub use guardrails::GuardrailsConfig;
 pub use http::GatewayHttpState;
 pub use http_backend::HttpBackend;
 pub use limits::LimitsConfig;
 pub use passthrough::PassthroughConfig;
-pub use router::{RouteRule, RouterConfig};
+pub use proxy_backend::ProxyBackend;
+#[cfg(feature = "gateway-proxy-cache")]
+pub use proxy_cache::{CachedProxyResponse, ProxyCacheConfig, ProxyResponseCache};
+#[cfg(feature = "gateway-routing-advanced")]
+pub use proxy_routing::{
+    BackendHealthSnapshot, ProxyCircuitBreakerConfig, ProxyRetryConfig, ProxyRoutingConfig,
+};
+#[cfg(feature = "gateway-store-redis")]
+pub use redis_store::{RedisStore, RedisStoreError};
+pub use router::{RouteBackend, RouteRule, RouterConfig};
+#[cfg(feature = "gateway-store-sqlite")]
+pub use sqlite_store::{SqliteStore, SqliteStoreError};
+pub use state_file::{GatewayStateFile, GatewayStateFileError};
+pub use store_types::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord};
+#[cfg(feature = "gateway-translation")]
+pub use translation::TranslationBackend;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayRequest {
@@ -75,6 +112,13 @@ pub enum GatewayError {
     GuardrailRejected { reason: String },
     #[error("budget exceeded: limit={limit} attempted={attempted}")]
     BudgetExceeded { limit: u64, attempted: u64 },
+    #[error(
+        "cost budget exceeded: limit_usd_micros={limit_usd_micros} attempted_usd_micros={attempted_usd_micros}"
+    )]
+    CostBudgetExceeded {
+        limit_usd_micros: u64,
+        attempted_usd_micros: u64,
+    },
     #[error("backend not found: {name}")]
     BackendNotFound { name: String },
     #[error("backend error: {message}")]

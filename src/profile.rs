@@ -136,6 +136,10 @@ pub enum ThinkingIntensity {
 pub struct ModelConfig {
     #[serde(default)]
     pub thinking: ThinkingIntensity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_compact_token_limit: Option<u64>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -953,12 +957,14 @@ EMPTY=
                 "*".to_string(),
                 ModelConfig {
                     thinking: ThinkingIntensity::High,
+                    ..Default::default()
                 },
             ),
             (
                 "gpt-4.1".to_string(),
                 ModelConfig {
                     thinking: ThinkingIntensity::XHigh,
+                    ..Default::default()
                 },
             ),
         ]);

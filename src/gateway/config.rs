@@ -1,4 +1,8 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+
+use crate::ProviderConfig;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
@@ -6,8 +10,38 @@ use super::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayConfig {
+    #[serde(default)]
+    pub backends: Vec<BackendConfig>,
     pub virtual_keys: Vec<VirtualKeyConfig>,
     pub router: RouterConfig,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct BackendConfig {
+    pub name: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_config: Option<ProviderConfig>,
+    #[serde(default)]
+    pub model_map: BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for BackendConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackendConfig")
+            .field("name", &self.name)
+            .field("base_url", &self.base_url)
+            .field("headers", &"<redacted>")
+            .field("provider", &self.provider)
+            .field("provider_config", &"<redacted>")
+            .field("model_map", &self.model_map)
+            .finish()
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

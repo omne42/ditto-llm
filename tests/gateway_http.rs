@@ -42,9 +42,11 @@ fn base_key() -> VirtualKeyConfig {
 
 fn base_config() -> GatewayConfig {
     GatewayConfig {
+        backends: Vec::new(),
         virtual_keys: vec![base_key()],
         router: RouterConfig {
             default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
             rules: Vec::new(),
         },
     }

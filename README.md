@@ -27,10 +27,13 @@ Optional feature-gated modules:
 - Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
+- Gateway translation proxy: OpenAI-compatible `/v1/chat/completions` and `/v1/responses` backed by Ditto providers (feature `gateway-translation`).
+- Gateway proxy caching: in-memory cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
+- Gateway OpenTelemetry: OTLP tracing exporter + structured logs for gateway HTTP requests (feature `gateway-otel`).
 
 Non-goals (for now):
 
-- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service, but multi-tenant teams/orgs, upstream health checks, observability callbacks, prompt management, and full pass-through endpoints remain out of scope.
+- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `/v1/chat/completions` and `/v1/responses`, but full OpenAI surface translation (images/audio/batches/etc) and multi-tenant product features remain out of scope.
 - Core helpers are single-step and return tool calls to the caller; the `agent` feature offers an opt-in tool loop, but it is not enabled by default.
 - It is not a full UI SDK (no frontend hooks or middleware ecosystem); the `sdk` feature only provides protocol/telemetry/devtools/MCP utilities.
 - Bedrock support targets Anthropic Messages-on-Bedrock; other Bedrock model families and Vertex service-account JWT flows are not covered yet.
@@ -84,15 +87,83 @@ cargo run --example batches --features batches -- ./requests.jsonl
 Run the HTTP gateway (feature `gateway`):
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080 --backend primary=http://localhost:9001
+cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
+
+Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injected headers, e.g. `Authorization`):
+
+```json
+{
+  "backends": [
+    {
+      "name": "primary",
+      "base_url": "https://api.openai.com/v1",
+      "headers": { "authorization": "Bearer <OPENAI_API_KEY>" }
+    }
+  ],
+  "virtual_keys": [],
+  "router": { "default_backend": "primary", "rules": [] }
+}
+```
+
+Translation backends (feature `gateway-translation`) can be configured with `provider` + `provider_config` (same shape as `ProviderConfig`):
+
+```json
+{
+  "backends": [
+    {
+      "name": "anthropic",
+      "provider": "anthropic",
+      "provider_config": {
+        "auth": { "type": "api_key_env", "keys": ["ANTHROPIC_API_KEY"] },
+        "default_model": "claude-3-5-sonnet-20241022"
+      }
+    }
+  ],
+  "virtual_keys": [],
+  "router": { "default_backend": "anthropic", "rules": [] }
+}
+```
+
+Routing (optional):
+
+- `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
+- `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backend` if empty)
+- If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
 
 Endpoints:
 
-- `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
+- OpenAI-compatible proxy (passthrough): `ANY /v1/*` (e.g. `POST /v1/responses`, `POST /v1/chat/completions`, `GET /v1/models`).
+  - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key`).
+  - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
+  - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
+- OpenAI-compatible translation (feature `gateway-translation`): `POST /v1/chat/completions` and `POST /v1/responses` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
+- Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`
 - `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured). `GET /admin/keys` redacts tokens unless `?include_tokens=true`.
+
+CLI options:
+
+- `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
+- `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).
+- `--sqlite PATH` enables persistence for admin virtual-key mutations in a sqlite file (requires `--features gateway-store-sqlite`; loaded on startup; cannot be combined with `--state`).
+- `--json-logs` emits JSON log records to stderr.
+- `--proxy-cache` enables a best-effort in-memory cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`).
+- `--proxy-cache-ttl SECS` sets the proxy cache TTL (implies `--proxy-cache`).
+- `--proxy-cache-max-entries N` sets the proxy cache capacity (implies `--proxy-cache`).
+- `--devtools PATH` enables JSONL request/response logging (requires `--features gateway-devtools`).
+- `--otel` enables OpenTelemetry tracing export via OTLP (requires `--features gateway-otel`).
+- `--otel-endpoint URL` overrides the OTLP endpoint (implies `--otel`).
+- `--otel-json` enables JSON formatted tracing logs (implies `--otel`).
+
+Response headers:
+
+- `x-ditto-backend`: which backend handled the request
+- `x-ditto-request-id`: request id (uses incoming `x-request-id` or generates one)
+- `x-ditto-cache`: `hit` when served from the optional proxy cache
+- `x-ditto-shim`: present when `POST /v1/responses` is shimmed via `POST /v1/chat/completions`
+- `x-ditto-translation`: present when a translation backend handled the request
 
 ## Stream Collection
 

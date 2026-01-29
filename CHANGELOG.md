@@ -51,6 +51,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bedrock: Anthropic Messages-on-Bedrock generate + streaming + tools support (feature `bedrock`).
 - Vertex: GenAI generateContent + streamGenerateContent (SSE) + tools support (feature `vertex`).
 - Gateway: `ditto-gateway` HTTP server with `/v1/gateway`, `/health`, `/metrics`, and `/admin/keys` (feature `gateway`).
+- Gateway: OpenAI-compatible passthrough proxy for `ANY /v1/*` (incl. streaming) with per-backend header injection and optional devtools JSONL logging (feature `gateway-devtools`).
+- Gateway: add `gateway-translation` feature to serve `POST /v1/chat/completions` and `POST /v1/responses` via native Ditto providers (configured via backend `provider` + `provider_config`).
+- Gateway: when upstream does not implement `POST /v1/responses` (404/405/501), automatically fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (`x-ditto-shim: responses_via_chat_completions`).
+- Gateway: `--state PATH` persists admin virtual-key mutations to a JSON state file; proxy responses include `x-ditto-request-id`.
+- Gateway: router supports weighted backends (`default_backends` / `rules[].backends`) and falls back on network errors when proxying.
+- Gateway: optional sqlite persistence for admin virtual keys via `--sqlite PATH` (feature `gateway-store-sqlite`).
+- Gateway: optional in-memory proxy cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
+- Gateway: optional OpenTelemetry tracing exporter via OTLP (feature `gateway-otel`).
+- Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.
 

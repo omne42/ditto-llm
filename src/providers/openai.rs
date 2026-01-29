@@ -2,10 +2,14 @@ use std::collections::{BTreeMap, VecDeque};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 use futures_util::stream;
 use reqwest::multipart::{Form, Part};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use tokio::io::AsyncBufReadExt;
+use tokio::sync::mpsc;
+use tokio_util::io::StreamReader;
 
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
@@ -118,6 +122,15 @@ impl OpenAI {
             base.to_string()
         } else {
             format!("{base}/responses")
+        }
+    }
+
+    fn responses_compact_url(&self) -> String {
+        let base = self.responses_url();
+        if base.ends_with("/responses") {
+            format!("{base}/compact")
+        } else {
+            format!("{base}/responses/compact")
         }
     }
 
@@ -401,6 +414,115 @@ impl OpenAI {
         }
         usage.merge_total();
         usage
+    }
+
+    pub async fn compact_responses_history_raw(
+        &self,
+        request: &OpenAIResponsesCompactionRequest<'_>,
+    ) -> Result<Vec<Value>> {
+        #[derive(Debug, Deserialize)]
+        struct CompactionResponse {
+            output: Vec<Value>,
+        }
+
+        let url = self.responses_compact_url();
+        let req = self.http.post(url);
+        let response = self.apply_auth(req).json(request).send().await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let parsed = response.json::<CompactionResponse>().await?;
+        Ok(parsed.output)
+    }
+
+    pub async fn create_response_stream_raw(
+        &self,
+        request: &OpenAIResponsesRawRequest<'_>,
+    ) -> Result<OpenAIResponsesRawEventStream> {
+        if !request.stream {
+            return Err(DittoError::InvalidResponse(
+                "stream=true is required for create_response_stream_raw".to_string(),
+            ));
+        }
+
+        let mut body = Map::<String, Value>::new();
+        body.insert(
+            "model".to_string(),
+            Value::String(request.model.to_string()),
+        );
+        body.insert(
+            "instructions".to_string(),
+            Value::String(request.instructions.to_string()),
+        );
+        body.insert("input".to_string(), Value::Array(request.input.to_vec()));
+        body.insert("store".to_string(), Value::Bool(request.store));
+        body.insert("stream".to_string(), Value::Bool(true));
+        body.insert(
+            "parallel_tool_calls".to_string(),
+            Value::Bool(request.parallel_tool_calls),
+        );
+
+        if let Some(tools) = request.tools.as_ref() {
+            let mapped = tools.iter().map(Self::tool_to_openai).collect();
+            body.insert("tools".to_string(), Value::Array(mapped));
+        }
+        if let Some(tool_choice) = request.tool_choice.as_ref() {
+            body.insert(
+                "tool_choice".to_string(),
+                Self::tool_choice_to_openai(tool_choice),
+            );
+        }
+        if let Some(effort) = request.reasoning_effort {
+            body.insert(
+                "reasoning".to_string(),
+                serde_json::json!({ "effort": effort }),
+            );
+        }
+        if let Some(response_format) = request.response_format.as_ref() {
+            body.insert(
+                "response_format".to_string(),
+                serde_json::to_value(response_format)?,
+            );
+        }
+        if !request.include.is_empty() {
+            body.insert(
+                "include".to_string(),
+                Value::Array(request.include.iter().cloned().map(Value::String).collect()),
+            );
+        }
+        if let Some(key) = request.prompt_cache_key.as_deref() {
+            body.insert(
+                "prompt_cache_key".to_string(),
+                Value::String(key.to_string()),
+            );
+        }
+
+        let url = self.responses_url();
+        let req = self.http.post(url);
+        let mut req = self.apply_auth(req).json(&body);
+        for (name, value) in request.extra_headers.iter() {
+            req = req.header(name, value);
+        }
+        req = req.header("Accept", "text/event-stream");
+        let response = req.send().await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
+        let reader = StreamReader::new(byte_stream);
+        let lines = tokio::io::BufReader::new(reader).lines();
+
+        let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(512);
+        let task = tokio::spawn(process_raw_responses_sse(lines, tx_event));
+        Ok(OpenAIResponsesRawEventStream { rx_event, task })
     }
 }
 
@@ -1145,12 +1267,193 @@ impl EmbeddingModel for OpenAIEmbeddings {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct OpenAIResponsesRawRequest<'a> {
+    pub model: &'a str,
+    pub instructions: &'a str,
+    pub input: &'a [Value],
+    pub tools: Option<&'a [Tool]>,
+    pub tool_choice: Option<&'a ToolChoice>,
+    pub parallel_tool_calls: bool,
+    pub store: bool,
+    pub stream: bool,
+    pub reasoning_effort: Option<crate::types::ReasoningEffort>,
+    pub response_format: Option<&'a crate::types::ResponseFormat>,
+    pub include: Vec<String>,
+    pub prompt_cache_key: Option<String>,
+    pub extra_headers: reqwest::header::HeaderMap,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OpenAIResponsesCompactionRequest<'a> {
+    pub model: &'a str,
+    pub input: &'a [Value],
+    pub instructions: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpenAIResponsesRawEvent {
+    Created {
+        response_id: Option<String>,
+    },
+    OutputTextDelta(String),
+    OutputItemDone(Value),
+    Failed {
+        response_id: Option<String>,
+        error: Value,
+    },
+    Completed {
+        response_id: Option<String>,
+        usage: Option<Value>,
+    },
+}
+
+pub struct OpenAIResponsesRawEventStream {
+    rx_event: mpsc::Receiver<Result<OpenAIResponsesRawEvent>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl OpenAIResponsesRawEventStream {
+    pub async fn recv(&mut self) -> Option<Result<OpenAIResponsesRawEvent>> {
+        self.rx_event.recv().await
+    }
+}
+
+impl Drop for OpenAIResponsesRawEventStream {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct RawResponsesStreamEvent {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    response: Option<Value>,
+    #[serde(default)]
+    item: Option<Value>,
+    #[serde(default)]
+    delta: Option<String>,
+}
+
+fn parse_raw_responses_event(
+    event: RawResponsesStreamEvent,
+) -> Result<Option<OpenAIResponsesRawEvent>> {
+    match event.kind.as_str() {
+        "response.created" => {
+            let response_id = event
+                .response
+                .as_ref()
+                .and_then(|resp| resp.get("id"))
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            Ok(Some(OpenAIResponsesRawEvent::Created { response_id }))
+        }
+        "response.output_text.delta" => {
+            Ok(event.delta.map(OpenAIResponsesRawEvent::OutputTextDelta))
+        }
+        "response.output_item.done" => Ok(event.item.map(OpenAIResponsesRawEvent::OutputItemDone)),
+        "response.failed" => {
+            let Some(resp) = event.response else {
+                return Ok(Some(OpenAIResponsesRawEvent::Failed {
+                    response_id: None,
+                    error: Value::Null,
+                }));
+            };
+
+            let response_id = resp
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|v| v.to_string());
+            let error = resp.get("error").cloned().unwrap_or(resp);
+            Ok(Some(OpenAIResponsesRawEvent::Failed { response_id, error }))
+        }
+        "response.completed" | "response.done" => {
+            let response_id = event
+                .response
+                .as_ref()
+                .and_then(|resp| resp.get("id"))
+                .and_then(Value::as_str)
+                .map(|s| s.to_string());
+            let usage = event
+                .response
+                .as_ref()
+                .and_then(|resp| resp.get("usage").cloned());
+            Ok(Some(OpenAIResponsesRawEvent::Completed {
+                response_id,
+                usage,
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+async fn process_raw_responses_sse<R>(
+    mut lines: tokio::io::Lines<R>,
+    tx_event: mpsc::Sender<Result<OpenAIResponsesRawEvent>>,
+) where
+    R: tokio::io::AsyncBufRead + Unpin,
+{
+    let mut data = String::new();
+    loop {
+        match lines.next_line().await {
+            Ok(Some(line)) => {
+                let line = line.trim_end_matches('\r');
+                if line.is_empty() {
+                    if data.is_empty() {
+                        continue;
+                    }
+                    if data == "[DONE]" {
+                        break;
+                    }
+
+                    let event =
+                        serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
+                            DittoError::InvalidResponse(format!(
+                                "failed to parse responses SSE event: {err}; data={data}"
+                            ))
+                        });
+                    match event.and_then(parse_raw_responses_event) {
+                        Ok(Some(parsed)) => {
+                            let _ = tx_event.send(Ok(parsed)).await;
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            let _ = tx_event.send(Err(err)).await;
+                        }
+                    }
+
+                    data.clear();
+                    continue;
+                }
+
+                let Some(rest) = line.strip_prefix("data:") else {
+                    continue;
+                };
+                let rest = rest.trim_start();
+                if !data.is_empty() {
+                    data.push('\n');
+                }
+                data.push_str(rest);
+            }
+            Ok(None) => break,
+            Err(err) => {
+                let _ = tx_event.send(Err(DittoError::Io(err))).await;
+                break;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use httpmock::{Method::POST, MockServer};
     use serde_json::json;
     use std::collections::BTreeMap;
+    use tokio::io::AsyncBufReadExt;
+    use tokio::sync::mpsc;
 
     #[tokio::test]
     async fn from_config_resolves_api_key_and_model() -> crate::Result<()> {
@@ -1201,6 +1504,114 @@ mod tests {
 
         mock.assert_async().await;
         assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn compact_responses_history_raw_posts_to_compact_endpoint() -> crate::Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/responses/compact")
+                    .header("authorization", "Bearer sk-test")
+                    .json_body(json!({
+                        "model": "test-model",
+                        "instructions": "inst",
+                        "input": [
+                            {"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}
+                        ],
+                    }));
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .json_body(json!({
+                        "output": [
+                            {"type":"message","role":"user","content":[{"type":"input_text","text":"compacted"}]}
+                        ]
+                    }));
+            })
+            .await;
+
+        let client = OpenAI::new("sk-test").with_base_url(server.url("/v1"));
+        let input = vec![json!({
+            "type": "message",
+            "role": "user",
+            "content": [{ "type": "input_text", "text": "hello" }],
+        })];
+        let request = OpenAIResponsesCompactionRequest {
+            model: "test-model",
+            instructions: "inst",
+            input: &input,
+        };
+
+        let output = client.compact_responses_history_raw(&request).await?;
+        mock.assert_async().await;
+        assert_eq!(
+            output,
+            vec![json!({
+                "type": "message",
+                "role": "user",
+                "content": [{ "type": "input_text", "text": "compacted" }],
+            })]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn raw_responses_sse_parses_expected_events() -> crate::Result<()> {
+        let sse = concat!(
+            "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n",
+            "data: {\"type\":\"ignored.event\",\"foo\":\"bar\"}\n\n",
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"tool\",\"arguments\":\"{}\"}}\n\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}}\n\n",
+            "data: [DONE]\n\n",
+        );
+
+        let reader = tokio::io::BufReader::new(sse.as_bytes());
+        let lines = reader.lines();
+        let (tx_event, mut rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(16);
+        tokio::spawn(process_raw_responses_sse(lines, tx_event));
+
+        let mut events = Vec::new();
+        while let Some(evt) = rx_event.recv().await {
+            events.push(evt?);
+        }
+
+        assert_eq!(events.len(), 4);
+        assert!(matches!(
+            events[0],
+            OpenAIResponsesRawEvent::Created {
+                response_id: Some(_)
+            }
+        ));
+        assert_eq!(
+            events[1],
+            OpenAIResponsesRawEvent::OutputTextDelta("Hello".to_string())
+        );
+        assert_eq!(
+            events[2],
+            OpenAIResponsesRawEvent::OutputItemDone(json!({
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "tool",
+                "arguments": "{}",
+            }))
+        );
+        assert_eq!(
+            events[3],
+            OpenAIResponsesRawEvent::Completed {
+                response_id: Some("resp_1".to_string()),
+                usage: Some(json!({
+                    "input_tokens": 1,
+                    "output_tokens": 2,
+                    "total_tokens": 3,
+                })),
+            }
+        );
         Ok(())
     }
 
