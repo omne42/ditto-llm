@@ -6,7 +6,9 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use futures_util::stream;
 use serde_json::{Map, Value};
+use tokio::sync::Mutex;
 
+use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
@@ -20,21 +22,37 @@ type IoResult<T> = std::result::Result<T, std::io::Error>;
 #[derive(Clone)]
 pub struct TranslationBackend {
     pub model: Arc<dyn LanguageModel>,
+    pub embedding_model: Option<Arc<dyn EmbeddingModel>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
+    provider_config: ProviderConfig,
+    embedding_cache: Arc<Mutex<HashMap<String, Arc<dyn EmbeddingModel>>>>,
 }
 
 impl TranslationBackend {
     pub fn new(provider: impl Into<String>, model: Arc<dyn LanguageModel>) -> Self {
         Self {
             model,
+            embedding_model: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
+            provider_config: ProviderConfig::default(),
+            embedding_cache: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn with_provider_config(mut self, provider_config: ProviderConfig) -> Self {
+        self.provider_config = provider_config;
+        self
     }
 
     pub fn with_model_map(mut self, model_map: BTreeMap<String, String>) -> Self {
         self.model_map = model_map;
+        self
+    }
+
+    pub fn with_embedding_model(mut self, embedding_model: Arc<dyn EmbeddingModel>) -> Self {
+        self.embedding_model = Some(embedding_model);
         self
     }
 
@@ -54,6 +72,45 @@ impl TranslationBackend {
         }
 
         requested.to_string()
+    }
+
+    pub async fn embed(&self, model: &str, texts: Vec<String>) -> crate::Result<Vec<Vec<f32>>> {
+        if let Some(model_impl) = self.embedding_model.as_ref() {
+            return model_impl.embed(texts).await;
+        }
+
+        let model = model.trim();
+        if model.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "embedding model is missing".to_string(),
+            ));
+        }
+
+        if let Some(model_impl) = self.embedding_cache.lock().await.get(model).cloned() {
+            return model_impl.embed(texts).await;
+        }
+
+        let mut cfg = self.provider_config.clone();
+        cfg.default_model = Some(model.to_string());
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl = build_embedding_model(self.provider.as_str(), &cfg, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support embeddings: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.embedding_cache.lock().await;
+            cache.insert(model.to_string(), model_impl.clone());
+        }
+
+        model_impl.embed(texts).await
     }
 }
 
@@ -144,6 +201,65 @@ pub async fn build_language_model(
     }
 }
 
+pub async fn build_embedding_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn EmbeddingModel>>> {
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "embeddings"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAIEmbeddings::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "embeddings")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleEmbeddings::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "embeddings")))]
+            {
+                Ok(None)
+            }
+        }
+        "google" => {
+            #[cfg(all(feature = "google", feature = "embeddings"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::GoogleEmbeddings::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "google", feature = "embeddings")))]
+            {
+                Ok(None)
+            }
+        }
+        "cohere" => {
+            #[cfg(all(feature = "cohere", feature = "embeddings"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::CohereEmbeddings::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "cohere", feature = "embeddings")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -158,6 +274,14 @@ pub fn is_responses_create_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/responses" || path == "/v1/responses/"
+}
+
+pub fn is_embeddings_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/embeddings" || path == "/v1/embeddings/"
 }
 
 pub fn chat_completions_request_to_generate_request(
@@ -222,6 +346,41 @@ pub fn chat_completions_request_to_generate_request(
     Ok(out)
 }
 
+pub fn embeddings_request_to_texts(request: &Value) -> ParseResult<Vec<String>> {
+    let obj = request
+        .as_object()
+        .ok_or_else(|| "embeddings request must be a JSON object".to_string())?;
+
+    if let Some(format) = obj.get("encoding_format").and_then(Value::as_str) {
+        let format = format.trim();
+        if !format.is_empty() && format != "float" {
+            return Err(format!("unsupported encoding_format: {format}"));
+        }
+    }
+
+    let input = obj
+        .get("input")
+        .ok_or_else(|| "embeddings request missing input".to_string())?;
+
+    match input {
+        Value::String(text) => Ok(vec![text.clone()]),
+        Value::Array(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for (idx, item) in items.iter().enumerate() {
+                match item {
+                    Value::String(text) => out.push(text.clone()),
+                    _ => return Err(format!("embeddings input[{idx}] must be a string")),
+                }
+            }
+            if out.is_empty() {
+                return Err("embeddings request input must not be empty".to_string());
+            }
+            Ok(out)
+        }
+        _ => Err("embeddings request input must be a string or array of strings".to_string()),
+    }
+}
+
 pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<GenerateRequest> {
     let chat = super::responses_shim::responses_request_to_chat_completions(request)
         .ok_or_else(|| "responses request cannot be mapped to chat/completions".to_string())?;
@@ -266,6 +425,31 @@ pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<Gen
     }
 
     Ok(out)
+}
+
+pub fn embeddings_to_openai_response(embeddings: Vec<Vec<f32>>, model: &str) -> Value {
+    fn safe_number(value: f32) -> Value {
+        let num = serde_json::Number::from_f64(f64::from(value))
+            .or_else(|| serde_json::Number::from_f64(0.0))
+            .unwrap_or_else(|| serde_json::Number::from(0));
+        Value::Number(num)
+    }
+
+    let mut data = Vec::<Value>::with_capacity(embeddings.len());
+    for (index, embedding) in embeddings.into_iter().enumerate() {
+        let vec = embedding.into_iter().map(safe_number).collect::<Vec<_>>();
+        data.push(serde_json::json!({
+            "object": "embedding",
+            "index": index,
+            "embedding": vec,
+        }));
+    }
+
+    serde_json::json!({
+        "object": "list",
+        "data": data,
+        "model": model,
+    })
 }
 
 pub fn generate_response_to_chat_completions(

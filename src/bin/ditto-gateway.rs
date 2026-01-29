@@ -280,6 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
                 let backend_model = ditto_llm::gateway::TranslationBackend::new(provider, model)
+                    .with_provider_config(provider_config)
                     .with_model_map(backend.model_map.clone());
                 if translation_backends
                     .insert(backend.name.clone(), backend_model)

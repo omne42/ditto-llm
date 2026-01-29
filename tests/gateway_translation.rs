@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
+use ditto_llm::embedding::EmbeddingModel;
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouterConfig, TranslationBackend,
 };
@@ -65,6 +66,28 @@ impl LanguageModel for FakeModel {
     }
 }
 
+#[derive(Clone)]
+struct FakeEmbeddingModel;
+
+#[async_trait]
+impl EmbeddingModel for FakeEmbeddingModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-embed"
+    }
+
+    async fn embed(&self, texts: Vec<String>) -> ditto_llm::Result<Vec<Vec<f32>>> {
+        Ok(texts
+            .into_iter()
+            .enumerate()
+            .map(|(idx, _)| vec![idx as f32, 0.5])
+            .collect())
+    }
+}
+
 fn base_gateway() -> Gateway {
     Gateway::new(GatewayConfig {
         backends: Vec::new(),
@@ -83,7 +106,8 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_llm::Resu
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
         "primary".to_string(),
-        TranslationBackend::new("fake", Arc::new(FakeModel)),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -134,7 +158,8 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_llm::Result<(
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
         "primary".to_string(),
-        TranslationBackend::new("fake", Arc::new(FakeModel)),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -170,7 +195,8 @@ async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> 
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
         "primary".to_string(),
-        TranslationBackend::new("fake", Arc::new(FakeModel)),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -208,7 +234,8 @@ async fn gateway_translation_responses_streaming() -> ditto_llm::Result<()> {
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
         "primary".to_string(),
-        TranslationBackend::new("fake", Arc::new(FakeModel)),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
     );
 
     let state = GatewayHttpState::new(gateway)
@@ -235,6 +262,60 @@ async fn gateway_translation_responses_streaming() -> ditto_llm::Result<()> {
     assert!(text.contains("\"type\":\"response.created\""));
     assert!(text.contains("\"type\":\"response.output_text.delta\""));
     assert!(text.contains("\"type\":\"response.completed\""));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_embeddings_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "text-embedding-3-small",
+        "input": ["a", "b"]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/embeddings")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("model").and_then(|v| v.as_str()),
+        Some("text-embedding-3-small")
+    );
+    assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("list"));
+    assert_eq!(
+        parsed
+            .get("data")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len()),
+        Some(2)
+    );
 
     Ok(())
 }

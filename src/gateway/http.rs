@@ -1315,7 +1315,8 @@ async fn handle_openai_compat_proxy(
         #[cfg(feature = "gateway-translation")]
         if let Some(translation_backend) = state.translation_backends.get(&backend_name).cloned() {
             let supported_path = translation::is_chat_completions_path(path_and_query)
-                || translation::is_responses_create_path(path_and_query);
+                || translation::is_responses_create_path(path_and_query)
+                || translation::is_embeddings_path(path_and_query);
             if parts.method == axum::http::Method::POST && supported_path {
                 let Some(parsed_json) = parsed_json.as_ref() else {
                     last_err = Some(openai_error(
@@ -1352,41 +1353,35 @@ async fn handle_openai_compat_proxy(
                     continue;
                 }
 
-                let generate_request = if translation::is_chat_completions_path(path_and_query) {
-                    translation::chat_completions_request_to_generate_request(parsed_json)
-                } else {
-                    translation::responses_request_to_generate_request(parsed_json)
-                };
-
-                let generate_request = match generate_request {
-                    Ok(mut request) => {
-                        request.model = Some(mapped_model);
-                        request
-                    }
-                    Err(err) => {
+                let result: Result<
+                    axum::response::Response,
+                    (StatusCode, Json<OpenAiErrorResponse>),
+                > = if translation::is_embeddings_path(path_and_query) {
+                    if _stream_requested {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
-                            err,
+                            "embeddings endpoint does not support stream=true",
                         ));
                         continue;
                     }
-                };
 
-                let fallback_response_id = if translation::is_chat_completions_path(path_and_query)
-                {
-                    format!("chatcmpl_{request_id}")
-                } else {
-                    format!("resp_{request_id}")
-                };
+                    let texts = match translation::embeddings_request_to_texts(parsed_json) {
+                        Ok(texts) => texts,
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
 
-                let result: Result<
-                    axum::response::Response,
-                    (StatusCode, Json<OpenAiErrorResponse>),
-                > = if _stream_requested {
-                    let stream = match translation_backend.model.stream(generate_request).await {
-                        Ok(stream) => stream,
+                    let embeddings = match translation_backend.embed(&mapped_model, texts).await {
+                        Ok(embeddings) => embeddings,
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
@@ -1395,63 +1390,8 @@ async fn handle_openai_compat_proxy(
                         }
                     };
 
-                    let stream = if translation::is_chat_completions_path(path_and_query) {
-                        translation::stream_to_chat_completions_sse(
-                            stream,
-                            fallback_response_id.clone(),
-                            original_model.clone(),
-                            _now_epoch_seconds,
-                        )
-                    } else {
-                        translation::stream_to_responses_sse(stream, fallback_response_id)
-                    };
-
-                    let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "text/event-stream".parse().unwrap());
-                    headers.insert(
-                        "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
-                    );
-                    headers.remove("content-length");
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
-
-                    let mut response = axum::response::Response::new(Body::from_stream(stream));
-                    *response.status_mut() = StatusCode::OK;
-                    *response.headers_mut() = headers;
-                    Ok(response)
-                } else {
-                    let generated = match translation_backend.model.generate(generate_request).await
-                    {
-                        Ok(generated) => generated,
-                        Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
-                        }
-                    };
-
-                    let response_id =
-                        translation::provider_response_id(&generated, &fallback_response_id);
-                    let value = if translation::is_chat_completions_path(path_and_query) {
-                        translation::generate_response_to_chat_completions(
-                            &generated,
-                            &response_id,
-                            &original_model,
-                            _now_epoch_seconds,
-                        )
-                    } else {
-                        translation::generate_response_to_responses(
-                            &generated,
-                            &response_id,
-                            &original_model,
-                            _now_epoch_seconds,
-                        )
-                    };
-
+                    let value =
+                        translation::embeddings_to_openai_response(embeddings, &original_model);
                     let bytes = serde_json::to_vec(&value)
                         .map(Bytes::from)
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
@@ -1471,6 +1411,136 @@ async fn handle_openai_compat_proxy(
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok(response)
+                } else {
+                    let generate_request = if translation::is_chat_completions_path(path_and_query)
+                    {
+                        translation::chat_completions_request_to_generate_request(parsed_json)
+                    } else {
+                        translation::responses_request_to_generate_request(parsed_json)
+                    };
+
+                    let generate_request = match generate_request {
+                        Ok(mut request) => {
+                            request.model = Some(mapped_model);
+                            request
+                        }
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
+
+                    let fallback_response_id =
+                        if translation::is_chat_completions_path(path_and_query) {
+                            format!("chatcmpl_{request_id}")
+                        } else {
+                            format!("resp_{request_id}")
+                        };
+
+                    if _stream_requested {
+                        let stream = match translation_backend.model.stream(generate_request).await
+                        {
+                            Ok(stream) => stream,
+                            Err(err) => {
+                                let (status, kind, code, message) =
+                                    translation::map_provider_error_to_openai(err);
+                                last_err = Some(openai_error(status, kind, code, message));
+                                continue;
+                            }
+                        };
+
+                        let stream = if translation::is_chat_completions_path(path_and_query) {
+                            translation::stream_to_chat_completions_sse(
+                                stream,
+                                fallback_response_id.clone(),
+                                original_model.clone(),
+                                _now_epoch_seconds,
+                            )
+                        } else {
+                            translation::stream_to_responses_sse(stream, fallback_response_id)
+                        };
+
+                        let mut headers = HeaderMap::new();
+                        headers.insert("content-type", "text/event-stream".parse().unwrap());
+                        headers.insert(
+                            "x-ditto-translation",
+                            translation_backend
+                                .provider
+                                .parse()
+                                .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        );
+                        headers.remove("content-length");
+                        apply_proxy_response_headers(
+                            &mut headers,
+                            &backend_name,
+                            &request_id,
+                            false,
+                        );
+
+                        let mut response = axum::response::Response::new(Body::from_stream(stream));
+                        *response.status_mut() = StatusCode::OK;
+                        *response.headers_mut() = headers;
+                        Ok(response)
+                    } else {
+                        let generated =
+                            match translation_backend.model.generate(generate_request).await {
+                                Ok(generated) => generated,
+                                Err(err) => {
+                                    let (status, kind, code, message) =
+                                        translation::map_provider_error_to_openai(err);
+                                    last_err = Some(openai_error(status, kind, code, message));
+                                    continue;
+                                }
+                            };
+
+                        let response_id =
+                            translation::provider_response_id(&generated, &fallback_response_id);
+                        let value = if translation::is_chat_completions_path(path_and_query) {
+                            translation::generate_response_to_chat_completions(
+                                &generated,
+                                &response_id,
+                                &original_model,
+                                _now_epoch_seconds,
+                            )
+                        } else {
+                            translation::generate_response_to_responses(
+                                &generated,
+                                &response_id,
+                                &original_model,
+                                _now_epoch_seconds,
+                            )
+                        };
+
+                        let bytes = serde_json::to_vec(&value)
+                            .map(Bytes::from)
+                            .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                        let mut headers = HeaderMap::new();
+                        headers.insert("content-type", "application/json".parse().unwrap());
+                        headers.insert(
+                            "x-ditto-translation",
+                            translation_backend
+                                .provider
+                                .parse()
+                                .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        );
+                        apply_proxy_response_headers(
+                            &mut headers,
+                            &backend_name,
+                            &request_id,
+                            false,
+                        );
+
+                        let mut response = axum::response::Response::new(Body::from(bytes));
+                        *response.status_mut() = StatusCode::OK;
+                        *response.headers_mut() = headers;
+                        Ok(response)
+                    }
                 };
 
                 let status = StatusCode::OK;
