@@ -14,13 +14,14 @@ use crate::embedding::EmbeddingModel;
 use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::moderation::ModerationModel;
+use crate::rerank::RerankModel;
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, ContentPart, FinishReason, GenerateRequest, GenerateResponse,
     ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message, ModerationInput,
-    ModerationRequest, ModerationResponse, ProviderOptions, ReasoningEffort, ResponseFormat, Role,
-    SpeechRequest, SpeechResponse, SpeechResponseFormat, Tool, ToolChoice,
-    TranscriptionResponseFormat, Usage,
+    ModerationRequest, ModerationResponse, ProviderOptions, ReasoningEffort, RerankRequest,
+    RerankResponse, ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat,
+    Tool, ToolChoice, TranscriptionResponseFormat, Usage,
 };
 use crate::{DittoError, Env, ProviderConfig};
 
@@ -35,6 +36,7 @@ pub struct TranslationBackend {
     pub moderation_model: Option<Arc<dyn ModerationModel>>,
     pub audio_transcription_model: Option<Arc<dyn AudioTranscriptionModel>>,
     pub speech_model: Option<Arc<dyn SpeechModel>>,
+    pub rerank_model: Option<Arc<dyn RerankModel>>,
     pub batch_client: Option<Arc<dyn BatchClient>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
@@ -44,6 +46,7 @@ pub struct TranslationBackend {
     image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
     audio_transcription_cache: Arc<Mutex<HashMap<String, Arc<dyn AudioTranscriptionModel>>>>,
     speech_cache: Arc<Mutex<HashMap<String, Arc<dyn SpeechModel>>>>,
+    rerank_cache: Arc<Mutex<HashMap<String, Arc<dyn RerankModel>>>>,
     batch_cache: Arc<Mutex<Option<Arc<dyn BatchClient>>>>,
 }
 
@@ -56,6 +59,7 @@ impl TranslationBackend {
             moderation_model: None,
             audio_transcription_model: None,
             speech_model: None,
+            rerank_model: None,
             batch_client: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
@@ -65,6 +69,7 @@ impl TranslationBackend {
             image_generation_cache: Arc::new(Mutex::new(None)),
             audio_transcription_cache: Arc::new(Mutex::new(HashMap::new())),
             speech_cache: Arc::new(Mutex::new(HashMap::new())),
+            rerank_cache: Arc::new(Mutex::new(HashMap::new())),
             batch_cache: Arc::new(Mutex::new(None)),
         }
     }
@@ -107,6 +112,11 @@ impl TranslationBackend {
 
     pub fn with_speech_model(mut self, speech_model: Arc<dyn SpeechModel>) -> Self {
         self.speech_model = Some(speech_model);
+        self
+    }
+
+    pub fn with_rerank_model(mut self, rerank_model: Arc<dyn RerankModel>) -> Self {
+        self.rerank_model = Some(rerank_model);
         self
     }
 
@@ -345,6 +355,58 @@ impl TranslationBackend {
 
         request.model = Some(model.to_string());
         model_impl.speak(request).await
+    }
+
+    pub async fn rerank(
+        &self,
+        model: &str,
+        mut request: RerankRequest,
+    ) -> crate::Result<RerankResponse> {
+        if let Some(model_impl) = self.rerank_model.as_ref() {
+            if request
+                .model
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            {
+                request.model = Some(model.trim().to_string());
+            }
+            return model_impl.rerank(request).await;
+        }
+
+        let model = model.trim();
+        if model.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "rerank model is missing".to_string(),
+            ));
+        }
+
+        if let Some(model_impl) = self.rerank_cache.lock().await.get(model).cloned() {
+            request.model = Some(model.to_string());
+            return model_impl.rerank(request).await;
+        }
+
+        let mut cfg = self.provider_config.clone();
+        cfg.default_model = Some(model.to_string());
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl = build_rerank_model(self.provider.as_str(), &cfg, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support rerank: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.rerank_cache.lock().await;
+            cache.insert(model.to_string(), model_impl.clone());
+        }
+
+        request.model = Some(model.to_string());
+        model_impl.rerank(request).await
     }
 
     pub async fn create_batch(&self, request: BatchCreateRequest) -> crate::Result<BatchResponse> {
@@ -798,6 +860,30 @@ pub async fn build_batch_client(
     }
 }
 
+pub async fn build_rerank_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn RerankModel>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "cohere" => {
+            #[cfg(all(feature = "cohere", feature = "rerank"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::CohereRerank::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "cohere", feature = "rerank")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -860,6 +946,14 @@ pub fn is_batches_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/batches" || path == "/v1/batches/"
+}
+
+pub fn is_rerank_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/rerank" || path == "/v1/rerank/"
 }
 
 pub fn batches_cancel_id(path_and_query: &str) -> Option<String> {
@@ -937,6 +1031,38 @@ pub fn batch_list_response_to_openai(response: &BatchListResponse) -> Value {
     if let Some(last_id) = last_id {
         obj.insert("last_id".to_string(), Value::String(last_id));
     }
+
+    Value::Object(obj)
+}
+
+pub fn rerank_request_to_request(request: &Value) -> ParseResult<RerankRequest> {
+    serde_json::from_value::<RerankRequest>(request.clone())
+        .map_err(|err| format!("rerank request is invalid: {err}"))
+}
+
+pub fn rerank_response_to_openai(response: &RerankResponse) -> Value {
+    let mut obj = Map::<String, Value>::new();
+
+    if let Some(metadata) = response.provider_metadata.as_ref() {
+        if let Some(id) = metadata.get("id") {
+            obj.insert("id".to_string(), id.clone());
+        }
+        if let Some(meta) = metadata.get("meta") {
+            obj.insert("meta".to_string(), meta.clone());
+        }
+    }
+
+    let results: Vec<Value> = response
+        .ranking
+        .iter()
+        .map(|result| {
+            serde_json::json!({
+                "index": result.index,
+                "relevance_score": result.relevance_score,
+            })
+        })
+        .collect();
+    obj.insert("results".to_string(), Value::Array(results));
 
     Value::Object(obj)
 }

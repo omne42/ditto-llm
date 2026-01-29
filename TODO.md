@@ -86,7 +86,7 @@
 
 - [x] Passthrough proxy endpoints：`ANY /v1/*`（含 `/v1/responses`、`/v1/chat/completions`、`/v1/embeddings`、`/v1/models`）
 - [x] `/v1/responses` shim（OpenAI-compatible upstream）：当 upstream 仅支持 `/v1/chat/completions` 时，gateway 自动 fallback 并返回“Responses-like”（best-effort，仍属于变形路径）
-- [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
+- [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
 - [x] 路由（basic）：weighted backends（seeded）+ network-error fallback
 - [x] 路由（advanced）：retry + circuit breaker（feature `gateway-routing-advanced`；health checks 暂不包含主动探测）
 - [ ] 成本口径：真实 token 计数（tiktoken 等价）+ usage-based settle（目前为 bytes/token 预估 + 可选 pricing table + USD budget）
@@ -113,10 +113,11 @@
 ### P0（让 Gateway 达到 LiteLLM 的“可替换”）
 
 - [x] Gateway 代理路径：基础持久化（virtual keys via `--state` or `--sqlite`）
-- [ ] Gateway 代理路径：持久化存储（virtual keys / budgets / audit logs；sqlite/redis 可选）
-- [ ] 路由：retry/fallback + weighted load balancing + health checks/circuit breaker
+- [x] Gateway 代理路径：持久化存储（virtual keys / budgets / audit logs；sqlite/redis 可选）
+- [x] 路由：retry/fallback + weighted load balancing + passive health（circuit breaker）
+- [ ] 路由：主动健康检查/探活（active probing）+ backpressure
 - [ ] 成本：token 计数 + pricing + spend（按 project/user/key）+ 预算控制（USD 口径）
-- [ ] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做，per-key tags 未做）
+- [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
 - [x] Proxy caching（非流式请求；并提供显式绕过）
 
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
@@ -128,7 +129,7 @@
 
 - [x] Gateway translation：`/audio/transcriptions` 与 `/audio/speech`
 - [x] Gateway translation：`/batches`
-- [ ] Gateway translation：`/rerank`（`/images/generations` 与 `/moderations` 已完成）
+- [x] Gateway translation：`/rerank`（`/images/generations` 与 `/moderations` 已完成）
 - [ ] 更强的策略/缓存/背压（backpressure）控制（适配高并发与长连接 streaming）
 
 ---

@@ -1325,6 +1325,7 @@ async fn handle_openai_compat_proxy(
                 || translation::is_images_generations_path(path_and_query)
                 || translation::is_audio_transcriptions_path(path_and_query)
                 || translation::is_audio_speech_path(path_and_query)
+                || translation::is_rerank_path(path_and_query)
                 || batches_root
                 || batch_cancel_id.is_some()
                 || batch_retrieve_id.is_some();
@@ -1337,6 +1338,7 @@ async fn handle_openai_compat_proxy(
                     || translation::is_images_generations_path(path_and_query)
                     || translation::is_audio_transcriptions_path(path_and_query)
                     || translation::is_audio_speech_path(path_and_query)
+                    || translation::is_rerank_path(path_and_query)
                     || batches_root
                     || batch_cancel_id.is_some()
             } else if parts.method == axum::http::Method::GET {
@@ -1538,6 +1540,92 @@ async fn handle_openai_compat_proxy(
                     };
 
                     let value = translation::batch_to_openai(&cancelled.batch);
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok(response)
+                } else if translation::is_rerank_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    if _stream_requested {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "rerank endpoint does not support stream=true",
+                        ));
+                        continue;
+                    }
+
+                    let mut request = match translation::rerank_request_to_request(parsed_json) {
+                        Ok(request) => request,
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
+
+                    let Some(original_model) = request.model.clone() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    };
+
+                    let mapped_model = translation_backend.map_model(&original_model);
+                    if mapped_model.trim().is_empty() {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    }
+                    request.model = Some(mapped_model.clone());
+
+                    let reranked = match translation_backend.rerank(&mapped_model, request).await {
+                        Ok(reranked) => reranked,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            last_err = Some(openai_error(status, kind, code, message));
+                            continue;
+                        }
+                    };
+
+                    let value = translation::rerank_response_to_openai(&reranked);
                     let bytes = serde_json::to_vec(&value)
                         .map(Bytes::from)
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));

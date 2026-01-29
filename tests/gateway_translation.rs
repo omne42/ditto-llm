@@ -15,12 +15,13 @@ use ditto_llm::gateway::{
 use ditto_llm::image::ImageGenerationModel;
 use ditto_llm::model::{LanguageModel, StreamResult};
 use ditto_llm::moderation::ModerationModel;
+use ditto_llm::rerank::RerankModel;
 use ditto_llm::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, BatchStatus, ContentPart, FinishReason, GenerateRequest,
     GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource,
-    ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, SpeechRequest,
-    SpeechResponse, StreamChunk, Usage,
+    ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
+    RerankResponse, RerankResult, SpeechRequest, SpeechResponse, StreamChunk, Usage,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -285,6 +286,42 @@ impl BatchClient for FakeBatchClient {
             has_more: Some(false),
             warnings: Vec::new(),
             provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeRerankModel;
+
+#[async_trait]
+impl RerankModel for FakeRerankModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-rerank"
+    }
+
+    async fn rerank(&self, _request: RerankRequest) -> ditto_llm::Result<RerankResponse> {
+        Ok(RerankResponse {
+            ranking: vec![
+                RerankResult {
+                    index: 0,
+                    relevance_score: 0.9,
+                    provider_metadata: None,
+                },
+                RerankResult {
+                    index: 1,
+                    relevance_score: 0.1,
+                    provider_metadata: None,
+                },
+            ],
+            warnings: Vec::new(),
+            provider_metadata: Some(json!({
+                "id": "rr_fake",
+                "meta": { "billed_units": { "search_units": 1 } }
+            })),
         })
     }
 }
@@ -869,5 +906,56 @@ async fn gateway_translation_batches_cancel() -> ditto_llm::Result<()> {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("batch_123"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_rerank_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_rerank_model(Arc::new(FakeRerankModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "rerank-v3.5",
+        "query": "hello",
+        "documents": ["a", "b"],
+        "top_n": 2
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/rerank")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("rr_fake"));
+    assert_eq!(
+        parsed
+            .get("results")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len()),
+        Some(2)
+    );
     Ok(())
 }

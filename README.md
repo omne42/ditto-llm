@@ -27,13 +27,13 @@ Optional feature-gated modules:
 - Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
-- Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/speech`, and `/v1/batches` backed by Ditto providers (feature `gateway-translation`).
+- Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/speech`, `/v1/rerank`, and `/v1/batches` backed by Ditto providers (feature `gateway-translation`).
 - Gateway proxy caching: in-memory cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
 - Gateway OpenTelemetry: OTLP tracing exporter + structured logs for gateway HTTP requests (feature `gateway-otel`).
 
 Non-goals (for now):
 
-- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/speech`, and `/v1/batches`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
+- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/speech`, `/v1/rerank`, and `/v1/batches`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
 - Core helpers are single-step and return tool calls to the caller; the `agent` feature offers an opt-in tool loop, but it is not enabled by default.
 - It is not a full UI SDK (no frontend hooks or middleware ecosystem); the `sdk` feature only provides protocol/telemetry/devtools/MCP utilities.
 - Bedrock support targets Anthropic Messages-on-Bedrock; other Bedrock model families and Vertex service-account JWT flows are not covered yet.
@@ -137,7 +137,7 @@ Endpoints:
   - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key`).
   - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
-- OpenAI-compatible translation (feature `gateway-translation`): `POST /v1/chat/completions`, `POST /v1/responses`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/speech`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
+- OpenAI-compatible translation (feature `gateway-translation`): `POST /v1/chat/completions`, `POST /v1/responses`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/speech`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`
