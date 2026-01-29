@@ -9,16 +9,18 @@ use serde_json::{Map, Value};
 use tokio::sync::Mutex;
 
 use crate::audio::{AudioTranscriptionModel, SpeechModel};
+use crate::batch::BatchClient;
 use crate::embedding::EmbeddingModel;
 use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::moderation::ModerationModel;
 use crate::types::{
-    AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FinishReason,
-    GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
-    ImageSource, Message, ModerationInput, ModerationRequest, ModerationResponse, ProviderOptions,
-    ReasoningEffort, ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat,
-    Tool, ToolChoice, TranscriptionResponseFormat, Usage,
+    AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
+    BatchListResponse, BatchResponse, ContentPart, FinishReason, GenerateRequest, GenerateResponse,
+    ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message, ModerationInput,
+    ModerationRequest, ModerationResponse, ProviderOptions, ReasoningEffort, ResponseFormat, Role,
+    SpeechRequest, SpeechResponse, SpeechResponseFormat, Tool, ToolChoice,
+    TranscriptionResponseFormat, Usage,
 };
 use crate::{DittoError, Env, ProviderConfig};
 
@@ -33,6 +35,7 @@ pub struct TranslationBackend {
     pub moderation_model: Option<Arc<dyn ModerationModel>>,
     pub audio_transcription_model: Option<Arc<dyn AudioTranscriptionModel>>,
     pub speech_model: Option<Arc<dyn SpeechModel>>,
+    pub batch_client: Option<Arc<dyn BatchClient>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
     provider_config: ProviderConfig,
@@ -41,6 +44,7 @@ pub struct TranslationBackend {
     image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
     audio_transcription_cache: Arc<Mutex<HashMap<String, Arc<dyn AudioTranscriptionModel>>>>,
     speech_cache: Arc<Mutex<HashMap<String, Arc<dyn SpeechModel>>>>,
+    batch_cache: Arc<Mutex<Option<Arc<dyn BatchClient>>>>,
 }
 
 impl TranslationBackend {
@@ -52,6 +56,7 @@ impl TranslationBackend {
             moderation_model: None,
             audio_transcription_model: None,
             speech_model: None,
+            batch_client: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
             provider_config: ProviderConfig::default(),
@@ -60,6 +65,7 @@ impl TranslationBackend {
             image_generation_cache: Arc::new(Mutex::new(None)),
             audio_transcription_cache: Arc::new(Mutex::new(HashMap::new())),
             speech_cache: Arc::new(Mutex::new(HashMap::new())),
+            batch_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -101,6 +107,11 @@ impl TranslationBackend {
 
     pub fn with_speech_model(mut self, speech_model: Arc<dyn SpeechModel>) -> Self {
         self.speech_model = Some(speech_model);
+        self
+    }
+
+    pub fn with_batch_client(mut self, batch_client: Arc<dyn BatchClient>) -> Self {
+        self.batch_client = Some(batch_client);
         self
     }
 
@@ -334,6 +345,130 @@ impl TranslationBackend {
 
         request.model = Some(model.to_string());
         model_impl.speak(request).await
+    }
+
+    pub async fn create_batch(&self, request: BatchCreateRequest) -> crate::Result<BatchResponse> {
+        if let Some(client) = self.batch_client.as_ref() {
+            return client.create(request).await;
+        }
+
+        let cached = self.batch_cache.lock().await.clone();
+        if let Some(client) = cached {
+            return client.create(request).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support batches: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.batch_cache.lock().await;
+            *cache = Some(client.clone());
+        }
+
+        client.create(request).await
+    }
+
+    pub async fn retrieve_batch(&self, batch_id: &str) -> crate::Result<BatchResponse> {
+        if let Some(client) = self.batch_client.as_ref() {
+            return client.retrieve(batch_id).await;
+        }
+
+        let cached = self.batch_cache.lock().await.clone();
+        if let Some(client) = cached {
+            return client.retrieve(batch_id).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support batches: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.batch_cache.lock().await;
+            *cache = Some(client.clone());
+        }
+
+        client.retrieve(batch_id).await
+    }
+
+    pub async fn cancel_batch(&self, batch_id: &str) -> crate::Result<BatchResponse> {
+        if let Some(client) = self.batch_client.as_ref() {
+            return client.cancel(batch_id).await;
+        }
+
+        let cached = self.batch_cache.lock().await.clone();
+        if let Some(client) = cached {
+            return client.cancel(batch_id).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support batches: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.batch_cache.lock().await;
+            *cache = Some(client.clone());
+        }
+
+        client.cancel(batch_id).await
+    }
+
+    pub async fn list_batches(
+        &self,
+        limit: Option<u32>,
+        after: Option<String>,
+    ) -> crate::Result<BatchListResponse> {
+        if let Some(client) = self.batch_client.as_ref() {
+            return client.list(limit, after).await;
+        }
+
+        let cached = self.batch_cache.lock().await.clone();
+        if let Some(client) = cached {
+            return client.list(limit, after).await;
+        }
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support batches: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.batch_cache.lock().await;
+            *cache = Some(client.clone());
+        }
+
+        client.list(limit, after).await
     }
 }
 
@@ -627,6 +762,42 @@ pub async fn build_speech_model(
     }
 }
 
+pub async fn build_batch_client(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn BatchClient>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "batches"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAIBatches::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "batches")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "batches"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleBatches::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "batches")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -681,6 +852,93 @@ pub fn is_audio_speech_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/audio/speech" || path == "/v1/audio/speech/"
+}
+
+pub fn is_batches_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/batches" || path == "/v1/batches/"
+}
+
+pub fn batches_cancel_id(path_and_query: &str) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/batches/")?;
+    let (batch_id, suffix) = rest.split_once('/')?;
+    if batch_id.trim().is_empty() {
+        return None;
+    }
+    if suffix == "cancel" {
+        return Some(batch_id.to_string());
+    }
+    None
+}
+
+pub fn batches_retrieve_id(path_and_query: &str) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/batches/")?;
+    if rest.trim().is_empty() {
+        return None;
+    }
+    if rest.contains('/') {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
+pub fn batches_create_request_to_request(request: &Value) -> ParseResult<BatchCreateRequest> {
+    serde_json::from_value::<BatchCreateRequest>(request.clone())
+        .map_err(|err| format!("batches request is invalid: {err}"))
+}
+
+pub fn batch_to_openai(batch: &Batch) -> Value {
+    let mut value = serde_json::to_value(batch).unwrap_or(Value::Null);
+    if let Value::Object(obj) = &mut value {
+        obj.insert("object".to_string(), Value::String("batch".to_string()));
+    }
+    value
+}
+
+pub fn batch_list_response_to_openai(response: &BatchListResponse) -> Value {
+    let mut obj = Map::<String, Value>::new();
+    obj.insert("object".to_string(), Value::String("list".to_string()));
+
+    let data: Vec<Value> = response.batches.iter().map(batch_to_openai).collect();
+    obj.insert("data".to_string(), Value::Array(data));
+
+    if let Some(has_more) = response.has_more {
+        obj.insert("has_more".to_string(), Value::Bool(has_more));
+    }
+
+    let first_id = response
+        .batches
+        .first()
+        .map(|batch| batch.id.trim().to_string())
+        .filter(|id| !id.is_empty());
+    if let Some(first_id) = first_id {
+        obj.insert("first_id".to_string(), Value::String(first_id));
+    }
+
+    let last_id = response
+        .batches
+        .last()
+        .map(|batch| batch.id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .or_else(|| response.after.clone());
+    if let Some(last_id) = last_id {
+        obj.insert("last_id".to_string(), Value::String(last_id));
+    }
+
+    Value::Object(obj)
 }
 
 #[derive(Debug, Clone)]
