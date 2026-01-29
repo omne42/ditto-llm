@@ -1318,7 +1318,9 @@ async fn handle_openai_compat_proxy(
                 || translation::is_responses_create_path(path_and_query)
                 || translation::is_embeddings_path(path_and_query)
                 || translation::is_moderations_path(path_and_query)
-                || translation::is_images_generations_path(path_and_query);
+                || translation::is_images_generations_path(path_and_query)
+                || translation::is_audio_transcriptions_path(path_and_query)
+                || translation::is_audio_speech_path(path_and_query);
             if parts.method != axum::http::Method::POST || !supported_path {
                 last_err = Some(openai_error(
                     StatusCode::NOT_IMPLEMENTED,
@@ -1331,16 +1333,6 @@ async fn handle_openai_compat_proxy(
                 ));
                 continue;
             }
-
-            let Some(parsed_json) = parsed_json.as_ref() else {
-                last_err = Some(openai_error(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request_error",
-                    Some("invalid_request"),
-                    "request body must be application/json",
-                ));
-                continue;
-            };
 
             {
                 let mut gateway = state.gateway.lock().await;
@@ -1355,11 +1347,231 @@ async fn handle_openai_compat_proxy(
                     .record_proxy_backend_attempt(&backend_name);
             }
 
-            let original_model = model.clone().unwrap_or_default();
-            let mapped_model = translation_backend.map_model(&original_model);
-
             let result: Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> =
-                if translation::is_embeddings_path(path_and_query) {
+                if translation::is_audio_transcriptions_path(path_and_query) {
+                    let Some(content_type) = parts
+                        .headers
+                        .get("content-type")
+                        .and_then(|value| value.to_str().ok())
+                    else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "audio/transcriptions request missing content-type",
+                        ));
+                        continue;
+                    };
+
+                    if !content_type
+                        .to_ascii_lowercase()
+                        .starts_with("multipart/form-data")
+                    {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "audio/transcriptions request must be multipart/form-data",
+                        ));
+                        continue;
+                    }
+
+                    let request = match translation::audio_transcriptions_request_to_request(
+                        content_type,
+                        &body,
+                    ) {
+                        Ok(request) => request,
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
+
+                    let Some(original_model) = request.model.clone() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    };
+
+                    let mapped_model = translation_backend.map_model(&original_model);
+                    if mapped_model.trim().is_empty() {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    }
+
+                    let request_format = request.response_format;
+                    let mut request = request;
+                    request.model = Some(mapped_model.clone());
+
+                    let transcribed = match translation_backend
+                        .transcribe_audio(&mapped_model, request)
+                        .await
+                    {
+                        Ok(transcribed) => transcribed,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            last_err = Some(openai_error(status, kind, code, message));
+                            continue;
+                        }
+                    };
+
+                    let (content_type, is_json) =
+                        translation::transcription_format_to_content_type(request_format);
+                    let bytes = if is_json {
+                        let value = serde_json::json!({ "text": transcribed.text });
+                        serde_json::to_vec(&value)
+                            .map(Bytes::from)
+                            .unwrap_or_else(|_| Bytes::from(value.to_string()))
+                    } else {
+                        Bytes::from(transcribed.text)
+                    };
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert(
+                        "content-type",
+                        content_type
+                            .parse()
+                            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+                    );
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok(response)
+                } else if translation::is_audio_speech_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    if _stream_requested {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "audio/speech endpoint does not support stream=true",
+                        ));
+                        continue;
+                    }
+
+                    let request = match translation::audio_speech_request_to_request(parsed_json) {
+                        Ok(request) => request,
+                        Err(err) => {
+                            last_err = Some(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                            continue;
+                        }
+                    };
+
+                    let Some(original_model) = request.model.clone() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    };
+
+                    let mapped_model = translation_backend.map_model(&original_model);
+                    if mapped_model.trim().is_empty() {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                        continue;
+                    }
+
+                    let request_format = request.response_format;
+                    let mut request = request;
+                    request.model = Some(mapped_model.clone());
+
+                    let spoken = match translation_backend
+                        .speak_audio(&mapped_model, request)
+                        .await
+                    {
+                        Ok(spoken) => spoken,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            last_err = Some(openai_error(status, kind, code, message));
+                            continue;
+                        }
+                    };
+
+                    let content_type = spoken.media_type.clone().unwrap_or_else(|| {
+                        translation::speech_response_format_to_content_type(request_format)
+                            .to_string()
+                    });
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert(
+                        "content-type",
+                        content_type
+                            .parse()
+                            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+                    );
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let mut response = axum::response::Response::new(Body::from(spoken.audio));
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok(response)
+                } else if translation::is_embeddings_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    let original_model = model.clone().unwrap_or_default();
+                    let mapped_model = translation_backend.map_model(&original_model);
+
                     if mapped_model.trim().is_empty() {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,
@@ -1424,6 +1636,19 @@ async fn handle_openai_compat_proxy(
                     *response.headers_mut() = headers;
                     Ok(response)
                 } else if translation::is_moderations_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    let original_model = model.clone().unwrap_or_default();
+                    let mapped_model = translation_backend.map_model(&original_model);
+
                     if _stream_requested {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,
@@ -1486,6 +1711,19 @@ async fn handle_openai_compat_proxy(
                     *response.headers_mut() = headers;
                     Ok(response)
                 } else if translation::is_images_generations_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    let original_model = model.clone().unwrap_or_default();
+                    let mapped_model = translation_backend.map_model(&original_model);
+
                     if _stream_requested {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,
@@ -1548,6 +1786,19 @@ async fn handle_openai_compat_proxy(
                     *response.headers_mut() = headers;
                     Ok(response)
                 } else {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        last_err = Some(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                        continue;
+                    };
+
+                    let original_model = model.clone().unwrap_or_default();
+                    let mapped_model = translation_backend.map_model(&original_model);
+
                     if mapped_model.trim().is_empty() {
                         last_err = Some(openai_error(
                             StatusCode::BAD_REQUEST,

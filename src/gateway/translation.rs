@@ -8,15 +8,17 @@ use futures_util::stream;
 use serde_json::{Map, Value};
 use tokio::sync::Mutex;
 
+use crate::audio::{AudioTranscriptionModel, SpeechModel};
 use crate::embedding::EmbeddingModel;
 use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::moderation::ModerationModel;
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
-    ImageGenerationResponse, ImageSource, Message, ModerationInput, ModerationRequest,
-    ModerationResponse, ProviderOptions, ReasoningEffort, ResponseFormat, Role, Tool, ToolChoice,
-    Usage,
+    AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FinishReason,
+    GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
+    ImageSource, Message, ModerationInput, ModerationRequest, ModerationResponse, ProviderOptions,
+    ReasoningEffort, ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat,
+    Tool, ToolChoice, TranscriptionResponseFormat, Usage,
 };
 use crate::{DittoError, Env, ProviderConfig};
 
@@ -29,12 +31,16 @@ pub struct TranslationBackend {
     pub embedding_model: Option<Arc<dyn EmbeddingModel>>,
     pub image_generation_model: Option<Arc<dyn ImageGenerationModel>>,
     pub moderation_model: Option<Arc<dyn ModerationModel>>,
+    pub audio_transcription_model: Option<Arc<dyn AudioTranscriptionModel>>,
+    pub speech_model: Option<Arc<dyn SpeechModel>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
     provider_config: ProviderConfig,
     embedding_cache: Arc<Mutex<HashMap<String, Arc<dyn EmbeddingModel>>>>,
     moderation_cache: Arc<Mutex<Option<Arc<dyn ModerationModel>>>>,
     image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
+    audio_transcription_cache: Arc<Mutex<HashMap<String, Arc<dyn AudioTranscriptionModel>>>>,
+    speech_cache: Arc<Mutex<HashMap<String, Arc<dyn SpeechModel>>>>,
 }
 
 impl TranslationBackend {
@@ -44,12 +50,16 @@ impl TranslationBackend {
             embedding_model: None,
             image_generation_model: None,
             moderation_model: None,
+            audio_transcription_model: None,
+            speech_model: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
             provider_config: ProviderConfig::default(),
             embedding_cache: Arc::new(Mutex::new(HashMap::new())),
             moderation_cache: Arc::new(Mutex::new(None)),
             image_generation_cache: Arc::new(Mutex::new(None)),
+            audio_transcription_cache: Arc::new(Mutex::new(HashMap::new())),
+            speech_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -78,6 +88,19 @@ impl TranslationBackend {
 
     pub fn with_moderation_model(mut self, moderation_model: Arc<dyn ModerationModel>) -> Self {
         self.moderation_model = Some(moderation_model);
+        self
+    }
+
+    pub fn with_audio_transcription_model(
+        mut self,
+        audio_transcription_model: Arc<dyn AudioTranscriptionModel>,
+    ) -> Self {
+        self.audio_transcription_model = Some(audio_transcription_model);
+        self
+    }
+
+    pub fn with_speech_model(mut self, speech_model: Arc<dyn SpeechModel>) -> Self {
+        self.speech_model = Some(speech_model);
         self
     }
 
@@ -201,6 +224,116 @@ impl TranslationBackend {
         }
 
         model_impl.generate(request).await
+    }
+
+    pub async fn transcribe_audio(
+        &self,
+        model: &str,
+        mut request: AudioTranscriptionRequest,
+    ) -> crate::Result<AudioTranscriptionResponse> {
+        if let Some(model_impl) = self.audio_transcription_model.as_ref() {
+            if request
+                .model
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            {
+                request.model = Some(model.trim().to_string());
+            }
+            return model_impl.transcribe(request).await;
+        }
+
+        let model = model.trim();
+        if model.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "audio transcription model is missing".to_string(),
+            ));
+        }
+
+        if let Some(model_impl) = self
+            .audio_transcription_cache
+            .lock()
+            .await
+            .get(model)
+            .cloned()
+        {
+            request.model = Some(model.to_string());
+            return model_impl.transcribe(request).await;
+        }
+
+        let mut cfg = self.provider_config.clone();
+        cfg.default_model = Some(model.to_string());
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl = build_audio_transcription_model(self.provider.as_str(), &cfg, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support audio transcriptions: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.audio_transcription_cache.lock().await;
+            cache.insert(model.to_string(), model_impl.clone());
+        }
+
+        request.model = Some(model.to_string());
+        model_impl.transcribe(request).await
+    }
+
+    pub async fn speak_audio(
+        &self,
+        model: &str,
+        mut request: SpeechRequest,
+    ) -> crate::Result<SpeechResponse> {
+        if let Some(model_impl) = self.speech_model.as_ref() {
+            if request
+                .model
+                .as_deref()
+                .is_none_or(|value| value.trim().is_empty())
+            {
+                request.model = Some(model.trim().to_string());
+            }
+            return model_impl.speak(request).await;
+        }
+
+        let model = model.trim();
+        if model.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "speech model is missing".to_string(),
+            ));
+        }
+
+        if let Some(model_impl) = self.speech_cache.lock().await.get(model).cloned() {
+            request.model = Some(model.to_string());
+            return model_impl.speak(request).await;
+        }
+
+        let mut cfg = self.provider_config.clone();
+        cfg.default_model = Some(model.to_string());
+
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let model_impl = build_speech_model(self.provider.as_str(), &cfg, &env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support audio speech: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.speech_cache.lock().await;
+            cache.insert(model.to_string(), model_impl.clone());
+        }
+
+        request.model = Some(model.to_string());
+        model_impl.speak(request).await
     }
 }
 
@@ -422,6 +555,78 @@ pub async fn build_image_generation_model(
     }
 }
 
+pub async fn build_audio_transcription_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn AudioTranscriptionModel>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "audio"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAIAudioTranscription::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "audio")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleAudioTranscription::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+pub async fn build_speech_model(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn SpeechModel>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+    match provider {
+        "openai" => {
+            #[cfg(all(feature = "openai", feature = "audio"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAISpeech::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai", feature = "audio")))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" => {
+            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatibleSpeech::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -460,6 +665,326 @@ pub fn is_images_generations_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/images/generations" || path == "/v1/images/generations/"
+}
+
+pub fn is_audio_transcriptions_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/audio/transcriptions" || path == "/v1/audio/transcriptions/"
+}
+
+pub fn is_audio_speech_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/audio/speech" || path == "/v1/audio/speech/"
+}
+
+#[derive(Debug, Clone)]
+struct MultipartPart {
+    name: String,
+    filename: Option<String>,
+    content_type: Option<String>,
+    data: Bytes,
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(start);
+    }
+    if start >= haystack.len() {
+        return None;
+    }
+    let first = needle[0];
+    let mut pos = start;
+    while pos + needle.len() <= haystack.len() {
+        let rel = haystack[pos..].iter().position(|&b| b == first)?;
+        pos += rel;
+        if pos + needle.len() > haystack.len() {
+            return None;
+        }
+        if &haystack[pos..pos + needle.len()] == needle {
+            return Some(pos);
+        }
+        pos += 1;
+    }
+    None
+}
+
+fn multipart_boundary(content_type: &str) -> ParseResult<String> {
+    for part in content_type.split(';').map(str::trim) {
+        if part.len() < "boundary=".len() {
+            continue;
+        }
+        if !part[..].to_ascii_lowercase().starts_with("boundary=") {
+            continue;
+        }
+
+        let value = part["boundary=".len()..].trim();
+        if value.is_empty() {
+            continue;
+        }
+
+        let unquoted = value
+            .strip_prefix('"')
+            .and_then(|v| v.strip_suffix('"'))
+            .unwrap_or(value);
+
+        if unquoted.trim().is_empty() {
+            continue;
+        }
+
+        return Ok(unquoted.to_string());
+    }
+
+    Err("multipart boundary is missing".to_string())
+}
+
+fn parse_multipart_form(content_type: &str, body: &Bytes) -> ParseResult<Vec<MultipartPart>> {
+    let boundary = multipart_boundary(content_type)?;
+    let boundary_marker = format!("--{boundary}");
+    let boundary_bytes = boundary_marker.as_bytes();
+    let delimiter = format!("\r\n{boundary_marker}");
+    let delimiter_bytes = delimiter.as_bytes();
+
+    let bytes = body.as_ref();
+    let Some(mut cursor) = find_subslice(bytes, boundary_bytes, 0) else {
+        return Err("multipart body missing boundary marker".to_string());
+    };
+    cursor += boundary_bytes.len();
+
+    let mut parts = Vec::<MultipartPart>::new();
+    loop {
+        if bytes.get(cursor..cursor + 2) == Some(b"--") {
+            break;
+        }
+        if bytes.get(cursor..cursor + 2) == Some(b"\r\n") {
+            cursor += 2;
+        } else if bytes.get(cursor..cursor + 1) == Some(b"\n") {
+            cursor += 1;
+        }
+
+        let (headers_end, header_sep_len) =
+            if let Some(idx) = find_subslice(bytes, b"\r\n\r\n", cursor) {
+                (idx, 4)
+            } else if let Some(idx) = find_subslice(bytes, b"\n\n", cursor) {
+                (idx, 2)
+            } else {
+                return Err("multipart part missing header separator".to_string());
+            };
+
+        let headers_raw = String::from_utf8_lossy(&bytes[cursor..headers_end]);
+        let mut name: Option<String> = None;
+        let mut filename: Option<String> = None;
+        let mut content_type: Option<String> = None;
+
+        for line in headers_raw.lines() {
+            let Some((key, value)) = line.split_once(':') else {
+                continue;
+            };
+            let key = key.trim();
+            let value = value.trim();
+            if key.eq_ignore_ascii_case("content-disposition") {
+                for item in value.split(';').map(str::trim) {
+                    if let Some(value) = item.strip_prefix("name=") {
+                        let value = value.trim();
+                        let value = value
+                            .strip_prefix('"')
+                            .and_then(|v| v.strip_suffix('"'))
+                            .unwrap_or(value);
+                        name = Some(value.to_string());
+                    } else if let Some(value) = item.strip_prefix("filename=") {
+                        let value = value.trim();
+                        let value = value
+                            .strip_prefix('"')
+                            .and_then(|v| v.strip_suffix('"'))
+                            .unwrap_or(value);
+                        filename = Some(value.to_string());
+                    }
+                }
+            } else if key.eq_ignore_ascii_case("content-type") && !value.is_empty() {
+                content_type = Some(value.to_string());
+            }
+        }
+
+        let name =
+            name.ok_or_else(|| "multipart part missing content-disposition name".to_string())?;
+        let data_start = headers_end + header_sep_len;
+
+        let Some(delim_pos) = find_subslice(bytes, delimiter_bytes, data_start) else {
+            return Err("multipart part missing trailing boundary".to_string());
+        };
+        let data_end = delim_pos;
+
+        let data = body.slice(data_start..data_end);
+        parts.push(MultipartPart {
+            name,
+            filename,
+            content_type,
+            data,
+        });
+
+        cursor = delim_pos + delimiter_bytes.len();
+        if bytes.get(cursor..cursor + 2) == Some(b"--") {
+            break;
+        }
+        if bytes.get(cursor..cursor + 2) == Some(b"\r\n") {
+            cursor += 2;
+        } else if bytes.get(cursor..cursor + 1) == Some(b"\n") {
+            cursor += 1;
+        }
+    }
+
+    Ok(parts)
+}
+
+pub fn multipart_extract_text_field(
+    content_type: &str,
+    body: &Bytes,
+    field_name: &str,
+) -> ParseResult<Option<String>> {
+    let parts = parse_multipart_form(content_type, body)?;
+    for part in parts {
+        if part.name != field_name {
+            continue;
+        }
+        if part.filename.is_some() {
+            continue;
+        }
+        let text = String::from_utf8_lossy(part.data.as_ref())
+            .trim()
+            .to_string();
+        if text.is_empty() {
+            return Ok(None);
+        }
+        return Ok(Some(text));
+    }
+    Ok(None)
+}
+
+pub fn audio_transcriptions_request_to_request(
+    content_type: &str,
+    body: &Bytes,
+) -> ParseResult<AudioTranscriptionRequest> {
+    let mut file: Option<MultipartPart> = None;
+    let mut model: Option<String> = None;
+    let mut language: Option<String> = None;
+    let mut prompt: Option<String> = None;
+    let mut response_format: Option<TranscriptionResponseFormat> = None;
+    let mut temperature: Option<f32> = None;
+
+    let parts = parse_multipart_form(content_type, body)?;
+    for part in parts {
+        match part.name.as_str() {
+            "file" => {
+                file = Some(part);
+            }
+            "model" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    model = Some(value);
+                }
+            }
+            "language" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    language = Some(value);
+                }
+            }
+            "prompt" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    prompt = Some(value);
+                }
+            }
+            "response_format" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                response_format = match value.as_str() {
+                    "json" => Some(TranscriptionResponseFormat::Json),
+                    "text" => Some(TranscriptionResponseFormat::Text),
+                    "srt" => Some(TranscriptionResponseFormat::Srt),
+                    "verbose_json" => Some(TranscriptionResponseFormat::VerboseJson),
+                    "vtt" => Some(TranscriptionResponseFormat::Vtt),
+                    _ => None,
+                };
+            }
+            "temperature" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if let Ok(parsed) = value.parse::<f32>() {
+                    if parsed.is_finite() {
+                        temperature = Some(parsed);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let file = file.ok_or_else(|| "audio/transcriptions request missing file".to_string())?;
+    let model = model.ok_or_else(|| "audio/transcriptions request missing model".to_string())?;
+
+    let filename = file
+        .filename
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "audio".to_string());
+
+    Ok(AudioTranscriptionRequest {
+        audio: file.data.to_vec(),
+        filename,
+        media_type: file.content_type.clone(),
+        model: Some(model),
+        language,
+        prompt,
+        response_format,
+        temperature,
+        provider_options: None,
+    })
+}
+
+pub fn audio_speech_request_to_request(request: &Value) -> ParseResult<SpeechRequest> {
+    serde_json::from_value::<SpeechRequest>(request.clone())
+        .map_err(|err| format!("audio/speech request is invalid: {err}"))
+}
+
+pub fn speech_response_format_to_content_type(
+    format: Option<SpeechResponseFormat>,
+) -> &'static str {
+    match format {
+        Some(SpeechResponseFormat::Mp3) => "audio/mpeg",
+        Some(SpeechResponseFormat::Opus) => "audio/opus",
+        Some(SpeechResponseFormat::Aac) => "audio/aac",
+        Some(SpeechResponseFormat::Flac) => "audio/flac",
+        Some(SpeechResponseFormat::Wav) => "audio/wav",
+        Some(SpeechResponseFormat::Pcm) => "audio/pcm",
+        None => "application/octet-stream",
+    }
+}
+
+pub fn transcription_format_to_content_type(
+    format: Option<TranscriptionResponseFormat>,
+) -> (&'static str, bool) {
+    match format {
+        Some(TranscriptionResponseFormat::Text) => ("text/plain; charset=utf-8", false),
+        Some(TranscriptionResponseFormat::Srt) => ("application/x-subrip", false),
+        Some(TranscriptionResponseFormat::Vtt) => ("text/vtt", false),
+        Some(TranscriptionResponseFormat::Json) => ("application/json", true),
+        Some(TranscriptionResponseFormat::VerboseJson) => ("application/json", true),
+        None => ("application/json", true),
+    }
 }
 
 pub fn chat_completions_request_to_generate_request(

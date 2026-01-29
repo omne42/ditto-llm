@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
+use ditto_llm::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_llm::embedding::EmbeddingModel;
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouterConfig, TranslationBackend,
@@ -14,9 +15,10 @@ use ditto_llm::image::ImageGenerationModel;
 use ditto_llm::model::{LanguageModel, StreamResult};
 use ditto_llm::moderation::ModerationModel;
 use ditto_llm::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
-    ImageGenerationResponse, ImageSource, ModerationInput, ModerationRequest, ModerationResponse,
-    ModerationResult, StreamChunk, Usage,
+    AudioTranscriptionRequest, AudioTranscriptionResponse, ContentPart, FinishReason,
+    GenerateRequest, GenerateResponse, ImageGenerationRequest, ImageGenerationResponse,
+    ImageSource, ModerationInput, ModerationRequest, ModerationResponse, ModerationResult,
+    SpeechRequest, SpeechResponse, StreamChunk, Usage,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -154,6 +156,56 @@ impl ImageGenerationModel for FakeImageModel {
                 },
             ],
             usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeAudioTranscriptionModel;
+
+#[async_trait]
+impl AudioTranscriptionModel for FakeAudioTranscriptionModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-audio-transcription"
+    }
+
+    async fn transcribe(
+        &self,
+        request: AudioTranscriptionRequest,
+    ) -> ditto_llm::Result<AudioTranscriptionResponse> {
+        let model = request.model.unwrap_or_default();
+        Ok(AudioTranscriptionResponse {
+            text: format!("transcribed:{model}"),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeSpeechModel;
+
+#[async_trait]
+impl SpeechModel for FakeSpeechModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-speech"
+    }
+
+    async fn speak(&self, request: SpeechRequest) -> ditto_llm::Result<SpeechResponse> {
+        let _ = request;
+        Ok(SpeechResponse {
+            audio: vec![0, 1, 2, 3],
+            media_type: None,
             warnings: Vec::new(),
             provider_metadata: None,
         })
@@ -502,5 +554,96 @@ async fn gateway_translation_images_generations_non_streaming() -> ditto_llm::Re
         Some(2)
     );
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_audio_transcription_model(Arc::new(FakeAudioTranscriptionModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "ditto_boundary";
+    let multipart = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.txt\"\r\nContent-Type: text/plain\r\n\r\nhello\r\n--{boundary}--\r\n"
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/audio/transcriptions")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("text").and_then(|v| v.as_str()),
+        Some("transcribed:whisper-1")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_audio_speech_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_speech_model(Arc::new(FakeSpeechModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "tts-1",
+        "input": "hello",
+        "voice": "alloy",
+        "response_format": "mp3"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/audio/speech")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("audio/mpeg")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(body.as_ref(), &[0, 1, 2, 3]);
     Ok(())
 }
