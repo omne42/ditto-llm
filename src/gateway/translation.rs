@@ -40,6 +40,7 @@ pub struct TranslationBackend {
     pub batch_client: Option<Arc<dyn BatchClient>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
+    env: Env,
     provider_config: ProviderConfig,
     embedding_cache: Arc<Mutex<HashMap<String, Arc<dyn EmbeddingModel>>>>,
     moderation_cache: Arc<Mutex<Option<Arc<dyn ModerationModel>>>>,
@@ -63,6 +64,7 @@ impl TranslationBackend {
             batch_client: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
+            env: Env::default(),
             provider_config: ProviderConfig::default(),
             embedding_cache: Arc::new(Mutex::new(HashMap::new())),
             moderation_cache: Arc::new(Mutex::new(None)),
@@ -76,6 +78,11 @@ impl TranslationBackend {
 
     pub fn with_provider_config(mut self, provider_config: ProviderConfig) -> Self {
         self.provider_config = provider_config;
+        self
+    }
+
+    pub fn with_env(mut self, env: Env) -> Self {
+        self.env = env;
         self
     }
 
@@ -162,10 +169,7 @@ impl TranslationBackend {
         let mut cfg = self.provider_config.clone();
         cfg.default_model = Some(model.to_string());
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let model_impl = build_embedding_model(self.provider.as_str(), &cfg, &env)
+        let model_impl = build_embedding_model(self.provider.as_str(), &cfg, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -192,11 +196,8 @@ impl TranslationBackend {
             return model_impl.moderate(request).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
         let model_impl =
-            build_moderation_model(self.provider.as_str(), &self.provider_config, &env)
+            build_moderation_model(self.provider.as_str(), &self.provider_config, &self.env)
                 .await?
                 .ok_or_else(|| {
                     DittoError::InvalidResponse(format!(
@@ -226,11 +227,8 @@ impl TranslationBackend {
             return model_impl.generate(request).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
         let model_impl =
-            build_image_generation_model(self.provider.as_str(), &self.provider_config, &env)
+            build_image_generation_model(self.provider.as_str(), &self.provider_config, &self.env)
                 .await?
                 .ok_or_else(|| {
                     DittoError::InvalidResponse(format!(
@@ -284,10 +282,7 @@ impl TranslationBackend {
         let mut cfg = self.provider_config.clone();
         cfg.default_model = Some(model.to_string());
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let model_impl = build_audio_transcription_model(self.provider.as_str(), &cfg, &env)
+        let model_impl = build_audio_transcription_model(self.provider.as_str(), &cfg, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -336,10 +331,7 @@ impl TranslationBackend {
         let mut cfg = self.provider_config.clone();
         cfg.default_model = Some(model.to_string());
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let model_impl = build_speech_model(self.provider.as_str(), &cfg, &env)
+        let model_impl = build_speech_model(self.provider.as_str(), &cfg, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -388,10 +380,7 @@ impl TranslationBackend {
         let mut cfg = self.provider_config.clone();
         cfg.default_model = Some(model.to_string());
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let model_impl = build_rerank_model(self.provider.as_str(), &cfg, &env)
+        let model_impl = build_rerank_model(self.provider.as_str(), &cfg, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -419,10 +408,7 @@ impl TranslationBackend {
             return client.create(request).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -449,10 +435,7 @@ impl TranslationBackend {
             return client.retrieve(batch_id).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -479,10 +462,7 @@ impl TranslationBackend {
             return client.cancel(batch_id).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(
@@ -513,10 +493,7 @@ impl TranslationBackend {
             return client.list(limit, after).await;
         }
 
-        let env = Env {
-            dotenv: BTreeMap::new(),
-        };
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &env)
+        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
             .await?
             .ok_or_else(|| {
                 DittoError::InvalidResponse(format!(

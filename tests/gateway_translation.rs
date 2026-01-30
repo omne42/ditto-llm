@@ -1259,3 +1259,55 @@ async fn gateway_translation_rerank_non_streaming() -> ditto_llm::Result<()> {
     );
     Ok(())
 }
+
+#[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+#[tokio::test]
+async fn translation_backend_uses_dotenv_for_lazy_embedding_clients() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = httpmock::MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(httpmock::Method::POST)
+            .path("/v1/embeddings")
+            .header("authorization", "Bearer sk-dotenv");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "data": [{"embedding": [1.0, 2.0]}]
+            }));
+    });
+
+    let provider_config = ditto_llm::ProviderConfig {
+        base_url: Some(upstream.url("/v1")),
+        default_model: Some("gpt-4o-mini".to_string()),
+        auth: Some(ditto_llm::ProviderAuth::ApiKeyEnv {
+            keys: vec!["CODEPM_TEST_DOTENV_API_KEY".to_string()],
+        }),
+        ..ditto_llm::ProviderConfig::default()
+    };
+    let env = ditto_llm::Env {
+        dotenv: std::collections::BTreeMap::from([(
+            "CODEPM_TEST_DOTENV_API_KEY".to_string(),
+            "sk-dotenv".to_string(),
+        )]),
+    };
+
+    let model = ditto_llm::gateway::translation::build_language_model(
+        "openai-compatible",
+        &provider_config,
+        &env,
+    )
+    .await?;
+    let backend = TranslationBackend::new("openai-compatible", model)
+        .with_env(env)
+        .with_provider_config(provider_config);
+
+    let embeddings = backend
+        .embed("text-embedding-3-small", vec!["hello".to_string()])
+        .await?;
+    assert_eq!(embeddings, vec![vec![1.0, 2.0]]);
+    mock.assert();
+    Ok(())
+}

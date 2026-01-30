@@ -108,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: fix README `gateway.json` example indentation.
 - Gateway: do not mount `/admin/*` routes unless an admin token is configured.
 - Gateway: apply per-route guardrails overrides to OpenAI proxy requests.
+- Gateway translation: use `--dotenv` env values when lazily building provider clients (embeddings/moderations/images/audio/rerank/batches).
 - Gateway: keep proxy backpressure permits until the response body is drained (including non-streaming responses).
 - Streaming: abort background stream tasks when the consumer streams are dropped.
 - Providers: avoid panicking if the default `reqwest::Client` build fails (fall back to `reqwest::Client::new()`).
