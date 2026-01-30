@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI-only options via `ProviderOptions`: `parallel_tool_calls`.
 - OpenAI Responses tool schemas default to `strict=true` when omitted.
 - Usage: add `cache_input_tokens` (e.g., OpenAI `cached_tokens`) for prompt-cache accounting.
+- Gateway: pricing table supports LiteLLM `cache_read_input_token_cost` for cached prompt tokens.
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.

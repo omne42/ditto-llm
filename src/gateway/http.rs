@@ -2278,9 +2278,10 @@ async fn handle_openai_compat_proxy(
                                 else {
                                     return None;
                                 };
-                                pricing.estimate_cost_usd_micros(
+                                pricing.estimate_cost_usd_micros_with_cache(
                                     model,
                                     clamp_u64_to_u32(input),
+                                    usage.cache_input_tokens.map(clamp_u64_to_u32),
                                     clamp_u64_to_u32(output),
                                 )
                             })
@@ -3347,9 +3348,10 @@ async fn handle_openai_compat_proxy(
                         let usage = observed_usage?;
                         let input = usage.input_tokens?;
                         let output = usage.output_tokens?;
-                        pricing.estimate_cost_usd_micros(
+                        pricing.estimate_cost_usd_micros_with_cache(
                             model,
                             clamp_u64_to_u32(input),
+                            usage.cache_input_tokens.map(clamp_u64_to_u32),
                             clamp_u64_to_u32(output),
                         )
                     })
@@ -3679,6 +3681,7 @@ fn clamp_u64_to_u32(value: u64) -> u32 {
 #[derive(Clone, Copy, Debug, Default)]
 struct ObservedUsage {
     input_tokens: Option<u64>,
+    cache_input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     total_tokens: Option<u64>,
 }
@@ -3691,6 +3694,11 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
         .get("input_tokens")
         .or_else(|| usage.get("prompt_tokens"))
         .and_then(|v| v.as_u64());
+    let cache_input_tokens = usage
+        .get("input_tokens_details")
+        .or_else(|| usage.get("prompt_tokens_details"))
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(|v| v.as_u64());
     let output_tokens = usage
         .get("output_tokens")
         .or_else(|| usage.get("completion_tokens"))
@@ -3700,6 +3708,7 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
     });
     Some(ObservedUsage {
         input_tokens,
+        cache_input_tokens,
         output_tokens,
         total_tokens,
     })
