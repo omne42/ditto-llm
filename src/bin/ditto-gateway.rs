@@ -3,11 +3,12 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
     let mut admin_token: Option<String> = None;
+    let mut dotenv_path: Option<std::path::PathBuf> = None;
     let mut state_path: Option<std::path::PathBuf> = None;
     let mut _sqlite_path: Option<std::path::PathBuf> = None;
     let mut redis_url: Option<String> = None;
@@ -43,6 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match arg.as_str() {
             "--listen" | "--addr" => {
                 listen = args.next().ok_or("missing value for --listen/--addr")?;
+            }
+            "--dotenv" => {
+                dotenv_path = Some(args.next().ok_or("missing value for --dotenv")?.into());
             }
             "--admin-token" => {
                 admin_token = Some(args.next().ok_or("missing value for --admin-token")?);
@@ -290,8 +294,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let env = ditto_llm::Env {
-        dotenv: std::collections::BTreeMap::new(),
+    let env = if let Some(path) = dotenv_path.as_deref() {
+        let raw = std::fs::read_to_string(path)?;
+        ditto_llm::Env::parse_dotenv(&raw)
+    } else {
+        ditto_llm::Env {
+            dotenv: std::collections::BTreeMap::new(),
+        }
     };
     config.resolve_env(&env)?;
 
