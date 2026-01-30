@@ -87,6 +87,7 @@ pub struct GatewayHttpState {
     #[cfg(feature = "gateway-proxy-cache")]
     proxy_cache: Option<Arc<Mutex<ProxyResponseCache>>>,
     proxy_backpressure: Option<Arc<Semaphore>>,
+    proxy_backend_backpressure: Arc<HashMap<String, Arc<Semaphore>>>,
     #[cfg(feature = "gateway-metrics-prometheus")]
     prometheus_metrics: Option<Arc<Mutex<PrometheusMetrics>>>,
     #[cfg(feature = "gateway-routing-advanced")]
@@ -100,6 +101,17 @@ pub struct GatewayHttpState {
 
 impl GatewayHttpState {
     pub fn new(gateway: Gateway) -> Self {
+        let mut proxy_backend_backpressure: HashMap<String, Arc<Semaphore>> = HashMap::new();
+        for backend in &gateway.config.backends {
+            let Some(max_in_flight) = backend.max_in_flight else {
+                continue;
+            };
+            proxy_backend_backpressure.insert(
+                backend.name.clone(),
+                Arc::new(Semaphore::new(max_in_flight.max(1))),
+            );
+        }
+
         Self {
             gateway: Arc::new(Mutex::new(gateway)),
             proxy_backends: Arc::new(HashMap::new()),
@@ -116,6 +128,7 @@ impl GatewayHttpState {
             #[cfg(feature = "gateway-proxy-cache")]
             proxy_cache: None,
             proxy_backpressure: None,
+            proxy_backend_backpressure: Arc::new(proxy_backend_backpressure),
             #[cfg(feature = "gateway-metrics-prometheus")]
             prometheus_metrics: None,
             #[cfg(feature = "gateway-routing-advanced")]
@@ -2594,7 +2607,13 @@ async fn handle_openai_compat_proxy(
                 continue;
             }
 
-            let mut proxy_permit = try_acquire_proxy_permit(&state)?;
+            let mut proxy_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+                ProxyPermitOutcome::Acquired(permits) => permits,
+                ProxyPermitOutcome::BackendRateLimited(err) => {
+                    last_err = Some(err);
+                    continue;
+                }
+            };
 
             {
                 let mut gateway = state.gateway.lock().await;
@@ -2633,7 +2652,7 @@ async fn handle_openai_compat_proxy(
                     headers.insert("x-ditto-translation", "multi".parse().unwrap());
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2669,7 +2688,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2719,7 +2738,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2783,7 +2802,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2816,7 +2835,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2858,7 +2877,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -2941,7 +2960,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -3059,7 +3078,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -3155,7 +3174,7 @@ async fn handle_openai_compat_proxy(
 
                     let body = proxy_body_from_bytes_with_permit(
                         Bytes::from(spoken.audio),
-                        proxy_permit.take(),
+                        proxy_permits.take(),
                     );
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
@@ -3231,7 +3250,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -3305,7 +3324,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -3379,7 +3398,7 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
@@ -3489,7 +3508,7 @@ async fn handle_openai_compat_proxy(
 
                         let stream = ProxyBodyStreamWithPermit {
                             inner: stream.boxed(),
-                            _permit: proxy_permit.take(),
+                            _permits: proxy_permits.take(),
                         };
                         let mut response = axum::response::Response::new(Body::from_stream(stream));
                         *response.status_mut() = StatusCode::OK;
@@ -3553,7 +3572,7 @@ async fn handle_openai_compat_proxy(
                             false,
                         );
 
-                        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                         let mut response = axum::response::Response::new(body);
                         *response.status_mut() = StatusCode::OK;
                         *response.headers_mut() = headers;
@@ -3820,7 +3839,13 @@ async fn handle_openai_compat_proxy(
             }
         };
 
-        let mut proxy_permit = try_acquire_proxy_permit(&state)?;
+        let mut proxy_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+            ProxyPermitOutcome::Acquired(permits) => permits,
+            ProxyPermitOutcome::BackendRateLimited(err) => {
+                last_err = Some(err);
+                continue;
+            }
+        };
 
         let backend_model_map: BTreeMap<String, String> = {
             let mut gateway = state.gateway.lock().await;
@@ -3939,7 +3964,7 @@ async fn handle_openai_compat_proxy(
 
         if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
             if let Some(parsed_json) = parsed_json.as_ref() {
-                let _ = proxy_permit.take();
+                let _ = proxy_permits.take();
                 let Some(mut chat_body) =
                     responses_shim::responses_request_to_chat_completions(parsed_json)
                 else {
@@ -4012,7 +4037,13 @@ async fn handle_openai_compat_proxy(
                     );
                 }
 
-                let shim_permit = try_acquire_proxy_permit(&state)?;
+                let shim_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+                    ProxyPermitOutcome::Acquired(permits) => permits,
+                    ProxyPermitOutcome::BackendRateLimited(err) => {
+                        last_err = Some(err);
+                        continue;
+                    }
+                };
                 let shim_timer_start = Instant::now();
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -4378,7 +4409,7 @@ async fn handle_openai_compat_proxy(
                         proxy_cache_key.as_deref(),
                         #[cfg(not(feature = "gateway-proxy-cache"))]
                         None,
-                        shim_permit,
+                        shim_permits,
                     )
                     .await
                     {
@@ -4398,7 +4429,7 @@ async fn handle_openai_compat_proxy(
                         proxy_cache_key.as_deref(),
                         #[cfg(not(feature = "gateway-proxy-cache"))]
                         None,
-                        shim_permit,
+                        shim_permits,
                     )
                     .await);
                 }
@@ -4701,7 +4732,7 @@ async fn handle_openai_compat_proxy(
                 proxy_cache_key.as_deref(),
                 #[cfg(not(feature = "gateway-proxy-cache"))]
                 None,
-                proxy_permit,
+                proxy_permits,
             )
             .await);
         }
@@ -4950,7 +4981,7 @@ async fn handle_openai_compat_proxy(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
-        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
@@ -5455,9 +5486,35 @@ fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Val
 
 type ProxyBodyStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
 
+#[derive(Default)]
+struct ProxyPermits {
+    _proxy: Option<OwnedSemaphorePermit>,
+    _backend: Option<OwnedSemaphorePermit>,
+}
+
+impl ProxyPermits {
+    fn new(proxy: Option<OwnedSemaphorePermit>, backend: Option<OwnedSemaphorePermit>) -> Self {
+        Self {
+            _proxy: proxy,
+            _backend: backend,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self._proxy.is_none() && self._backend.is_none()
+    }
+
+    fn take(&mut self) -> Self {
+        Self {
+            _proxy: self._proxy.take(),
+            _backend: self._backend.take(),
+        }
+    }
+}
+
 struct ProxyBodyStreamWithPermit {
     inner: ProxyBodyStream,
-    _permit: Option<OwnedSemaphorePermit>,
+    _permits: ProxyPermits,
 }
 
 impl futures_util::Stream for ProxyBodyStreamWithPermit {
@@ -5469,11 +5526,8 @@ impl futures_util::Stream for ProxyBodyStreamWithPermit {
     }
 }
 
-fn proxy_body_from_bytes_with_permit(
-    bytes: Bytes,
-    proxy_permit: Option<OwnedSemaphorePermit>,
-) -> Body {
-    let Some(proxy_permit) = proxy_permit else {
+fn proxy_body_from_bytes_with_permit(bytes: Bytes, proxy_permits: ProxyPermits) -> Body {
+    if proxy_permits.is_empty() {
         return Body::from(bytes);
     };
 
@@ -5481,7 +5535,7 @@ fn proxy_body_from_bytes_with_permit(
         futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(bytes) }).boxed();
     let stream = ProxyBodyStreamWithPermit {
         inner: stream,
-        _permit: Some(proxy_permit),
+        _permits: proxy_permits,
     };
     Body::from_stream(stream)
 }
@@ -5492,7 +5546,7 @@ async fn proxy_response(
     backend: String,
     request_id: String,
     _cache_key: Option<&str>,
-    proxy_permit: Option<OwnedSemaphorePermit>,
+    proxy_permits: ProxyPermits,
 ) -> axum::response::Response {
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
@@ -5512,7 +5566,7 @@ async fn proxy_response(
             .boxed();
         let stream = ProxyBodyStreamWithPermit {
             inner: stream,
-            _permit: proxy_permit,
+            _permits: proxy_permits,
         };
         let mut response = axum::response::Response::new(Body::from_stream(stream));
         *response.status_mut() = status;
@@ -5537,7 +5591,7 @@ async fn proxy_response(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit);
+        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits);
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
@@ -5551,7 +5605,7 @@ async fn responses_shim_response(
     backend: String,
     request_id: String,
     _cache_key: Option<&str>,
-    proxy_permit: Option<OwnedSemaphorePermit>,
+    proxy_permits: ProxyPermits,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
@@ -5567,7 +5621,7 @@ async fn responses_shim_response(
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, request_id.clone());
         let stream = ProxyBodyStreamWithPermit {
             inner: stream.boxed(),
-            _permit: proxy_permit,
+            _permits: proxy_permits,
         };
         let mut headers = upstream_headers;
         headers.insert(
@@ -5628,7 +5682,7 @@ async fn responses_shim_response(
         }
 
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        let body = proxy_body_from_bytes_with_permit(mapped_bytes, proxy_permit);
+        let body = proxy_body_from_bytes_with_permit(mapped_bytes, proxy_permits);
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
@@ -6352,20 +6406,48 @@ async fn settle_proxy_cost_budget_reservations(
     }
 }
 
-fn try_acquire_proxy_permit(
+enum ProxyPermitOutcome {
+    Acquired(ProxyPermits),
+    BackendRateLimited((StatusCode, Json<OpenAiErrorResponse>)),
+}
+
+fn try_acquire_proxy_permits(
     state: &GatewayHttpState,
-) -> Result<Option<OwnedSemaphorePermit>, (StatusCode, Json<OpenAiErrorResponse>)> {
-    let Some(limit) = state.proxy_backpressure.as_ref() else {
-        return Ok(None);
+    backend: &str,
+) -> Result<ProxyPermitOutcome, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let proxy_permit = if let Some(limit) = state.proxy_backpressure.as_ref() {
+        Some(limit.clone().try_acquire_owned().map_err(|_| {
+            openai_error(
+                StatusCode::TOO_MANY_REQUESTS,
+                "rate_limit_error",
+                Some("inflight_limit"),
+                "too many in-flight proxy requests",
+            )
+        })?)
+    } else {
+        None
     };
-    limit.clone().try_acquire_owned().map(Some).map_err(|_| {
-        openai_error(
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate_limit_error",
-            Some("inflight_limit"),
-            "too many in-flight proxy requests",
-        )
-    })
+
+    let backend_permit = if let Some(limit) = state.proxy_backend_backpressure.get(backend) {
+        match limit.clone().try_acquire_owned() {
+            Ok(permit) => Some(permit),
+            Err(_) => {
+                return Ok(ProxyPermitOutcome::BackendRateLimited(openai_error(
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "rate_limit_error",
+                    Some("inflight_limit_backend"),
+                    format!("too many in-flight proxy requests for backend {backend}"),
+                )));
+            }
+        }
+    } else {
+        None
+    };
+
+    Ok(ProxyPermitOutcome::Acquired(ProxyPermits::new(
+        proxy_permit,
+        backend_permit,
+    )))
 }
 
 fn openai_error(

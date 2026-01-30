@@ -99,6 +99,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
     {
       "name": "primary",
       "base_url": "https://api.openai.com/v1",
+      "max_in_flight": 64,
       "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
       "query_params": {}
     }
@@ -107,6 +108,8 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
   "router": { "default_backend": "primary", "rules": [] }
 }
 ```
+
+`backends[].max_in_flight` optionally caps concurrent in-flight proxy requests per backend (rejects with HTTP 429 + OpenAI-style error code `inflight_limit_backend`).
 
 Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` fields (e.g. `base_url`/`http_headers`/`http_query_params`), and `virtual_keys[].token` (expanded at startup via the process env or `--dotenv`).
 

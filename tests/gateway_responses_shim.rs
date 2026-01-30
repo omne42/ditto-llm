@@ -32,6 +32,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
     BackendConfig {
         name: name.to_string(),
         base_url,
+        max_in_flight: None,
         headers,
         query_params: BTreeMap::new(),
         provider: None,
