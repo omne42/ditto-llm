@@ -570,6 +570,18 @@ async fn handle_openai_compat_proxy(
                 return Err(map_openai_gateway_error(err));
             }
 
+            if let Some(model) = model.as_deref() {
+                if let Some(reason) = key.guardrails.check_model(model) {
+                    gateway.observability.record_guardrail_blocked();
+                    return Err(openai_error(
+                        StatusCode::FORBIDDEN,
+                        "policy_error",
+                        Some("guardrail_rejected"),
+                        reason,
+                    ));
+                }
+            }
+
             if let Some(limit) = key.guardrails.max_input_tokens {
                 if input_tokens_estimate > limit {
                     gateway.observability.record_guardrail_blocked();

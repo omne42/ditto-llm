@@ -217,6 +217,8 @@ async fn guardrail_rejects_banned_phrase() {
     key.guardrails = GuardrailsConfig {
         banned_phrases: vec!["forbidden".to_string()],
         max_input_tokens: None,
+        allow_models: Vec::new(),
+        deny_models: Vec::new(),
     };
     let config = base_config(key);
     let clock = Box::new(FixedClock { now: 480 });
@@ -227,6 +229,49 @@ async fn guardrail_rejects_banned_phrase() {
 
     let mut request = base_request();
     request.prompt = "contains forbidden text".to_string();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
+}
+
+#[tokio::test]
+async fn guardrail_rejects_denied_model() {
+    let mut key = base_key();
+    key.guardrails = GuardrailsConfig {
+        banned_phrases: Vec::new(),
+        max_input_tokens: None,
+        allow_models: Vec::new(),
+        deny_models: vec!["gpt-4o-mini".to_string()],
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 500 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
+}
+
+#[tokio::test]
+async fn guardrail_rejects_not_allowed_model() {
+    let mut key = base_key();
+    key.guardrails = GuardrailsConfig {
+        banned_phrases: Vec::new(),
+        max_input_tokens: None,
+        allow_models: vec!["gpt-*".to_string()],
+        deny_models: Vec::new(),
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 520 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut request = base_request();
+    request.model = "o1".to_string();
     let err = gateway.handle(request).await.unwrap_err();
     assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
 }
