@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vertex: GenAI generateContent + streamGenerateContent (SSE) + tools support (feature `vertex`).
 - Gateway: `ditto-gateway` HTTP server with `/v1/gateway`, `/health`, `/metrics`, and `/admin/keys` (feature `gateway`).
 - Gateway: OpenAI-compatible passthrough proxy for `ANY /v1/*` (incl. streaming) with per-backend header/query-param injection and optional devtools JSONL logging (feature `gateway-devtools`).
+- Gateway: accept virtual keys via `x-api-key` (alias for `Authorization: Bearer ...` / `x-ditto-virtual-key`).
 - Gateway: config supports `${ENV_VAR}` interpolation in proxy backend `base_url`/`headers`/`query_params`, backend `provider_config` fields, and `virtual_keys[].token` (resolved at startup).
 - Gateway: `ditto-gateway` supports `--dotenv PATH` to load env vars for config interpolation and provider auth.
 - Gateway: `ditto-gateway` supports `--admin-token-env` and `--redis-env` to load sensitive CLI options from env (works with `--dotenv`).

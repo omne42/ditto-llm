@@ -1390,6 +1390,7 @@ async fn handle_openai_compat_proxy(
         } else {
             let token = extract_bearer(&parts.headers)
                 .or_else(|| extract_header(&parts.headers, "x-ditto-virtual-key"))
+                .or_else(|| extract_header(&parts.headers, "x-api-key"))
                 .ok_or_else(|| {
                     openai_error(
                         StatusCode::UNAUTHORIZED,
@@ -5223,6 +5224,7 @@ fn max_option_u64(a: Option<u64>, b: Option<u64>) -> Option<u64> {
 fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
     if strip_authorization {
         headers.remove("authorization");
+        headers.remove("x-api-key");
     }
     headers.remove("x-ditto-virtual-key");
     headers.remove("x-ditto-cache-bypass");
