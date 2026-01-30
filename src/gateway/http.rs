@@ -2532,9 +2532,12 @@ async fn handle_openai_compat_proxy(
             let batch_cancel_id = translation::batches_cancel_id(path_and_query);
             let batch_retrieve_id = translation::batches_retrieve_id(path_and_query);
             let batches_root = translation::is_batches_path(path_and_query);
+            let models_root = translation::is_models_path(path_and_query);
+            let models_retrieve_id = translation::models_retrieve_id(path_and_query);
 
             let supported_path = translation::is_chat_completions_path(path_and_query)
                 || translation::is_completions_path(path_and_query)
+                || models_root
                 || translation::is_responses_create_path(path_and_query)
                 || translation::is_embeddings_path(path_and_query)
                 || translation::is_moderations_path(path_and_query)
@@ -2544,7 +2547,8 @@ async fn handle_openai_compat_proxy(
                 || translation::is_rerank_path(path_and_query)
                 || batches_root
                 || batch_cancel_id.is_some()
-                || batch_retrieve_id.is_some();
+                || batch_retrieve_id.is_some()
+                || models_retrieve_id.is_some();
 
             let supported_method = if parts.method == axum::http::Method::POST {
                 translation::is_chat_completions_path(path_and_query)
@@ -2559,7 +2563,10 @@ async fn handle_openai_compat_proxy(
                     || batches_root
                     || batch_cancel_id.is_some()
             } else if parts.method == axum::http::Method::GET {
-                batches_root || batch_retrieve_id.is_some()
+                batches_root
+                    || batch_retrieve_id.is_some()
+                    || models_root
+                    || models_retrieve_id.is_some()
             } else {
                 false
             };
@@ -2602,7 +2609,62 @@ async fn handle_openai_compat_proxy(
                 (axum::response::Response, ProxySpend),
                 (StatusCode, Json<OpenAiErrorResponse>),
             > = 'translation_backend_attempt: {
-                if batches_root && parts.method == axum::http::Method::GET {
+                if models_root && parts.method == axum::http::Method::GET {
+                    let models = translation::collect_models_from_translation_backends(
+                        state.translation_backends.as_ref(),
+                    );
+                    let value = translation::models_list_to_openai(&models, _now_epoch_seconds);
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert("x-ditto-translation", "multi".parse().unwrap());
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
+                } else if let Some(model_id) = models_retrieve_id.as_deref()
+                    && parts.method == axum::http::Method::GET
+                {
+                    let models = translation::collect_models_from_translation_backends(
+                        state.translation_backends.as_ref(),
+                    );
+                    let Some(owned_by) = models.get(model_id) else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::NOT_FOUND,
+                            "invalid_request_error",
+                            Some("model_not_found"),
+                            format!("model {model_id} not found"),
+                        ));
+                    };
+
+                    let value =
+                        translation::model_to_openai(model_id, owned_by, _now_epoch_seconds);
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        owned_by
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
+                } else if batches_root && parts.method == axum::http::Method::GET {
                     let mut limit: Option<u32> = None;
                     let mut after: Option<String> = None;
                     let query = parts.uri.query().unwrap_or_default();

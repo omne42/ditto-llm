@@ -548,6 +548,142 @@ async fn gateway_translation_completions_streaming() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
+async fn gateway_translation_models_list() -> ditto_llm::Result<()> {
+    use std::collections::BTreeMap;
+
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+
+    let mut model_map = BTreeMap::new();
+    model_map.insert("gpt-4o-mini".to_string(), "fake-model".to_string());
+
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)).with_model_map(model_map),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("other", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("multi")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("list"));
+
+    let ids = parsed
+        .get("data")
+        .and_then(|v| v.as_array())
+        .map(|data| {
+            data.iter()
+                .filter_map(|item| {
+                    item.get("id")
+                        .and_then(|v| v.as_str())
+                        .map(ToString::to_string)
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    assert!(ids.contains(&"gpt-4o-mini".to_string()));
+    assert!(ids.contains(&"fake/fake-model".to_string()));
+    assert!(ids.contains(&"other/fake-model".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_models_retrieve() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/v1/models/fake/fake-model")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("model"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("fake/fake-model")
+    );
+    assert_eq!(
+        parsed.get("owned_by").and_then(|v| v.as_str()),
+        Some("fake")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_models_retrieve_unknown() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/v1/models/does-not-exist")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();

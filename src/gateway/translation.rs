@@ -900,6 +900,27 @@ pub fn is_completions_path(path_and_query: &str) -> bool {
     path == "/v1/completions" || path == "/v1/completions/"
 }
 
+pub fn is_models_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/models" || path == "/v1/models/"
+}
+
+pub fn models_retrieve_id(path_and_query: &str) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/models/")?;
+    if rest.trim().is_empty() {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
 pub fn is_responses_create_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -995,6 +1016,77 @@ pub fn batches_retrieve_id(path_and_query: &str) -> Option<String> {
         return None;
     }
     Some(rest.to_string())
+}
+
+pub fn collect_models_from_translation_backends(
+    backends: &HashMap<String, TranslationBackend>,
+) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::<String, String>::new();
+
+    let mut backend_names = backends.keys().collect::<Vec<_>>();
+    backend_names.sort();
+
+    for backend_name in backend_names {
+        let backend = match backends.get(backend_name) {
+            Some(backend) => backend,
+            None => continue,
+        };
+
+        let provider = backend.provider.trim();
+        let owned_by = if provider.is_empty() {
+            backend_name.as_str()
+        } else {
+            provider
+        };
+
+        for key in backend.model_map.keys() {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            out.entry(key.to_string())
+                .or_insert_with(|| owned_by.to_string());
+        }
+
+        let default_model = backend.model.model_id().trim();
+        if !default_model.is_empty() {
+            out.entry(format!("{owned_by}/{default_model}"))
+                .or_insert_with(|| owned_by.to_string());
+        }
+
+        for value in backend.model_map.values() {
+            let value = value.trim();
+            if value.is_empty() {
+                continue;
+            }
+            out.entry(format!("{owned_by}/{value}"))
+                .or_insert_with(|| owned_by.to_string());
+        }
+    }
+
+    out
+}
+
+pub fn model_to_openai(id: &str, owned_by: &str, created: u64) -> Value {
+    let id = id.trim();
+    let owned_by = owned_by.trim();
+    serde_json::json!({
+        "id": id,
+        "object": "model",
+        "created": created,
+        "owned_by": owned_by,
+    })
+}
+
+pub fn models_list_to_openai(models: &BTreeMap<String, String>, created: u64) -> Value {
+    let data = models
+        .iter()
+        .map(|(id, owned_by)| model_to_openai(id, owned_by, created))
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "object": "list",
+        "data": data,
+    })
 }
 
 pub fn batches_create_request_to_request(request: &Value) -> ParseResult<BatchCreateRequest> {

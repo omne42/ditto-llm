@@ -91,7 +91,7 @@
 
 - [x] Passthrough proxy endpoints：`ANY /v1/*`（含 `/v1/responses`、`/v1/chat/completions`、`/v1/embeddings`、`/v1/models`）
 - [x] `/v1/responses` shim（OpenAI-compatible upstream）：当 upstream 仅支持 `/v1/chat/completions` 时，gateway 自动 fallback 并返回“Responses-like”（best-effort，仍属于变形路径）
-- [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
+- [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `GET /v1/models` + `GET /v1/models/*` + `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
 - [x] 路由（basic）：weighted backends（seeded）+ network-error fallback
 - [x] 路由（advanced）：retry + circuit breaker + active health checks（feature `gateway-routing-advanced`）
 - [x] 成本口径：真实 token 计数（tiktoken 等价；feature `gateway-tokenizer`，失败回退估算）
