@@ -113,7 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `provider_options` supports per-provider buckets (`"*"` + provider ids) and passes through additional provider-specific keys where supported (conflicts are ignored with warnings).
 - Format: rustfmt cleanup (no behavior changes).
 - Format: rustfmt cleanup (imports order).
-- Dev: pre-commit rejects oversized Rust files (configurable via `DITTO_MAX_RS_LINES`).
+- Dev: pre-commit rejects oversized staged Rust files (default 1000 lines; configurable via `DITTO_MAX_RS_LINES`).
 
 ### Fixed
 
