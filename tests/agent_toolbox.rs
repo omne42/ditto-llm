@@ -7,7 +7,7 @@ use serde_json::json;
 use ditto_llm::Result;
 use ditto_llm::agent::{
     FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE,
-    TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
+    TOOL_FS_STAT, TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -176,6 +176,31 @@ async fn fs_list_dir_lists_entries() -> Result<()> {
         .collect();
     assert!(names.contains(&"a.txt".to_string()));
     assert!(names.contains(&"sub".to_string()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_stat_tool_reports_metadata() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_STAT.to_string(),
+        arguments: json!({
+            "path": "a.txt"
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    let stat = value.get("stat").cloned().unwrap_or_default();
+    assert_eq!(stat.get("type").and_then(|v| v.as_str()), Some("file"));
+    assert_eq!(stat.get("size_bytes").and_then(|v| v.as_u64()), Some(2));
+    assert!(stat.get("modified_ms").is_some());
     Ok(())
 }
 

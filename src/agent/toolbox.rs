@@ -17,6 +17,7 @@ pub const TOOL_HTTP_FETCH: &str = "http_fetch";
 pub const TOOL_FS_READ_FILE: &str = "fs_read_file";
 pub const TOOL_FS_WRITE_FILE: &str = "fs_write_file";
 pub const TOOL_FS_LIST_DIR: &str = "fs_list_dir";
+pub const TOOL_FS_STAT: &str = "fs_stat";
 pub const TOOL_SHELL_EXEC: &str = "shell_exec";
 
 pub fn toolbox_tools() -> Vec<Tool> {
@@ -25,6 +26,7 @@ pub fn toolbox_tools() -> Vec<Tool> {
         fs_read_file_tool(),
         fs_write_file_tool(),
         fs_list_dir_tool(),
+        fs_stat_tool(),
         shell_exec_tool(),
     ]
 }
@@ -110,6 +112,23 @@ pub fn fs_list_dir_tool() -> Tool {
     }
 }
 
+pub fn fs_stat_tool() -> Tool {
+    Tool {
+        name: TOOL_FS_STAT.to_string(),
+        description: Some(
+            "Get file or directory metadata under the configured root directory.".to_string(),
+        ),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Path relative to the configured root directory." }
+            },
+            "required": ["path"]
+        }),
+        strict: Some(true),
+    }
+}
+
 pub fn shell_exec_tool() -> Tool {
     Tool {
         name: TOOL_SHELL_EXEC.to_string(),
@@ -174,7 +193,7 @@ impl ToolExecutor for ToolboxExecutor {
         match call.name.as_str() {
             TOOL_HTTP_FETCH => self.http.execute(call).await,
             TOOL_SHELL_EXEC => self.shell.execute(call).await,
-            TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR => {
+            TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR | TOOL_FS_STAT => {
                 self.fs.execute(call).await
             }
             other => Ok(ToolResult {
@@ -793,6 +812,11 @@ struct FsListDirArgs {
     max_entries: Option<usize>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FsStatArgs {
+    path: String,
+}
+
 #[async_trait]
 impl ToolExecutor for FsToolExecutor {
     async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
@@ -800,6 +824,7 @@ impl ToolExecutor for FsToolExecutor {
             TOOL_FS_READ_FILE => self.execute_read_file(call).await,
             TOOL_FS_WRITE_FILE => self.execute_write_file(call).await,
             TOOL_FS_LIST_DIR => self.execute_list_dir(call).await,
+            TOOL_FS_STAT => self.execute_stat(call).await,
             other => Ok(ToolResult {
                 tool_call_id: call.id,
                 content: format!("unknown tool: {other}"),
@@ -1007,6 +1032,58 @@ impl FsToolExecutor {
             is_error: None,
         })
     }
+
+    async fn execute_stat(&self, call: ToolCall) -> Result<ToolResult> {
+        let args: FsStatArgs = match serde_json::from_value(call.arguments.clone()) {
+            Ok(args) => args,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("invalid args: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let path = match self.resolve_existing_path(&args.path) {
+            Ok(path) => path,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: err,
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let stat = tokio::task::spawn_blocking(move || fs_stat_blocking(&path))
+            .await
+            .map_err(|err| {
+                DittoError::Io(std::io::Error::other(format!("fs_stat join error: {err}")))
+            })?;
+
+        let value = match stat {
+            Ok(value) => value,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_stat failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "path": args.path,
+            "stat": value,
+        });
+
+        Ok(ToolResult {
+            tool_call_id: call.id,
+            content: out.to_string(),
+            is_error: None,
+        })
+    }
 }
 
 fn read_file_limited(path: &Path, max_bytes: usize) -> std::io::Result<(String, bool)> {
@@ -1145,4 +1222,32 @@ fn fs_list_dir_blocking(
     }
 
     Ok((entries, truncated))
+}
+
+fn fs_stat_blocking(path: &Path) -> std::io::Result<Value> {
+    let meta = std::fs::metadata(path)?;
+    let file_type = meta.file_type();
+    let kind = if file_type.is_file() {
+        "file"
+    } else if file_type.is_dir() {
+        "dir"
+    } else if file_type.is_symlink() {
+        "symlink"
+    } else {
+        "other"
+    };
+
+    let size_bytes = if file_type.is_file() { meta.len() } else { 0 };
+
+    let modified_ms = meta
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|value| value.as_millis().min(u128::from(u64::MAX)) as u64);
+
+    Ok(serde_json::json!({
+        "type": kind,
+        "size_bytes": size_bytes,
+        "modified_ms": modified_ms,
+    }))
 }
