@@ -21,6 +21,7 @@ fn build_proxy_backends(
         let mut client = ProxyBackend::new(&backend.base_url)?;
         client = client.with_headers(backend.headers.clone())?;
         client = client.with_query_params(backend.query_params.clone());
+        client = client.with_request_timeout_seconds(backend.timeout_seconds);
         out.insert(backend.name.clone(), client);
     }
     Ok(out)
@@ -33,6 +34,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
         name: name.to_string(),
         base_url,
         max_in_flight: None,
+        timeout_seconds: None,
         headers,
         query_params: BTreeMap::new(),
         provider: None,
@@ -376,6 +378,63 @@ async fn openai_compat_proxy_enforces_backend_max_in_flight() {
     let statuses = [response_1.status(), response_2.status()];
     assert!(statuses.contains(&StatusCode::OK));
     assert!(statuses.contains(&StatusCode::TOO_MANY_REQUESTS));
+
+    mock.assert_calls(1);
+}
+
+#[tokio::test]
+async fn openai_compat_proxy_respects_backend_timeout_seconds() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .delay(std::time::Duration::from_millis(2_000))
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let mut backend = backend_config("primary", upstream.base_url(), "Bearer sk-test");
+    backend.timeout_seconds = Some(1);
+
+    let config = GatewayConfig {
+        backends: vec![backend],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    assert_eq!(
+        value
+            .get("error")
+            .and_then(|err| err.get("code"))
+            .and_then(|code| code.as_str()),
+        Some("backend_error")
+    );
 
     mock.assert_calls(1);
 }
@@ -1771,6 +1830,7 @@ async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
             name: "primary".to_string(),
             base_url: upstream.base_url(),
             max_in_flight: None,
+            timeout_seconds: None,
             headers: BTreeMap::new(),
             query_params: BTreeMap::new(),
             provider: None,

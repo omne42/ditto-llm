@@ -21,6 +21,7 @@ fn build_proxy_backends(
         let mut client = ProxyBackend::new(&backend.base_url)?;
         client = client.with_headers(backend.headers.clone())?;
         client = client.with_query_params(backend.query_params.clone());
+        client = client.with_request_timeout_seconds(backend.timeout_seconds);
         out.insert(backend.name.clone(), client);
     }
     Ok(out)
@@ -33,6 +34,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
         name: name.to_string(),
         base_url,
         max_in_flight: None,
+        timeout_seconds: None,
         headers,
         query_params: BTreeMap::new(),
         provider: None,

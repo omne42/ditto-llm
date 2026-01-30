@@ -35,6 +35,8 @@ pub struct BackendConfig {
     pub base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_in_flight: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
     #[serde(default)]
@@ -83,6 +85,7 @@ impl std::fmt::Debug for BackendConfig {
             .field("name", &self.name)
             .field("base_url", &self.base_url)
             .field("max_in_flight", &self.max_in_flight)
+            .field("timeout_seconds", &self.timeout_seconds)
             .field("headers", &"<redacted>")
             .field("query_params", &"<redacted>")
             .field("provider", &self.provider)
@@ -234,6 +237,7 @@ mod tests {
             name: "primary".to_string(),
             base_url: "https://example.com/${OPENAI_API_KEY}".to_string(),
             max_in_flight: None,
+            timeout_seconds: None,
             headers: BTreeMap::from([(
                 "authorization".to_string(),
                 "Bearer ${OPENAI_API_KEY}".to_string(),
@@ -294,6 +298,7 @@ mod tests {
             name: "translation".to_string(),
             base_url: String::new(),
             max_in_flight: None,
+            timeout_seconds: None,
             headers: BTreeMap::new(),
             query_params: BTreeMap::new(),
             provider: Some("openai-compatible".to_string()),
@@ -338,6 +343,7 @@ mod tests {
             name: "primary".to_string(),
             base_url: "https://example.com".to_string(),
             max_in_flight: None,
+            timeout_seconds: None,
             headers: BTreeMap::from([(
                 "authorization".to_string(),
                 "Bearer ${OPENAI_API_KEY}".to_string(),

@@ -424,6 +424,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut client = ditto_llm::gateway::ProxyBackend::new(&backend.base_url)?;
         client = client.with_headers(backend.headers.clone())?;
         client = client.with_query_params(backend.query_params.clone());
+        client = client.with_request_timeout_seconds(backend.timeout_seconds);
         if proxy_backends
             .insert(backend.name.clone(), client)
             .is_some()

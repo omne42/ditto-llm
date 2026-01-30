@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: Prometheus metrics for proxy cache lookups/hits/misses (by path/source) and cache store/purge counters (feature `gateway-metrics-prometheus` + `gateway-proxy-cache`).
 - Gateway: proxy backpressure via `--proxy-max-in-flight` (rejects when too many in-flight proxy requests).
 - Gateway: per-backend proxy backpressure via `backends[].max_in_flight` (rejects with 429 + OpenAI-style error code `inflight_limit_backend`).
+- Gateway: per-backend proxy request timeout via `backends[].timeout_seconds` (default: 300s).
 - Gateway: optional active health checks for proxy backends (`--proxy-health-check*`, feature `gateway-routing-advanced`).
 - Gateway: best-effort usage-based settling for proxy budgets (for non-streaming JSON responses, prefer `usage` tokens/cost over request estimates).
 - Gateway: optional tiktoken-based input token counting for proxy budgets/guardrails/costing (feature `gateway-tokenizer`; falls back to request-size estimation).

@@ -12,6 +12,7 @@ pub struct ProxyBackend {
     client: reqwest::Client,
     headers: HeaderMap,
     query_params: BTreeMap<String, String>,
+    request_timeout: Option<Duration>,
 }
 
 impl ProxyBackend {
@@ -27,7 +28,15 @@ impl ProxyBackend {
             client,
             headers: HeaderMap::new(),
             query_params: BTreeMap::new(),
+            request_timeout: None,
         })
+    }
+
+    pub fn with_request_timeout_seconds(mut self, timeout_seconds: Option<u64>) -> Self {
+        self.request_timeout = timeout_seconds
+            .filter(|seconds| *seconds > 0)
+            .map(Duration::from_secs);
+        self
     }
 
     pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Result<Self, GatewayError> {
@@ -68,6 +77,7 @@ impl ProxyBackend {
         if !self.query_params.is_empty() {
             req = req.query(&self.query_params);
         }
+        let timeout = timeout.or(self.request_timeout);
         if let Some(timeout) = timeout {
             req = req.timeout(timeout);
         }
