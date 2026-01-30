@@ -287,6 +287,11 @@ pub fn router(state: GatewayHttpState) -> Router {
                 put(upsert_key_with_id).delete(delete_key),
             );
 
+        #[cfg(feature = "gateway-proxy-cache")]
+        if state.proxy_cache.is_some() {
+            router = router.route("/admin/proxy_cache/purge", post(purge_proxy_cache));
+        }
+
         #[cfg(feature = "gateway-routing-advanced")]
         {
             router = router
@@ -325,6 +330,22 @@ async fn health() -> Json<HealthResponse> {
 async fn metrics(State(state): State<GatewayHttpState>) -> Json<ObservabilitySnapshot> {
     let gateway = state.gateway.lock().await;
     Json(gateway.observability())
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+#[derive(Debug, Deserialize)]
+struct PurgeProxyCacheRequest {
+    #[serde(default)]
+    all: bool,
+    #[serde(default)]
+    cache_key: Option<String>,
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+#[derive(Debug, Serialize)]
+struct PurgeProxyCacheResponse {
+    cleared_memory: bool,
+    deleted_redis: Option<u64>,
 }
 
 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -1854,7 +1875,14 @@ async fn handle_openai_compat_proxy(
                     .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
             }
 
-            return Ok(cached_proxy_response(cached, request_id.clone()));
+            let mut response = cached_proxy_response(cached, request_id.clone());
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                response.headers_mut().insert("x-ditto-cache-key", value);
+            }
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_source) {
+                response.headers_mut().insert("x-ditto-cache-source", value);
+            }
+            return Ok(response);
         }
     }
 
@@ -5001,6 +5029,12 @@ async fn handle_openai_compat_proxy(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+        #[cfg(feature = "gateway-proxy-cache")]
+        if let Some(cache_key) = proxy_cache_key.as_deref() {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
         let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
@@ -5579,6 +5613,11 @@ async fn proxy_response(
     if content_type.starts_with("text/event-stream") {
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+        if let Some(cache_key) = _cache_key {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
         headers.remove("content-length");
         let stream = upstream
             .bytes_stream()
@@ -5609,6 +5648,11 @@ async fn proxy_response(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+        if let Some(cache_key) = _cache_key {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
         let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits);
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
@@ -5649,6 +5693,11 @@ async fn responses_shim_response(
         headers.insert("content-type", "text/event-stream".parse().unwrap());
         headers.remove("content-length");
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+        if let Some(cache_key) = _cache_key {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
         let mut response = axum::response::Response::new(Body::from_stream(stream));
         *response.status_mut() = status;
         *response.headers_mut() = headers;
@@ -5698,6 +5747,11 @@ async fn responses_shim_response(
         }
 
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+        if let Some(cache_key) = _cache_key {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
         let body = proxy_body_from_bytes_with_permit(mapped_bytes, proxy_permits);
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
@@ -6521,6 +6575,91 @@ async fn list_keys(
         }
     }
     Ok(Json(keys))
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+async fn purge_proxy_cache(
+    State(state): State<GatewayHttpState>,
+    headers: HeaderMap,
+    Json(payload): Json<PurgeProxyCacheRequest>,
+) -> Result<Json<PurgeProxyCacheResponse>, (StatusCode, Json<ErrorResponse>)> {
+    ensure_admin(&state, &headers)?;
+
+    let Some(cache) = state.proxy_cache.as_ref() else {
+        return Err(error_response(
+            StatusCode::NOT_FOUND,
+            "not_configured",
+            "proxy cache not enabled",
+        ));
+    };
+
+    if payload.all {
+        {
+            let mut cache = cache.lock().await;
+            cache.clear();
+        }
+
+        #[cfg(feature = "gateway-store-redis")]
+        if let Some(store) = state.redis_store.as_ref() {
+            let deleted_redis = store.clear_proxy_cache().await.map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+            return Ok(Json(PurgeProxyCacheResponse {
+                cleared_memory: true,
+                deleted_redis: Some(deleted_redis),
+            }));
+        }
+
+        return Ok(Json(PurgeProxyCacheResponse {
+            cleared_memory: true,
+            deleted_redis: None,
+        }));
+    }
+
+    let Some(cache_key) = payload
+        .cache_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "must set all=true or cache_key",
+        ));
+    };
+
+    let removed_memory = {
+        let mut cache = cache.lock().await;
+        cache.remove(cache_key)
+    };
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let Some(store) = state.redis_store.as_ref() {
+        let deleted_redis = store
+            .delete_proxy_cache_response(cache_key)
+            .await
+            .map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+        return Ok(Json(PurgeProxyCacheResponse {
+            cleared_memory: removed_memory,
+            deleted_redis: Some(deleted_redis),
+        }));
+    }
+
+    Ok(Json(PurgeProxyCacheResponse {
+        cleared_memory: removed_memory,
+        deleted_redis: None,
+    }))
 }
 
 async fn upsert_key(

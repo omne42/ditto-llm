@@ -150,6 +150,7 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured). `GET /admin/keys` redacts tokens unless `?include_tokens=true`.
+- `POST /admin/proxy_cache/purge` (requires an admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
 - `GET /admin/backends` and `POST /admin/backends/:name/reset` (requires an admin token and `--features gateway-routing-advanced`).
 
 CLI options:
@@ -194,6 +195,8 @@ Response headers:
 - `x-ditto-backend`: which backend handled the request
 - `x-ditto-request-id`: request id (uses incoming `x-request-id` or generates one)
 - `x-ditto-cache`: `hit` when served from the optional proxy cache
+- `x-ditto-cache-key`: cache key for the optional proxy cache (when enabled and cacheable)
+- `x-ditto-cache-source`: `memory` or `redis` when `x-ditto-cache=hit`
 - `x-ditto-shim`: present when `POST /v1/responses` is shimmed via `POST /v1/chat/completions`
 - `x-ditto-translation`: present when a translation backend handled the request
 

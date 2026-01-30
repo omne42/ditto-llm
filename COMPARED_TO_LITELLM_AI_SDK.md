@@ -54,7 +54,7 @@
 - 路由：已支持“主动健康检查/探活”（feature `gateway-routing-advanced`），仍缺更丰富的策略（更细粒度熔断、分级 fallback、更细粒度 backpressure）
 - 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）+ LiteLLM prompt cache 成本（read: `cache_read_input_token_cost` + `cached_tokens`；write: `cache_creation_input_token_cost` + `cache_creation_input_tokens`；tiered: `*_above_*_tokens`）+ LiteLLM service tier 成本（`*_priority`/`*_flex` + request `service_tier`）+ proxy `model_map` 计费对齐（按 backend 映射后的 model 选价）；支持按 project/user 归因与共享预算（`virtual_keys[].project_id/user_id` + `project_budget`/`user_budget` + `/admin/budgets/projects|users` + `/admin/costs/projects|users`）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
-- 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用；仍缺 streaming cache 与 cache invalidation 策略
+- 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
 
 ---

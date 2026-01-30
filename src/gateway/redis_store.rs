@@ -221,6 +221,42 @@ impl RedisStore {
         Ok(())
     }
 
+    #[cfg(feature = "gateway-proxy-cache")]
+    pub async fn delete_proxy_cache_response(
+        &self,
+        cache_key: &str,
+    ) -> Result<u64, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let redis_key = self.key_proxy_cache_response(cache_key);
+        let deleted: u64 = conn.del(redis_key).await?;
+        Ok(deleted)
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    pub async fn clear_proxy_cache(&self) -> Result<u64, RedisStoreError> {
+        let pattern = format!("{}:proxy_cache:*", self.prefix);
+        let keys = {
+            let mut conn = self.connection().await?;
+            let mut iter = conn.scan_match::<_, String>(pattern).await?;
+            let mut keys = Vec::new();
+            while let Some(key) = iter.next_item().await {
+                keys.push(key?);
+            }
+            keys
+        };
+
+        if keys.is_empty() {
+            return Ok(0);
+        }
+
+        let mut conn = self.connection().await?;
+        let mut deleted = 0u64;
+        for chunk in keys.chunks(128) {
+            deleted = deleted.saturating_add(conn.del(chunk).await?);
+        }
+        Ok(deleted)
+    }
+
     pub async fn reserve_budget_tokens(
         &self,
         request_id: &str,

@@ -89,6 +89,19 @@ impl ProxyResponseCache {
             self.entries.remove(&candidate);
         }
     }
+
+    pub fn remove(&mut self, key: &str) -> bool {
+        let existed = self.entries.remove(key).is_some();
+        if existed {
+            self.order.retain(|candidate| candidate != key);
+        }
+        existed
+    }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.order.clear();
+    }
 }
 
 #[cfg(test)]

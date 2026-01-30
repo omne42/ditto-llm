@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: optional sqlite persistence for admin virtual keys via `--sqlite PATH` (feature `gateway-store-sqlite`).
 - Gateway: optional in-memory proxy cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
 - Gateway: proxy cache supports Redis-backed sharing when running with `--redis` (feature `gateway-store-redis`).
+- Gateway: proxy cache supports admin purge and emits `x-ditto-cache-key` / `x-ditto-cache-source` headers (feature `gateway-proxy-cache`).
 - Gateway: optional OpenTelemetry tracing exporter via OTLP (feature `gateway-otel`).
 - Gateway: Prometheus metrics for per-backend in-flight gauge and request duration histogram (feature `gateway-metrics-prometheus`).
 - Gateway: Prometheus metrics for per-path request counts and proxy request duration histogram (feature `gateway-metrics-prometheus`).
