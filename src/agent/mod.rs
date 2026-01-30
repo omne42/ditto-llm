@@ -6,8 +6,9 @@ pub mod types;
 
 pub use tool_loop::{ToolExecutor, ToolLoopAgent};
 pub use toolbox::{
-    FsToolExecutor, HttpToolExecutor, TOOL_FS_READ_FILE, TOOL_HTTP_FETCH, ToolboxExecutor,
-    fs_read_file_tool, http_fetch_tool, toolbox_tools,
+    FsToolExecutor, HttpToolExecutor, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_WRITE_FILE,
+    TOOL_HTTP_FETCH, ToolboxExecutor, fs_list_dir_tool, fs_read_file_tool, fs_write_file_tool,
+    http_fetch_tool, toolbox_tools,
 };
 pub use types::{
     ApprovalHook, StopWhen, ToolApproval, ToolCall, ToolLoopOutcome, ToolLoopState,

@@ -83,6 +83,8 @@
 - [ ] 常用工具 wrappers（可选模块）：shell/fs/http 等“本地工具”封装（对齐 AI SDK `ToolLoopAgent` 的可组合体验）
   - [x] `http_fetch` tool + executor（feature `agent`）
   - [x] `fs_read_file` tool + executor（feature `agent`，限制 root）
+  - [x] `fs_write_file` tool + executor（feature `agent`，限制 root，默认不覆盖）
+  - [x] `fs_list_dir` tool + executor（feature `agent`，限制 root）
   - [ ] `shell_exec` tool（需要 allowlist/sandbox 口径）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）

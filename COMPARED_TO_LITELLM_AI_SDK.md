@@ -29,7 +29,7 @@
 
 ### 仍缺（但属于“超集可选项”）
 
-- 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `fs_read_file` 的 tool + executor；仍缺 shell 等扩展）
+- 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `fs_read_file` + `fs_write_file` + `fs_list_dir` 的 tool + executor；仍缺 shell 等扩展）
 
 ---
 

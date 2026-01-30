@@ -6,7 +6,8 @@ use serde_json::json;
 
 use ditto_llm::Result;
 use ditto_llm::agent::{
-    FsToolExecutor, HttpToolExecutor, TOOL_FS_READ_FILE, TOOL_HTTP_FETCH, ToolCall, ToolExecutor,
+    FsToolExecutor, HttpToolExecutor, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_WRITE_FILE,
+    TOOL_HTTP_FETCH, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -85,6 +86,96 @@ async fn fs_read_file_tool_rejects_path_escape() -> Result<()> {
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_write_file_tool_writes_and_respects_overwrite() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let write_1 = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_WRITE_FILE.to_string(),
+        arguments: json!({
+            "path": "sub/hello.txt",
+            "content": "hi",
+            "create_parents": true
+        }),
+    };
+    let result_1 = executor.execute(write_1).await?;
+    assert_eq!(result_1.tool_call_id, "call_1");
+    assert_eq!(result_1.is_error, None);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("sub").join("hello.txt"))?,
+        "hi"
+    );
+
+    let write_2 = ToolCall {
+        id: "call_2".to_string(),
+        name: TOOL_FS_WRITE_FILE.to_string(),
+        arguments: json!({
+            "path": "sub/hello.txt",
+            "content": "bye"
+        }),
+    };
+    let result_2 = executor.execute(write_2).await?;
+    assert_eq!(result_2.tool_call_id, "call_2");
+    assert_eq!(result_2.is_error, Some(true));
+
+    let write_3 = ToolCall {
+        id: "call_3".to_string(),
+        name: TOOL_FS_WRITE_FILE.to_string(),
+        arguments: json!({
+            "path": "sub/hello.txt",
+            "content": "bye",
+            "overwrite": true
+        }),
+    };
+    let result_3 = executor.execute(write_3).await?;
+    assert_eq!(result_3.tool_call_id, "call_3");
+    assert_eq!(result_3.is_error, None);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("sub").join("hello.txt"))?,
+        "bye"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_list_dir_lists_entries() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "a")?;
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_LIST_DIR.to_string(),
+        arguments: json!({}),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    let entries = value
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let names: Vec<String> = entries
+        .iter()
+        .filter_map(|entry| {
+            entry
+                .get("name")
+                .and_then(|n| n.as_str())
+                .map(|s| s.to_string())
+        })
+        .collect();
+    assert!(names.contains(&"a.txt".to_string()));
+    assert!(names.contains(&"sub".to_string()));
     Ok(())
 }
 
