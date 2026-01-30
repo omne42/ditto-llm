@@ -161,6 +161,69 @@ async fn openai_compat_proxy_enforces_max_in_flight() {
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_spends_usage_tokens_when_available() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                r#"{"id":"ok","choices":[{"message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+            );
+    });
+
+    let max_tokens = 1u32;
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "max_tokens": max_tokens,
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let body_string = body.to_string();
+    let input_tokens_estimate = body_string.len().div_ceil(4) as u64;
+    let charge_tokens = input_tokens_estimate.saturating_add(u64::from(max_tokens));
+    let budget_total = charge_tokens.saturating_mul(2).saturating_sub(1);
+    assert!(budget_total > charge_tokens);
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.budget.total_tokens = Some(budget_total);
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    for idx in 0..2 {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/v1/chat/completions")
+            .header("authorization", "Bearer vk-1")
+            .header("content-type", "application/json")
+            .header("x-request-id", format!("req-{idx}"))
+            .body(Body::from(body_string.clone()))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    mock.assert_calls(2);
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_streams_text_event_stream() {
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {

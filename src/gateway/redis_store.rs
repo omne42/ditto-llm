@@ -285,9 +285,19 @@ return { "OK" }
     }
 
     pub async fn commit_budget_reservation(&self, request_id: &str) -> Result<(), RedisStoreError> {
+        self.commit_budget_reservation_with_tokens(request_id, u64::MAX)
+            .await
+    }
+
+    pub async fn commit_budget_reservation_with_tokens(
+        &self,
+        request_id: &str,
+        spent_tokens: u64,
+    ) -> Result<(), RedisStoreError> {
         let mut conn = self.connection().await?;
         let reservation_key = self.key_budget_reservation(request_id);
         let ts_ms = now_millis();
+        let spent_tokens = tokens_to_i64(spent_tokens);
 
         let script = redis::Script::new(
             r#"
@@ -295,25 +305,31 @@ local keys_key = KEYS[1]
 local reservation_key = KEYS[2]
 
 local prefix = ARGV[1]
-local ts_ms = ARGV[2]
+local spent_tokens = tonumber(ARGV[2]) or 0
+local ts_ms = ARGV[3]
 
 if redis.call("EXISTS", reservation_key) == 0 then
   return { "OK", "missing" }
 end
 
 local key_id = redis.call("HGET", reservation_key, "key_id")
-local tokens = tonumber(redis.call("HGET", reservation_key, "tokens") or "0") or 0
+local reserved_tokens = tonumber(redis.call("HGET", reservation_key, "tokens") or "0") or 0
 redis.call("DEL", reservation_key)
 if (not key_id) then
   return { "OK", "missing_key" }
 end
 
+local committed_tokens = reserved_tokens
+if spent_tokens < committed_tokens then
+  committed_tokens = spent_tokens
+end
+
 local ledger_key = prefix .. ":budget_ledger:" .. key_id
-local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_tokens", -tokens) or "0") or 0
+local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_tokens", -reserved_tokens) or "0") or 0
 if reserved_after < 0 then
   redis.call("HSET", ledger_key, "reserved_tokens", 0)
 end
-redis.call("HINCRBY", ledger_key, "spent_tokens", tokens)
+redis.call("HINCRBY", ledger_key, "spent_tokens", committed_tokens)
 redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
 redis.call("SADD", keys_key, key_id)
 return { "OK", key_id }
@@ -324,17 +340,27 @@ return { "OK", key_id }
             .key(self.key_budget_keys())
             .key(reservation_key)
             .arg(self.prefix.clone())
+            .arg(spent_tokens)
             .arg(ts_ms)
             .invoke_async(&mut conn)
             .await?;
-
         Ok(())
     }
 
     pub async fn commit_cost_reservation(&self, request_id: &str) -> Result<(), RedisStoreError> {
+        self.commit_cost_reservation_with_usd_micros(request_id, u64::MAX)
+            .await
+    }
+
+    pub async fn commit_cost_reservation_with_usd_micros(
+        &self,
+        request_id: &str,
+        spent_usd_micros: u64,
+    ) -> Result<(), RedisStoreError> {
         let mut conn = self.connection().await?;
         let reservation_key = self.key_cost_reservation(request_id);
         let ts_ms = now_millis();
+        let spent_usd_micros = tokens_to_i64(spent_usd_micros);
 
         let script = redis::Script::new(
             r#"
@@ -342,25 +368,31 @@ local keys_key = KEYS[1]
 local reservation_key = KEYS[2]
 
 local prefix = ARGV[1]
-local ts_ms = ARGV[2]
+local spent_usd_micros = tonumber(ARGV[2]) or 0
+local ts_ms = ARGV[3]
 
 if redis.call("EXISTS", reservation_key) == 0 then
   return { "OK", "missing" }
 end
 
 local key_id = redis.call("HGET", reservation_key, "key_id")
-local usd_micros = tonumber(redis.call("HGET", reservation_key, "usd_micros") or "0") or 0
+local reserved_usd_micros = tonumber(redis.call("HGET", reservation_key, "usd_micros") or "0") or 0
 redis.call("DEL", reservation_key)
 if (not key_id) then
   return { "OK", "missing_key" }
 end
 
+local committed_usd_micros = reserved_usd_micros
+if spent_usd_micros < committed_usd_micros then
+  committed_usd_micros = spent_usd_micros
+end
+
 local ledger_key = prefix .. ":cost_ledger:" .. key_id
-local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_usd_micros", -usd_micros) or "0") or 0
+local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_usd_micros", -reserved_usd_micros) or "0") or 0
 if reserved_after < 0 then
   redis.call("HSET", ledger_key, "reserved_usd_micros", 0)
 end
-redis.call("HINCRBY", ledger_key, "spent_usd_micros", usd_micros)
+redis.call("HINCRBY", ledger_key, "spent_usd_micros", committed_usd_micros)
 redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
 redis.call("SADD", keys_key, key_id)
 return { "OK", key_id }
@@ -371,6 +403,7 @@ return { "OK", key_id }
             .key(self.key_cost_keys())
             .key(reservation_key)
             .arg(self.prefix.clone())
+            .arg(spent_usd_micros)
             .arg(ts_ms)
             .invoke_async(&mut conn)
             .await?;
@@ -670,6 +703,7 @@ fn tokens_to_i64(tokens: u64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn env_nonempty(key: &str) -> Option<String> {
         std::env::var(key)
@@ -677,15 +711,26 @@ mod tests {
             .filter(|value| !value.trim().is_empty())
     }
 
+    fn redis_url() -> Option<String> {
+        env_nonempty("DITTO_REDIS_URL").or_else(|| env_nonempty("REDIS_URL"))
+    }
+
+    static PREFIX_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn test_prefix() -> String {
+        let n = PREFIX_COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("ditto_test:{}:{n}", now_millis())
+    }
+
     #[tokio::test]
     async fn redis_store_round_trips_virtual_keys_and_budget_ledgers() {
-        let Some(url) = env_nonempty("DITTO_REDIS_URL").or_else(|| env_nonempty("REDIS_URL"))
-        else {
+        let Some(url) = redis_url() else {
             return;
         };
 
-        let prefix = format!("ditto_test:{}", now_millis());
-        let store = RedisStore::new(url).expect("store").with_prefix(prefix);
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
         store.ping().await.expect("ping");
 
         let key = VirtualKeyConfig::new("key-1", "vk-1");
@@ -711,5 +756,76 @@ mod tests {
         assert_eq!(ledgers[0].key_id, "key-1");
         assert_eq!(ledgers[0].spent_tokens, 5);
         assert_eq!(ledgers[0].reserved_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn redis_store_commit_budget_reservation_with_tokens_releases_difference() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        store
+            .reserve_budget_tokens("req-1", "key-1", 10, 7)
+            .await
+            .expect("reserve");
+        store
+            .commit_budget_reservation_with_tokens("req-1", 3)
+            .await
+            .expect("commit");
+
+        let ledgers = store.list_budget_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].spent_tokens, 3);
+        assert_eq!(ledgers[0].reserved_tokens, 0);
+
+        store
+            .reserve_budget_tokens("req-2", "key-1", 10, 7)
+            .await
+            .expect("reserve 2");
+        let err = store.reserve_budget_tokens("req-3", "key-1", 10, 1).await;
+        assert!(matches!(err, Err(RedisStoreError::BudgetExceeded { .. })));
+    }
+
+    #[tokio::test]
+    async fn redis_store_commit_cost_reservation_with_usd_micros_releases_difference() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        store
+            .reserve_cost_usd_micros("req-1", "key-1", 10, 7)
+            .await
+            .expect("reserve");
+        store
+            .commit_cost_reservation_with_usd_micros("req-1", 3)
+            .await
+            .expect("commit");
+
+        let ledgers = store.list_cost_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].spent_usd_micros, 3);
+        assert_eq!(ledgers[0].reserved_usd_micros, 0);
+
+        store
+            .reserve_cost_usd_micros("req-2", "key-1", 10, 7)
+            .await
+            .expect("reserve 2");
+        let err = store.reserve_cost_usd_micros("req-3", "key-1", 10, 1).await;
+        assert!(matches!(
+            err,
+            Err(RedisStoreError::CostBudgetExceeded { .. })
+        ));
     }
 }

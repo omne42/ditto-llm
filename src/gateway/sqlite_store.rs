@@ -223,13 +223,15 @@ impl SqliteStore {
         .await?
     }
 
-    pub async fn commit_budget_reservation(
+    pub async fn commit_budget_reservation_with_tokens(
         &self,
         request_id: &str,
+        spent_tokens: u64,
     ) -> Result<(), SqliteStoreError> {
         let path = self.path.clone();
         let request_id = request_id.to_string();
         let ts_ms = now_millis();
+        let spent_tokens_i64 = tokens_to_i64(spent_tokens);
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let mut conn = open_connection(path)?;
@@ -259,13 +261,15 @@ impl SqliteStore {
                 rusqlite::params![key_id, ts_ms],
             )?;
 
+            let reserved_i64 = tokens_i64.max(0);
+            let committed_i64 = reserved_i64.min(spent_tokens_i64);
             tx.execute(
                 "UPDATE budget_ledger
                  SET reserved_tokens = CASE WHEN reserved_tokens >= ?2 THEN reserved_tokens - ?2 ELSE 0 END,
-                     spent_tokens = spent_tokens + ?2,
-                     updated_at_ms = ?3
+                     spent_tokens = spent_tokens + ?3,
+                     updated_at_ms = ?4
                  WHERE key_id = ?1",
-                rusqlite::params![key_id, tokens_i64, ts_ms],
+                rusqlite::params![key_id, reserved_i64, committed_i64, ts_ms],
             )?;
 
             tx.commit()?;
@@ -274,10 +278,23 @@ impl SqliteStore {
         .await?
     }
 
-    pub async fn commit_cost_reservation(&self, request_id: &str) -> Result<(), SqliteStoreError> {
+    pub async fn commit_budget_reservation(
+        &self,
+        request_id: &str,
+    ) -> Result<(), SqliteStoreError> {
+        self.commit_budget_reservation_with_tokens(request_id, u64::MAX)
+            .await
+    }
+
+    pub async fn commit_cost_reservation_with_usd_micros(
+        &self,
+        request_id: &str,
+        spent_usd_micros: u64,
+    ) -> Result<(), SqliteStoreError> {
         let path = self.path.clone();
         let request_id = request_id.to_string();
         let ts_ms = now_millis();
+        let spent_usd_i64 = usd_micros_to_i64(spent_usd_micros);
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let mut conn = open_connection(path)?;
@@ -307,19 +324,26 @@ impl SqliteStore {
                 rusqlite::params![key_id, ts_ms],
             )?;
 
+            let reserved_i64 = usd_i64.max(0);
+            let committed_i64 = reserved_i64.min(spent_usd_i64);
             tx.execute(
                 "UPDATE cost_ledger
                  SET reserved_usd_micros = CASE WHEN reserved_usd_micros >= ?2 THEN reserved_usd_micros - ?2 ELSE 0 END,
-                     spent_usd_micros = spent_usd_micros + ?2,
-                     updated_at_ms = ?3
+                     spent_usd_micros = spent_usd_micros + ?3,
+                     updated_at_ms = ?4
                  WHERE key_id = ?1",
-                rusqlite::params![key_id, usd_i64, ts_ms],
+                rusqlite::params![key_id, reserved_i64, committed_i64, ts_ms],
             )?;
 
             tx.commit()?;
             Ok(())
         })
         .await?
+    }
+
+    pub async fn commit_cost_reservation(&self, request_id: &str) -> Result<(), SqliteStoreError> {
+        self.commit_cost_reservation_with_usd_micros(request_id, u64::MAX)
+            .await
     }
 
     pub async fn rollback_budget_reservation(
@@ -796,6 +820,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sqlite_store_commit_budget_reservation_with_tokens_releases_difference() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("gateway.sqlite");
+        let store = SqliteStore::new(&path);
+        store.init().await.expect("init");
+
+        store
+            .reserve_budget_tokens("r1", "key-1", 10, 7)
+            .await
+            .expect("reserve r1");
+        store
+            .commit_budget_reservation_with_tokens("r1", 3)
+            .await
+            .expect("commit r1");
+
+        let ledgers = store.list_budget_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].spent_tokens, 3);
+        assert_eq!(ledgers[0].reserved_tokens, 0);
+
+        store
+            .reserve_budget_tokens("r2", "key-1", 10, 7)
+            .await
+            .expect("reserve r2");
+        let err = store.reserve_budget_tokens("r3", "key-1", 10, 1).await;
+        assert!(matches!(err, Err(SqliteStoreError::BudgetExceeded { .. })));
+
+        store
+            .reserve_budget_tokens("r4", "key-2", 10, 2)
+            .await
+            .expect("reserve r4");
+        store
+            .commit_budget_reservation_with_tokens("r4", 5)
+            .await
+            .expect("commit r4");
+
+        let ledgers = store.list_budget_ledgers().await.expect("ledgers 2");
+        assert_eq!(ledgers.len(), 2);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[1].key_id, "key-2");
+        assert_eq!(ledgers[1].spent_tokens, 2);
+        assert_eq!(ledgers[1].reserved_tokens, 0);
+    }
+
+    #[tokio::test]
     async fn sqlite_store_appends_audit_logs() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("gateway.sqlite");
@@ -834,5 +904,54 @@ mod tests {
         assert_eq!(ledgers[0].key_id, "key-1");
         assert_eq!(ledgers[0].spent_usd_micros, 5);
         assert_eq!(ledgers[0].reserved_usd_micros, 0);
+    }
+
+    #[tokio::test]
+    async fn sqlite_store_commit_cost_reservation_with_usd_micros_releases_difference() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("gateway.sqlite");
+        let store = SqliteStore::new(&path);
+        store.init().await.expect("init");
+
+        store
+            .reserve_cost_usd_micros("req-1", "key-1", 10, 7)
+            .await
+            .expect("reserve req-1");
+        store
+            .commit_cost_reservation_with_usd_micros("req-1", 3)
+            .await
+            .expect("commit req-1");
+
+        let ledgers = store.list_cost_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].spent_usd_micros, 3);
+        assert_eq!(ledgers[0].reserved_usd_micros, 0);
+
+        store
+            .reserve_cost_usd_micros("req-2", "key-1", 10, 7)
+            .await
+            .expect("reserve req-2");
+        let err = store.reserve_cost_usd_micros("req-3", "key-1", 10, 1).await;
+        assert!(matches!(
+            err,
+            Err(SqliteStoreError::CostBudgetExceeded { .. })
+        ));
+
+        store
+            .reserve_cost_usd_micros("req-4", "key-2", 10, 2)
+            .await
+            .expect("reserve req-4");
+        store
+            .commit_cost_reservation_with_usd_micros("req-4", 5)
+            .await
+            .expect("commit req-4");
+
+        let ledgers = store.list_cost_ledgers().await.expect("ledgers 2");
+        assert_eq!(ledgers.len(), 2);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[1].key_id, "key-2");
+        assert_eq!(ledgers[1].spent_usd_micros, 2);
+        assert_eq!(ledgers[1].reserved_usd_micros, 0);
     }
 }
