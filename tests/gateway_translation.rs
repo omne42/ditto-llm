@@ -19,7 +19,7 @@ use ditto_llm::rerank::RerankModel;
 use ditto_llm::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, BatchStatus, ContentPart, FinishReason, GenerateRequest,
-    GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource,
+    GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message,
     ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
     RerankResponse, RerankResult, SpeechRequest, SpeechResponse, StreamChunk, Usage,
 };
@@ -1308,6 +1308,66 @@ async fn translation_backend_uses_dotenv_for_lazy_embedding_clients() -> ditto_l
         .embed("text-embedding-3-small", vec!["hello".to_string()])
         .await?;
     assert_eq!(embeddings, vec![vec![1.0, 2.0]]);
+    mock.assert();
+    Ok(())
+}
+
+#[cfg(feature = "cohere")]
+#[tokio::test]
+async fn build_language_model_supports_cohere_from_config() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = httpmock::MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(httpmock::Method::POST)
+            .path("/v2/chat")
+            .header("authorization", "Bearer sk-dotenv")
+            .body_includes("\"model\":\"command-r\"")
+            .body_includes("\"role\":\"user\"")
+            .body_includes("\"content\":\"hi\"");
+        then.status(200)
+            .header("content-type", "application/json")
+            .json_body(serde_json::json!({
+                "id": "chat_123",
+                "finish_reason": "COMPLETE",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        { "type": "text", "text": "hello" }
+                    ]
+                },
+                "usage": { "tokens": { "input_tokens": 1, "output_tokens": 2 } }
+            }));
+    });
+
+    let provider_config = ditto_llm::ProviderConfig {
+        base_url: Some(upstream.url("/v2")),
+        default_model: Some("command-r".to_string()),
+        auth: Some(ditto_llm::ProviderAuth::ApiKeyEnv {
+            keys: vec!["CODEPM_TEST_DOTENV_COHERE_API_KEY".to_string()],
+        }),
+        ..ditto_llm::ProviderConfig::default()
+    };
+    let env = ditto_llm::Env {
+        dotenv: std::collections::BTreeMap::from([(
+            "CODEPM_TEST_DOTENV_COHERE_API_KEY".to_string(),
+            "sk-dotenv".to_string(),
+        )]),
+    };
+
+    let model =
+        ditto_llm::gateway::translation::build_language_model("cohere", &provider_config, &env)
+            .await?;
+    let response = model
+        .generate(GenerateRequest::from(vec![Message::user("hi")]))
+        .await?;
+
+    assert_eq!(response.text(), "hello");
+    assert_eq!(response.usage.input_tokens, Some(1));
+    assert_eq!(response.usage.output_tokens, Some(2));
+
     mock.assert();
     Ok(())
 }

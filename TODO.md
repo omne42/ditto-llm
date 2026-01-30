@@ -143,7 +143,7 @@
 
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
 
-- [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex；feature `gateway-translation`）
+- [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex/Cohere；feature `gateway-translation`）
 - [x] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（`sdk::http` 的 SSE/NDJSON 输出）
 
 ### P2（扩面端点）

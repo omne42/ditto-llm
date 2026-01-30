@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Providers: OpenAI (Responses + embeddings), Anthropic (Messages), Google (GenAI + embeddings).
 - Provider: OpenAI-compatible Chat Completions (for LiteLLM / DeepSeek / Qwen / etc.) and embeddings.
 - Provider: Cohere Chat API (`/v2/chat`) with generate + SSE streaming + tool calls.
+- Gateway translation: allow `provider=cohere` backends for OpenAI-compatible translation endpoints.
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
 - Streaming: `abortable_stream(StreamResult) -> AbortableStream` with `StreamAbortHandle`.

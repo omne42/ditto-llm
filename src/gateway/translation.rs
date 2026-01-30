@@ -568,6 +568,18 @@ pub async fn build_language_model(
                 ))
             }
         }
+        "cohere" => {
+            #[cfg(feature = "cohere")]
+            {
+                Ok(Arc::new(crate::Cohere::from_config(config, env).await?))
+            }
+            #[cfg(not(feature = "cohere"))]
+            {
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without cohere feature".to_string(),
+                ))
+            }
+        }
         "bedrock" => {
             #[cfg(feature = "bedrock")]
             {
