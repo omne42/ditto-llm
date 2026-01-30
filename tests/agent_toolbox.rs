@@ -6,9 +6,9 @@ use serde_json::json;
 
 use ditto_llm::Result;
 use ditto_llm::agent::{
-    FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_FIND, TOOL_FS_LIST_DIR,
-    TOOL_FS_READ_FILE, TOOL_FS_STAT, TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC,
-    ToolCall, ToolExecutor,
+    FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_FIND, TOOL_FS_GREP,
+    TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_STAT, TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH,
+    TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -215,6 +215,52 @@ async fn fs_find_tool_finds_nested_entries() -> Result<()> {
         .and_then(|v| v.as_str())
         .unwrap_or("");
     assert!(path.ends_with("sub/nested/hello.rs"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_grep_tool_finds_matching_lines() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+    std::fs::write(
+        dir.path().join("sub").join("hello.txt"),
+        "first line\nneedle here\nlast line\n",
+    )?;
+    std::fs::write(dir.path().join("sub").join("other.md"), "needle too\n")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_GREP.to_string(),
+        arguments: json!({
+            "pattern": "needle",
+            "extensions": ["txt"],
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    let matches = value
+        .get("matches")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(matches.len(), 1);
+    assert_eq!(
+        matches[0].get("line_number").and_then(|v| v.as_u64()),
+        Some(2)
+    );
+    assert_eq!(
+        matches[0].get("line").and_then(|v| v.as_str()),
+        Some("needle here")
+    );
+    let path = matches[0]
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(path.ends_with("sub/hello.txt"));
     Ok(())
 }
 
