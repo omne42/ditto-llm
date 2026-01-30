@@ -23,6 +23,8 @@ pub struct BackendConfig {
     pub base_url: String,
     #[serde(default)]
     pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub query_params: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,6 +39,7 @@ impl std::fmt::Debug for BackendConfig {
             .field("name", &self.name)
             .field("base_url", &self.base_url)
             .field("headers", &"<redacted>")
+            .field("query_params", &"<redacted>")
             .field("provider", &self.provider)
             .field("provider_config", &"<redacted>")
             .field("model_map", &self.model_map)

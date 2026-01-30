@@ -20,6 +20,7 @@ fn build_proxy_backends(
     for backend in &config.backends {
         let mut client = ProxyBackend::new(&backend.base_url)?;
         client = client.with_headers(backend.headers.clone())?;
+        client = client.with_query_params(backend.query_params.clone());
         out.insert(backend.name.clone(), client);
     }
     Ok(out)
@@ -32,6 +33,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
         name: name.to_string(),
         base_url,
         headers,
+        query_params: BTreeMap::new(),
         provider: None,
         provider_config: None,
         model_map: BTreeMap::new(),

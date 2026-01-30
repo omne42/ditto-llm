@@ -11,6 +11,7 @@ pub struct ProxyBackend {
     base_url: String,
     client: reqwest::Client,
     headers: HeaderMap,
+    query_params: BTreeMap<String, String>,
 }
 
 impl ProxyBackend {
@@ -25,12 +26,18 @@ impl ProxyBackend {
             base_url: base_url.into(),
             client,
             headers: HeaderMap::new(),
+            query_params: BTreeMap::new(),
         })
     }
 
     pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Result<Self, GatewayError> {
         self.headers = parse_headers(&headers)?;
         Ok(self)
+    }
+
+    pub fn with_query_params(mut self, params: BTreeMap<String, String>) -> Self {
+        self.query_params = normalize_query_params(&params);
+        self
     }
 
     pub fn headers(&self) -> &HeaderMap {
@@ -58,6 +65,9 @@ impl ProxyBackend {
     ) -> Result<reqwest::Response, GatewayError> {
         let url = join_base_url(&self.base_url, path);
         let mut req = self.client.request(method, url).headers(headers);
+        if !self.query_params.is_empty() {
+            req = req.query(&self.query_params);
+        }
         if let Some(timeout) = timeout {
             req = req.timeout(timeout);
         }
@@ -103,6 +113,14 @@ fn parse_headers(headers: &BTreeMap<String, String>) -> Result<HeaderMap, Gatewa
         out.insert(header_name, header_value);
     }
     Ok(out)
+}
+
+fn normalize_query_params(params: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    params
+        .iter()
+        .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
+        .filter(|(name, _)| !name.is_empty())
+        .collect()
 }
 
 #[cfg(test)]

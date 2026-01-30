@@ -54,7 +54,7 @@
 - [x] Control-plane primitives：virtual keys、rpm/tpm limits、token budget、simple cache、routing rules、guardrails
 - [x] Routing (basic)：weighted backends（`default_backends` / `rules[].backends`）+ proxy network-error fallback
 - [x] HTTP server：`/health`、`/metrics`、`/admin/keys`、`POST /v1/gateway`
-- [x] OpenAI-compatible passthrough proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header injection
+- [x] OpenAI-compatible passthrough proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header/query-param injection
 - [x] OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”输出（含 streaming + tool_calls）
 - [x] State file persistence：`--state <path>` 持久化 admin virtual-key mutations（`GatewayStateFile`）
 - [x] Optional sqlite persistence：`--sqlite <path>`（feature `gateway-store-sqlite`）

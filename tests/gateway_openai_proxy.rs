@@ -20,6 +20,7 @@ fn build_proxy_backends(
     for backend in &config.backends {
         let mut client = ProxyBackend::new(&backend.base_url)?;
         client = client.with_headers(backend.headers.clone())?;
+        client = client.with_query_params(backend.query_params.clone());
         out.insert(backend.name.clone(), client);
     }
     Ok(out)
@@ -32,6 +33,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
         name: name.to_string(),
         base_url,
         headers,
+        query_params: BTreeMap::new(),
         provider: None,
         provider_config: None,
         model_map: BTreeMap::new(),
@@ -94,6 +96,55 @@ async fn openai_compat_proxy_forwards_chat_completions_and_injects_upstream_auth
     );
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes, r#"{"id":"ok"}"#);
+    mock.assert();
+}
+
+#[tokio::test]
+async fn openai_compat_proxy_appends_backend_query_params() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .query_param("api-version", "2024-01-01")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let mut backend = backend_config("primary", upstream.base_url(), "Bearer sk-test");
+    backend
+        .query_params
+        .insert("api-version".to_string(), "2024-01-01".to_string());
+
+    let config = GatewayConfig {
+        backends: vec![backend],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
     mock.assert();
 }
 
@@ -1236,6 +1287,7 @@ async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
             name: "primary".to_string(),
             base_url: upstream.base_url(),
             headers: BTreeMap::new(),
+            query_params: BTreeMap::new(),
             provider: None,
             provider_config: None,
             model_map: BTreeMap::new(),

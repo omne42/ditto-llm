@@ -91,7 +91,7 @@ Run the HTTP gateway (feature `gateway`):
 cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
-Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injected headers, e.g. `Authorization`):
+Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injected headers/query params, e.g. `Authorization` and Azure-style `api-version`):
 
 ```json
 {
@@ -99,7 +99,8 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
     {
       "name": "primary",
       "base_url": "https://api.openai.com/v1",
-      "headers": { "authorization": "Bearer <OPENAI_API_KEY>" }
+      "headers": { "authorization": "Bearer <OPENAI_API_KEY>" },
+      "query_params": {}
     }
   ],
   "virtual_keys": [],
