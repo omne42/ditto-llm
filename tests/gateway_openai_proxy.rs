@@ -98,6 +98,69 @@ async fn openai_compat_proxy_forwards_chat_completions_and_injects_upstream_auth
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_enforces_max_in_flight() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .delay(std::time::Duration::from_millis(200))
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_max_in_flight(1);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request_1 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let request_2 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let (response_1, response_2) =
+        tokio::join!(app.clone().oneshot(request_1), app.oneshot(request_2));
+    let response_1 = response_1.unwrap();
+    let response_2 = response_2.unwrap();
+    let statuses = [response_1.status(), response_2.status()];
+    assert!(statuses.contains(&StatusCode::OK));
+    assert!(statuses.contains(&StatusCode::TOO_MANY_REQUESTS));
+
+    mock.assert_calls(1);
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_streams_text_event_stream() {
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {

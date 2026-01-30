@@ -2545,7 +2545,7 @@ async fn handle_openai_compat_proxy(
 
         if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
             if let Some(parsed_json) = parsed_json.as_ref() {
-                proxy_permit = None;
+                let _ = proxy_permit.take();
                 let Some(chat_body) =
                     responses_shim::responses_request_to_chat_completions(parsed_json)
                 else {
@@ -2607,7 +2607,7 @@ async fn handle_openai_compat_proxy(
                     );
                 }
 
-                let mut shim_permit = try_acquire_proxy_permit(&state)?;
+                let shim_permit = try_acquire_proxy_permit(&state)?;
                 let shim_timer_start = Instant::now();
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -3397,12 +3397,29 @@ fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Val
     eprintln!("{record}");
 }
 
+type ProxyBodyStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
+
+struct ProxyBodyStreamWithPermit {
+    inner: ProxyBodyStream,
+    _permit: Option<OwnedSemaphorePermit>,
+}
+
+impl futures_util::Stream for ProxyBodyStreamWithPermit {
+    type Item = Result<Bytes, std::io::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        this.inner.as_mut().poll_next(cx)
+    }
+}
+
 async fn proxy_response(
     _state: &GatewayHttpState,
     upstream: reqwest::Response,
     backend: String,
     request_id: String,
     _cache_key: Option<&str>,
+    proxy_permit: Option<OwnedSemaphorePermit>,
 ) -> axum::response::Response {
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
@@ -3418,7 +3435,12 @@ async fn proxy_response(
         headers.remove("content-length");
         let stream = upstream
             .bytes_stream()
-            .map(|chunk| chunk.map_err(std::io::Error::other));
+            .map(|chunk| chunk.map_err(std::io::Error::other))
+            .boxed();
+        let stream = ProxyBodyStreamWithPermit {
+            inner: stream,
+            _permit: proxy_permit,
+        };
         let mut response = axum::response::Response::new(Body::from_stream(stream));
         *response.status_mut() = status;
         *response.headers_mut() = headers;
@@ -3455,6 +3477,7 @@ async fn responses_shim_response(
     backend: String,
     request_id: String,
     _cache_key: Option<&str>,
+    proxy_permit: Option<OwnedSemaphorePermit>,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
@@ -3468,6 +3491,10 @@ async fn responses_shim_response(
         let data_stream = crate::utils::sse::sse_data_stream_from_response(upstream);
         let stream =
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, request_id.clone());
+        let stream = ProxyBodyStreamWithPermit {
+            inner: stream.boxed(),
+            _permit: proxy_permit,
+        };
         let mut headers = upstream_headers;
         headers.insert(
             "x-ditto-shim",
@@ -3749,6 +3776,22 @@ fn map_openai_gateway_error(err: GatewayError) -> (StatusCode, Json<OpenAiErrorR
             reason,
         ),
     }
+}
+
+fn try_acquire_proxy_permit(
+    state: &GatewayHttpState,
+) -> Result<Option<OwnedSemaphorePermit>, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let Some(limit) = state.proxy_backpressure.as_ref() else {
+        return Ok(None);
+    };
+    limit.clone().try_acquire_owned().map(Some).map_err(|_| {
+        openai_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limit_error",
+            Some("inflight_limit"),
+            "too many in-flight proxy requests",
+        )
+    })
 }
 
 fn openai_error(

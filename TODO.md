@@ -117,7 +117,8 @@
 - [x] Gateway 代理路径：基础持久化（virtual keys via `--state` or `--sqlite`）
 - [x] Gateway 代理路径：持久化存储（virtual keys / budgets / audit logs；sqlite/redis 可选）
 - [x] 路由：retry/fallback + weighted load balancing + passive health（circuit breaker）
-- [ ] 路由：主动健康检查/探活（active probing）+ backpressure
+- [ ] 路由：主动健康检查/探活（active probing）
+- [x] 路由：backpressure（`--proxy-max-in-flight`）
 - [ ] 成本：token 计数 + pricing + spend（按 project/user/key）+ 预算控制（USD 口径）
 - [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
 - [x] Proxy caching（非流式请求；并提供显式绕过）

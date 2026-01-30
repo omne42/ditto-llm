@@ -3,7 +3,7 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
@@ -18,6 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut proxy_cache_enabled = false;
     let mut proxy_cache_ttl_seconds: Option<u64> = None;
     let mut proxy_cache_max_entries: Option<usize> = None;
+    let mut proxy_max_in_flight: Option<usize> = None;
     let mut pricing_litellm_path: Option<String> = None;
     let mut prometheus_metrics_enabled = false;
     let mut prometheus_max_key_series: Option<usize> = None;
@@ -82,6 +83,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 proxy_cache_max_entries = Some(
                     raw.parse::<usize>()
                         .map_err(|_| "invalid --proxy-cache-max-entries")?,
+                );
+            }
+            "--proxy-max-in-flight" => {
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-max-in-flight")?;
+                proxy_max_in_flight = Some(
+                    raw.parse::<usize>()
+                        .map_err(|_| "invalid --proxy-max-in-flight")?,
                 );
             }
             "--pricing-litellm" => {
@@ -347,6 +357,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_cache_ttl_seconds,
         proxy_cache_max_entries,
     )?;
+    state = attach_proxy_backpressure(state, proxy_max_in_flight)?;
     state = attach_pricing_table(state, pricing_litellm_path)?;
     state = attach_prometheus_metrics(
         state,
@@ -412,6 +423,20 @@ fn attach_devtools(
         );
     }
     Ok(state)
+}
+
+#[cfg(feature = "gateway")]
+fn attach_proxy_backpressure(
+    state: ditto_llm::gateway::GatewayHttpState,
+    max_in_flight: Option<usize>,
+) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
+    let Some(max) = max_in_flight else {
+        return Ok(state);
+    };
+    if max == 0 {
+        return Err("--proxy-max-in-flight must be > 0".into());
+    }
+    Ok(state.with_proxy_max_in_flight(max))
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-proxy-cache"))]
