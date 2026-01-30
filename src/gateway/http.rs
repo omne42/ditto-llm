@@ -530,20 +530,6 @@ async fn handle_openai_compat_proxy(
     let input_tokens_estimate = estimate_tokens_from_bytes(&body);
     let charge_tokens = input_tokens_estimate.saturating_add(max_output_tokens);
 
-    #[cfg(feature = "gateway-costing")]
-    let charge_cost_usd_micros: Option<u64> = model.as_deref().and_then(|model| {
-        state.pricing.as_ref().and_then(|pricing| {
-            pricing.estimate_cost_usd_micros_for_service_tier(
-                model,
-                input_tokens_estimate,
-                max_output_tokens,
-                service_tier.as_deref(),
-            )
-        })
-    });
-    #[cfg(not(feature = "gateway-costing"))]
-    let charge_cost_usd_micros: Option<u64> = None;
-
     #[cfg(feature = "gateway-store-sqlite")]
     let use_sqlite_budget = state.sqlite_store.is_some();
     #[cfg(not(feature = "gateway-store-sqlite"))]
@@ -556,7 +542,7 @@ async fn handle_openai_compat_proxy(
 
     let use_persistent_budget = use_sqlite_budget || use_redis_budget;
 
-    let (virtual_key_id, budget, backend_candidates, strip_authorization) = {
+    let (virtual_key_id, budget, backend_candidates, strip_authorization, charge_cost_usd_micros) = {
         let mut gateway = state.gateway.lock().await;
         gateway.observability.record_request();
 
@@ -661,7 +647,58 @@ async fn handle_openai_compat_proxy(
                     gateway.observability.record_budget_exceeded();
                     return Err(map_openai_gateway_error(err));
                 }
+            }
 
+            let budget = Some(key.budget.clone());
+
+            let backends = gateway
+                .router
+                .select_backends_for_model_seeded(
+                    model.as_deref().unwrap_or_default(),
+                    Some(key),
+                    Some(&request_id),
+                )
+                .map_err(map_openai_gateway_error)?;
+
+            #[cfg(feature = "gateway-costing")]
+            let charge_cost_usd_micros = model.as_deref().and_then(|request_model| {
+                state.pricing.as_ref().and_then(|pricing| {
+                    let mut cost = pricing.estimate_cost_usd_micros_for_service_tier(
+                        request_model,
+                        input_tokens_estimate,
+                        max_output_tokens,
+                        service_tier.as_deref(),
+                    );
+                    for backend_name in &backends {
+                        if !state.proxy_backends.contains_key(backend_name) {
+                            continue;
+                        }
+                        let mapped_model = gateway
+                            .config
+                            .backends
+                            .iter()
+                            .find(|backend| backend.name == backend_name.as_str())
+                            .and_then(|backend| backend.model_map.get(request_model))
+                            .map(|model| model.as_str());
+                        if let Some(mapped_model) = mapped_model {
+                            cost = max_option_u64(
+                                cost,
+                                pricing.estimate_cost_usd_micros_for_service_tier(
+                                    mapped_model,
+                                    input_tokens_estimate,
+                                    max_output_tokens,
+                                    service_tier.as_deref(),
+                                ),
+                            );
+                        }
+                    }
+                    cost
+                })
+            });
+            #[cfg(not(feature = "gateway-costing"))]
+            let charge_cost_usd_micros: Option<u64> = None;
+
+            if !use_persistent_budget {
                 #[cfg(feature = "gateway-costing")]
                 if key.budget.total_usd_micros.is_some() {
                     let Some(charge_cost_usd_micros) = charge_cost_usd_micros else {
@@ -684,18 +721,13 @@ async fn handle_openai_compat_proxy(
                 }
             }
 
-            let budget = Some(key.budget.clone());
-
-            let backends = gateway
-                .router
-                .select_backends_for_model_seeded(
-                    model.as_deref().unwrap_or_default(),
-                    Some(key),
-                    Some(&request_id),
-                )
-                .map_err(map_openai_gateway_error)?;
-
-            (virtual_key_id, budget, backends, strip_authorization)
+            (
+                virtual_key_id,
+                budget,
+                backends,
+                strip_authorization,
+                charge_cost_usd_micros,
+            )
         } else {
             let backends = gateway
                 .router
@@ -706,7 +738,51 @@ async fn handle_openai_compat_proxy(
                 )
                 .map_err(map_openai_gateway_error)?;
 
-            (None, None, backends, strip_authorization)
+            #[cfg(feature = "gateway-costing")]
+            let charge_cost_usd_micros = model.as_deref().and_then(|request_model| {
+                state.pricing.as_ref().and_then(|pricing| {
+                    let mut cost = pricing.estimate_cost_usd_micros_for_service_tier(
+                        request_model,
+                        input_tokens_estimate,
+                        max_output_tokens,
+                        service_tier.as_deref(),
+                    );
+                    for backend_name in &backends {
+                        if !state.proxy_backends.contains_key(backend_name) {
+                            continue;
+                        }
+                        let mapped_model = gateway
+                            .config
+                            .backends
+                            .iter()
+                            .find(|backend| backend.name == backend_name.as_str())
+                            .and_then(|backend| backend.model_map.get(request_model))
+                            .map(|model| model.as_str());
+                        if let Some(mapped_model) = mapped_model {
+                            cost = max_option_u64(
+                                cost,
+                                pricing.estimate_cost_usd_micros_for_service_tier(
+                                    mapped_model,
+                                    input_tokens_estimate,
+                                    max_output_tokens,
+                                    service_tier.as_deref(),
+                                ),
+                            );
+                        }
+                    }
+                    cost
+                })
+            });
+            #[cfg(not(feature = "gateway-costing"))]
+            let charge_cost_usd_micros: Option<u64> = None;
+
+            (
+                None,
+                None,
+                backends,
+                strip_authorization,
+                charge_cost_usd_micros,
+            )
         }
     };
 
@@ -3393,13 +3469,19 @@ async fn handle_openai_compat_proxy(
         let spent_cost_usd_micros = if spend_tokens {
             model
                 .as_deref()
-                .and_then(|model| {
+                .map(|request_model| {
+                    backend_model_map
+                        .get(request_model)
+                        .map(|model| model.as_str())
+                        .unwrap_or(request_model)
+                })
+                .and_then(|cost_model| {
                     state.pricing.as_ref().and_then(|pricing| {
                         let usage = observed_usage?;
                         let input = usage.input_tokens?;
                         let output = usage.output_tokens?;
                         pricing.estimate_cost_usd_micros_with_cache_for_service_tier(
-                            model,
+                            cost_model,
                             clamp_u64_to_u32(input),
                             usage.cache_input_tokens.map(clamp_u64_to_u32),
                             usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
@@ -3788,6 +3870,15 @@ fn estimate_tokens_from_bytes(body: &Bytes) -> u32 {
         u32::MAX
     } else {
         estimate as u32
+    }
+}
+
+fn max_option_u64(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
     }
 }
 
