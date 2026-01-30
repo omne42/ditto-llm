@@ -81,6 +81,9 @@
 - [x] Structured output：OpenAI 原生 JSON schema；其它 provider 走 tool-call enforced JSON（并显式 warnings）
 - [x] “UI/HTTP 适配层”（AI SDK UI-like）：提供 `sdk::http::{stream_v1_sse, stream_v1_ndjson}`，把 Ditto 的 stream protocol v1 以 SSE/NDJSON 输出（Rust 侧提供 primitives，而非 React hooks）
 - [ ] 常用工具 wrappers（可选模块）：shell/fs/http 等“本地工具”封装（对齐 AI SDK `ToolLoopAgent` 的可组合体验）
+  - [x] `http_fetch` tool + executor（feature `agent`）
+  - [x] `fs_read_file` tool + executor（feature `agent`，限制 root）
+  - [ ] `shell_exec` tool（需要 allowlist/sandbox 口径）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）
 
