@@ -6,6 +6,7 @@ pub struct PrometheusMetricsConfig {
     pub max_key_series: usize,
     pub max_model_series: usize,
     pub max_backend_series: usize,
+    pub max_path_series: usize,
 }
 
 impl Default for PrometheusMetricsConfig {
@@ -14,6 +15,7 @@ impl Default for PrometheusMetricsConfig {
             max_key_series: 1024,
             max_model_series: 1024,
             max_backend_series: 128,
+            max_path_series: 128,
         }
     }
 }
@@ -25,6 +27,7 @@ pub struct PrometheusMetrics {
     proxy_requests_total: u64,
     proxy_requests_by_key: HashMap<String, u64>,
     proxy_requests_by_model: HashMap<String, u64>,
+    proxy_requests_by_path: HashMap<String, u64>,
 
     proxy_cache_hits_total: u64,
 
@@ -33,6 +36,7 @@ pub struct PrometheusMetrics {
     proxy_backend_failures_total: HashMap<String, u64>,
     proxy_backend_in_flight: HashMap<String, u64>,
     proxy_backend_request_duration_seconds: HashMap<String, DurationHistogram>,
+    proxy_request_duration_seconds: HashMap<String, DurationHistogram>,
 
     proxy_responses_by_status: HashMap<u16, u64>,
 }
@@ -44,17 +48,24 @@ impl PrometheusMetrics {
             proxy_requests_total: 0,
             proxy_requests_by_key: HashMap::new(),
             proxy_requests_by_model: HashMap::new(),
+            proxy_requests_by_path: HashMap::new(),
             proxy_cache_hits_total: 0,
             proxy_backend_attempts_total: HashMap::new(),
             proxy_backend_success_total: HashMap::new(),
             proxy_backend_failures_total: HashMap::new(),
             proxy_backend_in_flight: HashMap::new(),
             proxy_backend_request_duration_seconds: HashMap::new(),
+            proxy_request_duration_seconds: HashMap::new(),
             proxy_responses_by_status: HashMap::new(),
         }
     }
 
-    pub fn record_proxy_request(&mut self, virtual_key_id: Option<&str>, model: Option<&str>) {
+    pub fn record_proxy_request(
+        &mut self,
+        virtual_key_id: Option<&str>,
+        model: Option<&str>,
+        path: &str,
+    ) {
         self.proxy_requests_total = self.proxy_requests_total.saturating_add(1);
         bump_limited(
             &mut self.proxy_requests_by_key,
@@ -68,6 +79,11 @@ impl PrometheusMetrics {
                 self.config.max_model_series,
             );
         }
+        bump_limited(
+            &mut self.proxy_requests_by_path,
+            path,
+            self.config.max_path_series,
+        );
     }
 
     pub fn record_proxy_cache_hit(&mut self) {
@@ -129,6 +145,18 @@ impl PrometheusMetrics {
             .observe(duration);
     }
 
+    pub fn observe_proxy_request_duration(&mut self, path: &str, duration: Duration) {
+        let path = limit_label(
+            path,
+            &mut self.proxy_request_duration_seconds,
+            self.config.max_path_series,
+        );
+        self.proxy_request_duration_seconds
+            .entry(path)
+            .or_default()
+            .observe(duration);
+    }
+
     pub fn record_proxy_response_status(&mut self, status: u16) {
         *self.proxy_responses_by_status.entry(status).or_default() += 1;
     }
@@ -157,6 +185,14 @@ impl PrometheusMetrics {
             "Proxy requests grouped by model.",
             "model",
             &self.proxy_requests_by_model,
+        );
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_requests_by_path_total",
+            "Proxy requests grouped by OpenAI path.",
+            "path",
+            &self.proxy_requests_by_path,
         );
 
         out.push_str("# HELP ditto_gateway_proxy_cache_hits_total Total proxy cache hits.\n");
@@ -204,6 +240,14 @@ impl PrometheusMetrics {
             &self.proxy_backend_request_duration_seconds,
         );
 
+        write_histogram_map(
+            &mut out,
+            "ditto_gateway_proxy_request_duration_seconds",
+            "Proxy request duration in seconds.",
+            "path",
+            &self.proxy_request_duration_seconds,
+        );
+
         out.push_str(
             "# HELP ditto_gateway_proxy_responses_total Total proxy responses by HTTP status.\n",
         );
@@ -222,6 +266,46 @@ impl PrometheusMetrics {
         }
 
         out
+    }
+}
+
+pub(crate) fn normalize_proxy_path_label(path_and_query: &str) -> String {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.strip_suffix('/').unwrap_or(path);
+
+    match path {
+        "/v1/chat/completions"
+        | "/v1/completions"
+        | "/v1/embeddings"
+        | "/v1/moderations"
+        | "/v1/images/generations"
+        | "/v1/audio/transcriptions"
+        | "/v1/audio/translations"
+        | "/v1/audio/speech"
+        | "/v1/rerank"
+        | "/v1/batches"
+        | "/v1/models"
+        | "/v1/responses"
+        | "/v1/responses/compact" => path.to_string(),
+        _ => {
+            if path.starts_with("/v1/models/") {
+                return "/v1/models/*".to_string();
+            }
+            if path.starts_with("/v1/batches/") {
+                if path.ends_with("/cancel") {
+                    return "/v1/batches/*/cancel".to_string();
+                }
+                return "/v1/batches/*".to_string();
+            }
+            if path.starts_with("/v1/responses/") {
+                return "/v1/responses/*".to_string();
+            }
+
+            "/v1/*".to_string()
+        }
     }
 }
 

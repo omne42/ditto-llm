@@ -1746,13 +1746,18 @@ async fn handle_openai_compat_proxy(
     }
 
     let _now_epoch_seconds = now_epoch_seconds();
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let metrics_path = super::metrics_prometheus::normalize_proxy_path_label(path_and_query);
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let metrics_timer_start = Instant::now();
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     if let Some(metrics) = state.prometheus_metrics.as_ref() {
-        metrics
-            .lock()
-            .await
-            .record_proxy_request(virtual_key_id.as_deref(), model.as_deref());
+        metrics.lock().await.record_proxy_request(
+            virtual_key_id.as_deref(),
+            model.as_deref(),
+            &metrics_path,
+        );
     }
 
     #[cfg(feature = "gateway-routing-advanced")]
@@ -1808,6 +1813,8 @@ async fn handle_openai_compat_proxy(
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_cache_hit();
                 metrics.record_proxy_response_status(cached.status);
+                metrics
+                    .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
             }
 
             return Ok(cached_proxy_response(cached, request_id.clone()));
@@ -3616,6 +3623,8 @@ async fn handle_openai_compat_proxy(
                     metrics.record_proxy_backend_failure(&backend_name);
                 }
                 metrics.record_proxy_response_status(status.as_u16());
+                metrics
+                    .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
             }
 
             #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -4150,6 +4159,10 @@ async fn handle_openai_compat_proxy(
                         metrics.record_proxy_backend_success(&backend_name);
                     }
                     metrics.record_proxy_response_status(status.as_u16());
+                    metrics.observe_proxy_request_duration(
+                        &metrics_path,
+                        metrics_timer_start.elapsed(),
+                    );
                 }
 
                 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -4475,6 +4488,7 @@ async fn handle_openai_compat_proxy(
                 metrics.record_proxy_backend_success(&backend_name);
             }
             metrics.record_proxy_response_status(status.as_u16());
+            metrics.observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
         }
 
         let upstream_headers = upstream_response.headers().clone();
@@ -5005,7 +5019,9 @@ async fn handle_openai_compat_proxy(
             .as_ref()
             .map(|(status, _)| status.as_u16())
             .unwrap_or(StatusCode::BAD_GATEWAY.as_u16());
-        metrics.lock().await.record_proxy_response_status(status);
+        let mut metrics = metrics.lock().await;
+        metrics.record_proxy_response_status(status);
+        metrics.observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
     }
 
     Err(last_err.unwrap_or_else(|| {

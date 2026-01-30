@@ -117,6 +117,11 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
         rendered.contains("ditto_gateway_proxy_requests_by_model_total{model=\"gpt-4o-mini\"} 1\n")
     );
     assert!(
+        rendered.contains(
+            "ditto_gateway_proxy_requests_by_path_total{path=\"/v1/chat/completions\"} 1\n"
+        )
+    );
+    assert!(
         rendered.contains("ditto_gateway_proxy_backend_attempts_total{backend=\"primary\"} 1\n")
     );
     assert!(
@@ -129,6 +134,12 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
     ));
     assert!(rendered.contains(
         "ditto_gateway_proxy_backend_request_duration_seconds_count{backend=\"primary\"} 1\n"
+    ));
+    assert!(rendered.contains(
+        "ditto_gateway_proxy_request_duration_seconds_bucket{path=\"/v1/chat/completions\",le=\"+Inf\"} 1\n"
+    ));
+    assert!(rendered.contains(
+        "ditto_gateway_proxy_request_duration_seconds_count{path=\"/v1/chat/completions\"} 1\n"
     ));
 
     Ok(())

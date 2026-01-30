@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: optional in-memory proxy cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
 - Gateway: optional OpenTelemetry tracing exporter via OTLP (feature `gateway-otel`).
 - Gateway: Prometheus metrics for per-backend in-flight gauge and request duration histogram (feature `gateway-metrics-prometheus`).
+- Gateway: Prometheus metrics for per-path request counts and proxy request duration histogram (feature `gateway-metrics-prometheus`).
 - Gateway: proxy backpressure via `--proxy-max-in-flight` (rejects when too many in-flight proxy requests).
 - Gateway: optional active health checks for proxy backends (`--proxy-health-check*`, feature `gateway-routing-advanced`).
 - Gateway: best-effort usage-based settling for proxy budgets (for non-streaming JSON responses, prefer `usage` tokens/cost over request estimates).
