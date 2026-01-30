@@ -494,6 +494,12 @@ async fn handle_openai_compat_proxy(
         .and_then(|value| value.as_str())
         .map(|value| value.to_string());
 
+    let service_tier = parsed_json
+        .as_ref()
+        .and_then(|value| value.get("service_tier"))
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_string());
+
     #[cfg(feature = "gateway-otel")]
     if let Some(model) = model.as_deref() {
         proxy_span.record("model", tracing::field::display(model));
@@ -527,7 +533,12 @@ async fn handle_openai_compat_proxy(
     #[cfg(feature = "gateway-costing")]
     let charge_cost_usd_micros: Option<u64> = model.as_deref().and_then(|model| {
         state.pricing.as_ref().and_then(|pricing| {
-            pricing.estimate_cost_usd_micros(model, input_tokens_estimate, max_output_tokens)
+            pricing.estimate_cost_usd_micros_for_service_tier(
+                model,
+                input_tokens_estimate,
+                max_output_tokens,
+                service_tier.as_deref(),
+            )
         })
     });
     #[cfg(not(feature = "gateway-costing"))]
@@ -2278,12 +2289,13 @@ async fn handle_openai_compat_proxy(
                                 else {
                                     return None;
                                 };
-                                pricing.estimate_cost_usd_micros_with_cache(
+                                pricing.estimate_cost_usd_micros_with_cache_for_service_tier(
                                     model,
                                     clamp_u64_to_u32(input),
                                     usage.cache_input_tokens.map(clamp_u64_to_u32),
                                     usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
                                     clamp_u64_to_u32(output),
+                                    service_tier.as_deref(),
                                 )
                             })
                         });
@@ -3386,12 +3398,13 @@ async fn handle_openai_compat_proxy(
                         let usage = observed_usage?;
                         let input = usage.input_tokens?;
                         let output = usage.output_tokens?;
-                        pricing.estimate_cost_usd_micros_with_cache(
+                        pricing.estimate_cost_usd_micros_with_cache_for_service_tier(
                             model,
                             clamp_u64_to_u32(input),
                             usage.cache_input_tokens.map(clamp_u64_to_u32),
                             usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
                             clamp_u64_to_u32(output),
+                            service_tier.as_deref(),
                         )
                     })
                 })
@@ -3519,17 +3532,18 @@ async fn handle_openai_compat_proxy(
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         {
             let payload = serde_json::json!({
-                "request_id": &request_id,
-                "virtual_key_id": virtual_key_id.as_deref(),
-                "backend": &backend_name,
-                "attempted_backends": &attempted_backends,
-                "method": parts.method.as_str(),
-                "path": path_and_query,
-                "model": &model,
-                "status": status.as_u16(),
-                "charge_tokens": charge_tokens,
-                "spent_tokens": spent_tokens,
-                "charge_cost_usd_micros": charge_cost_usd_micros,
+                    "request_id": &request_id,
+                    "virtual_key_id": virtual_key_id.as_deref(),
+                    "backend": &backend_name,
+                    "attempted_backends": &attempted_backends,
+                    "method": parts.method.as_str(),
+                    "path": path_and_query,
+                    "model": &model,
+                    "service_tier": service_tier.as_deref(),
+                    "status": status.as_u16(),
+                    "charge_tokens": charge_tokens,
+                    "spent_tokens": spent_tokens,
+                    "charge_cost_usd_micros": charge_cost_usd_micros,
                 "spent_cost_usd_micros": spent_cost_usd_micros,
                 "body_len": body.len(),
             });

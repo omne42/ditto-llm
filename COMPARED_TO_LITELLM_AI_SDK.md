@@ -52,7 +52,7 @@
 ### 主要差异/缺口（P0：达到“可替换 LiteLLM”）
 
 - 路由：已支持“主动健康检查/探活”（feature `gateway-routing-advanced`），仍缺更丰富的策略（更细粒度熔断、分级 fallback、backpressure）
-- 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）+ LiteLLM prompt cache 成本（read: `cache_read_input_token_cost` + `cached_tokens`；write: `cache_creation_input_token_cost` + `cache_creation_input_tokens`；tiered: `*_above_*_tokens`）；仍缺更细粒度的 spend 分摊（如按 project/user）
+- 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）+ LiteLLM prompt cache 成本（read: `cache_read_input_token_cost` + `cached_tokens`；write: `cache_creation_input_token_cost` + `cache_creation_input_tokens`；tiered: `*_above_*_tokens`）+ LiteLLM service tier 成本（`*_priority`/`*_flex` + request `service_tier`）；仍缺更细粒度的 spend 分摊（如按 project/user）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；缺 redis cache、streaming cache、cache invalidation 策略
 - Translation：当前覆盖 `POST /v1/chat/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/speech`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面

@@ -106,6 +106,99 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
+async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST).path("/v1/chat/completions");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let pricing = PricingTable::from_litellm_json_str(
+        r#"{
+          "gpt-4o-mini": {
+            "input_cost_per_token": 1.0,
+            "output_cost_per_token": 1.0,
+            "input_cost_per_token_priority": 2.0,
+            "output_cost_per_token_priority": 2.0
+          }
+        }"#,
+    )
+    .expect("pricing");
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "service_tier": "priority",
+        "max_tokens": 1,
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let body_string = body.to_string();
+    let estimated_input_tokens = {
+        #[cfg(feature = "gateway-tokenizer")]
+        {
+            ditto_llm::gateway::token_count::estimate_input_tokens(
+                "/v1/chat/completions",
+                "gpt-4o-mini",
+                &body,
+            )
+            .map(u64::from)
+            .unwrap_or_else(|| body_string.len().div_ceil(4) as u64)
+        }
+        #[cfg(not(feature = "gateway-tokenizer"))]
+        {
+            body_string.len().div_ceil(4) as u64
+        }
+    };
+    let estimated_total_tokens = estimated_input_tokens.saturating_add(1);
+    let budget_usd_micros = estimated_total_tokens.saturating_mul(1_500_000);
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.budget.total_usd_micros = Some(budget_usd_micros);
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_pricing_table(pricing);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body_string))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::PAYMENT_REQUIRED);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        value["error"]["code"].as_str().unwrap_or_default(),
+        "cost_budget_exceeded"
+    );
+
+    mock.assert_calls(0);
+    Ok(())
+}
+
+#[tokio::test]
 async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {

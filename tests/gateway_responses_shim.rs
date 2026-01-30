@@ -48,7 +48,12 @@ async fn responses_shim_falls_back_to_chat_completions_non_streaming() {
     let chat_mock = upstream.mock(|when, then| {
         when.method(POST)
             .path("/v1/chat/completions")
-            .header("authorization", "Bearer sk-test");
+            .header("authorization", "Bearer sk-test")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "service_tier": "priority",
+                "messages": [{"role":"user","content":"hi"}]
+            }));
         then.status(200)
             .header("content-type", "application/json")
             .body(
@@ -76,6 +81,7 @@ async fn responses_shim_falls_back_to_chat_completions_non_streaming() {
 
     let body = json!({
         "model": "gpt-4o-mini",
+        "service_tier": "priority",
         "input": "hi"
     });
     let request = Request::builder()

@@ -17,6 +17,12 @@ pub struct ModelPricing {
     pub cache_read_input_usd_micros_per_token_tiers: Vec<(u32, u64)>,
     pub cache_creation_input_usd_micros_per_token: Option<u64>,
     pub cache_creation_input_usd_micros_per_token_tiers: Vec<(u32, u64)>,
+    pub input_usd_micros_per_token_priority: Option<u64>,
+    pub output_usd_micros_per_token_priority: Option<u64>,
+    pub cache_read_input_usd_micros_per_token_priority: Option<u64>,
+    pub input_usd_micros_per_token_flex: Option<u64>,
+    pub output_usd_micros_per_token_flex: Option<u64>,
+    pub cache_read_input_usd_micros_per_token_flex: Option<u64>,
 }
 
 #[derive(Debug, Error)]
@@ -71,6 +77,36 @@ impl PricingTable {
                     .map(|usd| usd_to_usd_micros_per_token(usd, model, "cache_creation_input_cost"))
                     .transpose()?;
 
+            let input_priority = parse_cost_usd_per_token(obj, "input_cost_per_token_priority")
+                .or_else(|| parse_cost_usd_per_1k_tokens(obj, "input_cost_per_1k_tokens_priority"))
+                .map(|usd| usd_to_usd_micros_per_token(usd, model, "input_cost_priority"))
+                .transpose()?;
+            let output_priority = parse_cost_usd_per_token(obj, "output_cost_per_token_priority")
+                .or_else(|| parse_cost_usd_per_1k_tokens(obj, "output_cost_per_1k_tokens_priority"))
+                .map(|usd| usd_to_usd_micros_per_token(usd, model, "output_cost_priority"))
+                .transpose()?;
+            let cache_read_input_priority =
+                parse_cost_usd_per_token(obj, "cache_read_input_token_cost_priority")
+                    .map(|usd| {
+                        usd_to_usd_micros_per_token(usd, model, "cache_read_input_cost_priority")
+                    })
+                    .transpose()?;
+
+            let input_flex = parse_cost_usd_per_token(obj, "input_cost_per_token_flex")
+                .or_else(|| parse_cost_usd_per_1k_tokens(obj, "input_cost_per_1k_tokens_flex"))
+                .map(|usd| usd_to_usd_micros_per_token(usd, model, "input_cost_flex"))
+                .transpose()?;
+            let output_flex = parse_cost_usd_per_token(obj, "output_cost_per_token_flex")
+                .or_else(|| parse_cost_usd_per_1k_tokens(obj, "output_cost_per_1k_tokens_flex"))
+                .map(|usd| usd_to_usd_micros_per_token(usd, model, "output_cost_flex"))
+                .transpose()?;
+            let cache_read_input_flex =
+                parse_cost_usd_per_token(obj, "cache_read_input_token_cost_flex")
+                    .map(|usd| {
+                        usd_to_usd_micros_per_token(usd, model, "cache_read_input_cost_flex")
+                    })
+                    .transpose()?;
+
             let input_tiers = parse_tiered_cost_usd_per_token(
                 obj,
                 "input_cost_per_token_above_",
@@ -110,6 +146,13 @@ impl PricingTable {
                             cache_creation_input_usd_micros_per_token: cache_creation_input,
                             cache_creation_input_usd_micros_per_token_tiers:
                                 cache_creation_input_tiers,
+                            input_usd_micros_per_token_priority: input_priority,
+                            output_usd_micros_per_token_priority: output_priority,
+                            cache_read_input_usd_micros_per_token_priority:
+                                cache_read_input_priority,
+                            input_usd_micros_per_token_flex: input_flex,
+                            output_usd_micros_per_token_flex: output_flex,
+                            cache_read_input_usd_micros_per_token_flex: cache_read_input_flex,
                         },
                     );
                     continue;
@@ -130,6 +173,12 @@ impl PricingTable {
                     cache_read_input_usd_micros_per_token_tiers: cache_read_input_tiers,
                     cache_creation_input_usd_micros_per_token: cache_creation_input,
                     cache_creation_input_usd_micros_per_token_tiers: cache_creation_input_tiers,
+                    input_usd_micros_per_token_priority: input_priority,
+                    output_usd_micros_per_token_priority: output_priority,
+                    cache_read_input_usd_micros_per_token_priority: cache_read_input_priority,
+                    input_usd_micros_per_token_flex: input_flex,
+                    output_usd_micros_per_token_flex: output_flex,
+                    cache_read_input_usd_micros_per_token_flex: cache_read_input_flex,
                 },
             );
         }
@@ -147,7 +196,24 @@ impl PricingTable {
         input_tokens: u32,
         output_tokens: u32,
     ) -> Option<u64> {
-        self.estimate_cost_usd_micros_with_cache(model, input_tokens, None, None, output_tokens)
+        self.estimate_cost_usd_micros_for_service_tier(model, input_tokens, output_tokens, None)
+    }
+
+    pub fn estimate_cost_usd_micros_for_service_tier(
+        &self,
+        model: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+        service_tier: Option<&str>,
+    ) -> Option<u64> {
+        self.estimate_cost_usd_micros_with_cache_for_service_tier(
+            model,
+            input_tokens,
+            None,
+            None,
+            output_tokens,
+            service_tier,
+        )
     }
 
     pub fn estimate_cost_usd_micros_with_cache(
@@ -158,28 +224,86 @@ impl PricingTable {
         cache_creation_input_tokens: Option<u32>,
         output_tokens: u32,
     ) -> Option<u64> {
+        self.estimate_cost_usd_micros_with_cache_for_service_tier(
+            model,
+            input_tokens,
+            cache_input_tokens,
+            cache_creation_input_tokens,
+            output_tokens,
+            None,
+        )
+    }
+
+    pub fn estimate_cost_usd_micros_with_cache_for_service_tier(
+        &self,
+        model: &str,
+        input_tokens: u32,
+        cache_input_tokens: Option<u32>,
+        cache_creation_input_tokens: Option<u32>,
+        output_tokens: u32,
+        service_tier: Option<&str>,
+    ) -> Option<u64> {
         let pricing = self.model_pricing(model)?;
+
+        let (input_base_usd_micros_per_token, output_base_usd_micros_per_token, cache_read_base) =
+            if let Some(tier) = service_tier {
+                if tier.eq_ignore_ascii_case("priority") {
+                    (
+                        pricing
+                            .input_usd_micros_per_token_priority
+                            .unwrap_or(pricing.input_usd_micros_per_token),
+                        pricing
+                            .output_usd_micros_per_token_priority
+                            .unwrap_or(pricing.output_usd_micros_per_token),
+                        pricing
+                            .cache_read_input_usd_micros_per_token_priority
+                            .or(pricing.cache_read_input_usd_micros_per_token),
+                    )
+                } else if tier.eq_ignore_ascii_case("flex") {
+                    (
+                        pricing
+                            .input_usd_micros_per_token_flex
+                            .unwrap_or(pricing.input_usd_micros_per_token),
+                        pricing
+                            .output_usd_micros_per_token_flex
+                            .unwrap_or(pricing.output_usd_micros_per_token),
+                        pricing
+                            .cache_read_input_usd_micros_per_token_flex
+                            .or(pricing.cache_read_input_usd_micros_per_token),
+                    )
+                } else {
+                    (
+                        pricing.input_usd_micros_per_token,
+                        pricing.output_usd_micros_per_token,
+                        pricing.cache_read_input_usd_micros_per_token,
+                    )
+                }
+            } else {
+                (
+                    pricing.input_usd_micros_per_token,
+                    pricing.output_usd_micros_per_token,
+                    pricing.cache_read_input_usd_micros_per_token,
+                )
+            };
 
         let cached_tokens = cache_input_tokens.unwrap_or(0);
         let cached_tokens = std::cmp::min(cached_tokens, input_tokens);
 
         let input_usd_micros_per_token = select_tiered_usd_micros_per_token(
-            pricing.input_usd_micros_per_token,
+            input_base_usd_micros_per_token,
             &pricing.input_usd_micros_per_token_tiers,
             input_tokens,
         );
 
         let output_usd_micros_per_token = select_tiered_usd_micros_per_token(
-            pricing.output_usd_micros_per_token,
+            output_base_usd_micros_per_token,
             &pricing.output_usd_micros_per_token_tiers,
             input_tokens,
         );
 
         let input_cost = if cached_tokens > 0 {
             let cache_read_input_usd_micros_per_token = select_tiered_usd_micros_per_token(
-                pricing
-                    .cache_read_input_usd_micros_per_token
-                    .unwrap_or(input_usd_micros_per_token),
+                cache_read_base.unwrap_or(input_usd_micros_per_token),
                 &pricing.cache_read_input_usd_micros_per_token_tiers,
                 input_tokens,
             );
@@ -414,5 +538,42 @@ mod tests {
             .estimate_cost_usd_micros_with_cache("tiered-model", 6, Some(2), Some(1), 1)
             .expect("cost");
         assert_eq!(cost, 41);
+    }
+
+    #[test]
+    fn estimates_cost_with_service_tier_pricing() {
+        let raw = r#"{
+          "tiered-model": {
+            "input_cost_per_token": 0.000001,
+            "output_cost_per_token": 0.000002,
+            "input_cost_per_token_priority": 0.000003,
+            "output_cost_per_token_priority": 0.000004,
+            "cache_read_input_token_cost_priority": 0.000001
+          }
+        }"#;
+
+        let table = PricingTable::from_litellm_json_str(raw).expect("pricing");
+
+        let cost_default = table
+            .estimate_cost_usd_micros_for_service_tier("tiered-model", 2, 3, Some("default"))
+            .expect("default cost");
+        assert_eq!(cost_default, 8);
+
+        let cost_priority = table
+            .estimate_cost_usd_micros_for_service_tier("tiered-model", 2, 3, Some("PRIORITY"))
+            .expect("priority cost");
+        assert_eq!(cost_priority, 18);
+
+        let cost_priority_cached = table
+            .estimate_cost_usd_micros_with_cache_for_service_tier(
+                "tiered-model",
+                10,
+                Some(4),
+                None,
+                1,
+                Some("priority"),
+            )
+            .expect("priority cached cost");
+        assert_eq!(cost_priority_cached, 26);
     }
 }

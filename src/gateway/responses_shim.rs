@@ -173,6 +173,9 @@ pub fn responses_request_to_chat_completions(request: &Value) -> Option<Value> {
     if let Some(max_output_tokens) = obj.get("max_output_tokens") {
         out.insert("max_tokens".to_string(), max_output_tokens.clone());
     }
+    if let Some(service_tier) = obj.get("service_tier") {
+        out.insert("service_tier".to_string(), service_tier.clone());
+    }
 
     if let Some(tools) = obj.get("tools") {
         out.insert("tools".to_string(), tools.clone());
