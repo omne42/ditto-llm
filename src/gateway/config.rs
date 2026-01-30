@@ -54,6 +54,23 @@ impl BackendConfig {
         for value in self.query_params.values_mut() {
             *value = expand_env_placeholders(value, env)?;
         }
+        if let Some(provider_config) = self.provider_config.as_mut() {
+            if let Some(base_url) = provider_config.base_url.as_mut() {
+                *base_url = expand_env_placeholders(base_url, env)?;
+            }
+            if let Some(default_model) = provider_config.default_model.as_mut() {
+                *default_model = expand_env_placeholders(default_model, env)?;
+            }
+            for value in provider_config.model_whitelist.iter_mut() {
+                *value = expand_env_placeholders(value, env)?;
+            }
+            for value in provider_config.http_headers.values_mut() {
+                *value = expand_env_placeholders(value, env)?;
+            }
+            for value in provider_config.http_query_params.values_mut() {
+                *value = expand_env_placeholders(value, env)?;
+            }
+        }
         Ok(())
     }
 }
@@ -234,6 +251,74 @@ mod tests {
         );
         assert_eq!(
             backend.query_params.get("api-version").map(|s| s.as_str()),
+            Some("2024-01-01")
+        );
+    }
+
+    #[test]
+    fn backend_config_resolves_env_placeholders_in_provider_config() {
+        let env = Env {
+            dotenv: BTreeMap::from([
+                (
+                    "BASE_URL".to_string(),
+                    "https://api.example.com/v1".to_string(),
+                ),
+                ("DEFAULT_MODEL".to_string(), "gpt-4o-mini".to_string()),
+                ("API_VERSION".to_string(), "2024-01-01".to_string()),
+                ("AUTH_TOKEN".to_string(), "sk-test".to_string()),
+                ("MODEL_PREFIX".to_string(), "gpt".to_string()),
+            ]),
+        };
+
+        let provider_config = ProviderConfig {
+            base_url: Some("${BASE_URL}".to_string()),
+            default_model: Some("${DEFAULT_MODEL}".to_string()),
+            model_whitelist: vec!["${MODEL_PREFIX}-*".to_string()],
+            http_headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer ${AUTH_TOKEN}".to_string(),
+            )]),
+            http_query_params: BTreeMap::from([(
+                "api-version".to_string(),
+                "${API_VERSION}".to_string(),
+            )]),
+            auth: None,
+            capabilities: None,
+        };
+
+        let mut backend = BackendConfig {
+            name: "translation".to_string(),
+            base_url: String::new(),
+            headers: BTreeMap::new(),
+            query_params: BTreeMap::new(),
+            provider: Some("openai-compatible".to_string()),
+            provider_config: Some(provider_config),
+            model_map: BTreeMap::new(),
+        };
+
+        backend.resolve_env(&env).expect("resolve");
+        let provider_config = backend.provider_config.expect("provider config");
+        assert_eq!(
+            provider_config.base_url.as_deref(),
+            Some("https://api.example.com/v1")
+        );
+        assert_eq!(
+            provider_config.default_model.as_deref(),
+            Some("gpt-4o-mini")
+        );
+        assert_eq!(provider_config.model_whitelist, vec!["gpt-*".to_string()]);
+        assert_eq!(
+            provider_config
+                .http_headers
+                .get("authorization")
+                .map(|s| s.as_str()),
+            Some("Bearer sk-test")
+        );
+        assert_eq!(
+            provider_config
+                .http_query_params
+                .get("api-version")
+                .map(|s| s.as_str()),
             Some("2024-01-01")
         );
     }

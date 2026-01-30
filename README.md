@@ -108,7 +108,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
 }
 ```
 
-Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params` and `virtual_keys[].token` (expanded at startup via the process env or `--dotenv`).
+Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` fields (e.g. `base_url`/`http_headers`/`http_query_params`), and `virtual_keys[].token` (expanded at startup via the process env or `--dotenv`).
 
 Translation backends (feature `gateway-translation`) can be configured with `provider` + `provider_config` (same shape as `ProviderConfig`):
 
