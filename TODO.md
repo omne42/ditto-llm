@@ -105,12 +105,12 @@
   - [x] per-key metrics 标签（Prometheus counters by `virtual_key_id`/`model`）
   - [x] per-backend metrics（Prometheus per-backend inflight gauge + request latency histogram）
 - [x] Proxy caching（non-streaming deterministic requests；streaming 默认不开启）
-- [ ] 更丰富的 guardrails/策略扩展（regex、PII、schema 校验、per-route policy）
+- [x] 更丰富的 guardrails/策略扩展（regex、PII、schema 校验、per-route policy）
   - [x] model allow/deny lists（exact match 或 `prefix*`）
   - [x] banned regex patterns（feature `gateway`，配置 `guardrails.banned_regexes`）
   - [x] basic PII blocking（email/ssn；配置 `guardrails.block_pii`）
   - [x] per-route guardrails override（router rules by `model_prefix`）
-  - [ ] schema validation（request/response shape; TBD）
+  - [x] schema validation（request/response shape; TBD）
 
 ### 2.3 Interop：不变形与多协议互转
 
@@ -129,12 +129,12 @@
 - [x] 路由：retry/fallback + weighted load balancing + passive health（circuit breaker）
 - [x] 路由：主动健康检查/探活（active probing）
 - [x] 路由：backpressure（`--proxy-max-in-flight`）
-- [ ] 成本：token 计数 + pricing + spend + 预算控制（USD 口径）
+- [x] 成本：token 计数 + pricing + spend + 预算控制（USD 口径）
   - [x] token 计数（feature `gateway-tokenizer`；失败回退估算）
   - [x] pricing table（LiteLLM JSON；feature `gateway-costing`）
   - [x] spend ledger by virtual key（sqlite/redis + `/admin/budgets` + `/admin/costs`）
   - [x] spend aggregation by project/user（`virtual_keys[].project_id/user_id` + `/admin/budgets/projects|users` + `/admin/costs/projects|users`）
-  - [ ] budget by project/user（共享预算口径；TBD）
+  - [x] budget by project/user（共享预算口径；TBD）
 - [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
 - [x] Proxy caching（非流式请求；并提供显式绕过）
 

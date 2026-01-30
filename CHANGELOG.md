@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: virtual keys support optional `project_id` and `user_id` attribution; admin endpoints can aggregate `/admin/budgets` and `/admin/costs` by project/user.
 - Gateway: virtual keys support shared budgets scoped by `project_id` / `user_id` via `project_budget` / `user_budget` (token + USD micros).
 - Gateway: guardrails support regex patterns (`banned_regexes`) and optional PII blocking (`block_pii`).
+- Gateway: guardrails support optional request schema validation via `guardrails.validate_schema`.
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.

@@ -14,6 +14,8 @@ pub struct GuardrailsConfig {
     #[serde(default)]
     pub block_pii: bool,
     #[serde(default)]
+    pub validate_schema: bool,
+    #[serde(default)]
     pub max_input_tokens: Option<u32>,
     #[serde(default)]
     pub allow_models: Vec<String>,

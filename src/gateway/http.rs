@@ -667,6 +667,21 @@ async fn handle_openai_compat_proxy(
                 }
             }
 
+            if guardrails.validate_schema {
+                if let Some(body_json) = parsed_json.as_ref() {
+                    if let Some(reason) = validate_openai_request_schema(path_and_query, body_json)
+                    {
+                        gateway.observability.record_guardrail_blocked();
+                        return Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            reason,
+                        ));
+                    }
+                }
+            }
+
             if guardrails.has_text_filters() {
                 if let Ok(text) = std::str::from_utf8(&body) {
                     if let Some(reason) = guardrails.check_text(text) {
@@ -4084,6 +4099,116 @@ fn extract_max_output_tokens(path: &str, value: &serde_json::Value) -> Option<u3
             v as u32
         }
     })
+}
+
+fn validate_openai_request_schema(
+    path_and_query: &str,
+    body: &serde_json::Value,
+) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+
+    if path == "/v1/chat/completions" {
+        return validate_openai_chat_completions_schema(body);
+    }
+    if path == "/v1/embeddings" {
+        return validate_openai_embeddings_schema(body);
+    }
+    if path.starts_with("/v1/responses") {
+        return validate_openai_responses_schema(body);
+    }
+
+    None
+}
+
+fn validate_openai_chat_completions_schema(body: &serde_json::Value) -> Option<String> {
+    let Some(obj) = body.as_object() else {
+        return Some("request body must be a JSON object".to_string());
+    };
+
+    let model = obj
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if model.is_none() {
+        return Some("missing field `model`".to_string());
+    }
+
+    let Some(messages) = obj.get("messages").and_then(|value| value.as_array()) else {
+        return Some("`messages` must be an array".to_string());
+    };
+
+    for (idx, message) in messages.iter().enumerate() {
+        let Some(message) = message.as_object() else {
+            return Some(format!("messages[{idx}] must be an object"));
+        };
+
+        let role = message
+            .get("role")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if role.is_none() {
+            return Some(format!("messages[{idx}].role must be a non-empty string"));
+        }
+
+        if !message.contains_key("content") {
+            return Some(format!("messages[{idx}].content is required"));
+        }
+    }
+
+    None
+}
+
+fn validate_openai_responses_schema(body: &serde_json::Value) -> Option<String> {
+    let Some(obj) = body.as_object() else {
+        return Some("request body must be a JSON object".to_string());
+    };
+
+    let model = obj
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if model.is_none() {
+        return Some("missing field `model`".to_string());
+    }
+
+    let Some(input) = obj.get("input") else {
+        return Some("missing field `input`".to_string());
+    };
+    if !(input.is_string() || input.is_array() || input.is_object()) {
+        return Some("`input` must be a string, array, or object".to_string());
+    }
+
+    None
+}
+
+fn validate_openai_embeddings_schema(body: &serde_json::Value) -> Option<String> {
+    let Some(obj) = body.as_object() else {
+        return Some("request body must be a JSON object".to_string());
+    };
+
+    let model = obj
+        .get("model")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if model.is_none() {
+        return Some("missing field `model`".to_string());
+    }
+
+    let Some(input) = obj.get("input") else {
+        return Some("missing field `input`".to_string());
+    };
+    if !(input.is_string() || input.is_array()) {
+        return Some("`input` must be a string or array".to_string());
+    }
+
+    None
 }
 
 fn clamp_u64_to_u32(value: u64) -> u32 {
