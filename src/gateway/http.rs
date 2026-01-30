@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path as StdPath, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -2521,10 +2521,17 @@ async fn handle_openai_compat_proxy(
 
         let mut proxy_permit = try_acquire_proxy_permit(&state)?;
 
-        {
+        let backend_model_map: BTreeMap<String, String> = {
             let mut gateway = state.gateway.lock().await;
             gateway.observability.record_backend_call();
-        }
+            gateway
+                .config
+                .backends
+                .iter()
+                .find(|backend| backend.name == backend_name)
+                .map(|backend| backend.model_map.clone())
+                .unwrap_or_default()
+        };
 
         let backend_timer_start = Instant::now();
 
@@ -2539,6 +2546,25 @@ async fn handle_openai_compat_proxy(
         sanitize_proxy_headers(&mut outgoing_headers, strip_authorization);
         apply_backend_headers(&mut outgoing_headers, backend.headers());
         insert_request_id(&mut outgoing_headers, &request_id);
+
+        let outgoing_body = if let (Some(request_model), Some(parsed_json)) =
+            (model.as_deref(), parsed_json.as_ref())
+        {
+            backend_model_map
+                .get(request_model)
+                .and_then(|mapped_model| {
+                    let mut value = parsed_json.clone();
+                    let obj = value.as_object_mut()?;
+                    obj.insert(
+                        "model".to_string(),
+                        serde_json::Value::String(mapped_model.clone()),
+                    );
+                    serde_json::to_vec(&value).ok().map(Bytes::from)
+                })
+                .unwrap_or_else(|| body.clone())
+        } else {
+            body.clone()
+        };
 
         #[cfg(feature = "sdk")]
         if let Some(logger) = state.devtools.as_ref() {
@@ -2561,7 +2587,7 @@ async fn handle_openai_compat_proxy(
                 parts.method.clone(),
                 path_and_query,
                 outgoing_headers,
-                Some(body.clone()),
+                Some(outgoing_body),
             )
             .await
         {
@@ -2613,7 +2639,7 @@ async fn handle_openai_compat_proxy(
         if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
             if let Some(parsed_json) = parsed_json.as_ref() {
                 let _ = proxy_permit.take();
-                let Some(chat_body) =
+                let Some(mut chat_body) =
                     responses_shim::responses_request_to_chat_completions(parsed_json)
                 else {
                     last_err = Some(openai_error(
@@ -2624,6 +2650,17 @@ async fn handle_openai_compat_proxy(
                     ));
                     continue;
                 };
+
+                if let Some(mapped_model) = chat_body
+                    .get("model")
+                    .and_then(|value| value.as_str())
+                    .and_then(|model| backend_model_map.get(model))
+                    .cloned()
+                {
+                    if let Some(obj) = chat_body.as_object_mut() {
+                        obj.insert("model".to_string(), serde_json::Value::String(mapped_model));
+                    }
+                }
 
                 emit_json_log(
                     &state,

@@ -98,6 +98,60 @@ async fn openai_compat_proxy_forwards_chat_completions_and_injects_upstream_auth
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_applies_backend_model_map() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .json_body(json!({
+                "model": "mapped-model",
+                "messages": [{"role":"user","content":"hi"}]
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let mut backend = backend_config("primary", upstream.base_url(), "Bearer sk-test");
+    backend
+        .model_map
+        .insert("gpt-4o-mini".to_string(), "mapped-model".to_string());
+
+    let config = GatewayConfig {
+        backends: vec![backend],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(bytes, r#"{"id":"ok"}"#);
+    mock.assert();
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_enforces_max_in_flight() {
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
