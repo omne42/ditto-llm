@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: do not mount `/admin/*` routes unless an admin token is configured.
 - Gateway: apply per-route guardrails overrides to OpenAI proxy requests.
 - Gateway: extend request schema validation coverage (`/v1/completions`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`).
+- Gateway tokenizer: estimate input tokens for additional OpenAI endpoints (`/v1/completions`, `/v1/images/generations`, `/v1/audio/speech`, `/v1/rerank`).
 - Gateway translation: use `--dotenv` env values when lazily building provider clients (embeddings/moderations/images/audio/rerank/batches).
 - Gateway proxy cache: include `x-api-key` in the cache scope when virtual keys are disabled.
 - Gateway: keep proxy backpressure permits until the response body is drained (including non-streaming responses).

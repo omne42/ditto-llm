@@ -14,8 +14,12 @@ pub fn estimate_input_tokens(path_and_query: &str, model: &str, request: &Value)
     let tokens = match path {
         "/v1/chat/completions" => count_chat_completions_input_tokens(model, bpe, request)?,
         "/v1/responses" => count_responses_input_tokens(bpe, request)?,
+        "/v1/completions" => count_string_or_array_tokens(bpe, request.get("prompt")?)?,
         "/v1/embeddings" => count_string_or_array_tokens(bpe, request.get("input")?)?,
         "/v1/moderations" => count_string_or_array_tokens(bpe, request.get("input")?)?,
+        "/v1/images/generations" => count_string_or_array_tokens(bpe, request.get("prompt")?)?,
+        "/v1/audio/speech" => count_string_or_array_tokens(bpe, request.get("input")?)?,
+        "/v1/rerank" => count_rerank_input_tokens(bpe, request)?,
         _ => return None,
     };
 
@@ -229,6 +233,28 @@ fn count_string_or_array_tokens(bpe: &CoreBPE, value: &Value) -> Option<usize> {
     }
 }
 
+fn count_rerank_input_tokens(bpe: &CoreBPE, request: &Value) -> Option<usize> {
+    let query = request.get("query")?.as_str()?;
+    let documents = request.get("documents")?.as_array()?;
+
+    let mut tokens = bpe.encode_with_special_tokens(query).len();
+    for document in documents {
+        let document_tokens = match document {
+            Value::String(text) => bpe.encode_with_special_tokens(text).len(),
+            Value::Object(obj) => obj
+                .get("text")
+                .and_then(|value| value.as_str())
+                .or_else(|| obj.get("content").and_then(|value| value.as_str()))
+                .map(|text| bpe.encode_with_special_tokens(text).len())
+                .unwrap_or_else(|| count_json_tokens(bpe, document)),
+            _ => count_json_tokens(bpe, document),
+        };
+        tokens = tokens.saturating_add(document_tokens);
+    }
+
+    Some(tokens)
+}
+
 fn count_json_tokens(bpe: &CoreBPE, value: &Value) -> usize {
     let json = serde_json::to_string(value).unwrap_or_default();
     bpe.encode_with_special_tokens(&json).len()
@@ -318,6 +344,69 @@ mod tests {
 
         let tokens =
             estimate_input_tokens("/v1/embeddings", "gpt-4o-mini", &request).expect("tokens");
+        assert_eq!(tokens, expected as u32);
+    }
+
+    #[test]
+    fn counts_completions_prompt_strings() {
+        let request = serde_json::json!({
+            "model": "gpt-4o-mini",
+            "prompt": ["hello", "world"],
+        });
+
+        let bpe = bpe_for_model("gpt-4o-mini");
+        let expected = bpe.encode_with_special_tokens("hello").len()
+            + bpe.encode_with_special_tokens("world").len();
+
+        let tokens =
+            estimate_input_tokens("/v1/completions", "gpt-4o-mini", &request).expect("tokens");
+        assert_eq!(tokens, expected as u32);
+    }
+
+    #[test]
+    fn counts_images_generations_prompt() {
+        let request = serde_json::json!({
+            "model": "gpt-4o-mini",
+            "prompt": "draw a cat",
+        });
+
+        let bpe = bpe_for_model("gpt-4o-mini");
+        let expected = bpe.encode_with_special_tokens("draw a cat").len();
+
+        let tokens = estimate_input_tokens("/v1/images/generations", "gpt-4o-mini", &request)
+            .expect("tokens");
+        assert_eq!(tokens, expected as u32);
+    }
+
+    #[test]
+    fn counts_audio_speech_input() {
+        let request = serde_json::json!({
+            "model": "gpt-4o-mini",
+            "input": "hello world",
+        });
+
+        let bpe = bpe_for_model("gpt-4o-mini");
+        let expected = bpe.encode_with_special_tokens("hello world").len();
+
+        let tokens =
+            estimate_input_tokens("/v1/audio/speech", "gpt-4o-mini", &request).expect("tokens");
+        assert_eq!(tokens, expected as u32);
+    }
+
+    #[test]
+    fn counts_rerank_query_and_documents() {
+        let request = serde_json::json!({
+            "model": "gpt-4o-mini",
+            "query": "hello",
+            "documents": ["world", {"text":"foo"}],
+        });
+
+        let bpe = bpe_for_model("gpt-4o-mini");
+        let expected = bpe.encode_with_special_tokens("hello").len()
+            + bpe.encode_with_special_tokens("world").len()
+            + bpe.encode_with_special_tokens("foo").len();
+
+        let tokens = estimate_input_tokens("/v1/rerank", "gpt-4o-mini", &request).expect("tokens");
         assert_eq!(tokens, expected as u32);
     }
 }
