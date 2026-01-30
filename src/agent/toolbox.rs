@@ -1,5 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -16,6 +17,7 @@ pub const TOOL_HTTP_FETCH: &str = "http_fetch";
 pub const TOOL_FS_READ_FILE: &str = "fs_read_file";
 pub const TOOL_FS_WRITE_FILE: &str = "fs_write_file";
 pub const TOOL_FS_LIST_DIR: &str = "fs_list_dir";
+pub const TOOL_SHELL_EXEC: &str = "shell_exec";
 
 pub fn toolbox_tools() -> Vec<Tool> {
     vec![
@@ -23,6 +25,7 @@ pub fn toolbox_tools() -> Vec<Tool> {
         fs_read_file_tool(),
         fs_write_file_tool(),
         fs_list_dir_tool(),
+        shell_exec_tool(),
     ]
 }
 
@@ -107,22 +110,55 @@ pub fn fs_list_dir_tool() -> Tool {
     }
 }
 
+pub fn shell_exec_tool() -> Tool {
+    Tool {
+        name: TOOL_SHELL_EXEC.to_string(),
+        description: Some(
+            "Execute an allowlisted program (no shell parsing) and return exit status and output."
+                .to_string(),
+        ),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "program": { "type": "string", "description": "Program name (must be allowlisted by the host)." },
+                "args": {
+                    "type": "array",
+                    "description": "Optional program arguments.",
+                    "items": { "type": "string" }
+                },
+                "cwd": { "type": "string", "description": "Working directory relative to the configured root directory (default: root)." },
+                "timeout_ms": { "type": "integer", "description": "Optional timeout override in milliseconds (clamped by the host)." }
+            },
+            "required": ["program"]
+        }),
+        strict: Some(true),
+    }
+}
+
 #[derive(Clone)]
 pub struct ToolboxExecutor {
     http: HttpToolExecutor,
+    shell: ShellToolExecutor,
     fs: FsToolExecutor,
 }
 
 impl ToolboxExecutor {
     pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
+        let root = root.into();
         Ok(Self {
             http: HttpToolExecutor::new(),
+            shell: ShellToolExecutor::new(root.clone())?,
             fs: FsToolExecutor::new(root)?,
         })
     }
 
     pub fn with_http(mut self, http: HttpToolExecutor) -> Self {
         self.http = http;
+        self
+    }
+
+    pub fn with_shell(mut self, shell: ShellToolExecutor) -> Self {
+        self.shell = shell;
         self
     }
 
@@ -137,6 +173,7 @@ impl ToolExecutor for ToolboxExecutor {
     async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
         match call.name.as_str() {
             TOOL_HTTP_FETCH => self.http.execute(call).await,
+            TOOL_SHELL_EXEC => self.shell.execute(call).await,
             TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR => {
                 self.fs.execute(call).await
             }
@@ -358,6 +395,317 @@ fn response_headers_to_map(headers: &reqwest::header::HeaderMap) -> BTreeMap<Str
             .or_insert(value);
     }
     out
+}
+
+#[derive(Clone)]
+pub struct ShellToolExecutor {
+    root: PathBuf,
+    allowed_programs: BTreeSet<String>,
+    max_output_bytes: usize,
+    timeout: Duration,
+}
+
+impl ShellToolExecutor {
+    pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
+        let root = root.into();
+        let root = std::fs::canonicalize(&root).map_err(|err| {
+            DittoError::Io(std::io::Error::new(
+                err.kind(),
+                format!("invalid shell tool root {}: {err}", root.display()),
+            ))
+        })?;
+        Ok(Self {
+            root,
+            allowed_programs: BTreeSet::new(),
+            max_output_bytes: 256 * 1024,
+            timeout: Duration::from_secs(20),
+        })
+    }
+
+    pub fn with_allowed_programs<I, S>(mut self, programs: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.allowed_programs = programs.into_iter().map(|p| p.into()).collect();
+        self
+    }
+
+    pub fn with_max_output_bytes(mut self, max_output_bytes: usize) -> Self {
+        self.max_output_bytes = max_output_bytes.max(1);
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    fn validate_program(raw: &str) -> std::result::Result<&str, String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Err("program is empty".to_string());
+        }
+        if raw.contains('/') || raw.contains('\\') || raw.contains(':') {
+            return Err("program must be a bare name without path separators".to_string());
+        }
+        Ok(raw)
+    }
+
+    fn resolve_existing_dir(&self, raw: &str) -> std::result::Result<PathBuf, String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Ok(self.root.clone());
+        }
+
+        let rel = Path::new(raw);
+        if rel.is_absolute() {
+            return Err("absolute paths are not allowed".to_string());
+        }
+        for component in rel.components() {
+            if matches!(component, std::path::Component::ParentDir) {
+                return Err("parent dir segments are not allowed".to_string());
+            }
+        }
+
+        let joined = self.root.join(rel);
+        let canonical = std::fs::canonicalize(&joined)
+            .map_err(|err| format!("failed to resolve path {}: {err}", joined.display()))?;
+        if !canonical.starts_with(&self.root) {
+            return Err("path escapes root".to_string());
+        }
+        let meta = std::fs::metadata(&canonical).map_err(|err| format!("stat failed: {err}"))?;
+        if !meta.is_dir() {
+            return Err("path is not a directory".to_string());
+        }
+        Ok(canonical)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ShellExecArgs {
+    program: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    timeout_ms: Option<u64>,
+}
+
+#[async_trait]
+impl ToolExecutor for ShellToolExecutor {
+    async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
+        if call.name != TOOL_SHELL_EXEC {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: format!("unknown tool: {}", call.name),
+                is_error: Some(true),
+            });
+        }
+
+        let args: ShellExecArgs = match serde_json::from_value(call.arguments.clone()) {
+            Ok(args) => args,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("invalid args: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let program = match Self::validate_program(&args.program) {
+            Ok(program) => program.to_string(),
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: err,
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        if !self.allowed_programs.contains(&program) {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: format!("program not allowed: {program}"),
+                is_error: Some(true),
+            });
+        }
+
+        if args.args.len() > 128 {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: "too many args (max: 128)".to_string(),
+                is_error: Some(true),
+            });
+        }
+        for arg in &args.args {
+            if arg.len() > 8 * 1024 {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: "arg too large (max: 8192 bytes)".to_string(),
+                    is_error: Some(true),
+                });
+            }
+        }
+
+        let cwd = match self.resolve_existing_dir(args.cwd.as_deref().unwrap_or("")) {
+            Ok(dir) => dir,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: err,
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let timeout = args
+            .timeout_ms
+            .map(Duration::from_millis)
+            .unwrap_or(self.timeout);
+        let timeout = timeout.min(self.timeout).max(Duration::from_millis(1));
+
+        let mut command = tokio::process::Command::new(&program);
+        command.args(&args.args);
+        command.current_dir(&cwd);
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        command.kill_on_drop(true);
+
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("failed to spawn: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let stdout = child.stdout.take().ok_or_else(|| {
+            DittoError::Io(std::io::Error::other("shell_exec missing stdout pipe"))
+        })?;
+        let stderr = child.stderr.take().ok_or_else(|| {
+            DittoError::Io(std::io::Error::other("shell_exec missing stderr pipe"))
+        })?;
+
+        let max_output_bytes = self.max_output_bytes;
+        let stdout_task = tokio::spawn(read_async_limited_bytes(stdout, max_output_bytes));
+        let stderr_task = tokio::spawn(read_async_limited_bytes(stderr, max_output_bytes));
+
+        let mut timed_out = false;
+        let status = match tokio::time::timeout(timeout, child.wait()).await {
+            Ok(status) => match status {
+                Ok(status) => Some(status),
+                Err(err) => {
+                    return Ok(ToolResult {
+                        tool_call_id: call.id,
+                        content: format!("failed to wait for process: {err}"),
+                        is_error: Some(true),
+                    });
+                }
+            },
+            Err(_) => {
+                timed_out = true;
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                None
+            }
+        };
+
+        let (stdout_bytes, stdout_truncated) = match stdout_task.await {
+            Ok(Ok(ok)) => ok,
+            Ok(Err(err)) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("failed to read stdout: {err}"),
+                    is_error: Some(true),
+                });
+            }
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("stdout join error: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+        let (stderr_bytes, stderr_truncated) = match stderr_task.await {
+            Ok(Ok(ok)) => ok,
+            Ok(Err(err)) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("failed to read stderr: {err}"),
+                    is_error: Some(true),
+                });
+            }
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("stderr join error: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let exit_code = status.as_ref().and_then(|status| status.code());
+        let ok = exit_code == Some(0) && !timed_out;
+
+        let out = serde_json::json!({
+            "program": program,
+            "args": args.args,
+            "cwd": args.cwd.unwrap_or_else(|| ".".to_string()),
+            "ok": ok,
+            "exit_code": exit_code,
+            "stdout": String::from_utf8_lossy(&stdout_bytes).to_string(),
+            "stderr": String::from_utf8_lossy(&stderr_bytes).to_string(),
+            "stdout_truncated": stdout_truncated,
+            "stderr_truncated": stderr_truncated,
+            "timed_out": timed_out,
+        });
+
+        Ok(ToolResult {
+            tool_call_id: call.id,
+            content: out.to_string(),
+            is_error: if timed_out { Some(true) } else { None },
+        })
+    }
+}
+
+async fn read_async_limited_bytes(
+    mut reader: impl tokio::io::AsyncRead + Unpin,
+    max_bytes: usize,
+) -> std::io::Result<(Vec<u8>, bool)> {
+    use tokio::io::AsyncReadExt;
+
+    let mut out = Vec::<u8>::new();
+    let mut truncated = false;
+    let mut buf = [0u8; 8192];
+
+    loop {
+        let read = reader.read(&mut buf).await?;
+        if read == 0 {
+            break;
+        }
+
+        if out.len() < max_bytes {
+            let remaining = max_bytes.saturating_sub(out.len());
+            let take = read.min(remaining);
+            out.extend_from_slice(&buf[..take]);
+            if take < read {
+                truncated = true;
+            }
+        } else {
+            truncated = true;
+        }
+    }
+
+    Ok((out, truncated))
 }
 
 #[derive(Clone)]

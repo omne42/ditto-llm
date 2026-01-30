@@ -85,7 +85,7 @@
   - [x] `fs_read_file` tool + executor（feature `agent`，限制 root）
   - [x] `fs_write_file` tool + executor（feature `agent`，限制 root，默认不覆盖）
   - [x] `fs_list_dir` tool + executor（feature `agent`，限制 root）
-  - [ ] `shell_exec` tool（需要 allowlist/sandbox 口径）
+  - [x] `shell_exec` tool（feature `agent`，allowlist + cwd 限制 root）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）
 

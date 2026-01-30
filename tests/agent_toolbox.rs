@@ -6,8 +6,8 @@ use serde_json::json;
 
 use ditto_llm::Result;
 use ditto_llm::agent::{
-    FsToolExecutor, HttpToolExecutor, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_WRITE_FILE,
-    TOOL_HTTP_FETCH, ToolCall, ToolExecutor,
+    FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE,
+    TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -176,6 +176,99 @@ async fn fs_list_dir_lists_entries() -> Result<()> {
         .collect();
     assert!(names.contains(&"a.txt".to_string()));
     assert!(names.contains(&"sub".to_string()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn shell_exec_tool_denies_disallowed_program() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let executor = ShellToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "rustc",
+            "args": ["--version"]
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn shell_exec_tool_runs_allowlisted_program() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["rustc"]);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "rustc",
+            "args": ["--version"]
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("exit_code").and_then(|v| v.as_i64()), Some(0));
+    let stdout = value.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stderr = value.get("stderr").and_then(|v| v.as_str()).unwrap_or("");
+    assert!(stdout.contains("rustc") || stderr.contains("rustc"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn shell_exec_tool_rejects_cwd_escape() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["rustc"]);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "rustc",
+            "args": ["--version"],
+            "cwd": "../"
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn shell_exec_tool_truncates_large_stdout() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+
+    let executor = ShellToolExecutor::new(dir.path())?
+        .with_allowed_programs(["rustc"])
+        .with_max_output_bytes(64);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "rustc",
+            "args": ["--print", "target-list"],
+            "cwd": "sub"
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("ok").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(
+        value.get("stdout_truncated").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    let stdout = value.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    assert!(stdout.len() <= 64);
     Ok(())
 }
 
