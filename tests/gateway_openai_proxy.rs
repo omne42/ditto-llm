@@ -181,7 +181,23 @@ async fn openai_compat_proxy_spends_usage_tokens_when_available() {
         "messages": [{"role":"user","content":"hi"}]
     });
     let body_string = body.to_string();
-    let input_tokens_estimate = body_string.len().div_ceil(4) as u64;
+    let input_tokens_estimate: u64 = {
+        #[cfg(feature = "gateway-tokenizer")]
+        {
+            u64::from(
+                ditto_llm::gateway::token_count::estimate_input_tokens(
+                    "/v1/chat/completions",
+                    "gpt-4o-mini",
+                    &body,
+                )
+                .expect("token_count"),
+            )
+        }
+        #[cfg(not(feature = "gateway-tokenizer"))]
+        {
+            body_string.len().div_ceil(4) as u64
+        }
+    };
     let charge_tokens = input_tokens_estimate.saturating_add(u64::from(max_tokens));
     let budget_total = charge_tokens.saturating_mul(2).saturating_sub(1);
     assert!(budget_total > charge_tokens);

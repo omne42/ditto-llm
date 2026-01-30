@@ -45,6 +45,9 @@ use super::{SqliteStore, SqliteStoreError};
 #[cfg(feature = "gateway-store-redis")]
 use super::{RedisStore, RedisStoreError};
 
+#[cfg(feature = "gateway-tokenizer")]
+use super::token_count;
+
 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
 use super::{AuditLogRecord, BudgetLedgerRecord};
 
@@ -507,6 +510,17 @@ async fn handle_openai_compat_proxy(
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
 
+    #[cfg(feature = "gateway-tokenizer")]
+    let input_tokens_estimate = parsed_json
+        .as_ref()
+        .and_then(|json| {
+            model
+                .as_deref()
+                .and_then(|model| token_count::estimate_input_tokens(path_and_query, model, json))
+        })
+        .unwrap_or_else(|| estimate_tokens_from_bytes(&body));
+
+    #[cfg(not(feature = "gateway-tokenizer"))]
     let input_tokens_estimate = estimate_tokens_from_bytes(&body);
     let charge_tokens = input_tokens_estimate.saturating_add(max_output_tokens);
 

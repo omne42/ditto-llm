@@ -52,7 +52,7 @@
 ### 主要差异/缺口（P0：达到“可替换 LiteLLM”）
 
 - 路由：已支持“主动健康检查/探活”（feature `gateway-routing-advanced`），仍缺更丰富的策略（更细粒度熔断、分级 fallback、backpressure）
-- 成本：仍缺 **真实 token 计数**（tiktoken 等价）；已支持 **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）
+- 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）；仍缺更细粒度的 spend 分摊（如按 project/user）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；缺 redis cache、streaming cache、cache invalidation 策略
 - Translation：当前覆盖 `POST /v1/chat/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/speech`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
@@ -66,7 +66,7 @@
 - **默认构建（不含 Gateway）**：providers + streaming/tools/embeddings（面向 SDK/库调用）
 - **可选：`gateway`**：HTTP server + control-plane + OpenAI-compatible proxy
 - **可选：`gateway-devtools`**：在 `gateway` 基础上启用 JSONL devtools logging（依赖 `sdk`）
-- **可选（默认不装）**：`gateway-proxy-cache`、`gateway-store-sqlite`、`gateway-store-redis`、`gateway-devtools`、`gateway-otel`、`gateway-metrics-prometheus`、`gateway-routing-advanced`、`gateway-costing`
+- **可选（默认不装）**：`gateway-proxy-cache`、`gateway-store-sqlite`、`gateway-store-redis`、`gateway-devtools`、`gateway-otel`、`gateway-metrics-prometheus`、`gateway-routing-advanced`、`gateway-costing`、`gateway-tokenizer`
 - **后续可选（规划）**：`gateway-proxy-cache-redis`、translation proxy（OpenAI in/out → native providers）等
 
 ---

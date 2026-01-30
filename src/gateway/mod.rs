@@ -28,6 +28,8 @@ pub mod router;
 pub mod sqlite_store;
 pub mod state_file;
 pub mod store_types;
+#[cfg(feature = "gateway-tokenizer")]
+pub mod token_count;
 #[cfg(feature = "gateway-translation")]
 pub mod translation;
 

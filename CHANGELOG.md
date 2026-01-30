@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: proxy backpressure via `--proxy-max-in-flight` (rejects when too many in-flight proxy requests).
 - Gateway: optional active health checks for proxy backends (`--proxy-health-check*`, feature `gateway-routing-advanced`).
 - Gateway: best-effort usage-based settling for proxy budgets (for non-streaming JSON responses, prefer `usage` tokens/cost over request estimates).
+- Gateway: optional tiktoken-based input token counting for proxy budgets/guardrails/costing (feature `gateway-tokenizer`; falls back to request-size estimation).
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.

@@ -89,7 +89,7 @@
 - [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
 - [x] 路由（basic）：weighted backends（seeded）+ network-error fallback
 - [x] 路由（advanced）：retry + circuit breaker + active health checks（feature `gateway-routing-advanced`）
-- [ ] 成本口径：真实 token 计数（tiktoken 等价）
+- [x] 成本口径：真实 token 计数（tiktoken 等价；feature `gateway-tokenizer`，失败回退估算）
 - [x] 成本口径：usage-based settle（非 streaming 响应优先使用 `usage`；否则回退预估）
 - [x] 存储（basic）：virtual keys 持久化（`--state` file / `--sqlite`）
 - [x] 存储（advanced）：budgets / audit logs 持久化（sqlite/redis 可选，支持多进程/多副本）
