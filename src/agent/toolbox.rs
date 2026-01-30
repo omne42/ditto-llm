@@ -17,6 +17,7 @@ pub const TOOL_HTTP_FETCH: &str = "http_fetch";
 pub const TOOL_FS_READ_FILE: &str = "fs_read_file";
 pub const TOOL_FS_WRITE_FILE: &str = "fs_write_file";
 pub const TOOL_FS_LIST_DIR: &str = "fs_list_dir";
+pub const TOOL_FS_FIND: &str = "fs_find";
 pub const TOOL_FS_STAT: &str = "fs_stat";
 pub const TOOL_SHELL_EXEC: &str = "shell_exec";
 
@@ -26,6 +27,7 @@ pub fn toolbox_tools() -> Vec<Tool> {
         fs_read_file_tool(),
         fs_write_file_tool(),
         fs_list_dir_tool(),
+        fs_find_tool(),
         fs_stat_tool(),
         shell_exec_tool(),
     ]
@@ -106,6 +108,29 @@ pub fn fs_list_dir_tool() -> Tool {
             "properties": {
                 "path": { "type": "string", "description": "Directory path relative to the configured root directory. Defaults to root." },
                 "max_entries": { "type": "integer", "description": "Maximum number of entries to return (default: 200)." }
+            }
+        }),
+        strict: Some(true),
+    }
+}
+
+pub fn fs_find_tool() -> Tool {
+    Tool {
+        name: TOOL_FS_FIND.to_string(),
+        description: Some(
+            "Recursively find files and directories under the configured root directory."
+                .to_string(),
+        ),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Directory path relative to the configured root directory. Defaults to root." },
+                "pattern": { "type": "string", "description": "Optional substring match on the relative path." },
+                "extensions": { "type": "array", "description": "Optional file extension filter (e.g., [\"rs\",\"md\"]).", "items": { "type": "string" } },
+                "max_entries": { "type": "integer", "description": "Maximum number of entries to return (default: 200)." },
+                "max_depth": { "type": "integer", "description": "Maximum recursion depth (default: 10)." },
+                "include_dirs": { "type": "boolean", "description": "Include directories in results (default: false)." },
+                "include_files": { "type": "boolean", "description": "Include files in results (default: true)." }
             }
         }),
         strict: Some(true),
@@ -193,9 +218,8 @@ impl ToolExecutor for ToolboxExecutor {
         match call.name.as_str() {
             TOOL_HTTP_FETCH => self.http.execute(call).await,
             TOOL_SHELL_EXEC => self.shell.execute(call).await,
-            TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR | TOOL_FS_STAT => {
-                self.fs.execute(call).await
-            }
+            TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR | TOOL_FS_FIND
+            | TOOL_FS_STAT => self.fs.execute(call).await,
             other => Ok(ToolResult {
                 tool_call_id: call.id,
                 content: format!("unknown tool: {other}"),
@@ -813,6 +837,24 @@ struct FsListDirArgs {
 }
 
 #[derive(Debug, Deserialize)]
+struct FsFindArgs {
+    #[serde(default)]
+    path: Option<String>,
+    #[serde(default)]
+    pattern: Option<String>,
+    #[serde(default)]
+    extensions: Option<Vec<String>>,
+    #[serde(default)]
+    max_entries: Option<usize>,
+    #[serde(default)]
+    max_depth: Option<usize>,
+    #[serde(default)]
+    include_dirs: bool,
+    #[serde(default)]
+    include_files: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
 struct FsStatArgs {
     path: String,
 }
@@ -824,6 +866,7 @@ impl ToolExecutor for FsToolExecutor {
             TOOL_FS_READ_FILE => self.execute_read_file(call).await,
             TOOL_FS_WRITE_FILE => self.execute_write_file(call).await,
             TOOL_FS_LIST_DIR => self.execute_list_dir(call).await,
+            TOOL_FS_FIND => self.execute_find(call).await,
             TOOL_FS_STAT => self.execute_stat(call).await,
             other => Ok(ToolResult {
                 tool_call_id: call.id,
@@ -1033,6 +1076,105 @@ impl FsToolExecutor {
         })
     }
 
+    async fn execute_find(&self, call: ToolCall) -> Result<ToolResult> {
+        let args: FsFindArgs = match serde_json::from_value(call.arguments.clone()) {
+            Ok(args) => args,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("invalid args: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let include_files = args.include_files.unwrap_or(true);
+
+        let raw_path = args.path.as_deref().unwrap_or("");
+        let dir = if raw_path.trim().is_empty() {
+            self.root.clone()
+        } else {
+            match self.resolve_existing_path(raw_path) {
+                Ok(path) => path,
+                Err(err) => {
+                    return Ok(ToolResult {
+                        tool_call_id: call.id,
+                        content: err,
+                        is_error: Some(true),
+                    });
+                }
+            }
+        };
+
+        let max_entries = args
+            .max_entries
+            .unwrap_or(self.max_list_entries)
+            .min(self.max_list_entries)
+            .max(1);
+
+        let max_depth = args.max_depth.unwrap_or(10).min(64);
+
+        let pattern = args
+            .pattern
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string());
+
+        let extensions = args.extensions.map(|values| {
+            values
+                .into_iter()
+                .filter_map(|value| {
+                    let trimmed = value.trim().trim_start_matches('.');
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_ascii_lowercase())
+                    }
+                })
+                .collect::<BTreeSet<_>>()
+        });
+
+        let options = FsFindOptions {
+            pattern,
+            extensions,
+            max_entries,
+            max_depth,
+            include_files,
+            include_dirs: args.include_dirs,
+        };
+
+        let root = self.root.clone();
+        let find = tokio::task::spawn_blocking(move || fs_find_blocking(&root, &dir, options))
+            .await
+            .map_err(|err| {
+                DittoError::Io(std::io::Error::other(format!("fs_find join error: {err}")))
+            })?;
+
+        let (entries, truncated) = match find {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_find failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "path": if raw_path.trim().is_empty() { "." } else { raw_path },
+            "entries": entries,
+            "truncated": truncated,
+        });
+
+        Ok(ToolResult {
+            tool_call_id: call.id,
+            content: out.to_string(),
+            is_error: None,
+        })
+    }
+
     async fn execute_stat(&self, call: ToolCall) -> Result<ToolResult> {
         let args: FsStatArgs = match serde_json::from_value(call.arguments.clone()) {
             Ok(args) => args,
@@ -1222,6 +1364,130 @@ fn fs_list_dir_blocking(
     }
 
     Ok((entries, truncated))
+}
+
+#[derive(Clone, Debug)]
+struct FsFindOptions {
+    pattern: Option<String>,
+    extensions: Option<BTreeSet<String>>,
+    max_entries: usize,
+    max_depth: usize,
+    include_files: bool,
+    include_dirs: bool,
+}
+
+fn fs_find_blocking(
+    root: &Path,
+    dir: &Path,
+    options: FsFindOptions,
+) -> std::io::Result<(Vec<Value>, bool)> {
+    let meta = std::fs::metadata(dir)?;
+    if !meta.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "path is not a directory",
+        ));
+    }
+
+    let mut entries = Vec::<Value>::new();
+    let mut truncated = false;
+    fs_find_walk(root, dir, 0, &options, &mut entries, &mut truncated)?;
+    Ok((entries, truncated))
+}
+
+fn fs_find_walk(
+    root: &Path,
+    dir: &Path,
+    depth: usize,
+    options: &FsFindOptions,
+    out: &mut Vec<Value>,
+    truncated: &mut bool,
+) -> std::io::Result<()> {
+    if *truncated {
+        return Ok(());
+    }
+    if out.len() >= options.max_entries {
+        *truncated = true;
+        return Ok(());
+    }
+
+    let mut rows: Vec<_> = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
+    rows.sort_by_key(|entry| entry.file_name());
+
+    for entry in rows {
+        if out.len() >= options.max_entries {
+            *truncated = true;
+            break;
+        }
+
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        let kind = if file_type.is_file() {
+            "file"
+        } else if file_type.is_dir() {
+            "dir"
+        } else if file_type.is_symlink() {
+            "symlink"
+        } else {
+            "other"
+        };
+
+        let rel_path = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .to_string();
+
+        let matches_pattern = match options.pattern.as_ref() {
+            None => true,
+            Some(pattern) => rel_path.contains(pattern),
+        };
+
+        let matches_extension = match options.extensions.as_ref() {
+            None => true,
+            Some(allowed) => {
+                if !(file_type.is_file() || file_type.is_symlink()) {
+                    true
+                } else {
+                    match path.extension().and_then(|value| value.to_str()) {
+                        Some(ext) => allowed.contains(&ext.to_ascii_lowercase()),
+                        None => false,
+                    }
+                }
+            }
+        };
+
+        let include = matches_pattern
+            && matches_extension
+            && ((options.include_dirs && file_type.is_dir())
+                || (options.include_files && (file_type.is_file() || file_type.is_symlink())));
+
+        if include {
+            let size_bytes = if file_type.is_file() {
+                entry.metadata().map(|m| m.len()).unwrap_or(0)
+            } else {
+                0
+            };
+
+            out.push(serde_json::json!({
+                "path": rel_path,
+                "name": name,
+                "type": kind,
+                "size_bytes": size_bytes,
+            }));
+        }
+
+        if file_type.is_dir() && depth < options.max_depth {
+            fs_find_walk(root, &path, depth + 1, options, out, truncated)?;
+            if *truncated {
+                break;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn fs_stat_blocking(path: &Path) -> std::io::Result<Value> {

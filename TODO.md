@@ -85,6 +85,7 @@
   - [x] `fs_read_file` tool + executor（feature `agent`，限制 root）
   - [x] `fs_write_file` tool + executor（feature `agent`，限制 root，默认不覆盖）
   - [x] `fs_list_dir` tool + executor（feature `agent`，限制 root）
+  - [x] `fs_find` tool + executor（feature `agent`，限制 root）
   - [x] `fs_stat` tool + executor（feature `agent`，限制 root）
   - [x] `shell_exec` tool（feature `agent`，allowlist + cwd 限制 root）
 
