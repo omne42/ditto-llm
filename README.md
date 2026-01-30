@@ -154,11 +154,13 @@ CLI options:
 - `--listen HOST:PORT` sets the bind address (default: `127.0.0.1:8080`).
 - `--dotenv PATH` loads a dotenv file (KEY=VALUE) for `${ENV_VAR}` interpolation and provider auth env lookups.
 - `--admin-token TOKEN` enables `/admin/*` endpoints.
+- `--admin-token-env ENV` loads the admin token from env (works with `--dotenv`).
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
 - `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).
 - `--sqlite PATH` enables persistence for admin virtual-key mutations in a sqlite file (requires `--features gateway-store-sqlite`; loaded on startup; cannot be combined with `--state`).
 - `--redis URL` enables redis persistence (requires `--features gateway-store-redis`).
-- `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis`).
+- `--redis-env ENV` loads the redis URL from env (works with `--dotenv`; requires `--features gateway-store-redis`).
+- `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis` and `--redis`/`--redis-env`).
 - `--json-logs` emits JSON log records to stderr.
 - `--proxy-max-in-flight N` limits concurrent in-flight proxy requests (rejects with 429 when exceeded).
 - `--proxy-cache` enables a best-effort in-memory cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`).

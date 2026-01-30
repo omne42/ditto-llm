@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: OpenAI-compatible passthrough proxy for `ANY /v1/*` (incl. streaming) with per-backend header/query-param injection and optional devtools JSONL logging (feature `gateway-devtools`).
 - Gateway: config supports `${ENV_VAR}` interpolation in proxy backend `base_url`/`headers`/`query_params`, backend `provider_config` fields, and `virtual_keys[].token` (resolved at startup).
 - Gateway: `ditto-gateway` supports `--dotenv PATH` to load env vars for config interpolation and provider auth.
+- Gateway: `ditto-gateway` supports `--admin-token-env` and `--redis-env` to load sensitive CLI options from env (works with `--dotenv`).
 - Gateway: passthrough proxy supports per-backend model mapping via `model_map` (rewrites JSON `model` before forwarding).
 - Gateway: add `gateway-translation` feature to serve `POST /v1/chat/completions` and `POST /v1/responses` via native Ditto providers (configured via backend `provider` + `provider_config`).
 - Gateway: translation backends can also serve `POST /v1/embeddings` (best-effort OpenAI shape).

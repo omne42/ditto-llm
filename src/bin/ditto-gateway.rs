@@ -3,15 +3,17 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
     let mut admin_token: Option<String> = None;
+    let mut admin_token_env: Option<String> = None;
     let mut dotenv_path: Option<std::path::PathBuf> = None;
     let mut state_path: Option<std::path::PathBuf> = None;
     let mut _sqlite_path: Option<std::path::PathBuf> = None;
     let mut redis_url: Option<String> = None;
+    let mut redis_url_env: Option<String> = None;
     let mut redis_prefix: Option<String> = None;
     let mut backend_specs: Vec<String> = Vec::new();
     let mut upstream_specs: Vec<String> = Vec::new();
@@ -51,6 +53,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--admin-token" => {
                 admin_token = Some(args.next().ok_or("missing value for --admin-token")?);
             }
+            "--admin-token-env" => {
+                admin_token_env = Some(args.next().ok_or("missing value for --admin-token-env")?);
+            }
             "--state" => {
                 state_path = Some(args.next().ok_or("missing value for --state")?.into());
             }
@@ -59,6 +64,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--redis" => {
                 redis_url = Some(args.next().ok_or("missing value for --redis")?);
+            }
+            "--redis-env" => {
+                redis_url_env = Some(args.next().ok_or("missing value for --redis-env")?);
             }
             "--redis-prefix" => {
                 redis_prefix = Some(args.next().ok_or("missing value for --redis-prefix")?);
@@ -231,13 +239,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    let env = if let Some(path) = dotenv_path.as_deref() {
+        let raw = std::fs::read_to_string(path)?;
+        ditto_llm::Env::parse_dotenv(&raw)
+    } else {
+        ditto_llm::Env {
+            dotenv: std::collections::BTreeMap::new(),
+        }
+    };
+
+    if admin_token.is_some() && admin_token_env.is_some() {
+        return Err("--admin-token cannot be combined with --admin-token-env".into());
+    }
+    if redis_url.is_some() && redis_url_env.is_some() {
+        return Err("--redis cannot be combined with --redis-env".into());
+    }
+
+    if let Some(key) = admin_token_env.as_deref() {
+        let token = env
+            .get(key)
+            .ok_or_else(|| format!("missing env var for --admin-token-env: {key}"))?;
+        if token.trim().is_empty() {
+            return Err(format!("admin token env var is empty: {key}").into());
+        }
+        admin_token = Some(token);
+    }
+
+    if let Some(key) = redis_url_env.as_deref() {
+        let url = env
+            .get(key)
+            .ok_or_else(|| format!("missing env var for --redis-env: {key}"))?;
+        if url.trim().is_empty() {
+            return Err(format!("redis url env var is empty: {key}").into());
+        }
+        redis_url = Some(url);
+    }
+
     let storage_count =
         state_path.is_some() as u8 + _sqlite_path.is_some() as u8 + redis_url.is_some() as u8;
     if storage_count > 1 {
         return Err("use only one of --state, --sqlite, or --redis".into());
     }
     if redis_prefix.is_some() && redis_url.is_none() {
-        return Err("--redis-prefix requires --redis".into());
+        return Err("--redis-prefix requires --redis or --redis-env".into());
     }
 
     let raw = std::fs::read_to_string(&path)?;
@@ -294,14 +338,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let env = if let Some(path) = dotenv_path.as_deref() {
-        let raw = std::fs::read_to_string(path)?;
-        ditto_llm::Env::parse_dotenv(&raw)
-    } else {
-        ditto_llm::Env {
-            dotenv: std::collections::BTreeMap::new(),
-        }
-    };
     config.resolve_env(&env)?;
 
     for key in &config.virtual_keys {
