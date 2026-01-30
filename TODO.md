@@ -148,7 +148,7 @@
 - [x] Gateway translation：`/audio/transcriptions` 与 `/audio/speech`
 - [x] Gateway translation：`/batches`
 - [x] Gateway translation：`/rerank`（`/images/generations` 与 `/moderations` 已完成）
-- [ ] 更强的策略/缓存/背压（backpressure）控制（适配高并发与长连接 streaming）
+- [x] 更强的策略/缓存/背压（backpressure）控制（适配高并发与长连接 streaming）
 
 ---
 

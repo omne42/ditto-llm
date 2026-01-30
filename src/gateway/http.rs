@@ -1820,7 +1820,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -1883,7 +1884,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -1915,7 +1917,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -1956,7 +1959,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2038,7 +2042,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2147,7 +2152,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2240,7 +2246,11 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(spoken.audio));
+                    let body = proxy_body_from_bytes_with_permit(
+                        Bytes::from(spoken.audio),
+                        proxy_permit.take(),
+                    );
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2314,7 +2324,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2387,7 +2398,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2460,7 +2472,8 @@ async fn handle_openai_compat_proxy(
                     );
                     apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
 
-                    let mut response = axum::response::Response::new(Body::from(bytes));
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                    let mut response = axum::response::Response::new(body);
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
@@ -2615,7 +2628,8 @@ async fn handle_openai_compat_proxy(
                             false,
                         );
 
-                        let mut response = axum::response::Response::new(Body::from(bytes));
+                        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+                        let mut response = axum::response::Response::new(body);
                         *response.status_mut() = StatusCode::OK;
                         *response.headers_mut() = headers;
                         let mut usage = generated.usage.clone();
@@ -4004,7 +4018,8 @@ async fn handle_openai_compat_proxy(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
-        let mut response = axum::response::Response::new(Body::from(bytes));
+        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit.take());
+        let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
         return Ok(response);
@@ -4353,6 +4368,23 @@ impl futures_util::Stream for ProxyBodyStreamWithPermit {
     }
 }
 
+fn proxy_body_from_bytes_with_permit(
+    bytes: Bytes,
+    proxy_permit: Option<OwnedSemaphorePermit>,
+) -> Body {
+    let Some(proxy_permit) = proxy_permit else {
+        return Body::from(bytes);
+    };
+
+    let stream =
+        futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(bytes) }).boxed();
+    let stream = ProxyBodyStreamWithPermit {
+        inner: stream,
+        _permit: Some(proxy_permit),
+    };
+    Body::from_stream(stream)
+}
+
 async fn proxy_response(
     _state: &GatewayHttpState,
     upstream: reqwest::Response,
@@ -4404,7 +4436,8 @@ async fn proxy_response(
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        let mut response = axum::response::Response::new(Body::from(bytes));
+        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permit);
+        let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
         response
@@ -4494,7 +4527,8 @@ async fn responses_shim_response(
         }
 
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        let mut response = axum::response::Response::new(Body::from(mapped_bytes));
+        let body = proxy_body_from_bytes_with_permit(mapped_bytes, proxy_permit);
+        let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
         Ok(response)
