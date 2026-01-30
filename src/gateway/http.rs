@@ -1825,6 +1825,14 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-proxy-cache")]
     if let (Some(cache), Some(cache_key)) = (state.proxy_cache.as_ref(), proxy_cache_key.as_ref()) {
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            metrics
+                .lock()
+                .await
+                .record_proxy_cache_lookup(&metrics_path);
+        }
+
         let mut cache_source = "memory";
         let mut cached = { cache.lock().await.get(cache_key, _now_epoch_seconds) };
         #[cfg(feature = "gateway-store-redis")]
@@ -1870,6 +1878,8 @@ async fn handle_openai_compat_proxy(
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_cache_hit();
+                metrics.record_proxy_cache_hit_by_source(cache_source);
+                metrics.record_proxy_cache_hit_by_path(&metrics_path);
                 metrics.record_proxy_response_status(cached.status);
                 metrics
                     .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
@@ -1883,6 +1893,11 @@ async fn handle_openai_compat_proxy(
                 response.headers_mut().insert("x-ditto-cache-source", value);
             }
             return Ok(response);
+        }
+
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            metrics.lock().await.record_proxy_cache_miss(&metrics_path);
         }
     }
 
@@ -5804,19 +5819,45 @@ async fn store_proxy_cache_response(
     cached: CachedProxyResponse,
     now_epoch_seconds: u64,
 ) {
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let mut redis_store_error: Option<bool> = None;
+
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some(config)) = (
         state.redis_store.as_ref(),
         state.proxy_cache_config.as_ref(),
     ) {
-        let _ = store
-            .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
-            .await;
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        {
+            let result = store
+                .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
+                .await;
+            redis_store_error = Some(result.is_err());
+        }
+
+        #[cfg(not(feature = "gateway-metrics-prometheus"))]
+        {
+            let _ = store
+                .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
+                .await;
+        }
     }
 
     if let Some(cache) = state.proxy_cache.as_ref() {
         let mut cache = cache.lock().await;
         cache.insert(cache_key.to_string(), cached, now_epoch_seconds);
+    }
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        let mut metrics = metrics.lock().await;
+        metrics.record_proxy_cache_store("memory");
+        if let Some(redis_error) = redis_store_error {
+            metrics.record_proxy_cache_store("redis");
+            if redis_error {
+                metrics.record_proxy_cache_store_error("redis");
+            }
+        }
     }
 }
 
@@ -6608,12 +6649,20 @@ async fn purge_proxy_cache(
                     err.to_string(),
                 )
             })?;
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                metrics.lock().await.record_proxy_cache_purge("all");
+            }
             return Ok(Json(PurgeProxyCacheResponse {
                 cleared_memory: true,
                 deleted_redis: Some(deleted_redis),
             }));
         }
 
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            metrics.lock().await.record_proxy_cache_purge("all");
+        }
         return Ok(Json(PurgeProxyCacheResponse {
             cleared_memory: true,
             deleted_redis: None,
@@ -6650,12 +6699,20 @@ async fn purge_proxy_cache(
                     err.to_string(),
                 )
             })?;
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            metrics.lock().await.record_proxy_cache_purge("key");
+        }
         return Ok(Json(PurgeProxyCacheResponse {
             cleared_memory: removed_memory,
             deleted_redis: Some(deleted_redis),
         }));
     }
 
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        metrics.lock().await.record_proxy_cache_purge("key");
+    }
     Ok(Json(PurgeProxyCacheResponse {
         cleared_memory: removed_memory,
         deleted_redis: None,

@@ -29,7 +29,19 @@ pub struct PrometheusMetrics {
     proxy_requests_by_model: HashMap<String, u64>,
     proxy_requests_by_path: HashMap<String, u64>,
 
+    proxy_cache_lookups_total: u64,
+    proxy_cache_lookups_by_path: HashMap<String, u64>,
+
     proxy_cache_hits_total: u64,
+    proxy_cache_hits_by_source: HashMap<String, u64>,
+    proxy_cache_hits_by_path: HashMap<String, u64>,
+
+    proxy_cache_misses_total: u64,
+    proxy_cache_misses_by_path: HashMap<String, u64>,
+
+    proxy_cache_stores_by_target: HashMap<String, u64>,
+    proxy_cache_store_errors_by_target: HashMap<String, u64>,
+    proxy_cache_purges_by_scope: HashMap<String, u64>,
 
     proxy_backend_attempts_total: HashMap<String, u64>,
     proxy_backend_success_total: HashMap<String, u64>,
@@ -49,7 +61,16 @@ impl PrometheusMetrics {
             proxy_requests_by_key: HashMap::new(),
             proxy_requests_by_model: HashMap::new(),
             proxy_requests_by_path: HashMap::new(),
+            proxy_cache_lookups_total: 0,
+            proxy_cache_lookups_by_path: HashMap::new(),
             proxy_cache_hits_total: 0,
+            proxy_cache_hits_by_source: HashMap::new(),
+            proxy_cache_hits_by_path: HashMap::new(),
+            proxy_cache_misses_total: 0,
+            proxy_cache_misses_by_path: HashMap::new(),
+            proxy_cache_stores_by_target: HashMap::new(),
+            proxy_cache_store_errors_by_target: HashMap::new(),
+            proxy_cache_purges_by_scope: HashMap::new(),
             proxy_backend_attempts_total: HashMap::new(),
             proxy_backend_success_total: HashMap::new(),
             proxy_backend_failures_total: HashMap::new(),
@@ -86,8 +107,50 @@ impl PrometheusMetrics {
         );
     }
 
+    pub fn record_proxy_cache_lookup(&mut self, path: &str) {
+        self.proxy_cache_lookups_total = self.proxy_cache_lookups_total.saturating_add(1);
+        bump_limited(
+            &mut self.proxy_cache_lookups_by_path,
+            path,
+            self.config.max_path_series,
+        );
+    }
+
     pub fn record_proxy_cache_hit(&mut self) {
         self.proxy_cache_hits_total = self.proxy_cache_hits_total.saturating_add(1);
+    }
+
+    pub fn record_proxy_cache_hit_by_source(&mut self, source: &str) {
+        bump_limited(&mut self.proxy_cache_hits_by_source, source, 8);
+    }
+
+    pub fn record_proxy_cache_hit_by_path(&mut self, path: &str) {
+        bump_limited(
+            &mut self.proxy_cache_hits_by_path,
+            path,
+            self.config.max_path_series,
+        );
+    }
+
+    pub fn record_proxy_cache_miss(&mut self, path: &str) {
+        self.proxy_cache_misses_total = self.proxy_cache_misses_total.saturating_add(1);
+        bump_limited(
+            &mut self.proxy_cache_misses_by_path,
+            path,
+            self.config.max_path_series,
+        );
+    }
+
+    pub fn record_proxy_cache_store(&mut self, target: &str) {
+        bump_limited(&mut self.proxy_cache_stores_by_target, target, 8);
+    }
+
+    pub fn record_proxy_cache_store_error(&mut self, target: &str) {
+        bump_limited(&mut self.proxy_cache_store_errors_by_target, target, 8);
+    }
+
+    pub fn record_proxy_cache_purge(&mut self, scope: &str) {
+        bump_limited(&mut self.proxy_cache_purges_by_scope, scope, 8);
     }
 
     pub fn record_proxy_backend_attempt(&mut self, backend: &str) {
@@ -195,12 +258,82 @@ impl PrometheusMetrics {
             &self.proxy_requests_by_path,
         );
 
+        out.push_str("# HELP ditto_gateway_proxy_cache_lookups_total Total proxy cache lookups.\n");
+        out.push_str("# TYPE ditto_gateway_proxy_cache_lookups_total counter\n");
+        out.push_str(&format!(
+            "ditto_gateway_proxy_cache_lookups_total {}\n",
+            self.proxy_cache_lookups_total
+        ));
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_lookups_by_path_total",
+            "Proxy cache lookups grouped by OpenAI path.",
+            "path",
+            &self.proxy_cache_lookups_by_path,
+        );
+
         out.push_str("# HELP ditto_gateway_proxy_cache_hits_total Total proxy cache hits.\n");
         out.push_str("# TYPE ditto_gateway_proxy_cache_hits_total counter\n");
         out.push_str(&format!(
             "ditto_gateway_proxy_cache_hits_total {}\n",
             self.proxy_cache_hits_total
         ));
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_hits_by_source_total",
+            "Proxy cache hits grouped by cache source.",
+            "source",
+            &self.proxy_cache_hits_by_source,
+        );
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_hits_by_path_total",
+            "Proxy cache hits grouped by OpenAI path.",
+            "path",
+            &self.proxy_cache_hits_by_path,
+        );
+
+        out.push_str("# HELP ditto_gateway_proxy_cache_misses_total Total proxy cache misses.\n");
+        out.push_str("# TYPE ditto_gateway_proxy_cache_misses_total counter\n");
+        out.push_str(&format!(
+            "ditto_gateway_proxy_cache_misses_total {}\n",
+            self.proxy_cache_misses_total
+        ));
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_misses_by_path_total",
+            "Proxy cache misses grouped by OpenAI path.",
+            "path",
+            &self.proxy_cache_misses_by_path,
+        );
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_stores_total",
+            "Total proxy cache stores.",
+            "target",
+            &self.proxy_cache_stores_by_target,
+        );
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_store_errors_total",
+            "Total proxy cache store errors.",
+            "target",
+            &self.proxy_cache_store_errors_by_target,
+        );
+
+        write_counter_map(
+            &mut out,
+            "ditto_gateway_proxy_cache_purges_total",
+            "Total proxy cache purges.",
+            "scope",
+            &self.proxy_cache_purges_by_scope,
+        );
 
         write_counter_map(
             &mut out,
