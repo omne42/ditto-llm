@@ -5644,6 +5644,11 @@ fn proxy_cache_scope(virtual_key_id: Option<&str>, headers: &HeaderMap) -> Strin
         return format!("auth:{hash:016x}");
     }
 
+    if let Some(api_key) = extract_header(headers, "x-api-key") {
+        let hash = hash64_fnv1a(api_key.as_bytes());
+        return format!("x-api-key:{hash:016x}");
+    }
+
     "public".to_string()
 }
 

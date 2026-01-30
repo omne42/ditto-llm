@@ -1450,3 +1450,99 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
 
     mock.assert_calls(1);
 }
+
+#[cfg(feature = "gateway-proxy-cache")]
+#[tokio::test]
+async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-test")
+            .is_true(|req: &httpmock::prelude::HttpMockRequest| {
+                req.headers()
+                    .iter()
+                    .any(|(name, _)| name.as_str() == "x-api-key")
+            });
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: Vec::new(),
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_cache(ditto_llm::gateway::ProxyCacheConfig {
+            ttl_seconds: 60,
+            max_entries: 16,
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let body = body.to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("x-api-key", "sk-client-a")
+        .header("content-type", "application/json")
+        .body(Body::from(body.clone()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get("x-ditto-cache").is_none());
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(bytes, r#"{"id":"ok"}"#);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("x-api-key", "sk-client-a")
+        .header("content-type", "application/json")
+        .body(Body::from(body.clone()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-cache")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "hit"
+    );
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(bytes, r#"{"id":"ok"}"#);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("x-api-key", "sk-client-b")
+        .header("content-type", "application/json")
+        .body(Body::from(body.clone()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get("x-ditto-cache").is_none());
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(bytes, r#"{"id":"ok"}"#);
+
+    mock.assert_calls(2);
+}
