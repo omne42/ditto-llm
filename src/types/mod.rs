@@ -225,9 +225,12 @@ const PROVIDER_OPTIONS_BUCKETS: &[&str] = &[
     "*",
     "openai",
     "openai-compatible",
+    "openai_compatible",
     "anthropic",
     "google",
     "cohere",
+    "bedrock",
+    "vertex",
 ];
 
 fn is_bucketed_provider_options(obj: &Map<String, Value>) -> bool {
@@ -252,6 +255,9 @@ pub(crate) fn select_provider_options<'a>(
         if let Some(bucket) = obj.get(provider) {
             return Some(bucket);
         }
+        if let Some(bucket) = provider_bucket_alias_key(provider).and_then(|key| obj.get(key)) {
+            return Some(bucket);
+        }
         if let Some(bucket) = obj.get("*") {
             return Some(bucket);
         }
@@ -259,6 +265,14 @@ pub(crate) fn select_provider_options<'a>(
     }
 
     Some(provider_options)
+}
+
+fn provider_bucket_alias_key(provider: &str) -> Option<&str> {
+    match provider {
+        "openai-compatible" => Some("openai_compatible"),
+        "openai_compatible" => Some("openai-compatible"),
+        _ => None,
+    }
 }
 
 pub(crate) fn select_provider_options_value(
@@ -302,6 +316,18 @@ pub(crate) fn select_provider_options_value(
             merged.insert(key.clone(), value.clone());
         }
         has_any = true;
+    } else if let Some(alias) = provider_bucket_alias_key(provider) {
+        if let Some(value) = obj.get(alias) {
+            let Some(bucket) = value.as_object() else {
+                return Err(DittoError::InvalidResponse(format!(
+                    "invalid provider_options: bucket {alias:?} must be a JSON object"
+                )));
+            };
+            for (key, value) in bucket {
+                merged.insert(key.clone(), value.clone());
+            }
+            has_any = true;
+        }
     }
 
     if !has_any {
@@ -827,6 +853,35 @@ mod tests {
         assert_eq!(parsed.parallel_tool_calls, Some(true));
 
         let selected = select_provider_options_value(Some(&raw), "anthropic")?.unwrap();
+        let parsed = ProviderOptions::from_value(&selected)?;
+        assert_eq!(parsed.parallel_tool_calls, Some(false));
+        Ok(())
+    }
+
+    #[test]
+    fn provider_options_bucketed_supports_openai_compatible_alias_key() -> Result<()> {
+        let raw = json!({
+            "openai_compatible": { "parallel_tool_calls": true }
+        });
+
+        let selected = select_provider_options_value(Some(&raw), "openai-compatible")?.unwrap();
+        let parsed = ProviderOptions::from_value(&selected)?;
+        assert_eq!(parsed.parallel_tool_calls, Some(true));
+        Ok(())
+    }
+
+    #[test]
+    fn provider_options_bucketed_supports_bedrock_and_vertex() -> Result<()> {
+        let raw = json!({
+            "bedrock": { "parallel_tool_calls": true },
+            "vertex": { "parallel_tool_calls": false }
+        });
+
+        let selected = select_provider_options_value(Some(&raw), "bedrock")?.unwrap();
+        let parsed = ProviderOptions::from_value(&selected)?;
+        assert_eq!(parsed.parallel_tool_calls, Some(true));
+
+        let selected = select_provider_options_value(Some(&raw), "vertex")?.unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(false));
         Ok(())
