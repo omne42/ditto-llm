@@ -12,6 +12,7 @@ pub struct ModelPricing {
     pub input_usd_micros_per_token: u64,
     pub output_usd_micros_per_token: u64,
     pub cache_read_input_usd_micros_per_token: Option<u64>,
+    pub cache_creation_input_usd_micros_per_token: Option<u64>,
 }
 
 #[derive(Debug, Error)]
@@ -61,6 +62,11 @@ impl PricingTable {
                 .map(|usd| usd_to_usd_micros_per_token(usd, model, "cache_read_input_cost"))
                 .transpose()?;
 
+            let cache_creation_input =
+                parse_cost_usd_per_token(obj, "cache_creation_input_token_cost")
+                    .map(|usd| usd_to_usd_micros_per_token(usd, model, "cache_creation_input_cost"))
+                    .transpose()?;
+
             let Some(input_usd_micros_per_token) = input else {
                 if output.is_some() {
                     models.insert(
@@ -69,6 +75,7 @@ impl PricingTable {
                             input_usd_micros_per_token: 0,
                             output_usd_micros_per_token: output.unwrap_or(0),
                             cache_read_input_usd_micros_per_token: cache_read_input,
+                            cache_creation_input_usd_micros_per_token: cache_creation_input,
                         },
                     );
                     continue;
@@ -84,6 +91,7 @@ impl PricingTable {
                     input_usd_micros_per_token,
                     output_usd_micros_per_token: output.unwrap_or(0),
                     cache_read_input_usd_micros_per_token: cache_read_input,
+                    cache_creation_input_usd_micros_per_token: cache_creation_input,
                 },
             );
         }
@@ -101,7 +109,7 @@ impl PricingTable {
         input_tokens: u32,
         output_tokens: u32,
     ) -> Option<u64> {
-        self.estimate_cost_usd_micros_with_cache(model, input_tokens, None, output_tokens)
+        self.estimate_cost_usd_micros_with_cache(model, input_tokens, None, None, output_tokens)
     }
 
     pub fn estimate_cost_usd_micros_with_cache(
@@ -109,6 +117,7 @@ impl PricingTable {
         model: &str,
         input_tokens: u32,
         cache_input_tokens: Option<u32>,
+        cache_creation_input_tokens: Option<u32>,
         output_tokens: u32,
     ) -> Option<u64> {
         let pricing = self.model_pricing(model)?;
@@ -133,7 +142,15 @@ impl PricingTable {
 
         let output_cost =
             u64::from(output_tokens).saturating_mul(pricing.output_usd_micros_per_token);
-        Some(input_cost.saturating_add(output_cost))
+        let mut total = input_cost.saturating_add(output_cost);
+        if let Some(cache_creation_cost) = pricing.cache_creation_input_usd_micros_per_token {
+            let cache_creation_tokens = cache_creation_input_tokens.unwrap_or(0);
+            let cache_creation_tokens = std::cmp::min(cache_creation_tokens, input_tokens);
+            total = total.saturating_add(
+                u64::from(cache_creation_tokens).saturating_mul(cache_creation_cost),
+            );
+        }
+        Some(total)
     }
 }
 
@@ -187,18 +204,20 @@ mod tests {
         let raw = r#"{
           "gpt-4o-mini": {"input_cost_per_token": 0.000001, "output_cost_per_token": 0.000002},
           "o1": {"input_cost_per_1k_tokens": 1.0, "output_cost_per_1k_tokens": 2.0},
-          "claude-3-5-haiku-20241022": {"input_cost_per_token": 0.000002, "output_cost_per_token": 0.000004, "cache_read_input_token_cost": 0.000001}
+          "claude-3-5-haiku-20241022": {"input_cost_per_token": 0.000002, "output_cost_per_token": 0.000004, "cache_read_input_token_cost": 0.000001, "cache_creation_input_token_cost": 0.000003}
         }"#;
         let table = PricingTable::from_litellm_json_str(raw).expect("pricing");
         let pricing = table.model_pricing("gpt-4o-mini").expect("pricing");
         assert_eq!(pricing.input_usd_micros_per_token, 1);
         assert_eq!(pricing.output_usd_micros_per_token, 2);
         assert_eq!(pricing.cache_read_input_usd_micros_per_token, None);
+        assert_eq!(pricing.cache_creation_input_usd_micros_per_token, None);
 
         let o1 = table.model_pricing("o1").expect("o1");
         assert_eq!(o1.input_usd_micros_per_token, 1000);
         assert_eq!(o1.output_usd_micros_per_token, 2000);
         assert_eq!(o1.cache_read_input_usd_micros_per_token, None);
+        assert_eq!(o1.cache_creation_input_usd_micros_per_token, None);
 
         let claude = table
             .model_pricing("claude-3-5-haiku-20241022")
@@ -206,6 +225,7 @@ mod tests {
         assert_eq!(claude.input_usd_micros_per_token, 2);
         assert_eq!(claude.output_usd_micros_per_token, 4);
         assert_eq!(claude.cache_read_input_usd_micros_per_token, Some(1));
+        assert_eq!(claude.cache_creation_input_usd_micros_per_token, Some(3));
 
         let cost = table
             .estimate_cost_usd_micros("gpt-4o-mini", 3, 4)
@@ -213,8 +233,14 @@ mod tests {
         assert_eq!(cost, 3 + 8);
 
         let cost_cached = table
-            .estimate_cost_usd_micros_with_cache("claude-3-5-haiku-20241022", 10, Some(4), 1)
+            .estimate_cost_usd_micros_with_cache(
+                "claude-3-5-haiku-20241022",
+                10,
+                Some(4),
+                Some(2),
+                1,
+            )
             .expect("cost cached");
-        assert_eq!(cost_cached, 12 + 4 + 4);
+        assert_eq!(cost_cached, 12 + 4 + 4 + 6);
     }
 }

@@ -456,6 +456,9 @@ impl OpenAICompatible {
                 .get("prompt_tokens_details")
                 .and_then(|details| details.get("cached_tokens"))
                 .and_then(Value::as_u64);
+            usage.cache_creation_input_tokens = obj
+                .get("cache_creation_input_tokens")
+                .and_then(Value::as_u64);
             usage.output_tokens = obj.get("completion_tokens").and_then(Value::as_u64);
             usage.total_tokens = obj.get("total_tokens").and_then(Value::as_u64);
         }

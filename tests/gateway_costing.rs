@@ -190,3 +190,95 @@ async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
     mock.assert_calls(2);
     Ok(())
 }
+
+#[tokio::test]
+async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::Result<()> {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST).path("/v1/chat/completions");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "ok",
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 0,
+                        "total_tokens": 10,
+                        "cache_creation_input_tokens": 20
+                    }
+                })
+                .to_string(),
+            );
+    });
+
+    let pricing = PricingTable::from_litellm_json_str(
+        r#"{
+          "claude-3-5-haiku-20241022": {
+            "input_cost_per_token": 0.000001,
+            "output_cost_per_token": 0.0,
+            "cache_creation_input_token_cost": 0.00001
+          }
+        }"#,
+    )
+    .expect("pricing");
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.budget.total_usd_micros = Some(100);
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_pricing_table(pricing);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "claude-3-5-haiku-20241022",
+        "max_tokens": 1,
+        "messages": [{"role":"user","content":"hi"}]
+    });
+
+    let request_1 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response_1 = app.clone().oneshot(request_1).await.unwrap();
+    assert_eq!(response_1.status(), StatusCode::OK);
+
+    let request_2 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response_2 = app.oneshot(request_2).await.unwrap();
+    assert_eq!(response_2.status(), StatusCode::PAYMENT_REQUIRED);
+    let bytes = to_bytes(response_2.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        value["error"]["code"].as_str().unwrap_or_default(),
+        "cost_budget_exceeded"
+    );
+
+    mock.assert_calls(1);
+    Ok(())
+}

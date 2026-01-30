@@ -2282,6 +2282,7 @@ async fn handle_openai_compat_proxy(
                                     model,
                                     clamp_u64_to_u32(input),
                                     usage.cache_input_tokens.map(clamp_u64_to_u32),
+                                    usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
                                     clamp_u64_to_u32(output),
                                 )
                             })
@@ -3352,6 +3353,7 @@ async fn handle_openai_compat_proxy(
                             model,
                             clamp_u64_to_u32(input),
                             usage.cache_input_tokens.map(clamp_u64_to_u32),
+                            usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
                             clamp_u64_to_u32(output),
                         )
                     })
@@ -3682,6 +3684,7 @@ fn clamp_u64_to_u32(value: u64) -> u32 {
 struct ObservedUsage {
     input_tokens: Option<u64>,
     cache_input_tokens: Option<u64>,
+    cache_creation_input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     total_tokens: Option<u64>,
 }
@@ -3694,11 +3697,20 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
         .get("input_tokens")
         .or_else(|| usage.get("prompt_tokens"))
         .and_then(|v| v.as_u64());
-    let cache_input_tokens = usage
+    let prompt_token_details = usage
         .get("input_tokens_details")
-        .or_else(|| usage.get("prompt_tokens_details"))
+        .or_else(|| usage.get("prompt_tokens_details"));
+    let cache_input_tokens = prompt_token_details
         .and_then(|details| details.get("cached_tokens"))
         .and_then(|v| v.as_u64());
+    let cache_creation_input_tokens = usage
+        .get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            prompt_token_details
+                .and_then(|details| details.get("cache_creation_tokens"))
+                .and_then(|v| v.as_u64())
+        });
     let output_tokens = usage
         .get("output_tokens")
         .or_else(|| usage.get("completion_tokens"))
@@ -3709,6 +3721,7 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
     Some(ObservedUsage {
         input_tokens,
         cache_input_tokens,
+        cache_creation_input_tokens,
         output_tokens,
         total_tokens,
     })

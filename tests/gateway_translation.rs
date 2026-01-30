@@ -49,6 +49,7 @@ impl LanguageModel for FakeModel {
             usage: Usage {
                 input_tokens: Some(1),
                 cache_input_tokens: None,
+                cache_creation_input_tokens: None,
                 output_tokens: Some(2),
                 total_tokens: Some(3),
             },
@@ -69,6 +70,7 @@ impl LanguageModel for FakeModel {
             Ok(StreamChunk::Usage(Usage {
                 input_tokens: Some(1),
                 cache_input_tokens: None,
+                cache_creation_input_tokens: None,
                 output_tokens: Some(2),
                 total_tokens: Some(3),
             })),
