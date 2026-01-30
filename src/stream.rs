@@ -266,6 +266,7 @@ mod tests {
             }),
             Ok(StreamChunk::Usage(Usage {
                 input_tokens: Some(3),
+                cache_input_tokens: None,
                 output_tokens: Some(7),
                 total_tokens: None,
             })),

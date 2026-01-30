@@ -102,6 +102,8 @@
 - [x] Proxy caching（non-streaming deterministic requests；streaming 默认不开启）
 - [ ] 更丰富的 guardrails/策略扩展（regex、PII、schema 校验、per-route policy）
   - [x] model allow/deny lists（exact match 或 `prefix*`）
+  - [x] banned regex patterns（feature `gateway`，配置 `guardrails.banned_regexes`）
+  - [x] basic PII blocking（email/ssn；配置 `guardrails.block_pii`）
 
 ### 2.3 Interop：不变形与多协议互转
 

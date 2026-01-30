@@ -137,6 +137,8 @@ pub struct Usage {
     #[serde(default)]
     pub input_tokens: Option<u64>,
     #[serde(default)]
+    pub cache_input_tokens: Option<u64>,
+    #[serde(default)]
     pub output_tokens: Option<u64>,
     #[serde(default)]
     pub total_tokens: Option<u64>,

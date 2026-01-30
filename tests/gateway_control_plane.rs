@@ -216,6 +216,8 @@ async fn guardrail_rejects_banned_phrase() {
     let mut key = base_key();
     key.guardrails = GuardrailsConfig {
         banned_phrases: vec!["forbidden".to_string()],
+        banned_regexes: Vec::new(),
+        block_pii: false,
         max_input_tokens: None,
         allow_models: Vec::new(),
         deny_models: Vec::new(),
@@ -234,10 +236,60 @@ async fn guardrail_rejects_banned_phrase() {
 }
 
 #[tokio::test]
+async fn guardrail_rejects_banned_regex() {
+    let mut key = base_key();
+    key.guardrails = GuardrailsConfig {
+        banned_phrases: Vec::new(),
+        banned_regexes: vec!["forbidden".to_string()],
+        block_pii: false,
+        max_input_tokens: None,
+        allow_models: Vec::new(),
+        deny_models: Vec::new(),
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 490 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut request = base_request();
+    request.prompt = "contains forbidden text".to_string();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
+}
+
+#[tokio::test]
+async fn guardrail_rejects_pii() {
+    let mut key = base_key();
+    key.guardrails = GuardrailsConfig {
+        banned_phrases: Vec::new(),
+        banned_regexes: Vec::new(),
+        block_pii: true,
+        max_input_tokens: None,
+        allow_models: Vec::new(),
+        deny_models: Vec::new(),
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 495 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut request = base_request();
+    request.prompt = "email test@example.com".to_string();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
+}
+
+#[tokio::test]
 async fn guardrail_rejects_denied_model() {
     let mut key = base_key();
     key.guardrails = GuardrailsConfig {
         banned_phrases: Vec::new(),
+        banned_regexes: Vec::new(),
+        block_pii: false,
         max_input_tokens: None,
         allow_models: Vec::new(),
         deny_models: vec!["gpt-4o-mini".to_string()],
@@ -259,6 +311,8 @@ async fn guardrail_rejects_not_allowed_model() {
     let mut key = base_key();
     key.guardrails = GuardrailsConfig {
         banned_phrases: Vec::new(),
+        banned_regexes: Vec::new(),
+        block_pii: false,
         max_input_tokens: None,
         allow_models: vec!["gpt-*".to_string()],
         deny_models: Vec::new(),

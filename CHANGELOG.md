@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming emits response ids (when available) via `StreamChunk::ResponseId`.
 - OpenAI-only options via `ProviderOptions`: `parallel_tool_calls`.
 - OpenAI Responses tool schemas default to `strict=true` when omitted.
+- Usage: add `cache_input_tokens` (e.g., OpenAI `cached_tokens`) for prompt-cache accounting.
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
@@ -71,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: optional active health checks for proxy backends (`--proxy-health-check*`, feature `gateway-routing-advanced`).
 - Gateway: best-effort usage-based settling for proxy budgets (for non-streaming JSON responses, prefer `usage` tokens/cost over request estimates).
 - Gateway: optional tiktoken-based input token counting for proxy budgets/guardrails/costing (feature `gateway-tokenizer`; falls back to request-size estimation).
+- Gateway: guardrails support regex patterns (`banned_regexes`) and optional PII blocking (`block_pii`).
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.

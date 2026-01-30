@@ -409,6 +409,10 @@ impl OpenAI {
         let mut usage = Usage::default();
         if let Some(obj) = value.as_object() {
             usage.input_tokens = obj.get("input_tokens").and_then(Value::as_u64);
+            usage.cache_input_tokens = obj
+                .get("input_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+                .and_then(Value::as_u64);
             usage.output_tokens = obj.get("output_tokens").and_then(Value::as_u64);
             usage.total_tokens = obj.get("total_tokens").and_then(Value::as_u64);
         }

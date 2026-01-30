@@ -290,6 +290,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    for key in &config.virtual_keys {
+        if let Err(err) = key.guardrails.validate() {
+            return Err(format!("invalid guardrails config for key {}: {err}", key.id).into());
+        }
+    }
+
     let mut proxy_backends = std::collections::HashMap::new();
     #[cfg(feature = "gateway-translation")]
     let mut translation_backends = std::collections::HashMap::new();

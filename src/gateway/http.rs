@@ -627,22 +627,16 @@ async fn handle_openai_compat_proxy(
                 }
             }
 
-            if !key.guardrails.banned_phrases.is_empty() {
+            if key.guardrails.has_text_filters() {
                 if let Ok(text) = std::str::from_utf8(&body) {
-                    let lowered = text.to_lowercase();
-                    for phrase in &key.guardrails.banned_phrases {
-                        if phrase.is_empty() {
-                            continue;
-                        }
-                        if lowered.contains(&phrase.to_lowercase()) {
-                            gateway.observability.record_guardrail_blocked();
-                            return Err(openai_error(
-                                StatusCode::FORBIDDEN,
-                                "policy_error",
-                                Some("guardrail_rejected"),
-                                format!("banned_phrase:{phrase}"),
-                            ));
-                        }
+                    if let Some(reason) = key.guardrails.check_text(text) {
+                        gateway.observability.record_guardrail_blocked();
+                        return Err(openai_error(
+                            StatusCode::FORBIDDEN,
+                            "policy_error",
+                            Some("guardrail_rejected"),
+                            reason,
+                        ));
                     }
                 }
             }
@@ -4262,6 +4256,13 @@ async fn upsert_key(
     Json(key): Json<VirtualKeyConfig>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(&state, &headers)?;
+    if let Err(err) = key.guardrails.validate() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            format!("invalid guardrails config: {err}"),
+        ));
+    }
     let (inserted, persisted_keys) = {
         let mut gateway = state.gateway.lock().await;
         let inserted = gateway.upsert_virtual_key(key.clone());
@@ -4297,6 +4298,13 @@ async fn upsert_key_with_id(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(&state, &headers)?;
     key.id = id;
+    if let Err(err) = key.guardrails.validate() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            format!("invalid guardrails config: {err}"),
+        ));
+    }
     let (inserted, persisted_keys) = {
         let mut gateway = state.gateway.lock().await;
         let inserted = gateway.upsert_virtual_key(key.clone());

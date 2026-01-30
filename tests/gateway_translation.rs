@@ -48,6 +48,7 @@ impl LanguageModel for FakeModel {
             finish_reason: FinishReason::Stop,
             usage: Usage {
                 input_tokens: Some(1),
+                cache_input_tokens: None,
                 output_tokens: Some(2),
                 total_tokens: Some(3),
             },
@@ -67,6 +68,7 @@ impl LanguageModel for FakeModel {
             Ok(StreamChunk::FinishReason(FinishReason::Stop)),
             Ok(StreamChunk::Usage(Usage {
                 input_tokens: Some(1),
+                cache_input_tokens: None,
                 output_tokens: Some(2),
                 total_tokens: Some(3),
             })),
