@@ -21,6 +21,9 @@ impl GatewayConfig {
         for backend in &mut self.backends {
             backend.resolve_env(env)?;
         }
+        for key in &mut self.virtual_keys {
+            key.resolve_env(env)?;
+        }
         Ok(())
     }
 }
@@ -187,6 +190,11 @@ impl VirtualKeyConfig {
             route: None,
         }
     }
+
+    pub fn resolve_env(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        self.token = expand_env_placeholders(&self.token, env)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -251,5 +259,16 @@ mod tests {
 
         let err = backend.resolve_env(&env).expect_err("missing env");
         assert!(err.to_string().contains("env var is empty: OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn virtual_key_config_resolves_env_placeholder_in_token() {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_VK_TOKEN".to_string(), "vk-1".to_string())]),
+        };
+
+        let mut key = VirtualKeyConfig::new("key-1", "${DITTO_TEST_VK_TOKEN}");
+        key.resolve_env(&env).expect("resolve");
+        assert_eq!(key.token, "vk-1");
     }
 }

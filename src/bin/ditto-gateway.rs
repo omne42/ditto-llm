@@ -239,11 +239,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let raw = std::fs::read_to_string(&path)?;
     let mut config: ditto_llm::gateway::GatewayConfig = serde_json::from_str(&raw)?;
 
-    let env = ditto_llm::Env {
-        dotenv: std::collections::BTreeMap::new(),
-    };
-    config.resolve_env(&env)?;
-
     if let Some(_sqlite_path_ref) = _sqlite_path.as_ref() {
         #[cfg(feature = "gateway-store-sqlite")]
         {
@@ -294,6 +289,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .save(state_path)?;
         }
     }
+
+    let env = ditto_llm::Env {
+        dotenv: std::collections::BTreeMap::new(),
+    };
+    config.resolve_env(&env)?;
 
     for key in &config.virtual_keys {
         if let Err(err) = key.guardrails.validate() {
