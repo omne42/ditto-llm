@@ -49,6 +49,10 @@ pub struct VirtualKeyConfig {
     pub id: String,
     pub token: String,
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
     pub limits: LimitsConfig,
     pub budget: BudgetConfig,
     pub cache: CacheConfig,
@@ -63,6 +67,8 @@ impl std::fmt::Debug for VirtualKeyConfig {
             .field("id", &self.id)
             .field("token", &"<redacted>")
             .field("enabled", &self.enabled)
+            .field("project_id", &self.project_id)
+            .field("user_id", &self.user_id)
             .field("limits", &self.limits)
             .field("budget", &self.budget)
             .field("cache", &self.cache)
@@ -79,6 +85,8 @@ impl VirtualKeyConfig {
             id: id.into(),
             token: token.into(),
             enabled: true,
+            project_id: None,
+            user_id: None,
             limits: LimitsConfig::default(),
             budget: BudgetConfig::default(),
             cache: CacheConfig::default(),

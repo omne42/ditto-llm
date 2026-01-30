@@ -70,6 +70,8 @@ fn base_key() -> VirtualKeyConfig {
         id: "key-1".to_string(),
         token: "vk-1".to_string(),
         enabled: true,
+        project_id: None,
+        user_id: None,
         limits: LimitsConfig::default(),
         budget: BudgetConfig::default(),
         cache: CacheConfig::default(),

@@ -129,7 +129,12 @@
 - [x] 路由：retry/fallback + weighted load balancing + passive health（circuit breaker）
 - [x] 路由：主动健康检查/探活（active probing）
 - [x] 路由：backpressure（`--proxy-max-in-flight`）
-- [ ] 成本：token 计数 + pricing + spend（按 project/user/key）+ 预算控制（USD 口径）
+- [ ] 成本：token 计数 + pricing + spend + 预算控制（USD 口径）
+  - [x] token 计数（feature `gateway-tokenizer`；失败回退估算）
+  - [x] pricing table（LiteLLM JSON；feature `gateway-costing`）
+  - [x] spend ledger by virtual key（sqlite/redis + `/admin/budgets` + `/admin/costs`）
+  - [x] spend aggregation by project/user（`virtual_keys[].project_id/user_id` + `/admin/budgets/projects|users` + `/admin/costs/projects|users`）
+  - [ ] budget by project/user（共享预算口径；TBD）
 - [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
 - [x] Proxy caching（非流式请求；并提供显式绕过）
 
