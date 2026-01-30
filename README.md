@@ -134,6 +134,8 @@ Translation backends (feature `gateway-translation`) can be configured with `pro
 }
 ```
 
+For OpenAI-compatible upstreams, `provider` can be `openai-compatible`/`openai_compatible` or a LiteLLM-style alias (e.g. `groq`, `mistral`, `deepseek`, `qwen`, `together`, `fireworks`, `xai`, `perplexity`, `openrouter`, `ollama`, `azure`).
+
 Routing (optional):
 
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)

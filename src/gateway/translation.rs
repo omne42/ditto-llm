@@ -530,7 +530,10 @@ pub async fn build_language_model(
                 ))
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(feature = "openai-compatible")]
             {
                 Ok(Arc::new(
@@ -629,7 +632,10 @@ pub async fn build_embedding_model(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
             {
                 Ok(Some(Arc::new(
@@ -689,7 +695,10 @@ pub async fn build_moderation_model(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "moderations"))]
             {
                 Ok(Some(Arc::new(
@@ -725,7 +734,10 @@ pub async fn build_image_generation_model(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "images"))]
             {
                 Ok(Some(Arc::new(
@@ -761,7 +773,10 @@ pub async fn build_audio_transcription_model(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "audio"))]
             {
                 Ok(Some(Arc::new(
@@ -797,7 +812,10 @@ pub async fn build_speech_model(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "audio"))]
             {
                 Ok(Some(Arc::new(
@@ -833,7 +851,10 @@ pub async fn build_batch_client(
                 Ok(None)
             }
         }
-        "openai-compatible" | "openai_compatible" => {
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
             #[cfg(all(feature = "openai-compatible", feature = "batches"))]
             {
                 Ok(Some(Arc::new(
