@@ -600,8 +600,18 @@ async fn handle_openai_compat_proxy(
                 return Err(map_openai_gateway_error(err));
             }
 
+            let guardrails = model
+                .as_deref()
+                .and_then(|model| {
+                    gateway
+                        .router
+                        .rule_for_model(model, Some(key))
+                        .and_then(|rule| rule.guardrails.as_ref())
+                })
+                .unwrap_or(&key.guardrails);
+
             if let Some(model) = model.as_deref() {
-                if let Some(reason) = key.guardrails.check_model(model) {
+                if let Some(reason) = guardrails.check_model(model) {
                     gateway.observability.record_guardrail_blocked();
                     return Err(openai_error(
                         StatusCode::FORBIDDEN,
@@ -612,7 +622,7 @@ async fn handle_openai_compat_proxy(
                 }
             }
 
-            if let Some(limit) = key.guardrails.max_input_tokens {
+            if let Some(limit) = guardrails.max_input_tokens {
                 if input_tokens_estimate > limit {
                     gateway.observability.record_guardrail_blocked();
                     return Err(openai_error(
@@ -624,9 +634,9 @@ async fn handle_openai_compat_proxy(
                 }
             }
 
-            if key.guardrails.has_text_filters() {
+            if guardrails.has_text_filters() {
                 if let Ok(text) = std::str::from_utf8(&body) {
-                    if let Some(reason) = key.guardrails.check_text(text) {
+                    if let Some(reason) = guardrails.check_text(text) {
                         gateway.observability.record_guardrail_blocked();
                         return Err(openai_error(
                             StatusCode::FORBIDDEN,

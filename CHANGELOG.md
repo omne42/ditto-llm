@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: do not mount `/admin/*` routes unless an admin token is configured.
+- Gateway: apply per-route guardrails overrides to OpenAI proxy requests.
 - Streaming: abort background stream tasks when the consumer streams are dropped.
 - Providers: avoid panicking if the default `reqwest::Client` build fails (fall back to `reqwest::Client::new()`).
 - Security: redact sensitive fields in `Debug` for gateway key config and auth-related types.

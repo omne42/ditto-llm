@@ -296,6 +296,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    for rule in &config.router.rules {
+        if let Some(guardrails) = rule.guardrails.as_ref() {
+            if let Err(err) = guardrails.validate() {
+                return Err(format!(
+                    "invalid guardrails config for route {}: {err}",
+                    rule.model_prefix
+                )
+                .into());
+            }
+        }
+    }
+
     let mut proxy_backends = std::collections::HashMap::new();
     #[cfg(feature = "gateway-translation")]
     let mut translation_backends = std::collections::HashMap::new();
