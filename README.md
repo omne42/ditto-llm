@@ -96,14 +96,14 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
 ```json
 {
   "backends": [
-	    {
-	      "name": "primary",
-	      "base_url": "https://api.openai.com/v1",
-	      "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
-	      "query_params": {}
-	    }
-	  ],
-	  "virtual_keys": [],
+    {
+      "name": "primary",
+      "base_url": "https://api.openai.com/v1",
+      "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
+      "query_params": {}
+    }
+  ],
+  "virtual_keys": [],
   "router": { "default_backend": "primary", "rules": [] }
 }
 ```

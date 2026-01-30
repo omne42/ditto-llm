@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Docs: update README gateway translation endpoints list (`/v1/models`, `/v1/completions`, `/v1/audio/translations`).
+- Docs: fix README `gateway.json` example indentation.
 - Gateway: do not mount `/admin/*` routes unless an admin token is configured.
 - Gateway: apply per-route guardrails overrides to OpenAI proxy requests.
 - Gateway: keep proxy backpressure permits until the response body is drained (including non-streaming responses).
