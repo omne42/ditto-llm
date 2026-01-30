@@ -436,6 +436,118 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_llm::Result<(
 }
 
 #[tokio::test]
+async fn gateway_translation_completions_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "prompt": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("resp_fake"));
+    assert_eq!(
+        parsed.get("object").and_then(|v| v.as_str()),
+        Some("text_completion")
+    );
+    assert_eq!(
+        parsed
+            .get("choices")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("text"))
+            .and_then(|v| v.as_str()),
+        Some("hello")
+    );
+    assert_eq!(
+        parsed
+            .get("choices")
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("finish_reason"))
+            .and_then(|v| v.as_str()),
+        Some("stop")
+    );
+    assert_eq!(
+        parsed
+            .get("usage")
+            .and_then(|v| v.get("total_tokens"))
+            .and_then(|v| v.as_u64()),
+        Some(3)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_completions_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "prompt": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/completions")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("text_completion"));
+    assert!(text.contains("\"text\":\"hello\""));
+    assert!(text.contains("[DONE]"));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();

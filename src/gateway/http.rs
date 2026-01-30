@@ -2534,6 +2534,7 @@ async fn handle_openai_compat_proxy(
             let batches_root = translation::is_batches_path(path_and_query);
 
             let supported_path = translation::is_chat_completions_path(path_and_query)
+                || translation::is_completions_path(path_and_query)
                 || translation::is_responses_create_path(path_and_query)
                 || translation::is_embeddings_path(path_and_query)
                 || translation::is_moderations_path(path_and_query)
@@ -2547,6 +2548,7 @@ async fn handle_openai_compat_proxy(
 
             let supported_method = if parts.method == axum::http::Method::POST {
                 translation::is_chat_completions_path(path_and_query)
+                    || translation::is_completions_path(path_and_query)
                     || translation::is_responses_create_path(path_and_query)
                     || translation::is_embeddings_path(path_and_query)
                     || translation::is_moderations_path(path_and_query)
@@ -3327,6 +3329,8 @@ async fn handle_openai_compat_proxy(
                     let generate_request = if translation::is_chat_completions_path(path_and_query)
                     {
                         translation::chat_completions_request_to_generate_request(parsed_json)
+                    } else if translation::is_completions_path(path_and_query) {
+                        translation::completions_request_to_generate_request(parsed_json)
                     } else {
                         translation::responses_request_to_generate_request(parsed_json)
                     };
@@ -3349,6 +3353,8 @@ async fn handle_openai_compat_proxy(
                     let fallback_response_id =
                         if translation::is_chat_completions_path(path_and_query) {
                             format!("chatcmpl_{request_id}")
+                        } else if translation::is_completions_path(path_and_query) {
+                            format!("cmpl_{request_id}")
                         } else {
                             format!("resp_{request_id}")
                         };
@@ -3368,6 +3374,13 @@ async fn handle_openai_compat_proxy(
 
                         let stream = if translation::is_chat_completions_path(path_and_query) {
                             translation::stream_to_chat_completions_sse(
+                                stream,
+                                fallback_response_id.clone(),
+                                original_model.clone(),
+                                _now_epoch_seconds,
+                            )
+                        } else if translation::is_completions_path(path_and_query) {
+                            translation::stream_to_completions_sse(
                                 stream,
                                 fallback_response_id.clone(),
                                 original_model.clone(),
@@ -3419,6 +3432,13 @@ async fn handle_openai_compat_proxy(
                             translation::provider_response_id(&generated, &fallback_response_id);
                         let value = if translation::is_chat_completions_path(path_and_query) {
                             translation::generate_response_to_chat_completions(
+                                &generated,
+                                &response_id,
+                                &original_model,
+                                _now_epoch_seconds,
+                            )
+                        } else if translation::is_completions_path(path_and_query) {
+                            translation::generate_response_to_completions(
                                 &generated,
                                 &response_id,
                                 &original_model,

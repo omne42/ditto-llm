@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: guardrails support regex patterns (`banned_regexes`) and optional PII blocking (`block_pii`).
 - Gateway: guardrails support optional request schema validation via `guardrails.validate_schema`.
 - Gateway: add Claude Code / Anthropic Messages API compatibility (`POST /v1/messages`, `POST /v1/messages/count_tokens`) and Gemini-compatible generateContent endpoints (`POST /v1beta/models/*:generateContent`, `POST /v1beta/models/*:streamGenerateContent`, and `POST /v1internal:*GenerateContent`).
+- Gateway translation: support legacy `POST /v1/completions` (non-streaming + streaming).
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.

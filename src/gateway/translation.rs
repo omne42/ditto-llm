@@ -892,6 +892,14 @@ pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     path == "/v1/chat/completions" || path == "/v1/chat/completions/"
 }
 
+pub fn is_completions_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/completions" || path == "/v1/completions/"
+}
+
 pub fn is_responses_create_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -1433,6 +1441,74 @@ pub fn chat_completions_request_to_generate_request(
     Ok(out)
 }
 
+pub fn completions_request_to_generate_request(request: &Value) -> ParseResult<GenerateRequest> {
+    let obj = request
+        .as_object()
+        .ok_or_else(|| "completions request must be a JSON object".to_string())?;
+
+    let model = obj
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "completions request missing model".to_string())?;
+
+    if let Some(suffix) = obj
+        .get("suffix")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|suffix| !suffix.is_empty())
+    {
+        return Err(format!("unsupported completions suffix: {suffix}"));
+    }
+
+    let prompt = match obj.get("prompt") {
+        None | Some(Value::Null) => String::new(),
+        Some(Value::String(text)) => text.to_string(),
+        Some(Value::Array(items)) => {
+            if items.len() > 1 {
+                return Err("completions prompt arrays are not supported".to_string());
+            }
+            items
+                .first()
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        }
+        _ => return Err("completions prompt must be a string".to_string()),
+    };
+
+    let mut out: GenerateRequest = vec![Message::user(prompt)].into();
+    out.model = Some(model.to_string());
+
+    if let Some(temperature) = obj.get("temperature").and_then(Value::as_f64) {
+        if temperature.is_finite() {
+            out.temperature = Some(temperature as f32);
+        }
+    }
+    if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64) {
+        if top_p.is_finite() {
+            out.top_p = Some(top_p as f32);
+        }
+    }
+    if let Some(max_tokens) = obj.get("max_tokens").and_then(Value::as_u64) {
+        out.max_tokens = Some(max_tokens.min(u64::from(u32::MAX)) as u32);
+    }
+    if let Some(stop) = obj.get("stop") {
+        out.stop_sequences = parse_stop_sequences(stop);
+    }
+
+    let provider_options = parse_provider_options_from_openai_request(obj);
+    if provider_options != ProviderOptions::default() {
+        out.provider_options = Some(
+            serde_json::to_value(provider_options)
+                .map_err(|err| format!("failed to serialize provider_options: {err}"))?,
+        );
+    }
+
+    Ok(out)
+}
+
 pub fn embeddings_request_to_texts(request: &Value) -> ParseResult<Vec<String>> {
     let obj = request
         .as_object()
@@ -1720,6 +1796,56 @@ pub fn generate_response_to_chat_completions(
     Value::Object(out)
 }
 
+pub fn generate_response_to_completions(
+    response: &GenerateResponse,
+    id: &str,
+    model: &str,
+    created: u64,
+) -> Value {
+    let mut text = String::new();
+    for part in &response.content {
+        if let ContentPart::Text { text: delta } = part {
+            text.push_str(delta);
+        }
+    }
+
+    let finish_reason = finish_reason_to_chat_finish_reason(response.finish_reason);
+
+    let mut choice = Map::<String, Value>::new();
+    choice.insert("index".to_string(), Value::Number(0.into()));
+    choice.insert("text".to_string(), Value::String(text));
+    choice.insert("logprobs".to_string(), Value::Null);
+    if let Some(finish_reason) = finish_reason {
+        choice.insert(
+            "finish_reason".to_string(),
+            Value::String(finish_reason.to_string()),
+        );
+    } else {
+        choice.insert("finish_reason".to_string(), Value::Null);
+    }
+
+    let mut out = Map::<String, Value>::new();
+    out.insert("id".to_string(), Value::String(id.to_string()));
+    out.insert(
+        "object".to_string(),
+        Value::String("text_completion".to_string()),
+    );
+    out.insert(
+        "created".to_string(),
+        Value::Number((created as i64).into()),
+    );
+    out.insert("model".to_string(), Value::String(model.to_string()));
+    out.insert(
+        "choices".to_string(),
+        Value::Array(vec![Value::Object(choice)]),
+    );
+    if let Some(usage) = usage_to_chat_usage(&response.usage) {
+        out.insert("usage".to_string(), usage);
+    }
+
+    Value::Object(out)
+}
+
 pub fn generate_response_to_responses(
     response: &GenerateResponse,
     id: &str,
@@ -1934,6 +2060,96 @@ pub fn stream_to_chat_completions_sse(
                                     usage,
                                 )));
                             }
+                            buffer.push_back(Ok(Bytes::from("data: [DONE]\n\n")));
+                            done = true;
+                            continue;
+                        }
+                    }
+                }
+            }
+        },
+    )
+    .boxed()
+}
+
+pub fn stream_to_completions_sse(
+    stream: StreamResult,
+    fallback_id: String,
+    model: String,
+    created: u64,
+) -> futures_util::stream::BoxStream<'static, IoResult<Bytes>> {
+    #[derive(Default)]
+    struct State {
+        response_id: String,
+        finish_reason: Option<FinishReason>,
+    }
+
+    stream::unfold(
+        (
+            stream,
+            VecDeque::<IoResult<Bytes>>::new(),
+            State {
+                response_id: fallback_id,
+                ..State::default()
+            },
+            false,
+        ),
+        move |(mut inner, mut buffer, mut state, mut done)| {
+            let model = model.clone();
+            async move {
+                loop {
+                    if let Some(item) = buffer.pop_front() {
+                        return Some((item, (inner, buffer, state, done)));
+                    }
+                    if done {
+                        return None;
+                    }
+
+                    match inner.next().await {
+                        Some(Ok(chunk)) => {
+                            match chunk {
+                                crate::types::StreamChunk::ResponseId { id } => {
+                                    let id = id.trim();
+                                    if !id.is_empty() {
+                                        state.response_id = id.to_string();
+                                    }
+                                }
+                                crate::types::StreamChunk::Warnings { .. } => {}
+                                crate::types::StreamChunk::TextDelta { text } => {
+                                    if !text.is_empty() {
+                                        buffer.push_back(Ok(completion_chunk_bytes(
+                                            &state.response_id,
+                                            &model,
+                                            created,
+                                            &text,
+                                            None,
+                                        )));
+                                    }
+                                }
+                                crate::types::StreamChunk::ToolCallStart { .. } => {}
+                                crate::types::StreamChunk::ToolCallDelta { .. } => {}
+                                crate::types::StreamChunk::ReasoningDelta { .. } => {}
+                                crate::types::StreamChunk::FinishReason(reason) => {
+                                    state.finish_reason = Some(reason);
+                                }
+                                crate::types::StreamChunk::Usage(_) => {}
+                            }
+                            continue;
+                        }
+                        Some(Err(err)) => {
+                            buffer.push_back(Err(std::io::Error::other(err.to_string())));
+                            done = true;
+                            continue;
+                        }
+                        None => {
+                            let finish_reason = state.finish_reason.unwrap_or(FinishReason::Stop);
+                            buffer.push_back(Ok(completion_chunk_bytes(
+                                &state.response_id,
+                                &model,
+                                created,
+                                "",
+                                Some(finish_reason),
+                            )));
                             buffer.push_back(Ok(Bytes::from("data: [DONE]\n\n")));
                             done = true;
                             continue;
@@ -2554,6 +2770,50 @@ fn finish_reason_to_responses_status(reason: FinishReason) -> (&'static str, Opt
         FinishReason::Error => ("failed", None),
         _ => ("completed", None),
     }
+}
+
+fn completion_chunk_bytes(
+    id: &str,
+    model: &str,
+    created: u64,
+    text: &str,
+    finish_reason: Option<FinishReason>,
+) -> Bytes {
+    let mut choice = Map::<String, Value>::new();
+    choice.insert("index".to_string(), Value::Number(0.into()));
+    choice.insert("text".to_string(), Value::String(text.to_string()));
+    choice.insert("logprobs".to_string(), Value::Null);
+    if let Some(finish_reason) = finish_reason {
+        if let Some(mapped) = finish_reason_to_chat_finish_reason(finish_reason) {
+            choice.insert(
+                "finish_reason".to_string(),
+                Value::String(mapped.to_string()),
+            );
+        } else {
+            choice.insert("finish_reason".to_string(), Value::Null);
+        }
+    } else {
+        choice.insert("finish_reason".to_string(), Value::Null);
+    }
+
+    let mut out = Map::<String, Value>::new();
+    out.insert("id".to_string(), Value::String(id.to_string()));
+    out.insert(
+        "object".to_string(),
+        Value::String("text_completion".to_string()),
+    );
+    out.insert(
+        "created".to_string(),
+        Value::Number((created as i64).into()),
+    );
+    out.insert("model".to_string(), Value::String(model.to_string()));
+    out.insert(
+        "choices".to_string(),
+        Value::Array(vec![Value::Object(choice)]),
+    );
+
+    let json = Value::Object(out).to_string();
+    Bytes::from(format!("data: {json}\n\n"))
 }
 
 fn chat_chunk_bytes(
