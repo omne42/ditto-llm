@@ -63,7 +63,7 @@
 - [x] Optional JSON logs（`--json-logs`）
 - [x] Optional proxy cache for OpenAI-compatible passthrough（`--proxy-cache*`，feature `gateway-proxy-cache`）
 - [x] Optional Prometheus metrics（`--prometheus-metrics`，feature `gateway-metrics-prometheus`）
-- [x] Optional proxy retry/circuit breaker（`--proxy-retry*`/`--proxy-circuit-breaker*`，feature `gateway-routing-advanced`）
+- [x] Optional proxy retry/circuit breaker/health checks（`--proxy-retry*`/`--proxy-circuit-breaker*`/`--proxy-health-check*`，feature `gateway-routing-advanced`）
 - [x] Optional pricing table + USD budgets（`--pricing-litellm <path>`，feature `gateway-costing`）
 - [x] Optional OpenTelemetry tracing（`--otel*`，feature `gateway-otel`）
 
@@ -88,7 +88,7 @@
 - [x] `/v1/responses` shim（OpenAI-compatible upstream）：当 upstream 仅支持 `/v1/chat/completions` 时，gateway 自动 fallback 并返回“Responses-like”（best-effort，仍属于变形路径）
 - [x] Translation proxy endpoints：用 Ditto provider adapters 实现“OpenAI in/out”的 `POST /v1/responses` + `POST /v1/chat/completions` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（feature `gateway-translation`；不依赖上游 OpenAI-compatible 服务）
 - [x] 路由（basic）：weighted backends（seeded）+ network-error fallback
-- [x] 路由（advanced）：retry + circuit breaker（feature `gateway-routing-advanced`；health checks 暂不包含主动探测）
+- [x] 路由（advanced）：retry + circuit breaker + active health checks（feature `gateway-routing-advanced`）
 - [ ] 成本口径：真实 token 计数（tiktoken 等价）+ usage-based settle（目前为 bytes/token 预估 + 可选 pricing table + USD budget）
 - [x] 存储（basic）：virtual keys 持久化（`--state` file / `--sqlite`）
 - [x] 存储（advanced）：budgets / audit logs 持久化（sqlite/redis 可选，支持多进程/多副本）
@@ -117,7 +117,7 @@
 - [x] Gateway 代理路径：基础持久化（virtual keys via `--state` or `--sqlite`）
 - [x] Gateway 代理路径：持久化存储（virtual keys / budgets / audit logs；sqlite/redis 可选）
 - [x] 路由：retry/fallback + weighted load balancing + passive health（circuit breaker）
-- [ ] 路由：主动健康检查/探活（active probing）
+- [x] 路由：主动健康检查/探活（active probing）
 - [x] 路由：backpressure（`--proxy-max-in-flight`）
 - [ ] 成本：token 计数 + pricing + spend（按 project/user/key）+ 预算控制（USD 口径）
 - [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）

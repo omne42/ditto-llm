@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{Path, Query, State};
@@ -267,6 +267,9 @@ pub fn router(state: GatewayHttpState) -> Router {
             }
         }
     }
+
+    #[cfg(feature = "gateway-routing-advanced")]
+    start_proxy_health_checks(&state);
 
     router.with_state(state)
 }
@@ -3614,7 +3617,7 @@ async fn filter_backend_candidates_by_health(
     let Some(config) = state.proxy_routing.as_ref() else {
         return candidates;
     };
-    if !config.circuit_breaker.enabled {
+    if !config.circuit_breaker.enabled && !config.health_check.enabled {
         return candidates;
     }
     let Some(health) = state.proxy_backend_health.as_ref() else {
@@ -3664,6 +3667,58 @@ async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
         .entry(backend.to_string())
         .or_default()
         .record_success();
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn start_proxy_health_checks(state: &GatewayHttpState) {
+    let Some(config) = state.proxy_routing.as_ref() else {
+        return;
+    };
+    if !config.health_check.enabled {
+        return;
+    }
+    let Some(health) = state.proxy_backend_health.as_ref() else {
+        return;
+    };
+
+    let backends = state.proxy_backends.clone();
+    let health = health.clone();
+    let path = config.health_check.path.clone();
+    let interval = Duration::from_secs(config.health_check.interval_seconds.max(1));
+    let timeout = Duration::from_secs(config.health_check.timeout_seconds.max(1));
+
+    tokio::spawn(async move {
+        loop {
+            for (backend_name, backend) in backends.iter() {
+                let mut headers = HeaderMap::new();
+                apply_backend_headers(&mut headers, backend.headers());
+
+                let result = backend
+                    .request_with_timeout(reqwest::Method::GET, &path, headers, None, Some(timeout))
+                    .await;
+
+                let mut health = health.lock().await;
+                let entry = health.entry(backend_name.clone()).or_default();
+                match result {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            entry.record_health_check_success();
+                        } else {
+                            entry.record_health_check_failure(format!(
+                                "health check returned {}",
+                                response.status()
+                            ));
+                        }
+                    }
+                    Err(err) => {
+                        entry.record_health_check_failure(err.to_string());
+                    }
+                }
+            }
+
+            tokio::time::sleep(interval).await;
+        }
+    });
 }
 
 #[cfg(feature = "gateway-proxy-cache")]
@@ -4093,13 +4148,7 @@ async fn list_backends(
             .get(name.as_str())
             .map(|entry| entry.snapshot(&name))
             .unwrap_or_else(|| BackendHealth::default().snapshot(&name));
-        out.push(BackendHealthSnapshot {
-            backend: snapshot.backend,
-            consecutive_failures: snapshot.consecutive_failures,
-            unhealthy_until_epoch_seconds: snapshot.unhealthy_until_epoch_seconds,
-            last_error: snapshot.last_error,
-            last_failure_ts_ms: snapshot.last_failure_ts_ms,
-        });
+        out.push(snapshot);
     }
 
     Ok(Json(out))

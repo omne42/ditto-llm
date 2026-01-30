@@ -55,12 +55,49 @@ impl Default for ProxyCircuitBreakerConfig {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProxyHealthCheckConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_health_check_path")]
+    pub path: String,
+    #[serde(default = "default_health_check_interval_seconds")]
+    pub interval_seconds: u64,
+    #[serde(default = "default_health_check_timeout_seconds")]
+    pub timeout_seconds: u64,
+}
+
+fn default_health_check_path() -> String {
+    "/v1/models".to_string()
+}
+
+fn default_health_check_interval_seconds() -> u64 {
+    10
+}
+
+fn default_health_check_timeout_seconds() -> u64 {
+    2
+}
+
+impl Default for ProxyHealthCheckConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            path: default_health_check_path(),
+            interval_seconds: default_health_check_interval_seconds(),
+            timeout_seconds: default_health_check_timeout_seconds(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ProxyRoutingConfig {
     #[serde(default)]
     pub retry: ProxyRetryConfig,
     #[serde(default)]
     pub circuit_breaker: ProxyCircuitBreakerConfig,
+    #[serde(default)]
+    pub health_check: ProxyHealthCheckConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -72,6 +109,12 @@ pub struct BackendHealthSnapshot {
     pub last_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_failure_ts_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health_check_healthy: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health_check_last_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub health_check_last_ts_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -80,6 +123,9 @@ pub struct BackendHealth {
     unhealthy_until_epoch_seconds: Option<u64>,
     last_error: Option<String>,
     last_failure_ts_ms: Option<u64>,
+    health_check_healthy: Option<bool>,
+    health_check_last_error: Option<String>,
+    health_check_last_ts_ms: Option<u64>,
 }
 
 impl BackendHealth {
@@ -90,10 +136,16 @@ impl BackendHealth {
             unhealthy_until_epoch_seconds: self.unhealthy_until_epoch_seconds,
             last_error: self.last_error.clone(),
             last_failure_ts_ms: self.last_failure_ts_ms,
+            health_check_healthy: self.health_check_healthy,
+            health_check_last_error: self.health_check_last_error.clone(),
+            health_check_last_ts_ms: self.health_check_last_ts_ms,
         }
     }
 
     pub fn is_healthy(&self, now_epoch_seconds: u64) -> bool {
+        if self.health_check_healthy == Some(false) {
+            return false;
+        }
         match self.unhealthy_until_epoch_seconds {
             Some(until) => now_epoch_seconds >= until,
             None => true,
@@ -134,6 +186,18 @@ impl BackendHealth {
             self.unhealthy_until_epoch_seconds =
                 Some(now_epoch_seconds.saturating_add(circuit_breaker.cooldown_seconds));
         }
+    }
+
+    pub fn record_health_check_success(&mut self) {
+        self.health_check_healthy = Some(true);
+        self.health_check_last_error = None;
+        self.health_check_last_ts_ms = Some(now_millis());
+    }
+
+    pub fn record_health_check_failure(&mut self, message: String) {
+        self.health_check_healthy = Some(false);
+        self.health_check_last_error = Some(message);
+        self.health_check_last_ts_ms = Some(now_millis());
     }
 }
 

@@ -130,6 +130,7 @@ Routing (optional):
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
 - `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backend` if empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
+- With `--features gateway-routing-advanced`, proxying can also use retry/circuit breaker/active health checks (`--proxy-retry*` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
 
 Endpoints:
 
@@ -142,16 +143,37 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured). `GET /admin/keys` redacts tokens unless `?include_tokens=true`.
+- `GET /admin/backends` and `POST /admin/backends/:name/reset` (requires an admin token and `--features gateway-routing-advanced`).
 
 CLI options:
 
+- `--listen HOST:PORT` sets the bind address (default: `127.0.0.1:8080`).
+- `--admin-token TOKEN` enables `/admin/*` endpoints.
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
 - `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).
 - `--sqlite PATH` enables persistence for admin virtual-key mutations in a sqlite file (requires `--features gateway-store-sqlite`; loaded on startup; cannot be combined with `--state`).
+- `--redis URL` enables redis persistence (requires `--features gateway-store-redis`).
+- `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis`).
 - `--json-logs` emits JSON log records to stderr.
+- `--proxy-max-in-flight N` limits concurrent in-flight proxy requests (rejects with 429 when exceeded).
 - `--proxy-cache` enables a best-effort in-memory cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`).
 - `--proxy-cache-ttl SECS` sets the proxy cache TTL (implies `--proxy-cache`).
 - `--proxy-cache-max-entries N` sets the proxy cache capacity (implies `--proxy-cache`).
+- `--proxy-retry` enables retry on retryable statuses (requires `--features gateway-routing-advanced`).
+- `--proxy-retry-status-codes CODES` overrides retry status codes (comma-separated; implies `--proxy-retry`).
+- `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).
+- `--proxy-circuit-breaker` enables a simple circuit breaker (requires `--features gateway-routing-advanced`).
+- `--proxy-cb-failure-threshold N` sets circuit breaker failure threshold (implies `--proxy-circuit-breaker`).
+- `--proxy-cb-cooldown-secs SECS` sets circuit breaker cooldown seconds (implies `--proxy-circuit-breaker`).
+- `--proxy-health-checks` enables active health checks (requires `--features gateway-routing-advanced`).
+- `--proxy-health-check-path PATH` overrides the health check request path (implies `--proxy-health-checks`; default: `/v1/models`).
+- `--proxy-health-check-interval-secs SECS` sets health check interval seconds (implies `--proxy-health-checks`).
+- `--proxy-health-check-timeout-secs SECS` sets health check timeout seconds (implies `--proxy-health-checks`).
+- `--pricing-litellm PATH` loads LiteLLM-style pricing JSON for cost budgets (requires `--features gateway-costing`).
+- `--prometheus-metrics` enables a Prometheus metrics endpoint (requires `--features gateway-metrics-prometheus`).
+- `--prometheus-max-key-series N` limits per-key series cardinality (implies `--prometheus-metrics`).
+- `--prometheus-max-model-series N` limits per-model series cardinality (implies `--prometheus-metrics`).
+- `--prometheus-max-backend-series N` limits per-backend series cardinality (implies `--prometheus-metrics`).
 - `--devtools PATH` enables JSONL request/response logging (requires `--features gateway-devtools`).
 - `--otel` enables OpenTelemetry tracing export via OTLP (requires `--features gateway-otel`).
 - `--otel-endpoint URL` overrides the OTLP endpoint (implies `--otel`).

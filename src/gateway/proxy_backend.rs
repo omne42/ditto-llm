@@ -44,8 +44,23 @@ impl ProxyBackend {
         headers: HeaderMap,
         body: Option<Bytes>,
     ) -> Result<reqwest::Response, GatewayError> {
+        self.request_with_timeout(method, path, headers, body, None)
+            .await
+    }
+
+    pub async fn request_with_timeout(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        headers: HeaderMap,
+        body: Option<Bytes>,
+        timeout: Option<Duration>,
+    ) -> Result<reqwest::Response, GatewayError> {
         let url = join_base_url(&self.base_url, path);
         let mut req = self.client.request(method, url).headers(headers);
+        if let Some(timeout) = timeout {
+            req = req.timeout(timeout);
+        }
         if let Some(body) = body {
             req = req.body(body);
         }

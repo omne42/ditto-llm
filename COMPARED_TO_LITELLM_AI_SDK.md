@@ -51,7 +51,7 @@
 
 ### 主要差异/缺口（P0：达到“可替换 LiteLLM”）
 
-- 路由：缺“主动健康检查/探活”与更丰富的策略（更细粒度熔断、分级 fallback、backpressure）
+- 路由：已支持“主动健康检查/探活”（feature `gateway-routing-advanced`），仍缺更丰富的策略（更细粒度熔断、分级 fallback、backpressure）
 - 成本：缺 **真实 token 计数**（tiktoken 等价）与 **usage-based settle**（目前可选 pricing table + USD budgets，但 token 仍是预估）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；缺 redis cache、streaming cache、cache invalidation 策略

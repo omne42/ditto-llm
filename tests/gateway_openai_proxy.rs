@@ -341,6 +341,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
                 max_attempts: Some(2),
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
+            ..Default::default()
         });
     let app = ditto_llm::gateway::http::router(state);
 
@@ -434,6 +435,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
                 failure_threshold: 1,
                 cooldown_seconds: 300,
             },
+            ..Default::default()
         });
     let app = ditto_llm::gateway::http::router(state);
 
@@ -466,6 +468,117 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
 
     primary_mock.assert_calls(1);
     secondary_mock.assert_calls(2);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_health_check_skips_unhealthy_backends() {
+    let primary = MockServer::start();
+    let secondary = MockServer::start();
+
+    let primary_health = primary.mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/v1/models")
+            .header("authorization", "Bearer sk-primary");
+        then.status(500)
+            .header("content-type", "application/json")
+            .body(r#"{"error":{"message":"unhealthy","type":"server_error"}}"#);
+    });
+    let secondary_health = secondary.mock(|when, then| {
+        when.method(httpmock::Method::GET)
+            .path("/v1/models")
+            .header("authorization", "Bearer sk-secondary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"data":[]}"#);
+    });
+
+    let primary_mock = primary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-primary")
+            .header("x-request-id", "req-0");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"backend":"primary"}"#);
+    });
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-0");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"backend":"secondary"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary.base_url(), "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: vec![
+                ditto_llm::gateway::RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1,
+                },
+                ditto_llm::gateway::RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1,
+                },
+            ],
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            health_check: ditto_llm::gateway::proxy_routing::ProxyHealthCheckConfig {
+                enabled: true,
+                path: "/v1/models".to_string(),
+                interval_seconds: 60,
+                timeout_seconds: 1,
+            },
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-0")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-backend")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "secondary"
+    );
+
+    primary_mock.assert_calls(0);
+    secondary_mock.assert_calls(1);
+    primary_health.assert_calls(1);
+    secondary_health.assert_calls(1);
 }
 
 #[tokio::test]

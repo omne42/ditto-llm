@@ -3,7 +3,7 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--listen HOST:PORT] [--admin-token TOKEN] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
@@ -30,6 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut proxy_circuit_breaker_enabled = false;
     let mut proxy_cb_failure_threshold: Option<u32> = None;
     let mut proxy_cb_cooldown_secs: Option<u64> = None;
+    let mut proxy_health_checks_enabled = false;
+    let mut proxy_health_check_path: Option<String> = None;
+    let mut proxy_health_check_interval_secs: Option<u64> = None;
+    let mut proxy_health_check_timeout_secs: Option<u64> = None;
     let mut devtools_path: Option<String> = None;
     let mut otel_enabled = false;
     let mut otel_endpoint: Option<String> = None;
@@ -173,6 +177,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 proxy_cb_cooldown_secs = Some(
                     raw.parse::<u64>()
                         .map_err(|_| "invalid --proxy-cb-cooldown-secs")?,
+                );
+            }
+            "--proxy-health-checks" => {
+                proxy_health_checks_enabled = true;
+            }
+            "--proxy-health-check-path" => {
+                proxy_health_checks_enabled = true;
+                proxy_health_check_path = Some(
+                    args.next()
+                        .ok_or("missing value for --proxy-health-check-path")?,
+                );
+            }
+            "--proxy-health-check-interval-secs" => {
+                proxy_health_checks_enabled = true;
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-health-check-interval-secs")?;
+                proxy_health_check_interval_secs = Some(
+                    raw.parse::<u64>()
+                        .map_err(|_| "invalid --proxy-health-check-interval-secs")?,
+                );
+            }
+            "--proxy-health-check-timeout-secs" => {
+                proxy_health_checks_enabled = true;
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-health-check-timeout-secs")?;
+                proxy_health_check_timeout_secs = Some(
+                    raw.parse::<u64>()
+                        .map_err(|_| "invalid --proxy-health-check-timeout-secs")?,
                 );
             }
             "--devtools" => {
@@ -368,12 +402,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     state = attach_proxy_routing(
         state,
-        proxy_retry_enabled,
-        proxy_retry_status_codes,
-        proxy_retry_max_attempts,
-        proxy_circuit_breaker_enabled,
-        proxy_cb_failure_threshold,
-        proxy_cb_cooldown_secs,
+        ProxyRoutingCliOptions {
+            retry_enabled: proxy_retry_enabled,
+            retry_status_codes: proxy_retry_status_codes,
+            retry_max_attempts: proxy_retry_max_attempts,
+            circuit_breaker_enabled: proxy_circuit_breaker_enabled,
+            cb_failure_threshold: proxy_cb_failure_threshold,
+            cb_cooldown_secs: proxy_cb_cooldown_secs,
+            health_checks_enabled: proxy_health_checks_enabled,
+            health_check_path: proxy_health_check_path,
+            health_check_interval_secs: proxy_health_check_interval_secs,
+            health_check_timeout_secs: proxy_health_check_timeout_secs,
+        },
     )?;
     if let Some(path) = state_path {
         state = state.with_state_file(path);
@@ -470,37 +510,79 @@ fn attach_proxy_cache(
     Ok(state)
 }
 
-#[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
-fn attach_proxy_routing(
-    state: ditto_llm::gateway::GatewayHttpState,
+#[cfg(feature = "gateway")]
+#[derive(Default)]
+struct ProxyRoutingCliOptions {
     retry_enabled: bool,
     retry_status_codes: Option<Vec<u16>>,
     retry_max_attempts: Option<usize>,
     circuit_breaker_enabled: bool,
     cb_failure_threshold: Option<u32>,
     cb_cooldown_secs: Option<u64>,
+    health_checks_enabled: bool,
+    health_check_path: Option<String>,
+    health_check_interval_secs: Option<u64>,
+    health_check_timeout_secs: Option<u64>,
+}
+
+#[cfg(feature = "gateway")]
+impl ProxyRoutingCliOptions {
+    fn any_set(&self) -> bool {
+        self.retry_enabled
+            || self.retry_status_codes.is_some()
+            || self.retry_max_attempts.is_some()
+            || self.circuit_breaker_enabled
+            || self.cb_failure_threshold.is_some()
+            || self.cb_cooldown_secs.is_some()
+            || self.health_checks_enabled
+            || self.health_check_path.is_some()
+            || self.health_check_interval_secs.is_some()
+            || self.health_check_timeout_secs.is_some()
+    }
+}
+
+#[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
+fn attach_proxy_routing(
+    state: ditto_llm::gateway::GatewayHttpState,
+    opts: ProxyRoutingCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if !retry_enabled && !circuit_breaker_enabled {
+    if !opts.any_set() {
         return Ok(state);
     }
 
     let mut config = ditto_llm::gateway::ProxyRoutingConfig::default();
-    if retry_enabled {
+    if opts.retry_enabled {
         config.retry.enabled = true;
     }
-    if let Some(codes) = retry_status_codes {
+    if let Some(codes) = opts.retry_status_codes {
         config.retry.retry_status_codes = codes;
     }
-    config.retry.max_attempts = retry_max_attempts.filter(|v| *v > 0);
+    config.retry.max_attempts = opts.retry_max_attempts.filter(|v| *v > 0);
 
-    if circuit_breaker_enabled {
+    if opts.circuit_breaker_enabled {
         config.circuit_breaker.enabled = true;
     }
-    if let Some(threshold) = cb_failure_threshold {
+    if let Some(threshold) = opts.cb_failure_threshold {
         config.circuit_breaker.failure_threshold = threshold.max(1);
     }
-    if let Some(cooldown) = cb_cooldown_secs {
+    if let Some(cooldown) = opts.cb_cooldown_secs {
         config.circuit_breaker.cooldown_seconds = cooldown;
+    }
+
+    if opts.health_checks_enabled {
+        config.health_check.enabled = true;
+    }
+    if let Some(path) = opts.health_check_path {
+        if path.trim().is_empty() {
+            return Err("health check path must be non-empty".into());
+        }
+        config.health_check.path = path;
+    }
+    if let Some(interval) = opts.health_check_interval_secs {
+        config.health_check.interval_seconds = interval.max(1);
+    }
+    if let Some(timeout) = opts.health_check_timeout_secs {
+        config.health_check.timeout_seconds = timeout.max(1);
     }
 
     Ok(state.with_proxy_routing(config))
@@ -509,20 +591,9 @@ fn attach_proxy_routing(
 #[cfg(all(feature = "gateway", not(feature = "gateway-routing-advanced")))]
 fn attach_proxy_routing(
     state: ditto_llm::gateway::GatewayHttpState,
-    retry_enabled: bool,
-    retry_status_codes: Option<Vec<u16>>,
-    retry_max_attempts: Option<usize>,
-    circuit_breaker_enabled: bool,
-    cb_failure_threshold: Option<u32>,
-    cb_cooldown_secs: Option<u64>,
+    opts: ProxyRoutingCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if retry_enabled
-        || retry_status_codes.is_some()
-        || retry_max_attempts.is_some()
-        || circuit_breaker_enabled
-        || cb_failure_threshold.is_some()
-        || cb_cooldown_secs.is_some()
-    {
+    if opts.any_set() {
         return Err("proxy routing requires `--features gateway-routing-advanced`".into());
     }
     Ok(state)
