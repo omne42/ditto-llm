@@ -115,7 +115,7 @@
 ### 2.3 Interop：不变形与多协议互转
 
 - [x] OpenAI `/responses` raw passthrough items round-trip（含 `/responses/compact`）
-- [ ] OpenAI-compatible ↔ Claude Code / Gemini CLI 格式互转
+- [x] OpenAI-compatible ↔ Claude Code / Gemini CLI 格式互转
 - [x] Gateway “passthrough vs translation” per-route 策略（同一个 gateway 可混用两种模式；以 backend config 的 `base_url` vs `provider` 区分）
 
 ---

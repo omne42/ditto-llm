@@ -8,6 +8,7 @@ pub mod costing;
 pub mod guardrails;
 pub mod http;
 pub mod http_backend;
+mod interop;
 pub mod limits;
 #[cfg(feature = "gateway-metrics-prometheus")]
 pub mod metrics_prometheus;
