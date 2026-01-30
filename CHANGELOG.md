@@ -81,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: best-effort usage-based settling for proxy budgets (for non-streaming JSON responses, prefer `usage` tokens/cost over request estimates).
 - Gateway: optional tiktoken-based input token counting for proxy budgets/guardrails/costing (feature `gateway-tokenizer`; falls back to request-size estimation).
 - Gateway: virtual keys support optional `project_id` and `user_id` attribution; admin endpoints can aggregate `/admin/budgets` and `/admin/costs` by project/user.
+- Gateway: virtual keys support shared budgets scoped by `project_id` / `user_id` via `project_budget` / `user_budget` (token + USD micros).
 - Gateway: guardrails support regex patterns (`banned_regexes`) and optional PII blocking (`block_pii`).
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.

@@ -72,6 +72,8 @@ fn base_key() -> VirtualKeyConfig {
         enabled: true,
         project_id: None,
         user_id: None,
+        project_budget: None,
+        user_budget: None,
         limits: LimitsConfig::default(),
         budget: BudgetConfig::default(),
         cache: CacheConfig::default(),
@@ -176,6 +178,85 @@ async fn budget_limit_blocks_request() {
         total_tokens: Some(5),
         total_usd_micros: None,
     };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 360 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::BudgetExceeded { .. }));
+}
+
+#[tokio::test]
+async fn project_budget_limit_blocks_request() {
+    let mut key = base_key();
+    key.project_id = Some("project-1".to_string());
+    key.project_budget = Some(BudgetConfig {
+        total_tokens: Some(5),
+        total_usd_micros: None,
+    });
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 360 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::BudgetExceeded { .. }));
+}
+
+#[tokio::test]
+async fn project_budget_is_shared_across_virtual_keys() {
+    let mut key_1 = base_key();
+    key_1.project_id = Some("project-1".to_string());
+    key_1.project_budget = Some(BudgetConfig {
+        total_tokens: Some(15),
+        total_usd_micros: None,
+    });
+
+    let mut key_2 = VirtualKeyConfig::new("key-2", "vk-2");
+    key_2.project_id = Some("project-1".to_string());
+    key_2.project_budget = Some(BudgetConfig {
+        total_tokens: Some(15),
+        total_usd_micros: None,
+    });
+
+    let config = GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![key_1, key_2],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+    let clock = Box::new(FixedClock { now: 360 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    gateway.handle(base_request()).await.unwrap();
+
+    let mut request = base_request();
+    request.virtual_key = "vk-2".to_string();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::BudgetExceeded { .. }));
+}
+
+#[tokio::test]
+async fn user_budget_limit_blocks_request() {
+    let mut key = base_key();
+    key.user_id = Some("user-1".to_string());
+    key.user_budget = Some(BudgetConfig {
+        total_tokens: Some(5),
+        total_usd_micros: None,
+    });
     let config = base_config(key);
     let clock = Box::new(FixedClock { now: 360 });
     let mut gateway = Gateway::with_clock(config, clock);

@@ -268,6 +268,38 @@ impl Gateway {
             self.observability.record_budget_exceeded();
             return Err(err);
         }
+        if let (Some(project_id), Some(project_budget)) = (
+            key.project_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.project_budget.as_ref(),
+        ) {
+            let scope = format!("project:{project_id}");
+            if let Err(err) = self
+                .budget
+                .can_spend(&scope, project_budget, u64::from(tokens))
+            {
+                self.observability.record_budget_exceeded();
+                return Err(err);
+            }
+        }
+        if let (Some(user_id), Some(user_budget)) = (
+            key.user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.user_budget.as_ref(),
+        ) {
+            let scope = format!("user:{user_id}");
+            if let Err(err) = self
+                .budget
+                .can_spend(&scope, user_budget, u64::from(tokens))
+            {
+                self.observability.record_budget_exceeded();
+                return Err(err);
+            }
+        }
 
         let backend =
             self.backends
@@ -283,6 +315,26 @@ impl Gateway {
         response.cached = false;
 
         self.budget.spend(&key.id, &key.budget, u64::from(tokens));
+        if let (Some(project_id), Some(project_budget)) = (
+            key.project_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.project_budget.as_ref(),
+        ) {
+            let scope = format!("project:{project_id}");
+            self.budget.spend(&scope, project_budget, u64::from(tokens));
+        }
+        if let (Some(user_id), Some(user_budget)) = (
+            key.user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.user_budget.as_ref(),
+        ) {
+            let scope = format!("user:{user_id}");
+            self.budget.spend(&scope, user_budget, u64::from(tokens));
+        }
 
         if key.cache.enabled && !bypass_cache {
             self.cache.insert(

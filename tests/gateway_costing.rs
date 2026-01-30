@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashMap};
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
-    BackendConfig, Gateway, GatewayConfig, GatewayHttpState, PricingTable, ProxyBackend,
-    RouterConfig, VirtualKeyConfig,
+    BackendConfig, BudgetConfig, Gateway, GatewayConfig, GatewayHttpState, PricingTable,
+    ProxyBackend, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -57,6 +57,77 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 
     let mut key = VirtualKeyConfig::new("key-1", "vk-1");
     key.budget.total_usd_micros = Some(500_000);
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_pricing_table(pricing);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "max_tokens": 1,
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::PAYMENT_REQUIRED);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        value["error"]["code"].as_str().unwrap_or_default(),
+        "cost_budget_exceeded"
+    );
+
+    mock.assert_calls(0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST).path("/v1/chat/completions");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let pricing = PricingTable::from_litellm_json_str(
+        r#"{
+          "gpt-4o-mini": {"input_cost_per_token": 1.0, "output_cost_per_token": 1.0}
+        }"#,
+    )
+    .expect("pricing");
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.project_id = Some("project-1".to_string());
+    key.project_budget = Some(BudgetConfig {
+        total_tokens: None,
+        total_usd_micros: Some(500_000),
+    });
 
     let config = GatewayConfig {
         backends: vec![backend_config(
