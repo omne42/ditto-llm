@@ -196,6 +196,7 @@ async fn router_switches_backend_by_model_prefix() {
             model_prefix: "gpt-4".to_string(),
             backend: "secondary".to_string(),
             backends: Vec::new(),
+            guardrails: None,
         }],
     };
     let clock = Box::new(FixedClock { now: 420 });
@@ -209,6 +210,48 @@ async fn router_switches_backend_by_model_prefix() {
     let request = base_request();
     let response = gateway.handle(request).await.unwrap();
     assert_eq!(response.backend, "secondary");
+}
+
+#[tokio::test]
+async fn guardrail_override_applies_for_route_rule() {
+    let mut key = base_key();
+    key.guardrails = GuardrailsConfig {
+        banned_phrases: vec!["forbidden".to_string()],
+        banned_regexes: Vec::new(),
+        block_pii: false,
+        max_input_tokens: None,
+        allow_models: Vec::new(),
+        deny_models: Vec::new(),
+    };
+
+    let mut config = base_config(key);
+    config.router = RouterConfig {
+        default_backend: "primary".to_string(),
+        default_backends: Vec::new(),
+        rules: vec![RouteRule {
+            model_prefix: "gpt-".to_string(),
+            backend: "primary".to_string(),
+            backends: Vec::new(),
+            guardrails: Some(GuardrailsConfig::default()),
+        }],
+    };
+
+    let clock = Box::new(FixedClock { now: 470 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut request = base_request();
+    request.prompt = "contains forbidden text".to_string();
+    let response = gateway.handle(request).await.unwrap();
+    assert_eq!(response.backend, "primary");
+
+    let mut request = base_request();
+    request.model = "o1".to_string();
+    request.prompt = "contains forbidden text".to_string();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::GuardrailRejected { .. }));
 }
 
 #[tokio::test]

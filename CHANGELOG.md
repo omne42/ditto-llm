@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: translation backends can also serve `POST /v1/rerank` (best-effort OpenAI behavior).
 - Gateway: translation backends can also serve `GET|POST /v1/batches`, `GET /v1/batches/{id}`, and `POST /v1/batches/{id}/cancel` (best-effort OpenAI behavior).
 - Gateway: guardrails support model allow/deny lists (exact or `prefix*`).
+- Gateway: router rules support per-route guardrails overrides (by `model_prefix`).
 - Gateway: when upstream does not implement `POST /v1/responses` (404/405/501), automatically fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (`x-ditto-shim: responses_via_chat_completions`).
 - Gateway: `--state PATH` persists admin virtual-key mutations to a JSON state file; proxy responses include `x-ditto-request-id`.
 - Gateway: router supports weighted backends (`default_backends` / `rules[].backends`) and falls back on network errors when proxying.

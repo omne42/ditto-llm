@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{GatewayError, GatewayRequest, VirtualKeyConfig};
+use super::{GatewayError, GatewayRequest, GuardrailsConfig, VirtualKeyConfig};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RouterConfig {
@@ -28,6 +28,8 @@ pub struct RouteRule {
     pub backend: String,
     #[serde(default)]
     pub backends: Vec<RouteBackend>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guardrails: Option<GuardrailsConfig>,
 }
 
 impl RouteRule {
@@ -44,6 +46,19 @@ pub struct Router {
 impl Router {
     pub fn new(config: RouterConfig) -> Self {
         Self { config }
+    }
+
+    pub fn rule_for_model(
+        &self,
+        model: &str,
+        key: Option<&VirtualKeyConfig>,
+    ) -> Option<&RouteRule> {
+        if let Some(key) = key {
+            if key.route.is_some() {
+                return None;
+            }
+        }
+        self.config.rules.iter().find(|rule| rule.matches(model))
     }
 
     pub fn select_backend(
@@ -228,6 +243,7 @@ mod tests {
                     weight: 2,
                 },
             ],
+            guardrails: None,
         };
         let router = Router::new(RouterConfig {
             default_backend: "default".to_string(),
@@ -268,6 +284,7 @@ mod tests {
                         weight: 1,
                     },
                 ],
+                guardrails: None,
             }],
         });
 

@@ -234,7 +234,13 @@ impl Gateway {
             return Err(err);
         }
 
-        if let Err(err) = key.guardrails.check(&request) {
+        let guardrails = self
+            .router
+            .rule_for_model(&request.model, Some(key))
+            .and_then(|rule| rule.guardrails.as_ref())
+            .unwrap_or(&key.guardrails);
+
+        if let Err(err) = guardrails.check(&request) {
             self.observability.record_guardrail_blocked();
             return Err(err);
         }

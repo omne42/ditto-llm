@@ -386,6 +386,7 @@ async fn openai_compat_proxy_routes_by_model_prefix() {
                 model_prefix: "gpt-".to_string(),
                 backend: "primary".to_string(),
                 backends: Vec::new(),
+                guardrails: None,
             }],
         },
     };
