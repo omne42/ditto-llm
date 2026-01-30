@@ -5,6 +5,15 @@ use thiserror::Error;
 
 use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, VirtualKeyConfig};
 
+#[cfg(feature = "gateway-proxy-cache")]
+use super::CachedProxyResponse;
+#[cfg(feature = "gateway-proxy-cache")]
+use axum::http::{HeaderMap, HeaderName, HeaderValue};
+#[cfg(feature = "gateway-proxy-cache")]
+use bytes::Bytes;
+#[cfg(feature = "gateway-proxy-cache")]
+use serde::{Deserialize, Serialize};
+
 const DEFAULT_RESERVATION_TTL_SECS: u64 = 60 * 60;
 
 #[derive(Clone, Debug)]
@@ -28,6 +37,52 @@ pub enum RedisStoreError {
         limit_usd_micros: u64,
         attempted_usd_micros: u64,
     },
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct CachedProxyResponseRecord {
+    status: u16,
+    backend: String,
+    headers: Vec<(String, Vec<u8>)>,
+    body: Vec<u8>,
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+impl CachedProxyResponseRecord {
+    fn from_cached(cached: &CachedProxyResponse) -> Self {
+        let mut headers = Vec::with_capacity(cached.headers.len());
+        for (name, value) in cached.headers.iter() {
+            headers.push((name.as_str().to_string(), value.as_bytes().to_vec()));
+        }
+
+        Self {
+            status: cached.status,
+            backend: cached.backend.clone(),
+            headers,
+            body: cached.body.as_ref().to_vec(),
+        }
+    }
+
+    fn into_cached(self) -> CachedProxyResponse {
+        let mut headers = HeaderMap::new();
+        for (name, value) in self.headers {
+            let Ok(name) = name.parse::<HeaderName>() else {
+                continue;
+            };
+            let Ok(value) = HeaderValue::from_bytes(&value) else {
+                continue;
+            };
+            headers.append(name, value);
+        }
+
+        CachedProxyResponse {
+            status: self.status,
+            headers,
+            body: Bytes::from(self.body),
+            backend: self.backend,
+        }
+    }
 }
 
 impl RedisStore {
@@ -97,6 +152,11 @@ impl RedisStore {
         format!("{}:audit:{id}", self.prefix)
     }
 
+    #[cfg(feature = "gateway-proxy-cache")]
+    fn key_proxy_cache_response(&self, cache_key: &str) -> String {
+        format!("{}:proxy_cache:{cache_key}", self.prefix)
+    }
+
     pub async fn load_virtual_keys(&self) -> Result<Vec<VirtualKeyConfig>, RedisStoreError> {
         let mut conn = self.connection().await?;
         let key = self.key_virtual_keys();
@@ -122,6 +182,42 @@ impl RedisStore {
             pipe.hset(&redis_key, &key.id, serde_json::to_string(key)?);
         }
         let _: () = pipe.query_async(&mut conn).await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    pub async fn get_proxy_cache_response(
+        &self,
+        cache_key: &str,
+    ) -> Result<Option<CachedProxyResponse>, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let redis_key = self.key_proxy_cache_response(cache_key);
+        let raw: Option<Vec<u8>> = conn.get(redis_key).await?;
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        let record: CachedProxyResponseRecord = match serde_json::from_slice(&raw) {
+            Ok(record) => record,
+            Err(_) => return Ok(None),
+        };
+        Ok(Some(record.into_cached()))
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    pub async fn set_proxy_cache_response(
+        &self,
+        cache_key: &str,
+        cached: &CachedProxyResponse,
+        ttl_seconds: u64,
+    ) -> Result<(), RedisStoreError> {
+        if ttl_seconds == 0 {
+            return Ok(());
+        }
+
+        let mut conn = self.connection().await?;
+        let redis_key = self.key_proxy_cache_response(cache_key);
+        let payload = serde_json::to_vec(&CachedProxyResponseRecord::from_cached(cached))?;
+        let _: () = conn.set_ex(redis_key, payload, ttl_seconds).await?;
         Ok(())
     }
 
@@ -704,6 +800,43 @@ fn tokens_to_i64(tokens: u64) -> i64 {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    #[test]
+    fn proxy_cache_record_round_trips_headers_and_body() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.append("content-type", "application/json".parse().unwrap());
+        headers.append("set-cookie", "a=b".parse().unwrap());
+
+        let cached = CachedProxyResponse {
+            status: 200,
+            headers: headers.clone(),
+            body: bytes::Bytes::from_static(b"ok"),
+            backend: "primary".to_string(),
+        };
+
+        let record = CachedProxyResponseRecord::from_cached(&cached);
+        let raw = serde_json::to_vec(&record).expect("serialize");
+        let decoded: CachedProxyResponseRecord = serde_json::from_slice(&raw).expect("decode");
+        let round_tripped = decoded.into_cached();
+
+        assert_eq!(round_tripped.status, cached.status);
+        assert_eq!(round_tripped.backend, cached.backend);
+        assert_eq!(round_tripped.body, cached.body);
+
+        assert_eq!(
+            round_tripped.headers.get("content-type"),
+            headers.get("content-type")
+        );
+        assert_eq!(
+            round_tripped
+                .headers
+                .get_all("set-cookie")
+                .iter()
+                .collect::<Vec<_>>(),
+            headers.get_all("set-cookie").iter().collect::<Vec<_>>(),
+        );
+    }
 
     fn env_nonempty(key: &str) -> Option<String> {
         std::env::var(key)

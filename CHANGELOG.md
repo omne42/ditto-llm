@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: router supports weighted backends (`default_backends` / `rules[].backends`) and falls back on network errors when proxying.
 - Gateway: optional sqlite persistence for admin virtual keys via `--sqlite PATH` (feature `gateway-store-sqlite`).
 - Gateway: optional in-memory proxy cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
+- Gateway: proxy cache supports Redis-backed sharing when running with `--redis` (feature `gateway-store-redis`).
 - Gateway: optional OpenTelemetry tracing exporter via OTLP (feature `gateway-otel`).
 - Gateway: Prometheus metrics for per-backend in-flight gauge and request duration histogram (feature `gateway-metrics-prometheus`).
 - Gateway: Prometheus metrics for per-path request counts and proxy request duration histogram (feature `gateway-metrics-prometheus`).

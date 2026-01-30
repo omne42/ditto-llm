@@ -166,9 +166,9 @@ CLI options:
 - `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis` and `--redis`/`--redis-env`).
 - `--json-logs` emits JSON log records to stderr.
 - `--proxy-max-in-flight N` limits concurrent in-flight proxy requests (rejects with 429 when exceeded).
-- `--proxy-cache` enables a best-effort in-memory cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`).
+- `--proxy-cache` enables a best-effort cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`). When combined with `--redis`, responses are also cached in Redis (shared across instances).
 - `--proxy-cache-ttl SECS` sets the proxy cache TTL (implies `--proxy-cache`).
-- `--proxy-cache-max-entries N` sets the proxy cache capacity (implies `--proxy-cache`).
+- `--proxy-cache-max-entries N` sets the in-memory proxy cache capacity (implies `--proxy-cache`).
 - `--proxy-retry` enables retry on retryable statuses (requires `--features gateway-routing-advanced`).
 - `--proxy-retry-status-codes CODES` overrides retry status codes (comma-separated; implies `--proxy-retry`).
 - `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).

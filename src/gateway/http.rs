@@ -86,6 +86,8 @@ pub struct GatewayHttpState {
     pricing: Option<Arc<PricingTable>>,
     #[cfg(feature = "gateway-proxy-cache")]
     proxy_cache: Option<Arc<Mutex<ProxyResponseCache>>>,
+    #[cfg(feature = "gateway-proxy-cache")]
+    proxy_cache_config: Option<ProxyCacheConfig>,
     proxy_backpressure: Option<Arc<Semaphore>>,
     proxy_backend_backpressure: Arc<HashMap<String, Arc<Semaphore>>>,
     #[cfg(feature = "gateway-metrics-prometheus")]
@@ -127,6 +129,8 @@ impl GatewayHttpState {
             pricing: None,
             #[cfg(feature = "gateway-proxy-cache")]
             proxy_cache: None,
+            #[cfg(feature = "gateway-proxy-cache")]
+            proxy_cache_config: None,
             proxy_backpressure: None,
             proxy_backend_backpressure: Arc::new(proxy_backend_backpressure),
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -190,7 +194,10 @@ impl GatewayHttpState {
 
     #[cfg(feature = "gateway-proxy-cache")]
     pub fn with_proxy_cache(mut self, config: ProxyCacheConfig) -> Self {
-        self.proxy_cache = Some(Arc::new(Mutex::new(ProxyResponseCache::new(config))));
+        self.proxy_cache = Some(Arc::new(Mutex::new(ProxyResponseCache::new(
+            config.clone(),
+        ))));
+        self.proxy_cache_config = Some(config);
         self
     }
 
@@ -1797,8 +1804,24 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-proxy-cache")]
     if let (Some(cache), Some(cache_key)) = (state.proxy_cache.as_ref(), proxy_cache_key.as_ref()) {
-        let cached = { cache.lock().await.get(cache_key, _now_epoch_seconds) };
+        let mut cache_source = "memory";
+        let mut cached = { cache.lock().await.get(cache_key, _now_epoch_seconds) };
+        #[cfg(feature = "gateway-store-redis")]
+        if cached.is_none() {
+            if let Some(store) = state.redis_store.as_ref() {
+                if let Ok(redis_cached) = store.get_proxy_cache_response(cache_key).await {
+                    if redis_cached.is_some() {
+                        cache_source = "redis";
+                    }
+                    cached = redis_cached;
+                }
+            }
+        }
         if let Some(cached) = cached {
+            if cache_source == "redis" {
+                let mut cache = cache.lock().await;
+                cache.insert(cache_key.to_string(), cached.clone(), _now_epoch_seconds);
+            }
             {
                 let mut gateway = state.gateway.lock().await;
                 gateway.observability.record_cache_hit();
@@ -1809,6 +1832,7 @@ async fn handle_openai_compat_proxy(
                 "proxy.cache_hit",
                 serde_json::json!({
                     "request_id": &request_id,
+                    "cache": cache_source,
                     "backend": &cached.backend,
                     "path": path_and_query,
                 }),
@@ -4964,18 +4988,14 @@ async fn handle_openai_compat_proxy(
 
         #[cfg(feature = "gateway-proxy-cache")]
         if status.is_success() {
-            if let (Some(cache), Some(cache_key)) =
-                (state.proxy_cache.as_ref(), proxy_cache_key.as_deref())
-            {
-                let now = now_epoch_seconds();
+            if let Some(cache_key) = proxy_cache_key.as_deref() {
                 let cached = CachedProxyResponse {
                     status: status.as_u16(),
                     headers: upstream_headers.clone(),
                     body: bytes.clone(),
                     backend: backend_name.clone(),
                 };
-                let mut cache = cache.lock().await;
-                cache.insert(cache_key.to_string(), cached, now);
+                store_proxy_cache_response(&state, cache_key, cached, now_epoch_seconds()).await;
             }
         }
 
@@ -5576,16 +5596,14 @@ async fn proxy_response(
         let bytes = upstream.bytes().await.unwrap_or_default();
         #[cfg(feature = "gateway-proxy-cache")]
         if status.is_success() {
-            if let (Some(cache), Some(cache_key)) = (_state.proxy_cache.as_ref(), _cache_key) {
-                let now = now_epoch_seconds();
+            if let Some(cache_key) = _cache_key {
                 let cached = CachedProxyResponse {
                     status: status.as_u16(),
                     headers: upstream_headers.clone(),
                     body: bytes.clone(),
                     backend: backend.clone(),
                 };
-                let mut cache = cache.lock().await;
-                cache.insert(cache_key.to_string(), cached, now);
+                store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
             }
         }
 
@@ -5668,16 +5686,14 @@ async fn responses_shim_response(
 
         #[cfg(feature = "gateway-proxy-cache")]
         if status.is_success() {
-            if let (Some(cache), Some(cache_key)) = (_state.proxy_cache.as_ref(), _cache_key) {
-                let now = now_epoch_seconds();
+            if let Some(cache_key) = _cache_key {
                 let cached = CachedProxyResponse {
                     status: status.as_u16(),
                     headers: headers.clone(),
                     body: mapped_bytes.clone(),
                     backend: backend.clone(),
                 };
-                let mut cache = cache.lock().await;
-                cache.insert(cache_key.to_string(), cached, now);
+                store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
             }
         }
 
@@ -5725,6 +5741,29 @@ fn cached_proxy_response(
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     response
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+async fn store_proxy_cache_response(
+    state: &GatewayHttpState,
+    cache_key: &str,
+    cached: CachedProxyResponse,
+    now_epoch_seconds: u64,
+) {
+    #[cfg(feature = "gateway-store-redis")]
+    if let (Some(store), Some(config)) = (
+        state.redis_store.as_ref(),
+        state.proxy_cache_config.as_ref(),
+    ) {
+        let _ = store
+            .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
+            .await;
+    }
+
+    if let Some(cache) = state.proxy_cache.as_ref() {
+        let mut cache = cache.lock().await;
+        cache.insert(cache_key.to_string(), cached, now_epoch_seconds);
+    }
 }
 
 fn now_epoch_seconds() -> u64 {
