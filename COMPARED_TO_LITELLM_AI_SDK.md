@@ -40,7 +40,7 @@
 - OpenAI-compatible proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header injection
 - virtual keys（可选启用）+ rpm/tpm limits + token/USD budget + guardrails
 - OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”（含 streaming + tool_calls）
-- Translation proxy：OpenAI in/out 的 `GET /v1/models` + `GET /v1/models/*` + `POST /v1/chat/completions` + `POST /v1/completions` + `POST /v1/responses` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（backend 配置 `provider`；feature `gateway-translation`）
+- Translation proxy：OpenAI in/out 的 `GET /v1/models` + `GET /v1/models/*` + `POST /v1/chat/completions` + `POST /v1/completions` + `POST /v1/responses` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/translations` + `POST /v1/audio/speech` + `POST /v1/rerank` + `/v1/batches`（backend 配置 `provider`；feature `gateway-translation`）
 - admin key 管理端点（可选启用）+ state/sqlite/redis 持久化 virtual keys + budgets/audit logs
 - 可选 devtools JSONL 事件日志（`--features gateway-devtools`）+ 可选 JSON logs（`--json-logs`）
 - 可选 proxy cache（`--features gateway-proxy-cache`）+ 可选 Prometheus metrics（`--features gateway-metrics-prometheus`）
@@ -55,7 +55,7 @@
 - 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）+ LiteLLM prompt cache 成本（read: `cache_read_input_token_cost` + `cached_tokens`；write: `cache_creation_input_token_cost` + `cache_creation_input_tokens`；tiered: `*_above_*_tokens`）+ LiteLLM service tier 成本（`*_priority`/`*_flex` + request `service_tier`）+ proxy `model_map` 计费对齐（按 backend 映射后的 model 选价）；支持按 project/user 归因与共享预算（`virtual_keys[].project_id/user_id` + `project_budget`/`user_budget` + `/admin/budgets/projects|users` + `/admin/costs/projects|users`）
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；缺 redis cache、streaming cache、cache invalidation 策略
-- Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/speech`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
+- Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
 
 ---
 

@@ -2543,6 +2543,7 @@ async fn handle_openai_compat_proxy(
                 || translation::is_moderations_path(path_and_query)
                 || translation::is_images_generations_path(path_and_query)
                 || translation::is_audio_transcriptions_path(path_and_query)
+                || translation::is_audio_translations_path(path_and_query)
                 || translation::is_audio_speech_path(path_and_query)
                 || translation::is_rerank_path(path_and_query)
                 || batches_root
@@ -2558,6 +2559,7 @@ async fn handle_openai_compat_proxy(
                     || translation::is_moderations_path(path_and_query)
                     || translation::is_images_generations_path(path_and_query)
                     || translation::is_audio_transcriptions_path(path_and_query)
+                    || translation::is_audio_translations_path(path_and_query)
                     || translation::is_audio_speech_path(path_and_query)
                     || translation::is_rerank_path(path_and_query)
                     || batches_root
@@ -2936,7 +2938,15 @@ async fn handle_openai_compat_proxy(
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
-                } else if translation::is_audio_transcriptions_path(path_and_query) {
+                } else if translation::is_audio_transcriptions_path(path_and_query)
+                    || translation::is_audio_translations_path(path_and_query)
+                {
+                    let endpoint = if translation::is_audio_translations_path(path_and_query) {
+                        "audio/translations"
+                    } else {
+                        "audio/transcriptions"
+                    };
+
                     let Some(content_type) = parts
                         .headers
                         .get("content-type")
@@ -2946,7 +2956,7 @@ async fn handle_openai_compat_proxy(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
-                            "audio/transcriptions request missing content-type",
+                            format!("{endpoint} request missing content-type"),
                         ));
                     };
 
@@ -2958,7 +2968,7 @@ async fn handle_openai_compat_proxy(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
-                            "audio/transcriptions request must be multipart/form-data",
+                            format!("{endpoint} request must be multipart/form-data"),
                         ));
                     }
 

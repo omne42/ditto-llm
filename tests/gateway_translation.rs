@@ -972,6 +972,54 @@ async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_llm::
 }
 
 #[tokio::test]
+async fn gateway_translation_audio_translations_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_audio_transcription_model(Arc::new(FakeAudioTranscriptionModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "ditto_boundary";
+    let multipart = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.txt\"\r\nContent-Type: text/plain\r\n\r\nhello\r\n--{boundary}--\r\n"
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/audio/translations")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("text").and_then(|v| v.as_str()),
+        Some("transcribed:whisper-1")
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_audio_speech_non_streaming() -> ditto_llm::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();

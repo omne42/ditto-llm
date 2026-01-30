@@ -961,6 +961,14 @@ pub fn is_audio_transcriptions_path(path_and_query: &str) -> bool {
     path == "/v1/audio/transcriptions" || path == "/v1/audio/transcriptions/"
 }
 
+pub fn is_audio_translations_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/audio/translations" || path == "/v1/audio/translations/"
+}
+
 pub fn is_audio_speech_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
