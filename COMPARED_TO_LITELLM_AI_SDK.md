@@ -20,6 +20,7 @@
 - 结构化输出：`generate_object_json` / `stream_object`（JSON schema / tool-call enforced）
 - 多模态输入（images/PDF）：统一为 `ContentPart`
 - 可选 agent loop：`feature=agent`
+- Stream protocol v1 HTTP 适配层：以 SSE/NDJSON 输出（feature `sdk`）
 
 ### 主要差异
 
@@ -28,7 +29,6 @@
 
 ### 仍缺（但属于“超集可选项”）
 
-- UI/HTTP 适配层（把 Ditto stream protocol v1 以 SSE/NDJSON 输出，供其他服务/前端消费）
 - 常用工具 wrappers（shell/fs/http 等）作为可选模块
 
 ---

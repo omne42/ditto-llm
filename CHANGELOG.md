@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
 - Providers: Bedrock (SigV4) and Vertex (OAuth) minimal adapters (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
+- SDK HTTP helpers: encode stream protocol v1 as NDJSON or SSE (feature `sdk`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, and `ditto-gateway` stub binary (feature `gateway`).
 - Docs: clarify Bedrock/Vertex scope for minimal adapters.
 - Bedrock: Anthropic Messages-on-Bedrock generate + streaming + tools support (feature `bedrock`).

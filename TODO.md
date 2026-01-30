@@ -79,7 +79,7 @@
 - [x] Abort/cancel primitives：`StreamAbortHandle`（`abortable_stream` / `LanguageModelExt::stream_abortable`）
 - [x] stream 聚合器：`collect_stream(StreamResult) -> CollectedStream`
 - [x] Structured output：OpenAI 原生 JSON schema；其它 provider 走 tool-call enforced JSON（并显式 warnings）
-- [ ] “UI/HTTP 适配层”（AI SDK UI-like）：提供 `axum`/`tower` helpers，把 Ditto 的 stream protocol 以 SSE/NDJSON 形式输出（Rust 侧提供 primitives，而非 React hooks）
+- [x] “UI/HTTP 适配层”（AI SDK UI-like）：提供 `sdk::http::{stream_v1_sse, stream_v1_ndjson}`，把 Ditto 的 stream protocol v1 以 SSE/NDJSON 输出（Rust 侧提供 primitives，而非 React hooks）
 - [ ] 常用工具 wrappers（可选模块）：shell/fs/http 等“本地工具”封装（对齐 AI SDK `ToolLoopAgent` 的可组合体验）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）
@@ -103,7 +103,7 @@
 ### 2.3 Interop：不变形与多协议互转
 
 - [x] OpenAI `/responses` raw passthrough items round-trip（含 `/responses/compact`）
-- [ ] OpenAI-compatible ↔ Claude Code / Gemini CLI 格式互转（仅当 CodePM/上层需要；否则保持 scope 小）
+- [ ] OpenAI-compatible ↔ Claude Code / Gemini CLI 格式互转
 - [x] Gateway “passthrough vs translation” per-route 策略（同一个 gateway 可混用两种模式；以 backend config 的 `base_url` vs `provider` 区分）
 
 ---
@@ -123,7 +123,7 @@
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
 
 - [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex；feature `gateway-translation`）
-- [ ] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（可独立 crate）
+- [x] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（`sdk::http` 的 SSE/NDJSON 输出）
 
 ### P2（扩面端点）
 
