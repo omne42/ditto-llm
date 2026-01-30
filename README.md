@@ -96,17 +96,19 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
 ```json
 {
   "backends": [
-    {
-      "name": "primary",
-      "base_url": "https://api.openai.com/v1",
-      "headers": { "authorization": "Bearer <OPENAI_API_KEY>" },
-      "query_params": {}
-    }
-  ],
-  "virtual_keys": [],
+	    {
+	      "name": "primary",
+	      "base_url": "https://api.openai.com/v1",
+	      "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
+	      "query_params": {}
+	    }
+	  ],
+	  "virtual_keys": [],
   "router": { "default_backend": "primary", "rules": [] }
 }
 ```
+
+Gateway backend `headers` and `query_params` values can reference environment variables via `${ENV_VAR}` (expanded at startup).
 
 Translation backends (feature `gateway-translation`) can be configured with `provider` + `provider_config` (same shape as `ProviderConfig`):
 

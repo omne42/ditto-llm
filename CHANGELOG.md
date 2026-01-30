@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vertex: GenAI generateContent + streamGenerateContent (SSE) + tools support (feature `vertex`).
 - Gateway: `ditto-gateway` HTTP server with `/v1/gateway`, `/health`, `/metrics`, and `/admin/keys` (feature `gateway`).
 - Gateway: OpenAI-compatible passthrough proxy for `ANY /v1/*` (incl. streaming) with per-backend header/query-param injection and optional devtools JSONL logging (feature `gateway-devtools`).
+- Gateway: proxy backend config supports `${ENV_VAR}` interpolation in `headers` and `query_params` values (resolved at startup).
 - Gateway: passthrough proxy supports per-backend model mapping via `model_map` (rewrites JSON `model` before forwarding).
 - Gateway: add `gateway-translation` feature to serve `POST /v1/chat/completions` and `POST /v1/responses` via native Ditto providers (configured via backend `provider` + `provider_config`).
 - Gateway: translation backends can also serve `POST /v1/embeddings` (best-effort OpenAI shape).
