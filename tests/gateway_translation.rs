@@ -80,6 +80,53 @@ impl LanguageModel for FakeModel {
 }
 
 #[derive(Clone)]
+struct FakeCompactionModel;
+
+#[async_trait]
+impl LanguageModel for FakeCompactionModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-compaction"
+    }
+
+    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::Result<GenerateResponse> {
+        Ok(GenerateResponse {
+            content: vec![ContentPart::ToolCall {
+                id: "call_0".to_string(),
+                name: "__ditto_object__".to_string(),
+                arguments: json!({
+                    "value": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type":"input_text","text":"compacted"}],
+                        }
+                    ]
+                }),
+            }],
+            finish_reason: FinishReason::Stop,
+            usage: Usage {
+                input_tokens: Some(1),
+                cache_input_tokens: None,
+                cache_creation_input_tokens: None,
+                output_tokens: Some(2),
+                total_tokens: Some(3),
+            },
+            warnings: Vec::new(),
+            provider_metadata: Some(json!({ "id": "resp_fake_compact" })),
+        })
+    }
+
+    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::Result<StreamResult> {
+        let chunks: Vec<ditto_llm::Result<StreamChunk>> = Vec::new();
+        Ok(futures_util::stream::iter(chunks).boxed())
+    }
+}
+
+#[derive(Clone)]
 struct FakeEmbeddingModel;
 
 #[async_trait]
@@ -721,6 +768,55 @@ async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> 
         Some("hello")
     );
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_responses_compact_non_streaming() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeCompactionModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "instructions": "inst",
+        "input": [
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}
+        ],
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses/compact")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("output"),
+        Some(&json!([
+            {"type":"message","role":"user","content":[{"type":"input_text","text":"compacted"}]}
+        ]))
+    );
     Ok(())
 }
 

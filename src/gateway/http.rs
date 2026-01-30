@@ -2627,6 +2627,7 @@ async fn handle_openai_compat_proxy(
                 || translation::is_completions_path(path_and_query)
                 || models_root
                 || translation::is_responses_create_path(path_and_query)
+                || translation::is_responses_compact_path(path_and_query)
                 || translation::is_embeddings_path(path_and_query)
                 || translation::is_moderations_path(path_and_query)
                 || translation::is_images_generations_path(path_and_query)
@@ -2643,6 +2644,7 @@ async fn handle_openai_compat_proxy(
                 translation::is_chat_completions_path(path_and_query)
                     || translation::is_completions_path(path_and_query)
                     || translation::is_responses_create_path(path_and_query)
+                    || translation::is_responses_compact_path(path_and_query)
                     || translation::is_embeddings_path(path_and_query)
                     || translation::is_moderations_path(path_and_query)
                     || translation::is_images_generations_path(path_and_query)
@@ -3396,6 +3398,133 @@ async fn handle_openai_compat_proxy(
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
+                } else if translation::is_responses_compact_path(path_and_query) {
+                    let Some(parsed_json) = parsed_json.as_ref() else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "request body must be application/json",
+                        ));
+                    };
+
+                    let original_model = model.clone().unwrap_or_default();
+                    let mapped_model = translation_backend.map_model(&original_model);
+
+                    if mapped_model.trim().is_empty() {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing model",
+                        ));
+                    }
+
+                    if _stream_requested {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "responses/compact endpoint does not support stream=true",
+                        ));
+                    }
+
+                    let instructions = parsed_json
+                        .get("instructions")
+                        .and_then(|value| value.as_str())
+                        .unwrap_or_default();
+
+                    let Some(input) = parsed_json.get("input") else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "missing input",
+                        ));
+                    };
+
+                    let input_items = match input {
+                        Value::Array(items) => items.clone(),
+                        Value::Object(_) => vec![input.clone()],
+                        Value::String(text) => vec![serde_json::json!({
+                            "type":"message",
+                            "role":"user",
+                            "content":[{"type":"input_text","text": text}],
+                        })],
+                        _ => {
+                            break 'translation_backend_attempt Err(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                "`input` must be a string, array, or object",
+                            ));
+                        }
+                    };
+
+                    let (output, usage) = match translation_backend
+                        .compact_responses_history(&mapped_model, instructions, &input_items)
+                        .await
+                    {
+                        Ok(compacted) => compacted,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
+                        }
+                    };
+
+                    let value = serde_json::json!({ "output": output });
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+
+                    let tokens = usage.total_tokens.unwrap_or(u64::from(charge_tokens));
+                    #[cfg(feature = "gateway-costing")]
+                    let cost_usd_micros = model.as_deref().and_then(|model| {
+                        state.pricing.as_ref().and_then(|pricing| {
+                            let (Some(input), Some(output)) =
+                                (usage.input_tokens, usage.output_tokens)
+                            else {
+                                return None;
+                            };
+                            pricing.estimate_cost_usd_micros_with_cache_for_service_tier(
+                                model,
+                                clamp_u64_to_u32(input),
+                                usage.cache_input_tokens.map(clamp_u64_to_u32),
+                                usage.cache_creation_input_tokens.map(clamp_u64_to_u32),
+                                clamp_u64_to_u32(output),
+                                service_tier.as_deref(),
+                            )
+                        })
+                    });
+                    #[cfg(not(feature = "gateway-costing"))]
+                    let cost_usd_micros: Option<u64> = None;
+
+                    Ok((
+                        response,
+                        ProxySpend {
+                            tokens,
+                            cost_usd_micros: cost_usd_micros.or(charge_cost_usd_micros),
+                        },
+                    ))
                 } else if translation::is_images_generations_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
                         break 'translation_backend_attempt Err(openai_error(

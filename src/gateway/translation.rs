@@ -14,14 +14,15 @@ use crate::embedding::EmbeddingModel;
 use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::moderation::ModerationModel;
+use crate::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
 use crate::rerank::RerankModel;
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, ContentPart, FinishReason, GenerateRequest, GenerateResponse,
-    ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message, ModerationInput,
-    ModerationRequest, ModerationResponse, ProviderOptions, ReasoningEffort, RerankRequest,
-    RerankResponse, ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat,
-    Tool, ToolChoice, TranscriptionResponseFormat, Usage,
+    ImageGenerationRequest, ImageGenerationResponse, ImageSource, JsonSchemaFormat, Message,
+    ModerationInput, ModerationRequest, ModerationResponse, ProviderOptions, ReasoningEffort,
+    RerankRequest, RerankResponse, ResponseFormat, Role, SpeechRequest, SpeechResponse,
+    SpeechResponseFormat, Tool, ToolChoice, TranscriptionResponseFormat, Usage,
 };
 use crate::{DittoError, Env, ProviderConfig};
 
@@ -509,6 +510,91 @@ impl TranslationBackend {
 
         client.list(limit, after).await
     }
+
+    pub async fn compact_responses_history(
+        &self,
+        model: &str,
+        instructions: &str,
+        input: &[Value],
+    ) -> crate::Result<(Vec<Value>, Usage)> {
+        let model = model.trim();
+        if model.is_empty() {
+            return Err(DittoError::InvalidResponse(
+                "compaction model is missing".to_string(),
+            ));
+        }
+
+        let instructions = instructions.trim();
+        let mut system = String::new();
+        if !instructions.is_empty() {
+            system.push_str(instructions);
+            system.push_str("\n\n");
+        }
+        system.push_str(
+            concat!(
+                "You are a compaction helper for the OpenAI Responses API.\n\n",
+                "Goal: return a compacted version of the provided input history as OpenAI Responses input items.\n",
+                "- Preserve the user's goals, constraints, and important context.\n",
+                "- Preserve tool outputs only if still relevant; drop redundant/low-value details.\n",
+                "- Do not invent facts.\n",
+                "- Output MUST be a JSON array of objects (Responses input items).\n",
+            ),
+        );
+
+        let input_json = serde_json::to_string(input).unwrap_or_else(|_| "[]".to_string());
+        let request = GenerateRequest {
+            messages: vec![
+                Message {
+                    role: Role::System,
+                    content: vec![ContentPart::Text { text: system }],
+                },
+                Message {
+                    role: Role::User,
+                    content: vec![ContentPart::Text {
+                        text: format!(
+                            "Compact the following OpenAI Responses input items JSON:\n{input_json}"
+                        ),
+                    }],
+                },
+            ],
+            model: Some(model.to_string()),
+            temperature: Some(0.0),
+            max_tokens: None,
+            top_p: None,
+            stop_sequences: None,
+            tools: None,
+            tool_choice: None,
+            provider_options: None,
+        };
+
+        let schema = JsonSchemaFormat {
+            name: "responses_compacted_input_items".to_string(),
+            schema: serde_json::json!({"type":"object"}),
+            strict: None,
+        };
+
+        let out = self
+            .model
+            .generate_object_json_with(
+                request,
+                schema,
+                ObjectOptions {
+                    output: ObjectOutput::Array,
+                    ..ObjectOptions::default()
+                },
+            )
+            .await?;
+
+        let Value::Array(items) = out.object else {
+            return Err(DittoError::InvalidResponse(
+                "compaction response is not a JSON array".to_string(),
+            ));
+        };
+
+        let mut usage = out.response.usage;
+        usage.merge_total();
+        Ok((items, usage))
+    }
 }
 
 pub async fn build_language_model(
@@ -937,6 +1023,14 @@ pub fn is_responses_create_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/responses" || path == "/v1/responses/"
+}
+
+pub fn is_responses_compact_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/responses/compact" || path == "/v1/responses/compact/"
 }
 
 pub fn is_embeddings_path(path_and_query: &str) -> bool {

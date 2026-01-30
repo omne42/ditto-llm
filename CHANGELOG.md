@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Provider: Cohere Chat API (`/v2/chat`) with generate + SSE streaming + tool calls.
 - Gateway translation: allow `provider=cohere` backends for OpenAI-compatible translation endpoints.
 - Gateway translation: accept LiteLLM-style OpenAI-compatible provider aliases (e.g. `groq`, `mistral`, `deepseek`, `openrouter`).
+- Gateway translation: support `POST /v1/responses/compact` via provider-backed compaction (best-effort).
 - Streaming + tool calling support across providers (with compatibility warnings when unsupported).
 - Stream utility: `collect_stream(StreamResult) -> CollectedStream` to aggregate `StreamChunk`s into a final `GenerateResponse`.
 - Streaming: `abortable_stream(StreamResult) -> AbortableStream` with `StreamAbortHandle`.
