@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).
 - Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
 - `provider_options` supports per-provider buckets (`"*"` + provider ids) and passes through additional provider-specific keys where supported (conflicts are ignored with warnings).
+- Format: rustfmt cleanup (no behavior changes).
 
 ### Fixed
 

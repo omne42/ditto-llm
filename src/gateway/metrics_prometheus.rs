@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub struct PrometheusMetricsConfig {
@@ -30,6 +31,8 @@ pub struct PrometheusMetrics {
     proxy_backend_attempts_total: HashMap<String, u64>,
     proxy_backend_success_total: HashMap<String, u64>,
     proxy_backend_failures_total: HashMap<String, u64>,
+    proxy_backend_in_flight: HashMap<String, u64>,
+    proxy_backend_request_duration_seconds: HashMap<String, DurationHistogram>,
 
     proxy_responses_by_status: HashMap<u16, u64>,
 }
@@ -45,6 +48,8 @@ impl PrometheusMetrics {
             proxy_backend_attempts_total: HashMap::new(),
             proxy_backend_success_total: HashMap::new(),
             proxy_backend_failures_total: HashMap::new(),
+            proxy_backend_in_flight: HashMap::new(),
+            proxy_backend_request_duration_seconds: HashMap::new(),
             proxy_responses_by_status: HashMap::new(),
         }
     }
@@ -91,6 +96,37 @@ impl PrometheusMetrics {
             backend,
             self.config.max_backend_series,
         );
+    }
+
+    pub fn record_proxy_backend_in_flight_inc(&mut self, backend: &str) {
+        let backend = limit_label(
+            backend,
+            &mut self.proxy_backend_in_flight,
+            self.config.max_backend_series,
+        );
+        *self.proxy_backend_in_flight.entry(backend).or_default() += 1;
+    }
+
+    pub fn record_proxy_backend_in_flight_dec(&mut self, backend: &str) {
+        let backend = limit_label(
+            backend,
+            &mut self.proxy_backend_in_flight,
+            self.config.max_backend_series,
+        );
+        let entry = self.proxy_backend_in_flight.entry(backend).or_default();
+        *entry = entry.saturating_sub(1);
+    }
+
+    pub fn observe_proxy_backend_request_duration(&mut self, backend: &str, duration: Duration) {
+        let backend = limit_label(
+            backend,
+            &mut self.proxy_backend_request_duration_seconds,
+            self.config.max_backend_series,
+        );
+        self.proxy_backend_request_duration_seconds
+            .entry(backend)
+            .or_insert_with(DurationHistogram::new)
+            .observe(duration);
     }
 
     pub fn record_proxy_response_status(&mut self, status: u16) {
@@ -152,6 +188,22 @@ impl PrometheusMetrics {
             &self.proxy_backend_failures_total,
         );
 
+        write_gauge_map(
+            &mut out,
+            "ditto_gateway_proxy_backend_in_flight",
+            "In-flight proxy backend requests.",
+            "backend",
+            &self.proxy_backend_in_flight,
+        );
+
+        write_histogram_map(
+            &mut out,
+            "ditto_gateway_proxy_backend_request_duration_seconds",
+            "Proxy backend request duration in seconds.",
+            "backend",
+            &self.proxy_backend_request_duration_seconds,
+        );
+
         out.push_str(
             "# HELP ditto_gateway_proxy_responses_total Total proxy responses by HTTP status.\n",
         );
@@ -182,6 +234,14 @@ fn bump_limited(map: &mut HashMap<String, u64>, key: &str, max_series: usize) {
     *map.entry(key).or_default() += 1;
 }
 
+fn limit_label<T>(key: &str, map: &mut HashMap<String, T>, max_series: usize) -> String {
+    if map.contains_key(key) || map.len() < max_series {
+        key.to_string()
+    } else {
+        "__overflow__".to_string()
+    }
+}
+
 fn write_counter_map(
     out: &mut String,
     metric: &str,
@@ -191,6 +251,26 @@ fn write_counter_map(
 ) {
     out.push_str(&format!("# HELP {metric} {help}\n"));
     out.push_str(&format!("# TYPE {metric} counter\n"));
+
+    let mut entries: Vec<(&String, &u64)> = map.iter().collect();
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (value, count) in entries {
+        out.push_str(&format!(
+            "{metric}{{{label}=\"{}\"}} {count}\n",
+            escape_label_value(value)
+        ));
+    }
+}
+
+fn write_gauge_map(
+    out: &mut String,
+    metric: &str,
+    help: &str,
+    label: &str,
+    map: &HashMap<String, u64>,
+) {
+    out.push_str(&format!("# HELP {metric} {help}\n"));
+    out.push_str(&format!("# TYPE {metric} gauge\n"));
 
     let mut entries: Vec<(&String, &u64)> = map.iter().collect();
     entries.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -213,6 +293,73 @@ fn escape_label_value(value: &str) -> String {
         }
     }
     out
+}
+
+#[derive(Clone, Debug, Default)]
+struct DurationHistogram {
+    buckets: [f64; 11],
+    bucket_counts: [u64; 11],
+    sum_seconds: f64,
+    count: u64,
+}
+
+impl DurationHistogram {
+    fn new() -> Self {
+        Self {
+            buckets: [
+                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+            ],
+            bucket_counts: [0; 11],
+            sum_seconds: 0.0,
+            count: 0,
+        }
+    }
+
+    fn observe(&mut self, duration: Duration) {
+        let seconds = duration.as_secs_f64();
+        self.sum_seconds += seconds;
+        self.count = self.count.saturating_add(1);
+        for (idx, bound) in self.buckets.iter().enumerate() {
+            if seconds <= *bound {
+                self.bucket_counts[idx] = self.bucket_counts[idx].saturating_add(1);
+            }
+        }
+    }
+}
+
+fn write_histogram_map(
+    out: &mut String,
+    metric: &str,
+    help: &str,
+    label: &str,
+    map: &HashMap<String, DurationHistogram>,
+) {
+    out.push_str(&format!("# HELP {metric} {help}\n"));
+    out.push_str(&format!("# TYPE {metric} histogram\n"));
+
+    let mut entries: Vec<(&String, &DurationHistogram)> = map.iter().collect();
+    entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (value, hist) in entries {
+        let value = escape_label_value(value);
+        for (idx, bound) in hist.buckets.iter().enumerate() {
+            out.push_str(&format!(
+                "{metric}_bucket{{{label}=\"{value}\",le=\"{bound}\"}} {}\n",
+                hist.bucket_counts[idx]
+            ));
+        }
+        out.push_str(&format!(
+            "{metric}_bucket{{{label}=\"{value}\",le=\"+Inf\"}} {}\n",
+            hist.count
+        ));
+        out.push_str(&format!(
+            "{metric}_sum{{{label}=\"{value}\"}} {}\n",
+            hist.sum_seconds
+        ));
+        out.push_str(&format!(
+            "{metric}_count{{{label}=\"{value}\"}} {}\n",
+            hist.count
+        ));
+    }
 }
 
 #[cfg(test)]

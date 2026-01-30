@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{Path, Query, State};
@@ -1377,12 +1377,13 @@ async fn handle_openai_compat_proxy(
                 gateway.observability.record_backend_call();
             }
 
+            let backend_timer_start = Instant::now();
+
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                metrics
-                    .lock()
-                    .await
-                    .record_proxy_backend_attempt(&backend_name);
+                let mut metrics = metrics.lock().await;
+                metrics.record_proxy_backend_attempt(&backend_name);
+                metrics.record_proxy_backend_in_flight_inc(&backend_name);
             }
 
             let result: Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> =
@@ -2249,6 +2250,16 @@ async fn handle_openai_compat_proxy(
                     }
                 };
 
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let mut metrics = metrics.lock().await;
+                metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                metrics.observe_proxy_backend_request_duration(
+                    &backend_name,
+                    backend_timer_start.elapsed(),
+                );
+            }
+
             let status = StatusCode::OK;
             let spend_tokens = true;
 
@@ -2447,12 +2458,13 @@ async fn handle_openai_compat_proxy(
             gateway.observability.record_backend_call();
         }
 
+        let backend_timer_start = Instant::now();
+
         #[cfg(feature = "gateway-metrics-prometheus")]
         if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            metrics
-                .lock()
-                .await
-                .record_proxy_backend_attempt(&backend_name);
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_backend_attempt(&backend_name);
+            metrics.record_proxy_backend_in_flight_inc(&backend_name);
         }
 
         let mut outgoing_headers = parts.headers.clone();
@@ -2489,6 +2501,15 @@ async fn handle_openai_compat_proxy(
             Err(err) => {
                 #[cfg(feature = "gateway-metrics-prometheus")]
                 if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                    metrics.observe_proxy_backend_request_duration(
+                        &backend_name,
+                        backend_timer_start.elapsed(),
+                    );
+                }
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.prometheus_metrics.as_ref() {
                     metrics
                         .lock()
                         .await
@@ -2508,6 +2529,16 @@ async fn handle_openai_compat_proxy(
                 continue;
             }
         };
+
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_backend_in_flight_dec(&backend_name);
+            metrics.observe_proxy_backend_request_duration(
+                &backend_name,
+                backend_timer_start.elapsed(),
+            );
+        }
 
         let status = upstream_response.status();
 
