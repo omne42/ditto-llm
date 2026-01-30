@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Usage: add `cache_input_tokens` (e.g., OpenAI `cached_tokens`) for prompt-cache accounting.
 - Usage: add `cache_creation_input_tokens` (Anthropic / LiteLLM) for prompt-cache accounting.
 - Gateway: pricing table supports LiteLLM prompt-cache costs (`cache_read_input_token_cost`, `cache_creation_input_token_cost`).
+- Gateway: pricing table supports LiteLLM tiered costs (`*_above_*_tokens` keys).
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
 - Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.

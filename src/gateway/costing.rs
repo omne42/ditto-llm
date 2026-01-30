@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use thiserror::Error;
 
@@ -10,9 +10,13 @@ pub struct PricingTable {
 #[derive(Clone, Debug)]
 pub struct ModelPricing {
     pub input_usd_micros_per_token: u64,
+    pub input_usd_micros_per_token_tiers: Vec<(u32, u64)>,
     pub output_usd_micros_per_token: u64,
+    pub output_usd_micros_per_token_tiers: Vec<(u32, u64)>,
     pub cache_read_input_usd_micros_per_token: Option<u64>,
+    pub cache_read_input_usd_micros_per_token_tiers: Vec<(u32, u64)>,
     pub cache_creation_input_usd_micros_per_token: Option<u64>,
+    pub cache_creation_input_usd_micros_per_token_tiers: Vec<(u32, u64)>,
 }
 
 #[derive(Debug, Error)]
@@ -67,15 +71,45 @@ impl PricingTable {
                     .map(|usd| usd_to_usd_micros_per_token(usd, model, "cache_creation_input_cost"))
                     .transpose()?;
 
+            let input_tiers = parse_tiered_cost_usd_per_token(
+                obj,
+                "input_cost_per_token_above_",
+                model,
+                "input_cost_above",
+            )?;
+            let output_tiers = parse_tiered_cost_usd_per_token(
+                obj,
+                "output_cost_per_token_above_",
+                model,
+                "output_cost_above",
+            )?;
+            let cache_read_input_tiers = parse_tiered_cost_usd_per_token(
+                obj,
+                "cache_read_input_token_cost_above_",
+                model,
+                "cache_read_input_cost_above",
+            )?;
+            let cache_creation_input_tiers = parse_tiered_cost_usd_per_token(
+                obj,
+                "cache_creation_input_token_cost_above_",
+                model,
+                "cache_creation_input_cost_above",
+            )?;
+
             let Some(input_usd_micros_per_token) = input else {
                 if output.is_some() {
                     models.insert(
                         model.clone(),
                         ModelPricing {
                             input_usd_micros_per_token: 0,
+                            input_usd_micros_per_token_tiers: input_tiers,
                             output_usd_micros_per_token: output.unwrap_or(0),
+                            output_usd_micros_per_token_tiers: output_tiers,
                             cache_read_input_usd_micros_per_token: cache_read_input,
+                            cache_read_input_usd_micros_per_token_tiers: cache_read_input_tiers,
                             cache_creation_input_usd_micros_per_token: cache_creation_input,
+                            cache_creation_input_usd_micros_per_token_tiers:
+                                cache_creation_input_tiers,
                         },
                     );
                     continue;
@@ -89,9 +123,13 @@ impl PricingTable {
                 model.clone(),
                 ModelPricing {
                     input_usd_micros_per_token,
+                    input_usd_micros_per_token_tiers: input_tiers,
                     output_usd_micros_per_token: output.unwrap_or(0),
+                    output_usd_micros_per_token_tiers: output_tiers,
                     cache_read_input_usd_micros_per_token: cache_read_input,
+                    cache_read_input_usd_micros_per_token_tiers: cache_read_input_tiers,
                     cache_creation_input_usd_micros_per_token: cache_creation_input,
+                    cache_creation_input_usd_micros_per_token_tiers: cache_creation_input_tiers,
                 },
             );
         }
@@ -125,33 +163,114 @@ impl PricingTable {
         let cached_tokens = cache_input_tokens.unwrap_or(0);
         let cached_tokens = std::cmp::min(cached_tokens, input_tokens);
 
+        let input_usd_micros_per_token = select_tiered_usd_micros_per_token(
+            pricing.input_usd_micros_per_token,
+            &pricing.input_usd_micros_per_token_tiers,
+            input_tokens,
+        );
+
+        let output_usd_micros_per_token = select_tiered_usd_micros_per_token(
+            pricing.output_usd_micros_per_token,
+            &pricing.output_usd_micros_per_token_tiers,
+            input_tokens,
+        );
+
         let input_cost = if cached_tokens > 0 {
-            match pricing.cache_read_input_usd_micros_per_token {
-                Some(cache_read_cost) => {
-                    let non_cached_tokens = input_tokens.saturating_sub(cached_tokens);
-                    let non_cached = u64::from(non_cached_tokens)
-                        .saturating_mul(pricing.input_usd_micros_per_token);
-                    let cached = u64::from(cached_tokens).saturating_mul(cache_read_cost);
-                    non_cached.saturating_add(cached)
-                }
-                None => u64::from(input_tokens).saturating_mul(pricing.input_usd_micros_per_token),
-            }
+            let cache_read_input_usd_micros_per_token = select_tiered_usd_micros_per_token(
+                pricing
+                    .cache_read_input_usd_micros_per_token
+                    .unwrap_or(input_usd_micros_per_token),
+                &pricing.cache_read_input_usd_micros_per_token_tiers,
+                input_tokens,
+            );
+
+            let non_cached_tokens = input_tokens.saturating_sub(cached_tokens);
+            let non_cached =
+                u64::from(non_cached_tokens).saturating_mul(input_usd_micros_per_token);
+            let cached =
+                u64::from(cached_tokens).saturating_mul(cache_read_input_usd_micros_per_token);
+            non_cached.saturating_add(cached)
         } else {
-            u64::from(input_tokens).saturating_mul(pricing.input_usd_micros_per_token)
+            u64::from(input_tokens).saturating_mul(input_usd_micros_per_token)
         };
 
-        let output_cost =
-            u64::from(output_tokens).saturating_mul(pricing.output_usd_micros_per_token);
+        let output_cost = u64::from(output_tokens).saturating_mul(output_usd_micros_per_token);
         let mut total = input_cost.saturating_add(output_cost);
-        if let Some(cache_creation_cost) = pricing.cache_creation_input_usd_micros_per_token {
+
+        if pricing.cache_creation_input_usd_micros_per_token.is_some()
+            || !pricing
+                .cache_creation_input_usd_micros_per_token_tiers
+                .is_empty()
+        {
+            let cache_creation_input_usd_micros_per_token = select_tiered_usd_micros_per_token(
+                pricing
+                    .cache_creation_input_usd_micros_per_token
+                    .unwrap_or(0),
+                &pricing.cache_creation_input_usd_micros_per_token_tiers,
+                input_tokens,
+            );
             let cache_creation_tokens = cache_creation_input_tokens.unwrap_or(0);
             let cache_creation_tokens = std::cmp::min(cache_creation_tokens, input_tokens);
             total = total.saturating_add(
-                u64::from(cache_creation_tokens).saturating_mul(cache_creation_cost),
+                u64::from(cache_creation_tokens)
+                    .saturating_mul(cache_creation_input_usd_micros_per_token),
             );
         }
         Some(total)
     }
+}
+
+fn select_tiered_usd_micros_per_token(base: u64, tiers: &[(u32, u64)], input_tokens: u32) -> u64 {
+    let mut out = base;
+    for (threshold_tokens, usd_micros_per_token) in tiers {
+        if input_tokens > *threshold_tokens {
+            out = *usd_micros_per_token;
+        }
+    }
+    out
+}
+
+fn parse_tiered_cost_usd_per_token(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    prefix: &'static str,
+    model: &str,
+    field: &'static str,
+) -> Result<Vec<(u32, u64)>, PricingTableError> {
+    let mut tiers = BTreeMap::<u32, u64>::new();
+    for (key, value) in obj {
+        let Some(rest) = key.strip_prefix(prefix) else {
+            continue;
+        };
+        let Some(threshold_str) = rest.strip_suffix("_tokens") else {
+            continue;
+        };
+        let Some(threshold_tokens) = parse_threshold_tokens(threshold_str) else {
+            continue;
+        };
+        let Some(usd_per_token) = value.as_f64() else {
+            continue;
+        };
+        let usd_micros_per_token = usd_to_usd_micros_per_token(usd_per_token, model, field)?;
+        tiers.insert(threshold_tokens, usd_micros_per_token);
+    }
+    Ok(tiers.into_iter().collect())
+}
+
+fn parse_threshold_tokens(raw: &str) -> Option<u32> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    let (raw, multiplier) =
+        if let Some(raw) = raw.strip_suffix('k').or_else(|| raw.strip_suffix('K')) {
+            (raw, 1_000u32)
+        } else {
+            (raw, 1u32)
+        };
+
+    let value: u32 = raw.parse().ok()?;
+    value.checked_mul(multiplier)
 }
 
 fn parse_cost_usd_per_token(
@@ -209,23 +328,54 @@ mod tests {
         let table = PricingTable::from_litellm_json_str(raw).expect("pricing");
         let pricing = table.model_pricing("gpt-4o-mini").expect("pricing");
         assert_eq!(pricing.input_usd_micros_per_token, 1);
+        assert!(pricing.input_usd_micros_per_token_tiers.is_empty());
         assert_eq!(pricing.output_usd_micros_per_token, 2);
+        assert!(pricing.output_usd_micros_per_token_tiers.is_empty());
         assert_eq!(pricing.cache_read_input_usd_micros_per_token, None);
+        assert!(
+            pricing
+                .cache_read_input_usd_micros_per_token_tiers
+                .is_empty()
+        );
         assert_eq!(pricing.cache_creation_input_usd_micros_per_token, None);
+        assert!(
+            pricing
+                .cache_creation_input_usd_micros_per_token_tiers
+                .is_empty()
+        );
 
         let o1 = table.model_pricing("o1").expect("o1");
         assert_eq!(o1.input_usd_micros_per_token, 1000);
+        assert!(o1.input_usd_micros_per_token_tiers.is_empty());
         assert_eq!(o1.output_usd_micros_per_token, 2000);
+        assert!(o1.output_usd_micros_per_token_tiers.is_empty());
         assert_eq!(o1.cache_read_input_usd_micros_per_token, None);
+        assert!(o1.cache_read_input_usd_micros_per_token_tiers.is_empty());
         assert_eq!(o1.cache_creation_input_usd_micros_per_token, None);
+        assert!(
+            o1.cache_creation_input_usd_micros_per_token_tiers
+                .is_empty()
+        );
 
         let claude = table
             .model_pricing("claude-3-5-haiku-20241022")
             .expect("claude");
         assert_eq!(claude.input_usd_micros_per_token, 2);
+        assert!(claude.input_usd_micros_per_token_tiers.is_empty());
         assert_eq!(claude.output_usd_micros_per_token, 4);
+        assert!(claude.output_usd_micros_per_token_tiers.is_empty());
         assert_eq!(claude.cache_read_input_usd_micros_per_token, Some(1));
+        assert!(
+            claude
+                .cache_read_input_usd_micros_per_token_tiers
+                .is_empty()
+        );
         assert_eq!(claude.cache_creation_input_usd_micros_per_token, Some(3));
+        assert!(
+            claude
+                .cache_creation_input_usd_micros_per_token_tiers
+                .is_empty()
+        );
 
         let cost = table
             .estimate_cost_usd_micros("gpt-4o-mini", 3, 4)
@@ -242,5 +392,27 @@ mod tests {
             )
             .expect("cost cached");
         assert_eq!(cost_cached, 12 + 4 + 4 + 6);
+    }
+
+    #[test]
+    fn parses_tiered_costs() {
+        let raw = r#"{
+          "tiered-model": {
+            "input_cost_per_token": 0.000002,
+            "input_cost_per_token_above_5_tokens": 0.000005,
+            "output_cost_per_token": 0.000003,
+            "output_cost_per_token_above_5_tokens": 0.000007,
+            "cache_read_input_token_cost": 0.000001,
+            "cache_read_input_token_cost_above_5_tokens": 0.000004,
+            "cache_creation_input_token_cost": 0.000002,
+            "cache_creation_input_token_cost_above_5_tokens": 0.000006
+          }
+        }"#;
+
+        let table = PricingTable::from_litellm_json_str(raw).expect("pricing");
+        let cost = table
+            .estimate_cost_usd_micros_with_cache("tiered-model", 6, Some(2), Some(1), 1)
+            .expect("cost");
+        assert_eq!(cost, 41);
     }
 }
