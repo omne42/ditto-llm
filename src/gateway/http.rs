@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::path::{Path as StdPath, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use axum::body::{Body, to_bytes};
@@ -12,8 +14,9 @@ use axum::routing::{any, get, post, put};
 use axum::{Json, Router};
 use bytes::Bytes;
 use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 #[cfg(feature = "sdk")]
 use crate::sdk::devtools::DevtoolsLogger;
@@ -71,6 +74,7 @@ pub struct GatewayHttpState {
     pricing: Option<Arc<PricingTable>>,
     #[cfg(feature = "gateway-proxy-cache")]
     proxy_cache: Option<Arc<Mutex<ProxyResponseCache>>>,
+    proxy_backpressure: Option<Arc<Semaphore>>,
     #[cfg(feature = "gateway-metrics-prometheus")]
     prometheus_metrics: Option<Arc<Mutex<PrometheusMetrics>>>,
     #[cfg(feature = "gateway-routing-advanced")]
@@ -99,6 +103,7 @@ impl GatewayHttpState {
             pricing: None,
             #[cfg(feature = "gateway-proxy-cache")]
             proxy_cache: None,
+            proxy_backpressure: None,
             #[cfg(feature = "gateway-metrics-prometheus")]
             prometheus_metrics: None,
             #[cfg(feature = "gateway-routing-advanced")]
@@ -161,6 +166,11 @@ impl GatewayHttpState {
     #[cfg(feature = "gateway-proxy-cache")]
     pub fn with_proxy_cache(mut self, config: ProxyCacheConfig) -> Self {
         self.proxy_cache = Some(Arc::new(Mutex::new(ProxyResponseCache::new(config))));
+        self
+    }
+
+    pub fn with_proxy_max_in_flight(mut self, max_in_flight: usize) -> Self {
+        self.proxy_backpressure = Some(Arc::new(Semaphore::new(max_in_flight.max(1))));
         self
     }
 
@@ -1372,6 +1382,8 @@ async fn handle_openai_compat_proxy(
                 continue;
             }
 
+            let mut proxy_permit = try_acquire_proxy_permit(&state)?;
+
             {
                 let mut gateway = state.gateway.lock().await;
                 gateway.observability.record_backend_call();
@@ -2168,6 +2180,10 @@ async fn handle_openai_compat_proxy(
                             false,
                         );
 
+                        let stream = ProxyBodyStreamWithPermit {
+                            inner: stream.boxed(),
+                            _permit: proxy_permit.take(),
+                        };
                         let mut response = axum::response::Response::new(Body::from_stream(stream));
                         *response.status_mut() = StatusCode::OK;
                         *response.headers_mut() = headers;
@@ -2436,6 +2452,8 @@ async fn handle_openai_compat_proxy(
             }
         };
 
+        let mut proxy_permit = try_acquire_proxy_permit(&state)?;
+
         {
             let mut gateway = state.gateway.lock().await;
             gateway.observability.record_backend_call();
@@ -2527,6 +2545,7 @@ async fn handle_openai_compat_proxy(
 
         if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
             if let Some(parsed_json) = parsed_json.as_ref() {
+                proxy_permit = None;
                 let Some(chat_body) =
                     responses_shim::responses_request_to_chat_completions(parsed_json)
                 else {
@@ -2588,6 +2607,7 @@ async fn handle_openai_compat_proxy(
                     );
                 }
 
+                let mut shim_permit = try_acquire_proxy_permit(&state)?;
                 let shim_timer_start = Instant::now();
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -2919,6 +2939,7 @@ async fn handle_openai_compat_proxy(
                         proxy_cache_key.as_deref(),
                         #[cfg(not(feature = "gateway-proxy-cache"))]
                         None,
+                        shim_permit,
                     )
                     .await
                     {
@@ -2928,19 +2949,20 @@ async fn handle_openai_compat_proxy(
                             continue;
                         }
                     }
+                } else {
+                    return Ok(proxy_response(
+                        &state,
+                        shim_response,
+                        backend_name,
+                        request_id.clone(),
+                        #[cfg(feature = "gateway-proxy-cache")]
+                        proxy_cache_key.as_deref(),
+                        #[cfg(not(feature = "gateway-proxy-cache"))]
+                        None,
+                        shim_permit,
+                    )
+                    .await);
                 }
-
-                return Ok(proxy_response(
-                    &state,
-                    shim_response,
-                    backend_name,
-                    request_id.clone(),
-                    #[cfg(feature = "gateway-proxy-cache")]
-                    proxy_cache_key.as_deref(),
-                    #[cfg(not(feature = "gateway-proxy-cache"))]
-                    None,
-                )
-                .await);
             }
         }
 
@@ -3199,6 +3221,7 @@ async fn handle_openai_compat_proxy(
             proxy_cache_key.as_deref(),
             #[cfg(not(feature = "gateway-proxy-cache"))]
             None,
+            proxy_permit,
         )
         .await);
     }
