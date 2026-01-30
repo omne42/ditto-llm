@@ -35,6 +35,8 @@ pub mod vertex;
 pub use anthropic::Anthropic;
 #[cfg(feature = "bedrock")]
 pub use bedrock::Bedrock;
+#[cfg(feature = "cohere")]
+pub use cohere::Cohere;
 #[cfg(all(feature = "cohere", feature = "embeddings"))]
 pub use cohere::CohereEmbeddings;
 #[cfg(all(feature = "cohere", feature = "rerank"))]

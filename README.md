@@ -16,7 +16,7 @@ Current scope:
   - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.) and embeddings
   - Anthropic Messages API (generate + SSE streaming)
   - Google GenAI (generate + SSE streaming) and embeddings
-  - Cohere embeddings and rerank (feature-gated)
+  - Cohere Chat API (generate + SSE streaming), embeddings, and rerank (feature-gated)
 - Batches: `BatchClient` for OpenAI/OpenAI-compatible `/batches` (feature `batches`).
 - Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
 

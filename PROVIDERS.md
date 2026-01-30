@@ -13,7 +13,7 @@ This file tracks coverage using two paths:
 
 | Capability | Unified Trait/Type | Native Providers | OpenAI-compatible Providers |
 | --- | --- | --- | --- |
-| Chat generation | `LanguageModel::{generate,stream}` | OpenAI `/responses`, Anthropic `/messages`, Google `generateContent` | `/chat/completions` |
+| Chat generation | `LanguageModel::{generate,stream}` | OpenAI `/responses`, Anthropic `/messages`, Google `generateContent`, Cohere `/chat` | `/chat/completions` |
 | Tools | `Tool` / `ToolChoice` / `ContentPart::ToolCall` | OpenAI/Anthropic/Google | yes (depends on upstream) |
 | JSON Schema output | `ProviderOptions.response_format` | OpenAI `/responses` | pass-through (depends on upstream) |
 | Embeddings | `EmbeddingModel::embed` | OpenAI, Google, Cohere | `/embeddings` |
@@ -31,7 +31,7 @@ This file tracks coverage using two paths:
 | OpenAI-compatible | Native adapter | Use for LiteLLM / DeepSeek / Qwen / Groq / Mistral / Together / Fireworks / xAI / Perplexity, etc. |
 | Anthropic | Native | `/messages` + streaming/tools |
 | Google | Native | `generateContent` + streaming/tools; embeddings (feature-gated) |
-| Cohere | Native (partial) | embeddings + rerank; chat adapter TBD |
+| Cohere | Native | chat + embeddings + rerank |
 | Azure OpenAI | OpenAI-compatible | Needs `http_query_params = { \"api-version\" = \"...\" }` + `api-key` header |
 | Amazon Bedrock | Native | Anthropic Messages-on-Bedrock generate + streaming/tools via SigV4 (feature `bedrock`) |
 | Google Vertex | Native | GenAI generateContent + streamGenerateContent (SSE) + tools via OAuth client-credentials (feature `vertex`) |

@@ -63,6 +63,8 @@ pub use types::{
 pub use providers::Anthropic;
 #[cfg(feature = "bedrock")]
 pub use providers::Bedrock;
+#[cfg(feature = "cohere")]
+pub use providers::Cohere;
 #[cfg(all(feature = "cohere", feature = "embeddings"))]
 pub use providers::CohereEmbeddings;
 #[cfg(all(feature = "cohere", feature = "rerank"))]
