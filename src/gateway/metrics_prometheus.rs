@@ -125,7 +125,7 @@ impl PrometheusMetrics {
         );
         self.proxy_backend_request_duration_seconds
             .entry(backend)
-            .or_insert_with(DurationHistogram::new)
+            .or_default()
             .observe(duration);
     }
 
@@ -295,12 +295,18 @@ fn escape_label_value(value: &str) -> String {
     out
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct DurationHistogram {
     buckets: [f64; 11],
     bucket_counts: [u64; 11],
     sum_seconds: f64,
     count: u64,
+}
+
+impl Default for DurationHistogram {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DurationHistogram {

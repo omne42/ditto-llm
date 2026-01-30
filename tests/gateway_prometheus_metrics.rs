@@ -121,6 +121,13 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
         rendered.contains("ditto_gateway_proxy_backend_success_total{backend=\"primary\"} 1\n")
     );
     assert!(rendered.contains("ditto_gateway_proxy_responses_total{status=\"200\"} 1\n"));
+    assert!(rendered.contains("ditto_gateway_proxy_backend_in_flight{backend=\"primary\"} 0\n"));
+    assert!(rendered.contains(
+        "ditto_gateway_proxy_backend_request_duration_seconds_bucket{backend=\"primary\",le=\"+Inf\"} 1\n"
+    ));
+    assert!(rendered.contains(
+        "ditto_gateway_proxy_backend_request_duration_seconds_count{backend=\"primary\"} 1\n"
+    ));
 
     Ok(())
 }

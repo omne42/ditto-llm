@@ -93,10 +93,11 @@
 - [x] 存储（basic）：virtual keys 持久化（`--state` file / `--sqlite`）
 - [x] 存储（advanced）：budgets / audit logs 持久化（sqlite/redis 可选，支持多进程/多副本）
 - [x] 观测（core）：request_id 贯穿（`x-ditto-request-id`/`x-request-id`）
-- [ ] 观测（extended）
+- [x] 观测（extended）
   - [x] structured JSON logs（`--json-logs`）
   - [x] OpenTelemetry traces（feature `gateway-otel`）
   - [x] per-key metrics 标签（Prometheus counters by `virtual_key_id`/`model`）
+  - [x] per-backend metrics（Prometheus per-backend inflight gauge + request latency histogram）
 - [x] Proxy caching（non-streaming deterministic requests；streaming 默认不开启）
 - [ ] 更丰富的 guardrails/策略扩展（regex、PII、schema 校验、per-route policy）
   - [x] model allow/deny lists（exact match 或 `prefix*`）

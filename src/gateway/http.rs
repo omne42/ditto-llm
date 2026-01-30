@@ -1386,7 +1386,7 @@ async fn handle_openai_compat_proxy(
                 metrics.record_proxy_backend_in_flight_inc(&backend_name);
             }
 
-            let result: Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> =
+            let result: Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> = 'translation_backend_attempt: {
                 if batches_root && parts.method == axum::http::Method::GET {
                     let mut limit: Option<u32> = None;
                     let mut after: Option<String> = None;
@@ -1410,8 +1410,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1437,36 +1438,33 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if batches_root && parts.method == axum::http::Method::POST {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "batches endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let request = match translation::batches_create_request_to_request(parsed_json)
                     {
                         Ok(request) => request,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
@@ -1475,8 +1473,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1506,8 +1505,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1533,13 +1533,12 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if let Some(batch_id) = batch_cancel_id.as_deref() {
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "batches endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let cancelled = match translation_backend.cancel_batch(batch_id).await {
@@ -1547,8 +1546,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1574,57 +1574,52 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if translation::is_rerank_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "rerank endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let mut request = match translation::rerank_request_to_request(parsed_json) {
                         Ok(request) => request,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
                     let Some(original_model) = request.model.clone() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     };
 
                     let mapped_model = translation_backend.map_model(&original_model);
                     if mapped_model.trim().is_empty() {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     }
                     request.model = Some(mapped_model.clone());
 
@@ -1633,8 +1628,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1664,26 +1660,24 @@ async fn handle_openai_compat_proxy(
                         .get("content-type")
                         .and_then(|value| value.to_str().ok())
                     else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "audio/transcriptions request missing content-type",
                         ));
-                        continue;
                     };
 
                     if !content_type
                         .to_ascii_lowercase()
                         .starts_with("multipart/form-data")
                     {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "audio/transcriptions request must be multipart/form-data",
                         ));
-                        continue;
                     }
 
                     let request = match translation::audio_transcriptions_request_to_request(
@@ -1692,35 +1686,32 @@ async fn handle_openai_compat_proxy(
                     ) {
                         Ok(request) => request,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
                     let Some(original_model) = request.model.clone() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     };
 
                     let mapped_model = translation_backend.map_model(&original_model);
                     if mapped_model.trim().is_empty() {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     }
 
                     let request_format = request.response_format;
@@ -1735,8 +1726,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1773,57 +1765,52 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if translation::is_audio_speech_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "audio/speech endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let request = match translation::audio_speech_request_to_request(parsed_json) {
                         Ok(request) => request,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
                     let Some(original_model) = request.model.clone() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     };
 
                     let mapped_model = translation_backend.map_model(&original_model);
                     if mapped_model.trim().is_empty() {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     }
 
                     let request_format = request.response_format;
@@ -1838,8 +1825,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1870,47 +1858,43 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if translation::is_embeddings_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     let original_model = model.clone().unwrap_or_default();
                     let mapped_model = translation_backend.map_model(&original_model);
 
                     if mapped_model.trim().is_empty() {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     }
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "embeddings endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let texts = match translation::embeddings_request_to_texts(parsed_json) {
                         Ok(texts) => texts,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
@@ -1919,8 +1903,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -1947,39 +1932,36 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if translation::is_moderations_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     let original_model = model.clone().unwrap_or_default();
                     let mapped_model = translation_backend.map_model(&original_model);
 
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "moderations endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let mut request = match translation::moderations_request_to_request(parsed_json)
                     {
                         Ok(request) => request,
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
@@ -1992,8 +1974,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -2022,39 +2005,36 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else if translation::is_images_generations_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     let original_model = model.clone().unwrap_or_default();
                     let mapped_model = translation_backend.map_model(&original_model);
 
                     if _stream_requested {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "images endpoint does not support stream=true",
                         ));
-                        continue;
                     }
 
                     let mut request =
                         match translation::images_generation_request_to_request(parsed_json) {
                             Ok(request) => request,
                             Err(err) => {
-                                last_err = Some(openai_error(
+                                break 'translation_backend_attempt Err(openai_error(
                                     StatusCode::BAD_REQUEST,
                                     "invalid_request_error",
                                     Some("invalid_request"),
                                     err,
                                 ));
-                                continue;
                             }
                         };
 
@@ -2067,8 +2047,9 @@ async fn handle_openai_compat_proxy(
                         Err(err) => {
                             let (status, kind, code, message) =
                                 translation::map_provider_error_to_openai(err);
-                            last_err = Some(openai_error(status, kind, code, message));
-                            continue;
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
                         }
                     };
 
@@ -2097,26 +2078,24 @@ async fn handle_openai_compat_proxy(
                     Ok(response)
                 } else {
                     let Some(parsed_json) = parsed_json.as_ref() else {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "request body must be application/json",
                         ));
-                        continue;
                     };
 
                     let original_model = model.clone().unwrap_or_default();
                     let mapped_model = translation_backend.map_model(&original_model);
 
                     if mapped_model.trim().is_empty() {
-                        last_err = Some(openai_error(
+                        break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
                             "invalid_request_error",
                             Some("invalid_request"),
                             "missing model",
                         ));
-                        continue;
                     }
 
                     let generate_request = if translation::is_chat_completions_path(path_and_query)
@@ -2132,13 +2111,12 @@ async fn handle_openai_compat_proxy(
                             request
                         }
                         Err(err) => {
-                            last_err = Some(openai_error(
+                            break 'translation_backend_attempt Err(openai_error(
                                 StatusCode::BAD_REQUEST,
                                 "invalid_request_error",
                                 Some("invalid_request"),
                                 err,
                             ));
-                            continue;
                         }
                     };
 
@@ -2156,8 +2134,9 @@ async fn handle_openai_compat_proxy(
                             Err(err) => {
                                 let (status, kind, code, message) =
                                     translation::map_provider_error_to_openai(err);
-                                last_err = Some(openai_error(status, kind, code, message));
-                                continue;
+                                break 'translation_backend_attempt Err(openai_error(
+                                    status, kind, code, message,
+                                ));
                             }
                         };
 
@@ -2200,8 +2179,9 @@ async fn handle_openai_compat_proxy(
                                 Err(err) => {
                                     let (status, kind, code, message) =
                                         translation::map_provider_error_to_openai(err);
-                                    last_err = Some(openai_error(status, kind, code, message));
-                                    continue;
+                                    break 'translation_backend_attempt Err(openai_error(
+                                        status, kind, code, message,
+                                    ));
                                 }
                             };
 
@@ -2248,7 +2228,8 @@ async fn handle_openai_compat_proxy(
                         *response.headers_mut() = headers;
                         Ok(response)
                     }
-                };
+                }
+            };
 
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
@@ -2259,6 +2240,14 @@ async fn handle_openai_compat_proxy(
                     backend_timer_start.elapsed(),
                 );
             }
+
+            let response = match result {
+                Ok(response) => response,
+                Err(err) => {
+                    last_err = Some(err);
+                    continue;
+                }
+            };
 
             let status = StatusCode::OK;
             let spend_tokens = true;
@@ -2431,13 +2420,7 @@ async fn handle_openai_compat_proxy(
                 );
             }
 
-            match result {
-                Ok(response) => return Ok(response),
-                Err(err) => {
-                    last_err = Some(err);
-                    continue;
-                }
-            }
+            return Ok(response);
         }
 
         let backend = match state.proxy_backends.get(&backend_name) {
@@ -2605,6 +2588,15 @@ async fn handle_openai_compat_proxy(
                     );
                 }
 
+                let shim_timer_start = Instant::now();
+
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_backend_attempt(&backend_name);
+                    metrics.record_proxy_backend_in_flight_inc(&backend_name);
+                }
+
                 let shim_response = match backend
                     .request(
                         parts.method.clone(),
@@ -2618,10 +2610,13 @@ async fn handle_openai_compat_proxy(
                     Err(err) => {
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                            metrics
-                                .lock()
-                                .await
-                                .record_proxy_backend_failure(&backend_name);
+                            let mut metrics = metrics.lock().await;
+                            metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                            metrics.observe_proxy_backend_request_duration(
+                                &backend_name,
+                                shim_timer_start.elapsed(),
+                            );
+                            metrics.record_proxy_backend_failure(&backend_name);
                         }
                         #[cfg(feature = "gateway-routing-advanced")]
                         record_proxy_backend_failure(
@@ -2637,6 +2632,16 @@ async fn handle_openai_compat_proxy(
                         continue;
                     }
                 };
+
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                    metrics.observe_proxy_backend_request_duration(
+                        &backend_name,
+                        shim_timer_start.elapsed(),
+                    );
+                }
 
                 let status = shim_response.status();
 
