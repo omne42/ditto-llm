@@ -1,0 +1,468 @@
+use std::collections::{BTreeMap, VecDeque};
+
+use async_trait::async_trait;
+use futures_util::StreamExt;
+use futures_util::stream;
+use reqwest::multipart::{Form, Part};
+use serde::Deserialize;
+use serde_json::{Map, Value};
+
+#[cfg(feature = "embeddings")]
+use crate::embedding::EmbeddingModel;
+use crate::model::{LanguageModel, StreamResult};
+use crate::profile::{
+    Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
+    resolve_request_auth_with_default_keys,
+};
+use crate::types::{
+    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
+};
+use crate::{DittoError, Result};
+
+#[derive(Clone)]
+pub struct OpenAICompatible {
+    http: reqwest::Client,
+    base_url: String,
+    auth: Option<RequestAuth>,
+    default_model: String,
+    http_query_params: BTreeMap<String, String>,
+}
+
+impl OpenAICompatible {
+    pub fn new(api_key: impl Into<String>) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let api_key = api_key.into();
+        let auth = if api_key.trim().is_empty() {
+            None
+        } else {
+            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
+        };
+
+        Self {
+            http,
+            base_url: "https://api.openai.com/v1".to_string(),
+            auth,
+            default_model: String::new(),
+            http_query_params: BTreeMap::new(),
+        }
+    }
+
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
+    }
+
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.default_model = model.into();
+        self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &[
+            "OPENAI_COMPAT_API_KEY",
+            "OPENAI_API_KEY",
+            "CODE_PM_OPENAI_API_KEY",
+        ];
+
+        let auth = match config.auth.clone() {
+            Some(auth) => Some(
+                resolve_request_auth_with_default_keys(
+                    &auth,
+                    env,
+                    DEFAULT_KEYS,
+                    "authorization",
+                    Some("Bearer "),
+                )
+                .await?,
+            ),
+            None => DEFAULT_KEYS
+                .iter()
+                .find_map(|key| env.get(key))
+                .and_then(|token| HttpAuth::bearer(&token).ok().map(RequestAuth::Http)),
+        };
+
+        let mut out = Self::new("");
+        out.auth = auth;
+        out.http_query_params = config.http_query_params.clone();
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                std::time::Duration::from_secs(300),
+                &config.http_headers,
+            )?);
+        }
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
+    }
+
+    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let req = match self.auth.as_ref() {
+            Some(auth) => auth.apply(req),
+            None => req,
+        };
+        apply_http_query_params(req, &self.http_query_params)
+    }
+
+    fn chat_completions_url(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if base.ends_with("/chat/completions") {
+            base.to_string()
+        } else {
+            format!("{base}/chat/completions")
+        }
+    }
+
+    fn files_url(&self) -> String {
+        let base = self.base_url.trim_end_matches('/');
+        if base.ends_with("/files") {
+            base.to_string()
+        } else {
+            format!("{base}/files")
+        }
+    }
+
+    pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {
+        self.upload_file_with_purpose(filename, bytes, "assistants", None)
+            .await
+    }
+
+    pub async fn upload_file_with_purpose(
+        &self,
+        filename: impl Into<String>,
+        bytes: Vec<u8>,
+        purpose: impl Into<String>,
+        media_type: Option<&str>,
+    ) -> Result<String> {
+        #[derive(Deserialize)]
+        struct FilesUploadResponse {
+            id: String,
+        }
+
+        let filename = filename.into();
+        let mut file_part = Part::bytes(bytes).file_name(filename);
+        if let Some(media_type) = media_type {
+            file_part = file_part.mime_str(media_type).map_err(|err| {
+                DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
+            })?;
+        }
+
+        let form = Form::new()
+            .text("purpose", purpose.into())
+            .part("file", file_part);
+
+        let url = self.files_url();
+        let mut req = self.http.post(url);
+        req = self.apply_auth(req);
+        let response = req.multipart(form).send().await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(DittoError::Api { status, body: text });
+        }
+
+        let parsed = response.json::<FilesUploadResponse>().await?;
+        Ok(parsed.id)
+    }
+
+    fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
+        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
+            return Ok(model);
+        }
+        if !self.default_model.trim().is_empty() {
+            return Ok(self.default_model.as_str());
+        }
+        Err(DittoError::InvalidResponse(
+            "openai-compatible model is not set (set request.model or OpenAICompatible::with_model)"
+                .to_string(),
+        ))
+    }
+
+    fn tool_to_openai(tool: &Tool, warnings: &mut Vec<Warning>) -> Value {
+        if tool.strict.is_some() {
+            warnings.push(Warning::Unsupported {
+                feature: "tool.strict".to_string(),
+                details: Some("chat/completions does not support strict tool schemas".to_string()),
+            });
+        }
+
+        let mut function = Map::<String, Value>::new();
+        function.insert("name".to_string(), Value::String(tool.name.clone()));
+        if let Some(description) = &tool.description {
+            function.insert(
+                "description".to_string(),
+                Value::String(description.clone()),
+            );
+        }
+        function.insert("parameters".to_string(), tool.parameters.clone());
+
+        let mut out = Map::<String, Value>::new();
+        out.insert("type".to_string(), Value::String("function".to_string()));
+        out.insert("function".to_string(), Value::Object(function));
+        Value::Object(out)
+    }
+
+    fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
+        match choice {
+            ToolChoice::Auto => Value::String("auto".to_string()),
+            ToolChoice::None => Value::String("none".to_string()),
+            ToolChoice::Required => Value::String("required".to_string()),
+            ToolChoice::Tool { name } => serde_json::json!({
+                "type": "function",
+                "function": { "name": name }
+            }),
+        }
+    }
+
+    fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
+        match arguments {
+            Value::String(raw) => {
+                let raw = raw.trim();
+                if raw.is_empty() {
+                    "{}".to_string()
+                } else {
+                    raw.to_string()
+                }
+            }
+            other => other.to_string(),
+        }
+    }
+
+    fn messages_to_chat_messages(messages: &[Message]) -> (Vec<Value>, Vec<Warning>) {
+        let mut out = Vec::<Value>::new();
+        let mut warnings = Vec::<Warning>::new();
+
+        for message in messages {
+            match message.role {
+                Role::System => {
+                    let mut text = String::new();
+                    for part in &message.content {
+                        match part {
+                            ContentPart::Text { text: chunk } => text.push_str(chunk),
+                            other => warnings.push(Warning::Unsupported {
+                                feature: "system_content_part".to_string(),
+                                details: Some(format!(
+                                    "unsupported system content part: {other:?}"
+                                )),
+                            }),
+                        }
+                    }
+                    if text.trim().is_empty() {
+                        continue;
+                    }
+                    out.push(serde_json::json!({ "role": "system", "content": text }));
+                }
+                Role::User => {
+                    let mut texts = String::new();
+                    let mut parts = Vec::<Value>::new();
+                    let mut has_non_text = false;
+
+                    for part in &message.content {
+                        match part {
+                            ContentPart::Text { text } => {
+                                if text.is_empty() {
+                                    continue;
+                                }
+                                texts.push_str(text);
+                                parts.push(serde_json::json!({ "type": "text", "text": text }));
+                            }
+                            ContentPart::Image { source } => {
+                                has_non_text = true;
+                                let image_url = match source {
+                                    ImageSource::Url { url } => url.clone(),
+                                    ImageSource::Base64 { media_type, data } => {
+                                        format!("data:{media_type};base64,{data}")
+                                    }
+                                };
+                                parts.push(serde_json::json!({
+                                    "type": "image_url",
+                                    "image_url": { "url": image_url }
+                                }));
+                            }
+                            ContentPart::File {
+                                filename,
+                                media_type,
+                                source,
+                            } => {
+                                if media_type != "application/pdf" {
+                                    warnings.push(Warning::Unsupported {
+                                        feature: "file".to_string(),
+                                        details: Some(format!(
+                                            "unsupported file media type for openai-compatible: {media_type}"
+                                        )),
+                                    });
+                                    continue;
+                                }
+
+                                has_non_text = true;
+                                let part = match source {
+                                    FileSource::Url { url } => {
+                                        warnings.push(Warning::Unsupported {
+                                            feature: "file_url".to_string(),
+                                            details: Some(format!(
+                                                "openai-compatible chat messages do not support file URLs (url={url})"
+                                            )),
+                                        });
+                                        continue;
+                                    }
+                                    FileSource::Base64 { data } => serde_json::json!({
+                                        "type": "file",
+                                        "file": {
+                                            "filename": filename.clone().unwrap_or_else(|| "file.pdf".to_string()),
+                                            "file_data": format!("data:{media_type};base64,{data}"),
+                                        }
+                                    }),
+                                    FileSource::FileId { file_id } => serde_json::json!({
+                                        "type": "file",
+                                        "file": { "file_id": file_id }
+                                    }),
+                                };
+                                parts.push(part);
+                            }
+                            other => warnings.push(Warning::Unsupported {
+                                feature: "user_content_part".to_string(),
+                                details: Some(format!("unsupported user content part: {other:?}")),
+                            }),
+                        }
+                    }
+
+                    if parts.is_empty() {
+                        continue;
+                    }
+
+                    if has_non_text {
+                        out.push(serde_json::json!({ "role": "user", "content": parts }));
+                    } else {
+                        out.push(serde_json::json!({ "role": "user", "content": texts }));
+                    }
+                }
+                Role::Assistant => {
+                    let mut text = String::new();
+                    let mut tool_calls = Vec::<Value>::new();
+                    for part in &message.content {
+                        match part {
+                            ContentPart::Text { text: chunk } => text.push_str(chunk),
+                            ContentPart::ToolCall {
+                                id,
+                                name,
+                                arguments,
+                            } => {
+                                tool_calls.push(serde_json::json!({
+                                    "id": id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": name,
+                                        "arguments": Self::tool_call_arguments_to_openai_string(arguments),
+                                    }
+                                }));
+                            }
+                            ContentPart::Reasoning { .. } => warnings.push(Warning::Unsupported {
+                                feature: "reasoning".to_string(),
+                                details: Some(
+                                    "reasoning parts are not sent to openai-compatible messages"
+                                        .to_string(),
+                                ),
+                            }),
+                            other => warnings.push(Warning::Unsupported {
+                                feature: "assistant_content_part".to_string(),
+                                details: Some(format!(
+                                    "unsupported assistant content part: {other:?}"
+                                )),
+                            }),
+                        }
+                    }
+
+                    if text.trim().is_empty() && tool_calls.is_empty() {
+                        continue;
+                    }
+
+                    let mut msg = Map::<String, Value>::new();
+                    msg.insert("role".to_string(), Value::String("assistant".to_string()));
+                    if text.trim().is_empty() {
+                        msg.insert("content".to_string(), Value::Null);
+                    } else {
+                        msg.insert("content".to_string(), Value::String(text));
+                    }
+                    if !tool_calls.is_empty() {
+                        msg.insert("tool_calls".to_string(), Value::Array(tool_calls));
+                    }
+                    out.push(Value::Object(msg));
+                }
+                Role::Tool => {
+                    for part in &message.content {
+                        match part {
+                            ContentPart::ToolResult {
+                                tool_call_id,
+                                content,
+                                ..
+                            } => {
+                                if content.trim().is_empty() {
+                                    continue;
+                                }
+                                out.push(serde_json::json!({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call_id,
+                                    "content": content,
+                                }));
+                            }
+                            other => warnings.push(Warning::Unsupported {
+                                feature: "tool_content_part".to_string(),
+                                details: Some(format!("unsupported tool content part: {other:?}")),
+                            }),
+                        }
+                    }
+                }
+            }
+        }
+
+        (out, warnings)
+    }
+
+    fn parse_finish_reason(reason: Option<&str>) -> FinishReason {
+        match reason {
+            Some("stop") => FinishReason::Stop,
+            Some("length") => FinishReason::Length,
+            Some("tool_calls") => FinishReason::ToolCalls,
+            Some("function_call") => FinishReason::ToolCalls,
+            Some("content_filter") => FinishReason::ContentFilter,
+            Some("error") => FinishReason::Error,
+            _ => FinishReason::Unknown,
+        }
+    }
+
+    fn parse_usage(value: &Value) -> Usage {
+        let mut usage = Usage::default();
+        if let Some(obj) = value.as_object() {
+            usage.input_tokens = obj.get("prompt_tokens").and_then(Value::as_u64);
+            usage.cache_input_tokens = obj
+                .get("prompt_tokens_details")
+                .and_then(|details| details.get("cached_tokens"))
+                .and_then(Value::as_u64);
+            usage.cache_creation_input_tokens = obj
+                .get("cache_creation_input_tokens")
+                .and_then(Value::as_u64);
+            usage.output_tokens = obj.get("completion_tokens").and_then(Value::as_u64);
+            usage.total_tokens = obj.get("total_tokens").and_then(Value::as_u64);
+        }
+        usage.merge_total();
+        usage
+    }
+}
