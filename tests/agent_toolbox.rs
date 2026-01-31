@@ -6,9 +6,9 @@ use serde_json::json;
 
 use ditto_llm::Result;
 use ditto_llm::agent::{
-    FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_FIND, TOOL_FS_GREP,
-    TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_STAT, TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH,
-    TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
+    FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_DELETE_FILE, TOOL_FS_FIND,
+    TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_STAT, TOOL_FS_WRITE_FILE,
+    TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -386,6 +386,82 @@ async fn fs_stat_tool_reports_metadata() -> Result<()> {
     assert_eq!(stat.get("type").and_then(|v| v.as_str()), Some("file"));
     assert_eq!(stat.get("size_bytes").and_then(|v| v.as_u64()), Some(2));
     assert!(stat.get("modified_ms").is_some());
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_delete_file_tool_deletes_files() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_DELETE_FILE.to_string(),
+        arguments: json!({
+            "path": "a.txt"
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("a.txt").exists());
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("deleted").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("file"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_delete_file_tool_deletes_dirs_recursively() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+    std::fs::write(dir.path().join("sub").join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_DELETE_FILE.to_string(),
+        arguments: json!({
+            "path": "sub",
+            "recursive": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("sub").exists());
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("deleted").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("dir"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_delete_file_tool_ignores_missing_paths_when_requested() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_DELETE_FILE.to_string(),
+        arguments: json!({
+            "path": "missing.txt",
+            "ignore_missing": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("deleted").and_then(|v| v.as_bool()), Some(false));
+    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("missing"));
     Ok(())
 }
 

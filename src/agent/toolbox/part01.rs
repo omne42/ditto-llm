@@ -27,6 +27,7 @@ pub fn toolbox_tools() -> Vec<Tool> {
         http_fetch_tool(),
         fs_read_file_tool(),
         fs_write_file_tool(),
+        fs_delete_file_tool(),
         fs_list_dir_tool(),
         fs_find_tool(),
         fs_grep_tool(),
@@ -246,8 +247,7 @@ impl ToolExecutor for ToolboxExecutor {
         match call.name.as_str() {
             TOOL_HTTP_FETCH => self.http.execute(call).await,
             TOOL_SHELL_EXEC => self.shell.execute(call).await,
-            TOOL_FS_READ_FILE | TOOL_FS_WRITE_FILE | TOOL_FS_LIST_DIR | TOOL_FS_FIND
-            | TOOL_FS_GREP | TOOL_FS_STAT => self.fs.execute(call).await,
+            name if name.starts_with("fs_") => self.fs.execute(call).await,
             other => Ok(ToolResult {
                 tool_call_id: call.id,
                 content: format!("unknown tool: {other}"),

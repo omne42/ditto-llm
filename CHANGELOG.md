@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document non-goals and optional future scope (gateway/control-plane features, agent loop, UI SDK surface, native auth adapters).
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor`, stop hooks, approvals, and tool-result backfill (feature `agent`).
 - Agent: built-in tool wrappers and executors (`http_fetch`, `fs_read_file`, `fs_write_file`, `fs_list_dir`, `fs_find`, `fs_grep`, `fs_stat`, `shell_exec`) for `ToolLoopAgent` (feature `agent`).
+- Agent: add `fs_delete_file` tool + executor to delete files/directories within root (directories require `recursive=true`).
 - Agent: `shell_exec` supports optional `stdin` (UTF-8) input.
 - Agent: `http_fetch` supports `parse_json`, per-call `max_response_bytes`, emits `elapsed_ms`, and marks non-2xx responses as tool errors.
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
