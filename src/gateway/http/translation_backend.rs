@@ -747,7 +747,7 @@ async fn attempt_translation_backend(
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
                 } else {
-                    include!("part06/part06_rest.rs")
+                    include!("translation_backend/rest.rs")
                 }
             };
 

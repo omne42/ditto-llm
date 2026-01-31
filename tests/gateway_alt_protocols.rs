@@ -45,6 +45,9 @@ fn build_proxy_backends(
 
 #[tokio::test]
 async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST)
@@ -151,6 +154,9 @@ async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
 
 #[tokio::test]
 async fn anthropic_messages_streaming_translates_openai_sse() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     let sse = concat!(
         "data: {\"id\":\"chatcmpl_123\",\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"he\"},\"finish_reason\":null}]}\n\n",
@@ -226,6 +232,9 @@ async fn anthropic_messages_streaming_translates_openai_sse() {
 
 #[tokio::test]
 async fn google_generate_content_translates_to_openai_chat_completions() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST)
@@ -314,6 +323,9 @@ async fn google_generate_content_translates_to_openai_chat_completions() {
 
 #[tokio::test]
 async fn cloudcode_generate_content_wraps_google_format() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST)

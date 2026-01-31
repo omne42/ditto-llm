@@ -13,6 +13,9 @@ use ditto_llm::agent::{
 
 #[tokio::test]
 async fn http_fetch_tool_executes_get() -> Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(GET).path("/hello");
@@ -44,6 +47,9 @@ async fn http_fetch_tool_executes_get() -> Result<()> {
 
 #[tokio::test]
 async fn http_fetch_tool_parses_json_body() -> Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(GET).path("/hello.json");
@@ -80,6 +86,9 @@ async fn http_fetch_tool_parses_json_body() -> Result<()> {
 
 #[tokio::test]
 async fn http_fetch_tool_respects_max_response_bytes_override() -> Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(GET).path("/hello");
@@ -112,6 +121,9 @@ async fn http_fetch_tool_respects_max_response_bytes_override() -> Result<()> {
 
 #[tokio::test]
 async fn http_fetch_tool_marks_error_for_non_2xx_responses() -> Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(GET).path("/fail");

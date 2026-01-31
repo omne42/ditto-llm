@@ -45,6 +45,9 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
 
 #[tokio::test]
 async fn responses_shim_falls_back_to_chat_completions_non_streaming() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     let responses_mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/responses");
@@ -132,6 +135,9 @@ async fn responses_shim_falls_back_to_chat_completions_non_streaming() {
 
 #[tokio::test]
 async fn responses_shim_falls_back_to_chat_completions_streaming() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(POST).path("/v1/responses");
@@ -216,6 +222,9 @@ async fn responses_shim_falls_back_to_chat_completions_streaming() {
 
 #[tokio::test]
 async fn responses_shim_translates_tool_calls_non_streaming() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(POST).path("/v1/responses");
@@ -279,6 +288,9 @@ async fn responses_shim_translates_tool_calls_non_streaming() {
 
 #[tokio::test]
 async fn responses_shim_translates_tool_calls_streaming() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
     let upstream = MockServer::start();
     upstream.mock(|when, then| {
         when.method(POST).path("/v1/responses");

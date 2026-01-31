@@ -4,20 +4,18 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use futures_util::stream;
-use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
+use super::openai_like;
+
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    resolve_request_auth_with_default_keys,
-};
+use crate::profile::{Env, ProviderConfig, RequestAuth};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -35,21 +33,13 @@ pub struct OpenAI {
 
 impl OpenAI {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
         let api_key = api_key.into();
-        let auth = if api_key.trim().is_empty() {
-            None
-        } else {
-            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
-        };
+        let http = openai_like::default_http_client();
+        let auth = openai_like::auth_from_api_key(&api_key);
 
         Self {
             http,
-            base_url: "https://api.openai.com/v1".to_string(),
+            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
             auth,
             default_model: String::new(),
             http_query_params: BTreeMap::new(),
@@ -73,25 +63,14 @@ impl OpenAI {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
-        let auth = config
-            .auth
-            .clone()
-            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header = resolve_request_auth_with_default_keys(
-            &auth,
-            env,
-            DEFAULT_KEYS,
-            "authorization",
-            Some("Bearer "),
-        )
-        .await?;
+        let auth_header = openai_like::resolve_auth_required(config, env, DEFAULT_KEYS).await?;
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
         out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
-                std::time::Duration::from_secs(300),
+                openai_like::HTTP_TIMEOUT,
                 &config.http_headers,
             )?);
         }
@@ -109,11 +88,7 @@ impl OpenAI {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        let req = match self.auth.as_ref() {
-            Some(auth) => auth.apply(req),
-            None => req,
-        };
-        apply_http_query_params(req, &self.http_query_params)
+        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
     }
 
     fn responses_url(&self) -> String {
@@ -155,36 +130,18 @@ impl OpenAI {
         purpose: impl Into<String>,
         media_type: Option<&str>,
     ) -> Result<String> {
-        #[derive(Deserialize)]
-        struct FilesUploadResponse {
-            id: String,
-        }
-
-        let filename = filename.into();
-        let mut file_part = Part::bytes(bytes).file_name(filename);
-        if let Some(media_type) = media_type {
-            file_part = file_part.mime_str(media_type).map_err(|err| {
-                DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
-            })?;
-        }
-
-        let form = Form::new()
-            .text("purpose", purpose.into())
-            .part("file", file_part);
-
         let url = self.files_url();
-        let mut req = self.http.post(url);
-        req = self.apply_auth(req);
-        let response = req.multipart(form).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<FilesUploadResponse>().await?;
-        Ok(parsed.id)
+        openai_like::upload_file_with_purpose(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
+            filename,
+            bytes,
+            purpose,
+            media_type,
+        )
+        .await
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {

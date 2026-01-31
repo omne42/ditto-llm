@@ -45,6 +45,9 @@ fn build_proxy_backends(
 
 #[tokio::test]
 async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST)
@@ -151,6 +154,9 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
 #[cfg(feature = "gateway-proxy-cache")]
 #[tokio::test]
 async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST)

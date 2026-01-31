@@ -949,5 +949,5 @@ async fn attempt_proxy_backend(
             .await));
         }
 
-        include!("part07/part07_nonstream.rs")
+        include!("proxy_backend/nonstream.rs")
 }

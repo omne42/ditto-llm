@@ -159,10 +159,11 @@ Endpoints:
 
 CLI options:
 
-- `--listen HOST:PORT` sets the bind address (default: `127.0.0.1:8080`).
+- `--listen HOST:PORT` (or `--addr HOST:PORT`) sets the bind address (default: `127.0.0.1:8080`).
 - `--dotenv PATH` loads a dotenv file (KEY=VALUE) for `${ENV_VAR}` interpolation and provider auth env lookups.
 - `--admin-token TOKEN` enables `/admin/*` endpoints.
 - `--admin-token-env ENV` loads the admin token from env (works with `--dotenv`).
+- `--backend name=url` adds/overrides a backend for `POST /v1/gateway` (the backend is a URL that accepts `GatewayRequest` JSON and returns `GatewayResponse` JSON).
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
 - `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).
 - `--sqlite PATH` enables persistence for admin virtual-key mutations in a sqlite file (requires `--features gateway-store-sqlite`; loaded on startup; cannot be combined with `--state`).
@@ -189,6 +190,7 @@ CLI options:
 - `--prometheus-max-key-series N` limits per-key series cardinality (implies `--prometheus-metrics`).
 - `--prometheus-max-model-series N` limits per-model series cardinality (implies `--prometheus-metrics`).
 - `--prometheus-max-backend-series N` limits per-backend series cardinality (implies `--prometheus-metrics`).
+- `--prometheus-max-path-series N` limits per-path series cardinality (implies `--prometheus-metrics`).
 - `--devtools PATH` enables JSONL request/response logging (requires `--features gateway-devtools`).
 - `--otel` enables OpenTelemetry tracing export via OTLP (requires `--features gateway-otel`).
 - `--otel-endpoint URL` overrides the OTLP endpoint (implies `--otel`).
@@ -390,7 +392,8 @@ Bucketed example:
 ```
 
 Precedence is `"*"` (base) → provider bucket (override). Provider ids are: `openai`,
-`openai-compatible`, `anthropic`, `google`, `cohere`.
+`openai-compatible` (also accepts `openai_compatible` as an alias key), `anthropic`, `google`,
+`cohere`, `bedrock`, `vertex`.
 
 ## File Upload (Optional)
 

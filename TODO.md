@@ -173,5 +173,5 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 ```bash
 cargo run --example openai_compatible
-cargo run --example multimodal -- <image_path> <pdf_path>
+cargo run --example multimodal --features base64 -- <image_path> <pdf_path>
 ```

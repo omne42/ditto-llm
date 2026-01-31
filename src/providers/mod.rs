@@ -31,6 +31,9 @@ pub mod openai_moderations;
 #[cfg(feature = "vertex")]
 pub mod vertex;
 
+#[cfg(feature = "openai")]
+mod openai_like;
+
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
 #[cfg(feature = "bedrock")]

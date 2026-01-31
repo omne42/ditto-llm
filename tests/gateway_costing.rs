@@ -45,6 +45,9 @@ fn build_proxy_backends(
 
 #[tokio::test]
 async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");
@@ -112,6 +115,9 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 
 #[tokio::test]
 async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");
@@ -183,6 +189,9 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 
 #[tokio::test]
 async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");
@@ -276,6 +285,9 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
 
 #[tokio::test]
 async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");
@@ -365,6 +377,9 @@ async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<(
 
 #[tokio::test]
 async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");
@@ -451,6 +466,9 @@ async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
 
 #[tokio::test]
 async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
     let upstream = MockServer::start();
     let mock = upstream.mock(|when, then| {
         when.method(POST).path("/v1/chat/completions");

@@ -11,21 +11,13 @@ pub struct OpenAIEmbeddings {
 #[cfg(feature = "embeddings")]
 impl OpenAIEmbeddings {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
         let api_key = api_key.into();
-        let auth = if api_key.trim().is_empty() {
-            None
-        } else {
-            HttpAuth::bearer(&api_key).ok().map(RequestAuth::Http)
-        };
+        let http = openai_like::default_http_client();
+        let auth = openai_like::auth_from_api_key(&api_key);
 
         Self {
             http,
-            base_url: "https://api.openai.com/v1".to_string(),
+            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
             auth,
             model: String::new(),
             http_query_params: BTreeMap::new(),
@@ -49,25 +41,14 @@ impl OpenAIEmbeddings {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
-        let auth = config
-            .auth
-            .clone()
-            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header = resolve_request_auth_with_default_keys(
-            &auth,
-            env,
-            DEFAULT_KEYS,
-            "authorization",
-            Some("Bearer "),
-        )
-        .await?;
+        let auth_header = openai_like::resolve_auth_required(config, env, DEFAULT_KEYS).await?;
 
         let mut out = Self::new("");
         out.auth = Some(auth_header);
         out.http_query_params = config.http_query_params.clone();
         if !config.http_headers.is_empty() {
             out = out.with_http_client(crate::profile::build_http_client(
-                std::time::Duration::from_secs(300),
+                openai_like::HTTP_TIMEOUT,
                 &config.http_headers,
             )?);
         }
@@ -85,11 +66,7 @@ impl OpenAIEmbeddings {
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        let req = match self.auth.as_ref() {
-            Some(auth) => auth.apply(req),
-            None => req,
-        };
-        apply_http_query_params(req, &self.http_query_params)
+        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
     }
 
     fn resolve_model(&self) -> Result<&str> {

@@ -13,8 +13,8 @@ This file tracks coverage using two paths:
 
 | Capability | Unified Trait/Type | Native Providers | OpenAI-compatible Providers |
 | --- | --- | --- | --- |
-| Chat generation | `LanguageModel::{generate,stream}` | OpenAI `/responses`, Anthropic `/messages`, Google `generateContent`, Cohere `/chat` | `/chat/completions` |
-| Tools | `Tool` / `ToolChoice` / `ContentPart::ToolCall` | OpenAI/Anthropic/Google | yes (depends on upstream) |
+| Chat generation | `LanguageModel::{generate,stream}` | OpenAI `/responses`, Anthropic `/messages`, Google `generateContent`, Cohere `/v2/chat` | `/chat/completions` |
+| Tools | `Tool` / `ToolChoice` / `ContentPart::ToolCall` | OpenAI/Anthropic/Google/Cohere | yes (depends on upstream) |
 | JSON Schema output | `ProviderOptions.response_format` | OpenAI `/responses` | pass-through (depends on upstream) |
 | Embeddings | `EmbeddingModel::embed` | OpenAI, Google, Cohere | `/embeddings` |
 | Images | `ImageGenerationModel::generate` | OpenAI | `/images/generations` |
