@@ -4,20 +4,9 @@ use ditto_llm::Result;
 use ditto_llm::auth::OAuthClientCredentials;
 use httpmock::{Method::POST, MockServer};
 
-fn can_bind_localhost() -> bool {
-    match std::net::TcpListener::bind(("127.0.0.1", 0)) {
-        Ok(listener) => {
-            drop(listener);
-            true
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => false,
-        Err(err) => panic!("failed to bind localhost for httpmock tests: {err}"),
-    }
-}
-
 #[tokio::test]
 async fn oauth_client_credentials_fetches_token() -> Result<()> {
-    if !can_bind_localhost() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
     let server = MockServer::start_async().await;

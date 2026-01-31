@@ -92,30 +92,15 @@ impl OpenAI {
     }
 
     fn responses_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/responses") {
-            base.to_string()
-        } else {
-            format!("{base}/responses")
-        }
+        openai_like::join_endpoint(&self.base_url, "responses")
     }
 
     fn responses_compact_url(&self) -> String {
-        let base = self.responses_url();
-        if base.ends_with("/responses") {
-            format!("{base}/compact")
-        } else {
-            format!("{base}/responses/compact")
-        }
+        format!("{}/compact", self.responses_url())
     }
 
     fn files_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/files") {
-            base.to_string()
-        } else {
-            format!("{base}/files")
-        }
+        openai_like::join_endpoint(&self.base_url, "files")
     }
 
     pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {

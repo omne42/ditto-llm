@@ -120,7 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Format: rustfmt cleanup (imports order).
 - Refactor gateway HTTP module: split `src/gateway/http.rs` into smaller include parts (core/proxy/admin/translation/proxy-backend) to reduce duplication and keep modules under the repo size limit.
 - Refactor OpenAI-family providers: reuse shared `providers::openai_like` helpers across OpenAI and OpenAI-compatible adapters (embeddings/audio/images/moderations/batches).
+- Refactor OpenAI-family providers: centralize endpoint URL joining via `providers::openai_like::join_endpoint` to reduce adapter duplication.
 - Tests: split `tests/gateway_openai_proxy.rs` into parts and skip `httpmock`-based tests when the environment disallows binding `127.0.0.1` (sandbox compatibility).
+- Tests: reuse `utils::test_support::should_skip_httpmock` for `httpmock`-based OAuth test (sandbox compatibility).
 - Dev: pre-commit rejects oversized staged Rust files (default 1000 lines; configurable via `DITTO_MAX_RS_LINES`).
 - Refactor: split `gateway::translation` module into sub-files (no behavior changes).
 - Refactor: split `gateway::http` module into sub-files (no behavior changes).

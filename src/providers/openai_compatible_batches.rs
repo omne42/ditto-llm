@@ -70,24 +70,15 @@ impl OpenAICompatibleBatches {
     }
 
     fn batches_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/batches") {
-            base.to_string()
-        } else {
-            format!("{base}/batches")
-        }
+        openai_like::join_endpoint(&self.base_url, "batches")
     }
 
     fn batch_url(&self, batch_id: &str) -> String {
-        let url = self.batches_url();
-        let base = url.trim_end_matches('/');
-        format!("{base}/{batch_id}")
+        format!("{}/{batch_id}", self.batches_url())
     }
 
     fn batch_cancel_url(&self, batch_id: &str) -> String {
-        let url = self.batch_url(batch_id);
-        let base = url.trim_end_matches('/');
-        format!("{base}/cancel")
+        format!("{}/cancel", self.batch_url(batch_id))
     }
 
     async fn parse_batch_response(&self, response: reqwest::Response) -> Result<(Batch, Value)> {

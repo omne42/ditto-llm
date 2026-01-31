@@ -88,12 +88,7 @@ impl OpenAICompatibleAudioTranscription {
     }
 
     fn transcriptions_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/audio/transcriptions") {
-            base.to_string()
-        } else {
-            format!("{base}/audio/transcriptions")
-        }
+        openai_like::join_endpoint(&self.base_url, "audio/transcriptions")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a AudioTranscriptionRequest) -> Result<&'a str> {
@@ -322,12 +317,7 @@ impl OpenAICompatibleSpeech {
     }
 
     fn speech_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/audio/speech") {
-            base.to_string()
-        } else {
-            format!("{base}/audio/speech")
-        }
+        openai_like::join_endpoint(&self.base_url, "audio/speech")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a SpeechRequest) -> Result<&'a str> {

@@ -74,12 +74,7 @@ impl OpenAICompatibleEmbeddings {
     }
 
     fn embeddings_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/embeddings") {
-            base.to_string()
-        } else {
-            format!("{base}/embeddings")
-        }
+        openai_like::join_endpoint(&self.base_url, "embeddings")
     }
 
     fn resolve_model(&self) -> Result<&str> {

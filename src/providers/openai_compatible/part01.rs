@@ -92,21 +92,11 @@ impl OpenAICompatible {
     }
 
     fn chat_completions_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/chat/completions") {
-            base.to_string()
-        } else {
-            format!("{base}/chat/completions")
-        }
+        openai_like::join_endpoint(&self.base_url, "chat/completions")
     }
 
     fn files_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/files") {
-            base.to_string()
-        } else {
-            format!("{base}/files")
-        }
+        openai_like::join_endpoint(&self.base_url, "files")
     }
 
     pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {

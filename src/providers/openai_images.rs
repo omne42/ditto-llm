@@ -80,12 +80,7 @@ impl OpenAIImages {
     }
 
     fn images_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/images/generations") {
-            base.to_string()
-        } else {
-            format!("{base}/images/generations")
-        }
+        openai_like::join_endpoint(&self.base_url, "images/generations")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a ImageGenerationRequest) -> Result<&'a str> {

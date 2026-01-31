@@ -105,15 +105,7 @@ impl EmbeddingModel for OpenAIEmbeddings {
 
     async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         let model = self.resolve_model()?;
-
-        let url = {
-            let base = self.base_url.trim_end_matches('/');
-            if base.ends_with("/embeddings") {
-                base.to_string()
-            } else {
-                format!("{base}/embeddings")
-            }
-        };
+        let url = openai_like::join_endpoint(&self.base_url, "embeddings");
 
         let req = self.http.post(url);
         let response = self

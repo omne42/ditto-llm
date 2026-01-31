@@ -13,6 +13,16 @@ use crate::{DittoError, Result};
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const HTTP_TIMEOUT: Duration = Duration::from_secs(300);
 
+pub(crate) fn join_endpoint(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    let endpoint = endpoint.trim_start_matches('/');
+    if base.ends_with(&format!("/{endpoint}")) {
+        base.to_string()
+    } else {
+        format!("{base}/{endpoint}")
+    }
+}
+
 pub(crate) fn default_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(HTTP_TIMEOUT)

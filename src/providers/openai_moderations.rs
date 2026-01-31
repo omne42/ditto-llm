@@ -81,12 +81,7 @@ impl OpenAIModerations {
     }
 
     fn moderations_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/moderations") {
-            base.to_string()
-        } else {
-            format!("{base}/moderations")
-        }
+        openai_like::join_endpoint(&self.base_url, "moderations")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a ModerationRequest) -> Result<&'a str> {
