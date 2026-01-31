@@ -86,7 +86,7 @@
   - [x] `fs_find` tool + executor（feature `agent`，`safe-fs-tools` glob；files-only）
   - [x] `fs_grep` tool + executor（feature `agent`，`safe-fs-tools` grep）
   - [x] `fs_write_file` tool + executor（feature `agent`，`safe-fs-tools` `write_file`；支持创建新文件；支持 `create_parents`；需要 `overwrite=true` 才会覆盖已存在文件）
-  - [x] `fs_delete_file` tool + executor（feature `agent`，`safe-fs-tools` `delete_path`；支持 `recursive=true` 删除目录；支持 `ignore_missing=true`）
+  - [x] `fs_delete_file` tool + executor（feature `agent`，`safe-fs-tools` `delete`；支持 `recursive=true` 删除目录；支持 `ignore_missing=true`）
   - [x] `fs_list_dir` tool + executor（feature `agent`，`safe-fs-tools` `list_dir`）
   - [x] `fs_stat` tool + executor（feature `agent`，`safe-fs-tools` `stat`）
   - [x] `fs_mkdir` tool + executor（feature `agent`，`safe-fs-tools` `mkdir`）

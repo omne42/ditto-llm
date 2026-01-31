@@ -149,7 +149,7 @@ impl FsToolExecutor {
 
         let delete = tokio::task::spawn_blocking(move || {
             let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
-            ctx.delete_path(DeletePathRequest {
+            ctx.delete(DeleteRequest {
                 root_id: SAFE_FS_ROOT_ID.to_string(),
                 path: PathBuf::from(raw_path),
                 recursive,

@@ -1,5 +1,5 @@
 use safe_fs_tools::{
-    CopyFileRequest, DeletePathRequest, GlobRequest, GrepRequest, ListDirRequest, MkdirRequest,
+    CopyFileRequest, DeleteRequest, GlobRequest, GrepRequest, ListDirRequest, MkdirRequest,
     MovePathRequest, ReadRequest, RootMode, SandboxPolicy, StatRequest, WriteFileRequest,
 };
 

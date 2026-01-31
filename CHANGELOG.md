@@ -129,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor: split `providers::cohere` module into sub-files (no behavior changes).
 - Refactor: split `providers::google` module into sub-files (no behavior changes).
 - Refactor: split `agent::toolbox` module into sub-files (no behavior changes).
+- Agent: switch `fs_delete_file` executor to `safe-fs-tools` `delete` API (unified delete).
 - Refactor: split `object` module into sub-files (no behavior changes).
 - Refactor: split `profile` module into sub-files (no behavior changes).
 - Dev: fix clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`).
