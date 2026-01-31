@@ -9,7 +9,8 @@ pub fn fs_delete_file_tool() -> Tool {
         description: Some(
             "Delete a file or directory under the configured root directory.\n\n\
 Implemented via `safe-fs-tools`.\n\
-Directory deletion is supported with `recursive=true`."
+Directory deletion is supported with `recursive=true`.\n\
+When `ignore_missing=true`, deleting a missing path succeeds and returns `deleted=false`."
                 .to_string(),
         ),
         parameters: serde_json::json!({
