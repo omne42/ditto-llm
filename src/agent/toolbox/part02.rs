@@ -10,6 +10,7 @@ impl ToolExecutor for FsToolExecutor {
             TOOL_FS_READ_FILE => self.execute_read_file(call).await,
             TOOL_FS_WRITE_FILE => self.execute_write_file(call).await,
             TOOL_FS_DELETE_FILE => self.execute_delete_file(call).await,
+            TOOL_FS_MKDIR => self.execute_mkdir(call).await,
             TOOL_FS_LIST_DIR => self.execute_list_dir(call).await,
             TOOL_FS_FIND => self.execute_find(call).await,
             TOOL_FS_GREP => self.execute_grep(call).await,
@@ -502,6 +503,67 @@ fn read_file_limited(path: &Path, max_bytes: usize) -> std::io::Result<(String, 
     Ok((String::from_utf8_lossy(&buf).to_string(), truncated))
 }
 
+fn ensure_dir_under_root(root: &Path, rel: &Path, create_missing: bool) -> std::io::Result<PathBuf> {
+    use std::path::Component;
+
+    let mut current = root.to_path_buf();
+
+    for component in rel.components() {
+        match component {
+            Component::CurDir => continue,
+            Component::ParentDir => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "parent dir segments are not allowed",
+                ));
+            }
+            Component::Normal(segment) => {
+                let next = current.join(segment);
+                match std::fs::symlink_metadata(&next) {
+                    Ok(meta) => {
+                        if meta.file_type().is_symlink() {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::PermissionDenied,
+                                "refusing to traverse symlink",
+                            ));
+                        }
+                        if !meta.is_dir() {
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::InvalidInput,
+                                "path component is not a directory",
+                            ));
+                        }
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                        if create_missing {
+                            std::fs::create_dir(&next)?;
+                        } else {
+                            return Err(err);
+                        }
+                    }
+                    Err(err) => return Err(err),
+                }
+                current = next;
+            }
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "invalid path segment",
+                ));
+            }
+        }
+    }
+
+    if !current.starts_with(root) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "path escapes root",
+        ));
+    }
+
+    Ok(current)
+}
+
 fn fs_write_file_blocking(
     root: &Path,
     rel: &Path,
@@ -526,17 +588,7 @@ fn fs_write_file_blocking(
     })?;
     let rel_parent = rel.parent().unwrap_or_else(|| Path::new(""));
 
-    let joined_parent = root.join(rel_parent);
-    if create_parents {
-        std::fs::create_dir_all(&joined_parent)?;
-    }
-    let canonical_parent = std::fs::canonicalize(&joined_parent)?;
-    if !canonical_parent.starts_with(&root) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "path escapes root",
-        ));
-    }
+    let canonical_parent = ensure_dir_under_root(&root, rel_parent, create_parents)?;
 
     if content.len() > max_bytes {
         return Err(std::io::Error::new(
@@ -553,11 +605,29 @@ fn fs_write_file_blocking(
         ));
     }
 
-    if target.exists() && !overwrite {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "file exists",
-        ));
+    match std::fs::symlink_metadata(&target) {
+        Ok(meta) => {
+            if meta.file_type().is_symlink() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "refusing to write to symlink",
+                ));
+            }
+            if meta.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "path is a directory",
+                ));
+            }
+            if !overwrite {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "file exists",
+                ));
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err),
     }
 
     std::fs::write(&target, content)?;

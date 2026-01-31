@@ -28,6 +28,7 @@ pub fn toolbox_tools() -> Vec<Tool> {
         fs_read_file_tool(),
         fs_write_file_tool(),
         fs_delete_file_tool(),
+        fs_mkdir_tool(),
         fs_list_dir_tool(),
         fs_find_tool(),
         fs_grep_tool(),

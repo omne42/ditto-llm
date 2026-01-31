@@ -7,8 +7,8 @@ use serde_json::json;
 use ditto_llm::Result;
 use ditto_llm::agent::{
     FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_DELETE_FILE, TOOL_FS_FIND,
-    TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_READ_FILE, TOOL_FS_STAT, TOOL_FS_WRITE_FILE,
-    TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
+    TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_MKDIR, TOOL_FS_READ_FILE, TOOL_FS_STAT,
+    TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
 #[tokio::test]
@@ -244,6 +244,33 @@ async fn fs_write_file_tool_writes_and_respects_overwrite() -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_write_file_tool_rejects_symlink_escape_without_side_effects() -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempfile::tempdir()?;
+    let outside = tempfile::tempdir()?;
+    symlink(outside.path(), dir.path().join("link"))?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_WRITE_FILE.to_string(),
+        arguments: json!({
+            "path": "link/sub/hello.txt",
+            "content": "hi",
+            "create_parents": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+    assert!(!outside.path().join("sub").exists());
+    Ok(())
+}
+
 #[tokio::test]
 async fn fs_list_dir_lists_entries() -> Result<()> {
     let dir = tempfile::tempdir()?;
@@ -462,6 +489,77 @@ async fn fs_delete_file_tool_ignores_missing_paths_when_requested() -> Result<()
     let value: serde_json::Value = serde_json::from_str(&result.content)?;
     assert_eq!(value.get("deleted").and_then(|v| v.as_bool()), Some(false));
     assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("missing"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_mkdir_tool_creates_directory() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MKDIR.to_string(),
+        arguments: json!({
+            "path": "sub"
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(dir.path().join("sub").is_dir());
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_mkdir_tool_creates_parents() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MKDIR.to_string(),
+        arguments: json!({
+            "path": "a/b",
+            "create_parents": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(dir.path().join("a").join("b").is_dir());
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_mkdir_tool_ignores_existing_when_requested() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MKDIR.to_string(),
+        arguments: json!({
+            "path": "sub",
+            "ignore_existing": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(false));
     Ok(())
 }
 

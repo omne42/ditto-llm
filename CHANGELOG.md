@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor`, stop hooks, approvals, and tool-result backfill (feature `agent`).
 - Agent: built-in tool wrappers and executors (`http_fetch`, `fs_read_file`, `fs_write_file`, `fs_list_dir`, `fs_find`, `fs_grep`, `fs_stat`, `shell_exec`) for `ToolLoopAgent` (feature `agent`).
 - Agent: add `fs_delete_file` tool + executor to delete files/directories within root (directories require `recursive=true`).
+- Agent: add `fs_mkdir` tool + executor to create directories within root (use `create_parents=true` for nested paths).
 - Agent: `shell_exec` supports optional `stdin` (UTF-8) input.
 - Agent: `http_fetch` supports `parse_json`, per-call `max_response_bytes`, emits `elapsed_ms`, and marks non-2xx responses as tool errors.
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
@@ -147,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming: abort background stream tasks when the consumer streams are dropped.
 - Providers: avoid panicking if the default `reqwest::Client` build fails (fall back to `reqwest::Client::new()`).
 - Security: redact sensitive fields in `Debug` for gateway key config and auth-related types.
+- Agent: `fs_write_file` rejects symlink traversal to prevent root escape side effects.
 - Tests: make Vertex `generateContent` mock matching robust to float serialization differences.
 - OpenAI Responses: map `finish_reason` consistently (generate + stream), including tool-call completion.
 - OpenAI Responses: include `instructions` (from system messages) to satisfy providers that require it.
