@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document non-goals and optional future scope (gateway/control-plane features, agent loop, UI SDK surface, native auth adapters).
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor`, stop hooks, approvals, and tool-result backfill (feature `agent`).
 - Agent: built-in tool wrappers and executors (`http_fetch`, `fs_read_file`, `fs_write_file`, `fs_list_dir`, `fs_find`, `fs_grep`, `fs_stat`, `shell_exec`) for `ToolLoopAgent` (feature `agent`).
+- Agent: `shell_exec` supports optional `stdin` (UTF-8) input.
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
 - Providers: Bedrock (SigV4) and Vertex (OAuth) minimal adapters (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
@@ -119,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor: split `gateway::http` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai_compatible` module into sub-files (no behavior changes).
+- Refactor: split `agent::toolbox` module into sub-files (no behavior changes).
 - Dev: fix clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`).
 
 ### Fixed

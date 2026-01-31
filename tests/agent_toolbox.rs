@@ -332,6 +332,31 @@ async fn shell_exec_tool_runs_allowlisted_program() -> Result<()> {
 }
 
 #[tokio::test]
+async fn shell_exec_tool_writes_stdin() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    let executor = ShellToolExecutor::new(dir.path())?
+        .with_allowed_programs(["cat"])
+        .with_max_output_bytes(1024);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "cat",
+            "stdin": "hello"
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("ok").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(value.get("stdout").and_then(|v| v.as_str()), Some("hello"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn shell_exec_tool_rejects_cwd_escape() -> Result<()> {
     let dir = tempfile::tempdir()?;
     let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["rustc"]);
