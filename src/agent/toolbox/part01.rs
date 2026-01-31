@@ -27,14 +27,9 @@ pub fn toolbox_tools() -> Vec<Tool> {
         http_fetch_tool(),
         fs_read_file_tool(),
         fs_write_file_tool(),
-        fs_move_tool(),
-        fs_copy_file_tool(),
         fs_delete_file_tool(),
-        fs_mkdir_tool(),
-        fs_list_dir_tool(),
         fs_find_tool(),
         fs_grep_tool(),
-        fs_stat_tool(),
         shell_exec_tool(),
     ]
 }
@@ -88,7 +83,9 @@ pub fn fs_write_file_tool() -> Tool {
     Tool {
         name: TOOL_FS_WRITE_FILE.to_string(),
         description: Some(
-            "Write a file under the configured root directory and return the written path."
+            "Overwrite an existing file under the configured root directory.\n\n\
+This tool is implemented via `safe-fs-tools` (atomic patching), and currently does not support\n\
+creating new files or parent directories."
                 .to_string(),
         ),
         parameters: serde_json::json!({
@@ -97,7 +94,7 @@ pub fn fs_write_file_tool() -> Tool {
                 "path": { "type": "string", "description": "Path relative to the configured root directory." },
                 "content": { "type": "string", "description": "File contents (UTF-8 string)." },
                 "overwrite": { "type": "boolean", "description": "Overwrite existing files (default: false)." },
-                "create_parents": { "type": "boolean", "description": "Create parent directories if missing (default: false)." }
+                "create_parents": { "type": "boolean", "description": "Not supported yet: safe-fs-tools cannot create directories." }
             },
             "required": ["path", "content"]
         }),
@@ -910,34 +907,6 @@ impl FsToolExecutor {
     pub fn with_max_list_entries(mut self, max_list_entries: usize) -> Self {
         self.max_list_entries = max_list_entries.max(1);
         self
-    }
-
-    fn validate_relative_path(raw: &str) -> std::result::Result<&Path, String> {
-        let raw = raw.trim();
-        if raw.is_empty() {
-            return Err("path is empty".to_string());
-        }
-        let rel = Path::new(raw);
-        if rel.is_absolute() {
-            return Err("absolute paths are not allowed".to_string());
-        }
-        for component in rel.components() {
-            if matches!(component, std::path::Component::ParentDir) {
-                return Err("parent dir segments are not allowed".to_string());
-            }
-        }
-        Ok(rel)
-    }
-
-    fn resolve_existing_path(&self, raw: &str) -> std::result::Result<PathBuf, String> {
-        let rel = Self::validate_relative_path(raw)?;
-        let joined = self.root.join(rel);
-        let canonical = std::fs::canonicalize(&joined)
-            .map_err(|err| format!("failed to resolve path {}: {err}", joined.display()))?;
-        if !canonical.starts_with(&self.root) {
-            return Err("path escapes root".to_string());
-        }
-        Ok(canonical)
     }
 }
 

@@ -82,12 +82,16 @@
 - [x] “UI/HTTP 适配层”（AI SDK UI-like）：提供 `sdk::http::{stream_v1_sse, stream_v1_ndjson}`，把 Ditto 的 stream protocol v1 以 SSE/NDJSON 输出（Rust 侧提供 primitives，而非 React hooks）
 - [x] 常用工具 wrappers（可选模块）：shell/fs/http 等“本地工具”封装（对齐 AI SDK `ToolLoopAgent` 的可组合体验）
   - [x] `http_fetch` tool + executor（feature `agent`）
-  - [x] `fs_read_file` tool + executor（feature `agent`，限制 root）
-  - [x] `fs_write_file` tool + executor（feature `agent`，限制 root，默认不覆盖）
-  - [x] `fs_list_dir` tool + executor（feature `agent`，限制 root）
-  - [x] `fs_find` tool + executor（feature `agent`，限制 root）
-  - [x] `fs_grep` tool + executor（feature `agent`，限制 root）
-  - [x] `fs_stat` tool + executor（feature `agent`，限制 root）
+  - [x] `fs_read_file` tool + executor（feature `agent`，`safe-fs-tools`，限制 root）
+  - [x] `fs_find` tool + executor（feature `agent`，`safe-fs-tools` glob；files-only）
+  - [x] `fs_grep` tool + executor（feature `agent`，`safe-fs-tools` grep）
+  - [x] `fs_write_file` tool + executor（feature `agent`，`safe-fs-tools` patch；仅覆盖已存在文件；需要 `overwrite=true`；不支持 `create_parents`）
+  - [x] `fs_delete_file` tool + executor（feature `agent`，`safe-fs-tools` delete；files-only；支持 `ignore_missing=true`）
+  - [ ] `fs_list_dir` tool + executor（TODO：`safe-fs-tools` 暂无 list-dir API）
+  - [ ] `fs_stat` tool + executor（TODO：`safe-fs-tools` 暂无 stat API）
+  - [ ] `fs_mkdir` tool + executor（TODO：`safe-fs-tools` 暂无 mkdir API）
+  - [ ] `fs_move` tool + executor（TODO：`safe-fs-tools` 暂无 move/rename API）
+  - [ ] `fs_copy_file` tool + executor（TODO：`safe-fs-tools` 暂无 copy API）
   - [x] `shell_exec` tool（feature `agent`，allowlist + cwd 限制 root）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）

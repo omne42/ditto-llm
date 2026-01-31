@@ -194,19 +194,21 @@ async fn fs_read_file_tool_rejects_path_escape() -> Result<()> {
 async fn fs_write_file_tool_writes_and_respects_overwrite() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
+    std::fs::create_dir_all(dir.path().join("sub"))?;
+    std::fs::write(dir.path().join("sub").join("hello.txt"), "hi")?;
+
     let executor = FsToolExecutor::new(dir.path())?;
     let write_1 = ToolCall {
         id: "call_1".to_string(),
         name: TOOL_FS_WRITE_FILE.to_string(),
         arguments: json!({
             "path": "sub/hello.txt",
-            "content": "hi",
-            "create_parents": true
+            "content": "bye"
         }),
     };
     let result_1 = executor.execute(write_1).await?;
     assert_eq!(result_1.tool_call_id, "call_1");
-    assert_eq!(result_1.is_error, None);
+    assert_eq!(result_1.is_error, Some(true));
     assert_eq!(
         std::fs::read_to_string(dir.path().join("sub").join("hello.txt"))?,
         "hi"
@@ -217,28 +219,26 @@ async fn fs_write_file_tool_writes_and_respects_overwrite() -> Result<()> {
         name: TOOL_FS_WRITE_FILE.to_string(),
         arguments: json!({
             "path": "sub/hello.txt",
-            "content": "bye"
-        }),
-    };
-    let result_2 = executor.execute(write_2).await?;
-    assert_eq!(result_2.tool_call_id, "call_2");
-    assert_eq!(result_2.is_error, Some(true));
-
-    let write_3 = ToolCall {
-        id: "call_3".to_string(),
-        name: TOOL_FS_WRITE_FILE.to_string(),
-        arguments: json!({
-            "path": "sub/hello.txt",
             "content": "bye",
             "overwrite": true
         }),
     };
-    let result_3 = executor.execute(write_3).await?;
-    assert_eq!(result_3.tool_call_id, "call_3");
-    assert_eq!(result_3.is_error, None);
+    let result_2 = executor.execute(write_2).await?;
+    assert_eq!(result_2.tool_call_id, "call_2");
+    assert_eq!(result_2.is_error, None);
     assert_eq!(
         std::fs::read_to_string(dir.path().join("sub").join("hello.txt"))?,
         "bye"
+    );
+
+    let value: serde_json::Value = serde_json::from_str(&result_2.content)?;
+    assert_eq!(value.get("written").and_then(|v| v.as_bool()), Some(true));
+    assert!(
+        value
+            .get("bytes_written")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            > 0
     );
 
     Ok(())
@@ -253,6 +253,9 @@ async fn fs_write_file_tool_rejects_symlink_escape_without_side_effects() -> Res
     let outside = tempfile::tempdir()?;
     symlink(outside.path(), dir.path().join("link"))?;
 
+    std::fs::create_dir_all(outside.path().join("sub"))?;
+    std::fs::write(outside.path().join("sub").join("hello.txt"), "original")?;
+
     let executor = FsToolExecutor::new(dir.path())?;
     let call = ToolCall {
         id: "call_1".to_string(),
@@ -260,14 +263,17 @@ async fn fs_write_file_tool_rejects_symlink_escape_without_side_effects() -> Res
         arguments: json!({
             "path": "link/sub/hello.txt",
             "content": "hi",
-            "create_parents": true
+            "overwrite": true
         }),
     };
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, Some(true));
-    assert!(!outside.path().join("sub").exists());
+    assert_eq!(
+        std::fs::read_to_string(outside.path().join("sub").join("hello.txt"))?,
+        "original"
+    );
     Ok(())
 }
 
@@ -285,25 +291,8 @@ async fn fs_list_dir_lists_entries() -> Result<()> {
     };
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
+    assert_eq!(result.is_error, Some(true));
 
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    let entries = value
-        .get("entries")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    let names: Vec<String> = entries
-        .iter()
-        .filter_map(|entry| {
-            entry
-                .get("name")
-                .and_then(|n| n.as_str())
-                .map(|s| s.to_string())
-        })
-        .collect();
-    assert!(names.contains(&"a.txt".to_string()));
-    assert!(names.contains(&"sub".to_string()));
     Ok(())
 }
 
@@ -324,100 +313,9 @@ async fn fs_move_tool_moves_files() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(!dir.path().join("a.txt").exists());
-    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
-    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("file"));
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_move_tool_creates_parents_for_destination() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_MOVE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "sub/b.txt",
-            "create_parents": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(!dir.path().join("a.txt").exists());
-    assert_eq!(
-        std::fs::read_to_string(dir.path().join("sub").join("b.txt"))?,
-        "hi"
-    );
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_move_tool_overwrites_destination_file() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-    std::fs::write(dir.path().join("b.txt"), "bye")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_MOVE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "b.txt",
-            "overwrite": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(!dir.path().join("a.txt").exists());
-    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
-    Ok(())
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn fs_move_tool_rejects_symlink_escape_without_side_effects() -> Result<()> {
-    use std::os::unix::fs::symlink;
-
-    let dir = tempfile::tempdir()?;
-    let outside = tempfile::tempdir()?;
-    symlink(outside.path(), dir.path().join("link"))?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_MOVE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "link/b.txt",
-            "create_parents": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, Some(true));
     assert!(dir.path().join("a.txt").exists());
-    assert!(!outside.path().join("b.txt").exists());
+    assert!(!dir.path().join("b.txt").exists());
     Ok(())
 }
 
@@ -438,94 +336,9 @@ async fn fs_copy_file_tool_copies_files() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt"))?, "hi");
-    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("copied").and_then(|v| v.as_bool()), Some(true));
-    assert!(value.get("bytes").and_then(|v| v.as_u64()).unwrap_or(0) > 0);
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_copy_file_tool_creates_parents_for_destination() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_COPY_FILE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "sub/b.txt",
-            "create_parents": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt"))?, "hi");
-    assert_eq!(
-        std::fs::read_to_string(dir.path().join("sub").join("b.txt"))?,
-        "hi"
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_copy_file_tool_overwrites_destination_file() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-    std::fs::write(dir.path().join("b.txt"), "bye")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_COPY_FILE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "b.txt",
-            "overwrite": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt"))?, "hi");
-    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
-    Ok(())
-}
-
-#[cfg(unix)]
-#[tokio::test]
-async fn fs_copy_file_tool_rejects_symlink_escape_without_side_effects() -> Result<()> {
-    use std::os::unix::fs::symlink;
-
-    let dir = tempfile::tempdir()?;
-    let outside = tempfile::tempdir()?;
-    symlink(outside.path(), dir.path().join("link"))?;
-    std::fs::write(dir.path().join("a.txt"), "hi")?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_COPY_FILE.to_string(),
-        arguments: json!({
-            "from": "a.txt",
-            "to": "link/b.txt",
-            "create_parents": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, Some(true));
     assert_eq!(std::fs::read_to_string(dir.path().join("a.txt"))?, "hi");
-    assert!(!outside.path().join("b.txt").exists());
+    assert!(!dir.path().join("b.txt").exists());
     Ok(())
 }
 
@@ -628,13 +441,7 @@ async fn fs_stat_tool_reports_metadata() -> Result<()> {
     };
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    let stat = value.get("stat").cloned().unwrap_or_default();
-    assert_eq!(stat.get("type").and_then(|v| v.as_str()), Some("file"));
-    assert_eq!(stat.get("size_bytes").and_then(|v| v.as_u64()), Some(2));
-    assert!(stat.get("modified_ms").is_some());
+    assert_eq!(result.is_error, Some(true));
     Ok(())
 }
 
@@ -681,12 +488,8 @@ async fn fs_delete_file_tool_deletes_dirs_recursively() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(!dir.path().join("sub").exists());
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("deleted").and_then(|v| v.as_bool()), Some(true));
-    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("dir"));
+    assert_eq!(result.is_error, Some(true));
+    assert!(dir.path().join("sub").is_dir());
     Ok(())
 }
 
@@ -729,59 +532,8 @@ async fn fs_mkdir_tool_creates_directory() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(dir.path().join("sub").is_dir());
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(true));
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_mkdir_tool_creates_parents() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_MKDIR.to_string(),
-        arguments: json!({
-            "path": "a/b",
-            "create_parents": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-    assert!(dir.path().join("a").join("b").is_dir());
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(true));
-    Ok(())
-}
-
-#[tokio::test]
-async fn fs_mkdir_tool_ignores_existing_when_requested() -> Result<()> {
-    let dir = tempfile::tempdir()?;
-    std::fs::create_dir_all(dir.path().join("sub"))?;
-
-    let executor = FsToolExecutor::new(dir.path())?;
-    let call = ToolCall {
-        id: "call_1".to_string(),
-        name: TOOL_FS_MKDIR.to_string(),
-        arguments: json!({
-            "path": "sub",
-            "ignore_existing": true
-        }),
-    };
-
-    let result = executor.execute(call).await?;
-    assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, None);
-
-    let value: serde_json::Value = serde_json::from_str(&result.content)?;
-    assert_eq!(value.get("created").and_then(|v| v.as_bool()), Some(false));
+    assert_eq!(result.is_error, Some(true));
+    assert!(!dir.path().join("sub").exists());
     Ok(())
 }
 

@@ -1,6 +1,50 @@
+use safe_fs_tools::{GlobRequest, GrepRequest, PatchRequest, ReadRequest, RootMode, SandboxPolicy};
+
+const SAFE_FS_ROOT_ID: &str = "root";
+
 #[derive(Debug, Deserialize)]
 struct FsStatArgs {
     path: String,
+}
+
+fn safe_fs_ctx(
+    root: PathBuf,
+    max_read_bytes: u64,
+    max_write_bytes: u64,
+    max_results: usize,
+) -> std::result::Result<safe_fs_tools::Context, safe_fs_tools::Error> {
+    let mut policy = SandboxPolicy::single_root(SAFE_FS_ROOT_ID, root, RootMode::ReadWrite);
+    policy.paths.allow_absolute = false;
+    policy.permissions.read = true;
+    policy.permissions.glob = true;
+    policy.permissions.grep = true;
+    policy.permissions.patch = true;
+    policy.permissions.delete = true;
+    policy.limits.max_read_bytes = max_read_bytes;
+    policy.limits.max_patch_bytes = Some(max_read_bytes.saturating_mul(2));
+    policy.limits.max_write_bytes = max_write_bytes;
+    policy.limits.max_results = max_results.max(1);
+    safe_fs_tools::Context::new(policy)
+}
+
+fn safe_fs_is_not_found(err: &safe_fs_tools::Error) -> bool {
+    match err {
+        safe_fs_tools::Error::Io(err) => err.kind() == std::io::ErrorKind::NotFound,
+        safe_fs_tools::Error::IoPath { source, .. } => source.kind() == std::io::ErrorKind::NotFound,
+        safe_fs_tools::Error::WalkDirRoot { source, .. } => {
+            source.kind() == std::io::ErrorKind::NotFound
+        }
+        _ => false,
+    }
+}
+
+fn path_depth_under(base: &Path, path: &Path) -> usize {
+    let rel = if base.as_os_str().is_empty() {
+        path
+    } else {
+        path.strip_prefix(base).unwrap_or(path)
+    };
+    rel.components().count().saturating_sub(1)
 }
 
 #[async_trait]
@@ -39,28 +83,25 @@ impl FsToolExecutor {
             }
         };
 
-        let path = match self.resolve_existing_path(&args.path) {
-            Ok(path) => path,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err,
-                    is_error: Some(true),
-                });
-            }
-        };
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let raw_path = args.path.clone();
 
-        let max_bytes = self.max_bytes;
-        let read = tokio::task::spawn_blocking(move || read_file_limited(&path, max_bytes))
-            .await
-            .map_err(|err| {
-                DittoError::Io(std::io::Error::other(format!(
-                    "fs_read_file join error: {err}"
-                )))
-            })?;
+        let read = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.read_file(ReadRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(raw_path),
+                start_line: None,
+                end_line: None,
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_read_file join error: {err}"))))?;
 
-        let (content, truncated) = match read {
-            Ok(ok) => ok,
+        let resp = match read {
+            Ok(resp) => resp,
             Err(err) => {
                 return Ok(ToolResult {
                     tool_call_id: call.id,
@@ -72,8 +113,8 @@ impl FsToolExecutor {
 
         let out = serde_json::json!({
             "path": args.path,
-            "content": content,
-            "truncated": truncated,
+            "content": resp.content,
+            "truncated": false,
         });
 
         Ok(ToolResult {
@@ -103,42 +144,62 @@ impl FsToolExecutor {
             });
         }
 
-        let rel = match Self::validate_relative_path(&args.path) {
-            Ok(rel) => rel.to_path_buf(),
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err,
-                    is_error: Some(true),
-                });
-            }
-        };
+        if args.create_parents {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: "create_parents is not supported (safe-fs-tools cannot create directories)"
+                    .to_string(),
+                is_error: Some(true),
+            });
+        }
+
+        if !args.overwrite {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: "refusing to modify files without overwrite=true (safe-fs-tools cannot create new files)"
+                    .to_string(),
+                is_error: Some(true),
+            });
+        }
 
         let root = self.root.clone();
-        let max_bytes = self.max_bytes;
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let raw_path = args.path.clone();
+        let desired = args.content.clone();
+
         let write = tokio::task::spawn_blocking(move || {
-            fs_write_file_blocking(
-                &root,
-                &rel,
-                &args.content,
-                args.overwrite,
-                args.create_parents,
-                max_bytes,
-            )
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+
+            let before = ctx.read_file(ReadRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(&raw_path),
+                start_line: None,
+                end_line: None,
+            })?;
+
+            let patch = diffy::create_patch(&before.content, &desired).to_string();
+            ctx.apply_unified_patch(PatchRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(&raw_path),
+                patch,
+            })
         })
         .await
-        .map_err(|err| {
-            DittoError::Io(std::io::Error::other(format!(
-                "fs_write_file join error: {err}"
-            )))
-        })?;
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_write_file join error: {err}"))))?;
 
-        let written_path = match write {
-            Ok(path) => path,
+        let resp = match write {
+            Ok(resp) => resp,
             Err(err) => {
+                let msg = if safe_fs_is_not_found(&err) {
+                    "fs_write_file failed: file does not exist (safe-fs-tools cannot create new files yet)"
+                        .to_string()
+                } else {
+                    format!("fs_write_file failed: {err}")
+                };
                 return Ok(ToolResult {
                     tool_call_id: call.id,
-                    content: format!("fs_write_file failed: {err}"),
+                    content: msg,
                     is_error: Some(true),
                 });
             }
@@ -147,7 +208,7 @@ impl FsToolExecutor {
         let out = serde_json::json!({
             "path": args.path,
             "written": true,
-            "absolute_path": written_path.to_string_lossy(),
+            "bytes_written": resp.bytes_written,
         });
 
         Ok(ToolResult {
@@ -169,59 +230,16 @@ impl FsToolExecutor {
             }
         };
 
-        let raw_path = args.path.as_deref().unwrap_or("");
-        let dir = if raw_path.trim().is_empty() {
-            self.root.clone()
-        } else {
-            match self.resolve_existing_path(raw_path) {
-                Ok(path) => path,
-                Err(err) => {
-                    return Ok(ToolResult {
-                        tool_call_id: call.id,
-                        content: err,
-                        is_error: Some(true),
-                    });
-                }
-            }
-        };
-
-        let max_entries = args
-            .max_entries
-            .unwrap_or(self.max_list_entries)
-            .min(self.max_list_entries)
-            .max(1);
-
-        let root = self.root.clone();
-        let list =
-            tokio::task::spawn_blocking(move || fs_list_dir_blocking(&root, &dir, max_entries))
-                .await
-                .map_err(|err| {
-                    DittoError::Io(std::io::Error::other(format!(
-                        "fs_list_dir join error: {err}"
-                    )))
-                })?;
-
-        let (entries, truncated) = match list {
-            Ok(ok) => ok,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("fs_list_dir failed: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let out = serde_json::json!({
-            "path": if raw_path.trim().is_empty() { "." } else { raw_path },
-            "entries": entries,
-            "truncated": truncated,
-        });
+        let requested = args.path.unwrap_or_else(|| ".".to_string());
+        let max_entries = args.max_entries.unwrap_or(self.max_list_entries);
 
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: out.to_string(),
-            is_error: None,
+            content: format!(
+                "fs_list_dir is not supported (safe-fs-tools has no directory listing API yet): path={requested:?} max_entries={max_entries}"
+            )
+                .to_string(),
+            is_error: Some(true),
         })
     }
 
@@ -238,21 +256,33 @@ impl FsToolExecutor {
         };
 
         let include_files = args.include_files.unwrap_or(true);
+        if !include_files {
+            let out = serde_json::json!({
+                "path": args.path.as_deref().unwrap_or("."),
+                "entries": [],
+                "truncated": false,
+            });
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: out.to_string(),
+                is_error: None,
+            });
+        }
 
-        let raw_path = args.path.as_deref().unwrap_or("");
-        let dir = if raw_path.trim().is_empty() {
-            self.root.clone()
+        if args.include_dirs {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: "fs_find include_dirs=true is not supported (safe-fs-tools glob only returns files)"
+                    .to_string(),
+                is_error: Some(true),
+            });
+        }
+
+        let raw_dir = args.path.as_deref().unwrap_or("").trim().trim_matches('/');
+        let dir_prefix = if raw_dir.is_empty() {
+            None
         } else {
-            match self.resolve_existing_path(raw_path) {
-                Ok(path) => path,
-                Err(err) => {
-                    return Ok(ToolResult {
-                        tool_call_id: call.id,
-                        content: err,
-                        is_error: Some(true),
-                    });
-                }
-            }
+            Some(raw_dir.to_string())
         };
 
         let max_entries = args
@@ -263,45 +293,49 @@ impl FsToolExecutor {
 
         let max_depth = args.max_depth.unwrap_or(10).min(64);
 
-        let pattern = args
+        let substring = args
             .pattern
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(|value| value.to_string());
 
-        let extensions = args.extensions.map(|values| {
-            values
-                .into_iter()
-                .filter_map(|value| {
-                    let trimmed = value.trim().trim_start_matches('.');
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_ascii_lowercase())
-                    }
-                })
-                .collect::<BTreeSet<_>>()
-        });
+        let extensions: Vec<String> = args
+            .extensions
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|value| {
+                let trimmed = value.trim().trim_start_matches('.').to_ascii_lowercase();
+                (!trimmed.is_empty()).then_some(trimmed)
+            })
+            .collect();
 
-        let options = FsFindOptions {
-            pattern,
-            extensions,
-            max_entries,
-            max_depth,
-            include_files,
-            include_dirs: args.include_dirs,
+        let file_glob = match (dir_prefix.as_deref(), extensions.as_slice()) {
+            (None, []) => "**/*".to_string(),
+            (Some(dir), []) => format!("{dir}/**/*"),
+            (None, [ext]) => format!("**/*.{ext}"),
+            (Some(dir), [ext]) => format!("{dir}/**/*.{ext}"),
+            (None, exts) => format!("**/*.{{{}}}", exts.join(",")),
+            (Some(dir), exts) => format!("{dir}/**/*.{{{}}}", exts.join(",")),
         };
 
         let root = self.root.clone();
-        let find = tokio::task::spawn_blocking(move || fs_find_blocking(&root, &dir, options))
-            .await
-            .map_err(|err| {
-                DittoError::Io(std::io::Error::other(format!("fs_find join error: {err}")))
-            })?;
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let base = dir_prefix.clone();
 
-        let (entries, truncated) = match find {
-            Ok(ok) => ok,
+        let glob = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.glob_paths(GlobRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                pattern: file_glob,
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_find join error: {err}"))))?;
+
+        let resp = match glob {
+            Ok(resp) => resp,
             Err(err) => {
                 return Ok(ToolResult {
                     tool_call_id: call.id,
@@ -311,8 +345,37 @@ impl FsToolExecutor {
             }
         };
 
+        let base_path = base.as_deref().map(PathBuf::from).unwrap_or_default();
+        let mut entries = Vec::<Value>::new();
+
+        for path in resp.matches {
+            if let Some(substring) = substring.as_ref() {
+                if !path.to_string_lossy().contains(substring) {
+                    continue;
+                }
+            }
+            if path_depth_under(&base_path, &path) > max_depth {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .map(|value| value.to_string_lossy().to_string())
+                .unwrap_or_default();
+            entries.push(serde_json::json!({
+                "path": path.to_string_lossy(),
+                "name": name,
+                "type": "file",
+            }));
+        }
+
+        let mut truncated = resp.truncated;
+        if entries.len() > max_entries {
+            entries.truncate(max_entries);
+            truncated = true;
+        }
+
         let out = serde_json::json!({
-            "path": if raw_path.trim().is_empty() { "." } else { raw_path },
+            "path": args.path.as_deref().unwrap_or("."),
             "entries": entries,
             "truncated": truncated,
         });
@@ -345,20 +408,11 @@ impl FsToolExecutor {
             });
         }
 
-        let raw_path = args.path.as_deref().unwrap_or("");
-        let dir = if raw_path.trim().is_empty() {
-            self.root.clone()
+        let raw_dir = args.path.as_deref().unwrap_or("").trim().trim_matches('/');
+        let dir_prefix = if raw_dir.is_empty() {
+            None
         } else {
-            match self.resolve_existing_path(raw_path) {
-                Ok(path) => path,
-                Err(err) => {
-                    return Ok(ToolResult {
-                        tool_call_id: call.id,
-                        content: err,
-                        is_error: Some(true),
-                    });
-                }
-            }
+            Some(raw_dir.to_string())
         };
 
         let max_entries = args
@@ -369,51 +423,58 @@ impl FsToolExecutor {
 
         let max_depth = args.max_depth.unwrap_or(10).min(64);
 
-        let max_file_bytes = args
+        let max_read_bytes = args
             .max_file_bytes
             .unwrap_or(self.max_bytes)
             .min(self.max_bytes)
-            .max(1);
+            .max(1) as u64;
 
         let case_sensitive = args.case_sensitive.unwrap_or(true);
-        let pattern_lower = if case_sensitive {
-            None
-        } else {
-            Some(pattern.to_lowercase())
+
+        let extensions: Vec<String> = args
+            .extensions
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|value| {
+                let trimmed = value.trim().trim_start_matches('.').to_ascii_lowercase();
+                (!trimmed.is_empty()).then_some(trimmed)
+            })
+            .collect();
+
+        let file_glob = match (dir_prefix.as_deref(), extensions.as_slice()) {
+            (None, []) => "**/*".to_string(),
+            (Some(dir), []) => format!("{dir}/**/*"),
+            (None, [ext]) => format!("**/*.{ext}"),
+            (Some(dir), [ext]) => format!("{dir}/**/*.{ext}"),
+            (None, exts) => format!("**/*.{{{}}}", exts.join(",")),
+            (Some(dir), exts) => format!("{dir}/**/*.{{{}}}", exts.join(",")),
         };
 
-        let extensions = args.extensions.map(|values| {
-            values
-                .into_iter()
-                .filter_map(|value| {
-                    let trimmed = value.trim().trim_start_matches('.');
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_ascii_lowercase())
-                    }
-                })
-                .collect::<BTreeSet<_>>()
-        });
-
-        let options = FsGrepOptions {
-            pattern: pattern.to_string(),
-            pattern_lower,
-            max_entries,
-            max_depth,
-            max_file_bytes,
-            extensions,
+        let (query, regex) = if case_sensitive {
+            (pattern.to_string(), false)
+        } else {
+            (format!("(?i){}", regex::escape(pattern)), true)
         };
 
         let root = self.root.clone();
-        let grep = tokio::task::spawn_blocking(move || fs_grep_blocking(&root, &dir, options))
-            .await
-            .map_err(|err| {
-                DittoError::Io(std::io::Error::other(format!("fs_grep join error: {err}")))
-            })?;
+        let max_write_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let base = dir_prefix.clone();
 
-        let (matches, truncated) = match grep {
-            Ok(ok) => ok,
+        let grep = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_read_bytes, max_write_bytes, max_results)?;
+            ctx.grep(GrepRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                query,
+                regex,
+                glob: Some(file_glob),
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_grep join error: {err}"))))?;
+
+        let resp = match grep {
+            Ok(resp) => resp,
             Err(err) => {
                 return Ok(ToolResult {
                     tool_call_id: call.id,
@@ -423,8 +484,27 @@ impl FsToolExecutor {
             }
         };
 
+        let base_path = base.as_deref().map(PathBuf::from).unwrap_or_default();
+        let mut matches = Vec::<Value>::new();
+        for item in resp.matches {
+            if path_depth_under(&base_path, &item.path) > max_depth {
+                continue;
+            }
+            matches.push(serde_json::json!({
+                "path": item.path.to_string_lossy(),
+                "line_number": item.line,
+                "line": item.text,
+            }));
+        }
+
+        let mut truncated = resp.truncated;
+        if matches.len() > max_entries {
+            matches.truncate(max_entries);
+            truncated = true;
+        }
+
         let out = serde_json::json!({
-            "path": if raw_path.trim().is_empty() { "." } else { raw_path },
+            "path": args.path.as_deref().unwrap_or("."),
             "matches": matches,
             "truncated": truncated,
         });
@@ -448,515 +528,13 @@ impl FsToolExecutor {
             }
         };
 
-        let path = match self.resolve_existing_path(&args.path) {
-            Ok(path) => path,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err,
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let stat = tokio::task::spawn_blocking(move || fs_stat_blocking(&path))
-            .await
-            .map_err(|err| {
-                DittoError::Io(std::io::Error::other(format!("fs_stat join error: {err}")))
-            })?;
-
-        let value = match stat {
-            Ok(value) => value,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("fs_stat failed: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let out = serde_json::json!({
-            "path": args.path,
-            "stat": value,
-        });
-
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: out.to_string(),
-            is_error: None,
+            content: format!(
+                "fs_stat is not supported (safe-fs-tools has no stat API yet): path={:?}",
+                args.path
+            ),
+            is_error: Some(true),
         })
     }
-}
-
-fn read_file_limited(path: &Path, max_bytes: usize) -> std::io::Result<(String, bool)> {
-    use std::io::Read;
-
-    let file = std::fs::File::open(path)?;
-    let mut buf = Vec::<u8>::new();
-    let mut limited = file.take(max_bytes as u64 + 1);
-    limited.read_to_end(&mut buf)?;
-
-    let truncated = buf.len() > max_bytes;
-    if truncated {
-        buf.truncate(max_bytes);
-    }
-
-    Ok((String::from_utf8_lossy(&buf).to_string(), truncated))
-}
-
-fn ensure_dir_under_root(root: &Path, rel: &Path, create_missing: bool) -> std::io::Result<PathBuf> {
-    use std::path::Component;
-
-    let mut current = root.to_path_buf();
-
-    for component in rel.components() {
-        match component {
-            Component::CurDir => continue,
-            Component::ParentDir => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "parent dir segments are not allowed",
-                ));
-            }
-            Component::Normal(segment) => {
-                let next = current.join(segment);
-                match std::fs::symlink_metadata(&next) {
-                    Ok(meta) => {
-                        if meta.file_type().is_symlink() {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::PermissionDenied,
-                                "refusing to traverse symlink",
-                            ));
-                        }
-                        if !meta.is_dir() {
-                            return Err(std::io::Error::new(
-                                std::io::ErrorKind::InvalidInput,
-                                "path component is not a directory",
-                            ));
-                        }
-                    }
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                        if create_missing {
-                            std::fs::create_dir(&next)?;
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                    Err(err) => return Err(err),
-                }
-                current = next;
-            }
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "invalid path segment",
-                ));
-            }
-        }
-    }
-
-    if !current.starts_with(root) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "path escapes root",
-        ));
-    }
-
-    Ok(current)
-}
-
-fn fs_write_file_blocking(
-    root: &Path,
-    rel: &Path,
-    content: &str,
-    overwrite: bool,
-    create_parents: bool,
-    max_bytes: usize,
-) -> std::io::Result<PathBuf> {
-    let root = std::fs::canonicalize(root)?;
-
-    for component in rel.components() {
-        if matches!(component, std::path::Component::ParentDir) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "parent dir segments are not allowed",
-            ));
-        }
-    }
-
-    let file_name = rel.file_name().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no filename")
-    })?;
-    let rel_parent = rel.parent().unwrap_or_else(|| Path::new(""));
-
-    let canonical_parent = ensure_dir_under_root(&root, rel_parent, create_parents)?;
-
-    if content.len() > max_bytes {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "content exceeds max_bytes",
-        ));
-    }
-
-    let target = canonical_parent.join(file_name);
-    if !target.starts_with(&root) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "path escapes root",
-        ));
-    }
-
-    match std::fs::symlink_metadata(&target) {
-        Ok(meta) => {
-            if meta.file_type().is_symlink() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "refusing to write to symlink",
-                ));
-            }
-            if meta.is_dir() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "path is a directory",
-                ));
-            }
-            if !overwrite {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::AlreadyExists,
-                    "file exists",
-                ));
-            }
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => return Err(err),
-    }
-
-    std::fs::write(&target, content)?;
-    Ok(target)
-}
-
-fn fs_list_dir_blocking(
-    root: &Path,
-    dir: &Path,
-    max_entries: usize,
-) -> std::io::Result<(Vec<Value>, bool)> {
-    let meta = std::fs::metadata(dir)?;
-    if !meta.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "path is not a directory",
-        ));
-    }
-
-    let mut entries = Vec::<Value>::new();
-    let mut truncated = false;
-
-    let mut rows: Vec<_> = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
-    rows.sort_by_key(|entry| entry.file_name());
-
-    for entry in rows.into_iter().take(max_entries + 1) {
-        if entries.len() >= max_entries {
-            truncated = true;
-            break;
-        }
-
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        let kind = if file_type.is_file() {
-            "file"
-        } else if file_type.is_dir() {
-            "dir"
-        } else if file_type.is_symlink() {
-            "symlink"
-        } else {
-            "other"
-        };
-
-        let rel_path = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .to_string();
-
-        let size_bytes = if file_type.is_file() {
-            entry.metadata().map(|m| m.len()).unwrap_or(0)
-        } else {
-            0
-        };
-
-        entries.push(serde_json::json!({
-            "path": rel_path,
-            "name": entry.file_name().to_string_lossy(),
-            "type": kind,
-            "size_bytes": size_bytes,
-        }));
-    }
-
-    Ok((entries, truncated))
-}
-
-#[derive(Clone, Debug)]
-struct FsFindOptions {
-    pattern: Option<String>,
-    extensions: Option<BTreeSet<String>>,
-    max_entries: usize,
-    max_depth: usize,
-    include_files: bool,
-    include_dirs: bool,
-}
-
-fn fs_find_blocking(
-    root: &Path,
-    dir: &Path,
-    options: FsFindOptions,
-) -> std::io::Result<(Vec<Value>, bool)> {
-    let meta = std::fs::metadata(dir)?;
-    if !meta.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "path is not a directory",
-        ));
-    }
-
-    let mut entries = Vec::<Value>::new();
-    let mut truncated = false;
-    fs_find_walk(root, dir, 0, &options, &mut entries, &mut truncated)?;
-    Ok((entries, truncated))
-}
-
-fn fs_find_walk(
-    root: &Path,
-    dir: &Path,
-    depth: usize,
-    options: &FsFindOptions,
-    out: &mut Vec<Value>,
-    truncated: &mut bool,
-) -> std::io::Result<()> {
-    if *truncated {
-        return Ok(());
-    }
-    if out.len() >= options.max_entries {
-        *truncated = true;
-        return Ok(());
-    }
-
-    let mut rows: Vec<_> = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
-    rows.sort_by_key(|entry| entry.file_name());
-
-    for entry in rows {
-        if out.len() >= options.max_entries {
-            *truncated = true;
-            break;
-        }
-
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        let name = entry.file_name().to_string_lossy().to_string();
-
-        let kind = if file_type.is_file() {
-            "file"
-        } else if file_type.is_dir() {
-            "dir"
-        } else if file_type.is_symlink() {
-            "symlink"
-        } else {
-            "other"
-        };
-
-        let rel_path = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .to_string();
-
-        let matches_pattern = match options.pattern.as_ref() {
-            None => true,
-            Some(pattern) => rel_path.contains(pattern),
-        };
-
-        let matches_extension = match options.extensions.as_ref() {
-            None => true,
-            Some(allowed) => {
-                if !(file_type.is_file() || file_type.is_symlink()) {
-                    true
-                } else {
-                    match path.extension().and_then(|value| value.to_str()) {
-                        Some(ext) => allowed.contains(&ext.to_ascii_lowercase()),
-                        None => false,
-                    }
-                }
-            }
-        };
-
-        let include = matches_pattern
-            && matches_extension
-            && ((options.include_dirs && file_type.is_dir())
-                || (options.include_files && (file_type.is_file() || file_type.is_symlink())));
-
-        if include {
-            let size_bytes = if file_type.is_file() {
-                entry.metadata().map(|m| m.len()).unwrap_or(0)
-            } else {
-                0
-            };
-
-            out.push(serde_json::json!({
-                "path": rel_path,
-                "name": name,
-                "type": kind,
-                "size_bytes": size_bytes,
-            }));
-        }
-
-        if file_type.is_dir() && depth < options.max_depth {
-            fs_find_walk(root, &path, depth + 1, options, out, truncated)?;
-            if *truncated {
-                break;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-#[derive(Clone, Debug)]
-struct FsGrepOptions {
-    pattern: String,
-    pattern_lower: Option<String>,
-    max_entries: usize,
-    max_depth: usize,
-    max_file_bytes: usize,
-    extensions: Option<BTreeSet<String>>,
-}
-
-fn fs_grep_blocking(
-    root: &Path,
-    dir: &Path,
-    options: FsGrepOptions,
-) -> std::io::Result<(Vec<Value>, bool)> {
-    let meta = std::fs::metadata(dir)?;
-    if !meta.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "path is not a directory",
-        ));
-    }
-
-    let mut matches = Vec::<Value>::new();
-    let mut truncated = false;
-    fs_grep_walk(root, dir, 0, &options, &mut matches, &mut truncated)?;
-    Ok((matches, truncated))
-}
-
-fn fs_grep_walk(
-    root: &Path,
-    dir: &Path,
-    depth: usize,
-    options: &FsGrepOptions,
-    out: &mut Vec<Value>,
-    truncated: &mut bool,
-) -> std::io::Result<()> {
-    if *truncated {
-        return Ok(());
-    }
-    if out.len() >= options.max_entries {
-        *truncated = true;
-        return Ok(());
-    }
-
-    let mut rows: Vec<_> = std::fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
-    rows.sort_by_key(|entry| entry.file_name());
-
-    for entry in rows {
-        if out.len() >= options.max_entries {
-            *truncated = true;
-            break;
-        }
-
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-
-        if file_type.is_dir() {
-            if depth < options.max_depth {
-                fs_grep_walk(root, &path, depth + 1, options, out, truncated)?;
-                if *truncated {
-                    break;
-                }
-            }
-            continue;
-        }
-
-        if !file_type.is_file() {
-            continue;
-        }
-
-        if let Some(allowed) = options.extensions.as_ref() {
-            let Some(ext) = path.extension().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            if !allowed.contains(&ext.to_ascii_lowercase()) {
-                continue;
-            }
-        }
-
-        let rel_path = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .to_string();
-
-        let (content, _) = read_file_limited(&path, options.max_file_bytes)?;
-
-        for (idx, line) in content.lines().enumerate() {
-            let matches_line = if let Some(pattern_lower) = options.pattern_lower.as_ref() {
-                line.to_lowercase().contains(pattern_lower)
-            } else {
-                line.contains(&options.pattern)
-            };
-
-            if matches_line {
-                out.push(serde_json::json!({
-                    "path": rel_path.clone(),
-                    "line_number": idx + 1,
-                    "line": line,
-                }));
-
-                if out.len() >= options.max_entries {
-                    *truncated = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn fs_stat_blocking(path: &Path) -> std::io::Result<Value> {
-    let meta = std::fs::metadata(path)?;
-    let file_type = meta.file_type();
-    let kind = if file_type.is_file() {
-        "file"
-    } else if file_type.is_dir() {
-        "dir"
-    } else if file_type.is_symlink() {
-        "symlink"
-    } else {
-        "other"
-    };
-
-    let size_bytes = if file_type.is_file() { meta.len() } else { 0 };
-
-    let modified_ms = meta
-        .modified()
-        .ok()
-        .and_then(|value| value.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|value| value.as_millis().min(u128::from(u64::MAX)) as u64);
-
-    Ok(serde_json::json!({
-        "type": kind,
-        "size_bytes": size_bytes,
-        "modified_ms": modified_ms,
-    }))
 }

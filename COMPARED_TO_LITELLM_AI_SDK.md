@@ -29,7 +29,7 @@
 
 ### 仍缺（但属于“超集可选项”）
 
-- 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `fs_read_file` + `fs_write_file` + `fs_list_dir` + `fs_find` + `fs_grep` + `fs_stat` + `shell_exec` 的 tool + executor；仍缺更丰富的工具扩展）
+- 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `shell_exec` + `safe-fs-tools` 驱动的 `fs_read_file`/`fs_find`/`fs_grep`/`fs_write_file`（patch 已存在文件）/`fs_delete_file`（files-only）；仍缺 `fs_list_dir`/`fs_stat`/`fs_mkdir`/`fs_move`/`fs_copy_file` 等，需要 `safe-fs-tools` 扩展能力）
 
 ---
 
