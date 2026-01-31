@@ -119,9 +119,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dev: pre-commit rejects oversized staged Rust files (default 1000 lines; configurable via `DITTO_MAX_RS_LINES`).
 - Refactor: split `gateway::translation` module into sub-files (no behavior changes).
 - Refactor: split `gateway::http` module into sub-files (no behavior changes).
+- Refactor: split `gateway::interop` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai_compatible` module into sub-files (no behavior changes).
+- Refactor: split `providers::anthropic` module into sub-files (no behavior changes).
+- Refactor: split `providers::bedrock` module into sub-files (no behavior changes).
+- Refactor: split `providers::cohere` module into sub-files (no behavior changes).
+- Refactor: split `providers::google` module into sub-files (no behavior changes).
 - Refactor: split `agent::toolbox` module into sub-files (no behavior changes).
+- Refactor: split `object` module into sub-files (no behavior changes).
+- Refactor: split `profile` module into sub-files (no behavior changes).
 - Dev: fix clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`).
 
 ### Fixed
