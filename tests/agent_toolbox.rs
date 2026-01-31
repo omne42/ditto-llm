@@ -43,6 +43,74 @@ async fn http_fetch_tool_executes_get() -> Result<()> {
 }
 
 #[tokio::test]
+async fn http_fetch_tool_parses_json_body() -> Result<()> {
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(GET).path("/hello.json");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body("{\"hello\":\"world\"}");
+    });
+
+    let url = format!("{}/hello.json", upstream.base_url());
+    let executor = HttpToolExecutor::new().with_max_response_bytes(1024);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_HTTP_FETCH.to_string(),
+        arguments: json!({
+            "url": url,
+            "method": "GET",
+            "parse_json": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(
+        value.get("body_json"),
+        Some(&json!({
+            "hello": "world"
+        }))
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn http_fetch_tool_respects_max_response_bytes_override() -> Result<()> {
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(GET).path("/hello");
+        then.status(200)
+            .header("content-type", "text/plain")
+            .body("hello world");
+    });
+
+    let url = format!("{}/hello", upstream.base_url());
+    let executor = HttpToolExecutor::new().with_max_response_bytes(1024);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_HTTP_FETCH.to_string(),
+        arguments: json!({
+            "url": url,
+            "method": "GET",
+            "max_response_bytes": 5
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("truncated").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(value.get("body").and_then(|v| v.as_str()), Some("hello"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn fs_read_file_tool_reads_within_root() -> Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("hello.txt"), "hi")?;

@@ -53,7 +53,9 @@ pub fn http_fetch_tool() -> Tool {
                 },
                 "body": { "type": "string", "description": "Optional request body (string)." },
                 "json": { "description": "Optional request JSON body. If set, takes precedence over body." },
-                "timeout_ms": { "type": "integer", "description": "Optional per-request timeout in milliseconds." }
+                "timeout_ms": { "type": "integer", "description": "Optional per-request timeout in milliseconds." },
+                "max_response_bytes": { "type": "integer", "description": "Optional max response size override in bytes (clamped by the host)." },
+                "parse_json": { "type": "boolean", "description": "If true, attempt to parse the response body as JSON (best-effort)." }
             },
             "required": ["url"]
         }),
@@ -306,6 +308,10 @@ struct HttpFetchArgs {
     json: Option<Value>,
     #[serde(default)]
     timeout_ms: Option<u64>,
+    #[serde(default)]
+    max_response_bytes: Option<usize>,
+    #[serde(default)]
+    parse_json: Option<bool>,
 }
 
 #[async_trait]
@@ -377,6 +383,12 @@ impl ToolExecutor for HttpToolExecutor {
             .unwrap_or(self.timeout);
         builder = builder.timeout(timeout);
 
+        let max_response_bytes = args
+            .max_response_bytes
+            .map(|max_response_bytes| max_response_bytes.max(1).min(self.max_response_bytes))
+            .unwrap_or(self.max_response_bytes);
+        let parse_json = args.parse_json.unwrap_or(false);
+
         let response = match builder.send().await {
             Ok(response) => response,
             Err(err) => {
@@ -391,8 +403,13 @@ impl ToolExecutor for HttpToolExecutor {
         let status = response.status().as_u16();
         let headers = response_headers_to_map(response.headers());
         let (body_bytes, truncated, read_error) =
-            read_limited_bytes(response.bytes_stream(), self.max_response_bytes).await;
+            read_limited_bytes(response.bytes_stream(), max_response_bytes).await;
         let body = String::from_utf8_lossy(&body_bytes).to_string();
+        let body_json = if parse_json {
+            serde_json::from_slice::<Value>(&body_bytes).ok()
+        } else {
+            None
+        };
 
         let mut out = serde_json::json!({
             "url": url.as_str(),
@@ -402,6 +419,11 @@ impl ToolExecutor for HttpToolExecutor {
             "body": body,
             "truncated": truncated,
         });
+        if parse_json {
+            if let Some(obj) = out.as_object_mut() {
+                obj.insert("body_json".to_string(), body_json.unwrap_or(Value::Null));
+            }
+        }
         if let Some(read_error) = read_error {
             if let Some(obj) = out.as_object_mut() {
                 obj.insert(
