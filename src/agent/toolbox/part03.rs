@@ -1,6 +1,7 @@
 pub const TOOL_FS_DELETE_FILE: &str = "fs_delete_file";
 pub const TOOL_FS_MKDIR: &str = "fs_mkdir";
 pub const TOOL_FS_MOVE: &str = "fs_move";
+pub const TOOL_FS_COPY_FILE: &str = "fs_copy_file";
 
 pub fn fs_delete_file_tool() -> Tool {
     Tool {
@@ -58,6 +59,24 @@ pub fn fs_move_tool() -> Tool {
     }
 }
 
+pub fn fs_copy_file_tool() -> Tool {
+    Tool {
+        name: TOOL_FS_COPY_FILE.to_string(),
+        description: Some("Copy a file under the configured root directory.".to_string()),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "from": { "type": "string", "description": "Source path relative to the configured root directory." },
+                "to": { "type": "string", "description": "Destination path relative to the configured root directory." },
+                "overwrite": { "type": "boolean", "description": "If true, allow overwriting an existing destination file." },
+                "create_parents": { "type": "boolean", "description": "If true, create missing parent directories for the destination path." },
+            },
+            "required": ["from", "to"]
+        }),
+        strict: Some(true),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct FsDeleteFileArgs {
     path: String,
@@ -76,6 +95,16 @@ struct FsMkdirArgs {
 
 #[derive(Debug, Deserialize)]
 struct FsMoveArgs {
+    from: String,
+    to: String,
+    #[serde(default)]
+    overwrite: bool,
+    #[serde(default)]
+    create_parents: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct FsCopyFileArgs {
     from: String,
     to: String,
     #[serde(default)]
@@ -565,4 +594,210 @@ fn fs_move_path_blocking(
 
     std::fs::rename(&source, &destination)?;
     Ok((true, kind.to_string()))
+}
+
+impl FsToolExecutor {
+    async fn execute_copy_file(&self, call: ToolCall) -> Result<ToolResult> {
+        let args: FsCopyFileArgs = match serde_json::from_value(call.arguments.clone()) {
+            Ok(args) => args,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("invalid args: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let raw_from = args.from.clone();
+        let raw_to = args.to.clone();
+
+        let from_rel = match Self::validate_relative_path(&raw_from) {
+            Ok(rel) => {
+                let is_root = rel
+                    .components()
+                    .all(|component| matches!(component, std::path::Component::CurDir));
+                if is_root {
+                    return Ok(ToolResult {
+                        tool_call_id: call.id,
+                        content: "refusing to copy the root directory".to_string(),
+                        is_error: Some(true),
+                    });
+                }
+                rel.to_path_buf()
+            }
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: err,
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let to_rel = match Self::validate_relative_path(&raw_to) {
+            Ok(rel) => {
+                let is_root = rel
+                    .components()
+                    .all(|component| matches!(component, std::path::Component::CurDir));
+                if is_root {
+                    return Ok(ToolResult {
+                        tool_call_id: call.id,
+                        content: "refusing to copy the root directory".to_string(),
+                        is_error: Some(true),
+                    });
+                }
+                rel.to_path_buf()
+            }
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: err,
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let overwrite = args.overwrite;
+        let create_parents = args.create_parents;
+
+        let root = self.root.clone();
+        let copy_result = tokio::task::spawn_blocking(move || {
+            fs_copy_file_blocking(&root, &from_rel, &to_rel, overwrite, create_parents)
+        })
+        .await
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!(
+                "fs_copy_file join error: {err}"
+            )))
+        })?;
+
+        let (copied, bytes) = match copy_result {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_copy_file failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "from": raw_from,
+            "to": raw_to,
+            "copied": copied,
+            "bytes": bytes,
+        });
+
+        Ok(ToolResult {
+            tool_call_id: call.id,
+            content: out.to_string(),
+            is_error: None,
+        })
+    }
+}
+
+fn fs_copy_file_blocking(
+    root: &Path,
+    from: &Path,
+    to: &Path,
+    overwrite: bool,
+    create_parents: bool,
+) -> std::io::Result<(bool, u64)> {
+    let root = std::fs::canonicalize(root)?;
+
+    for component in from.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "parent dir segments are not allowed",
+            ));
+        }
+    }
+
+    for component in to.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "parent dir segments are not allowed",
+            ));
+        }
+    }
+
+    let from_name = from.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "from path has no filename")
+    })?;
+    let to_name = to.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "to path has no filename")
+    })?;
+
+    let from_parent_rel = from.parent().unwrap_or_else(|| Path::new(""));
+    let to_parent_rel = to.parent().unwrap_or_else(|| Path::new(""));
+
+    let from_parent = ensure_dir_under_root(&root, from_parent_rel, false)?;
+    let to_parent = ensure_dir_under_root(&root, to_parent_rel, create_parents)?;
+
+    let source = from_parent.join(from_name);
+    if !source.starts_with(&root) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "source escapes root",
+        ));
+    }
+
+    let destination = to_parent.join(to_name);
+    if !destination.starts_with(&root) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "destination escapes root",
+        ));
+    }
+
+    if source == destination {
+        return Ok((false, 0));
+    }
+
+    let meta = std::fs::symlink_metadata(&source)?;
+    if meta.file_type().is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "refusing to copy symlinks",
+        ));
+    }
+    if meta.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "path is a directory",
+        ));
+    }
+    if !meta.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "path is not a file",
+        ));
+    }
+
+    match std::fs::symlink_metadata(&destination) {
+        Ok(meta) => {
+            if meta.is_dir() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "destination exists and is a directory",
+                ));
+            }
+            if !overwrite {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "destination exists",
+                ));
+            }
+            std::fs::remove_file(&destination)?;
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(err),
+    }
+
+    let bytes = std::fs::copy(&source, &destination)?;
+    Ok((true, bytes))
 }

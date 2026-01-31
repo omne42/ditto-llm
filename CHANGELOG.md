@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent: add `fs_delete_file` tool + executor to delete files/directories within root (directories require `recursive=true`).
 - Agent: add `fs_mkdir` tool + executor to create directories within root (use `create_parents=true` for nested paths).
 - Agent: add `fs_move` tool + executor to move (rename) files/directories within root (use `create_parents=true` for nested destinations).
+- Agent: add `fs_copy_file` tool + executor to copy files within root (use `create_parents=true` for nested destinations).
 - Agent: `shell_exec` supports optional `stdin` (UTF-8) input.
 - Agent: `http_fetch` supports `parse_json`, per-call `max_response_bytes`, emits `elapsed_ms`, and marks non-2xx responses as tool errors.
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
