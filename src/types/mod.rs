@@ -189,6 +189,15 @@ pub enum ReasoningEffort {
     XHigh,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningSummary {
+    Auto,
+    Concise,
+    Detailed,
+    None,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct JsonSchemaFormat {

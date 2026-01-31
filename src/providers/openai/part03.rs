@@ -167,6 +167,7 @@ pub struct OpenAIResponsesRawRequest<'a> {
     pub store: bool,
     pub stream: bool,
     pub reasoning_effort: Option<crate::types::ReasoningEffort>,
+    pub reasoning_summary: Option<crate::types::ReasoningSummary>,
     pub response_format: Option<&'a crate::types::ResponseFormat>,
     pub include: Vec<String>,
     pub prompt_cache_key: Option<String>,
@@ -186,6 +187,8 @@ pub enum OpenAIResponsesRawEvent {
         response_id: Option<String>,
     },
     OutputTextDelta(String),
+    ReasoningTextDelta(String),
+    ReasoningSummaryTextDelta(String),
     OutputItemDone(Value),
     Failed {
         response_id: Option<String>,
@@ -242,6 +245,12 @@ fn parse_raw_responses_event(
         "response.output_text.delta" => {
             Ok(event.delta.map(OpenAIResponsesRawEvent::OutputTextDelta))
         }
+        "response.reasoning_text.delta" => {
+            Ok(event.delta.map(OpenAIResponsesRawEvent::ReasoningTextDelta))
+        }
+        "response.reasoning_summary_text.delta" => Ok(event
+            .delta
+            .map(OpenAIResponsesRawEvent::ReasoningSummaryTextDelta)),
         "response.output_item.done" => Ok(event.item.map(OpenAIResponsesRawEvent::OutputItemDone)),
         "response.failed" => {
             let Some(resp) = event.response else {
@@ -455,6 +464,8 @@ mod tests {
             "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n",
             "data: {\"type\":\"ignored.event\",\"foo\":\"bar\"}\n\n",
             "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n",
+            "data: {\"type\":\"response.reasoning_summary_text.delta\",\"delta\":\"**Plan**\"}\n\n",
+            "data: {\"type\":\"response.reasoning_text.delta\",\"delta\":\"Long reasoning\"}\n\n",
             "data: {\"type\":\"response.output_item.done\",\"item\":{\"type\":\"function_call\",\"call_id\":\"call_1\",\"name\":\"tool\",\"arguments\":\"{}\"}}\n\n",
             "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}}\n\n",
             "data: [DONE]\n\n",
@@ -470,7 +481,7 @@ mod tests {
             events.push(evt?);
         }
 
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), 6);
         assert!(matches!(
             events[0],
             OpenAIResponsesRawEvent::Created {
@@ -483,6 +494,14 @@ mod tests {
         );
         assert_eq!(
             events[2],
+            OpenAIResponsesRawEvent::ReasoningSummaryTextDelta("**Plan**".to_string())
+        );
+        assert_eq!(
+            events[3],
+            OpenAIResponsesRawEvent::ReasoningTextDelta("Long reasoning".to_string())
+        );
+        assert_eq!(
+            events[4],
             OpenAIResponsesRawEvent::OutputItemDone(json!({
                 "type": "function_call",
                 "call_id": "call_1",
@@ -491,7 +510,7 @@ mod tests {
             }))
         );
         assert_eq!(
-            events[3],
+            events[5],
             OpenAIResponsesRawEvent::Completed {
                 response_id: Some("resp_1".to_string()),
                 usage: Some(json!({

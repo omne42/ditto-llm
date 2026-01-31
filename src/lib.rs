@@ -54,9 +54,9 @@ pub use types::{
     FinishReason, GenerateRequest, GenerateResponse, ImageGenerationRequest,
     ImageGenerationResponse, ImageResponseFormat, ImageSource, JsonSchemaFormat, Message,
     ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, ProviderOptions,
-    ReasoningEffort, RerankDocument, RerankRequest, RerankResponse, RerankResult, ResponseFormat,
-    Role, SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool, ToolChoice,
-    TranscriptionResponseFormat, Usage, Warning,
+    ReasoningEffort, ReasoningSummary, RerankDocument, RerankRequest, RerankResponse, RerankResult,
+    ResponseFormat, Role, SpeechRequest, SpeechResponse, SpeechResponseFormat, StreamChunk, Tool,
+    ToolChoice, TranscriptionResponseFormat, Usage, Warning,
 };
 
 #[cfg(feature = "anthropic")]

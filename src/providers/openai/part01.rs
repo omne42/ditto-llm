@@ -483,11 +483,15 @@ impl OpenAI {
                 Self::tool_choice_to_openai(tool_choice),
             );
         }
-        if let Some(effort) = request.reasoning_effort {
-            body.insert(
-                "reasoning".to_string(),
-                serde_json::json!({ "effort": effort }),
-            );
+        if request.reasoning_effort.is_some() || request.reasoning_summary.is_some() {
+            let mut reasoning = Map::<String, Value>::new();
+            if let Some(effort) = request.reasoning_effort {
+                reasoning.insert("effort".to_string(), serde_json::json!(effort));
+            }
+            if let Some(summary) = request.reasoning_summary {
+                reasoning.insert("summary".to_string(), serde_json::json!(summary));
+            }
+            body.insert("reasoning".to_string(), Value::Object(reasoning));
         }
         if let Some(response_format) = request.response_format.as_ref() {
             body.insert(
@@ -537,11 +541,12 @@ fn apply_provider_options(
     body: &mut Map<String, Value>,
     provider_options: &crate::types::ProviderOptions,
 ) -> Result<()> {
-    if let Some(effort) = provider_options.reasoning_effort {
-        body.insert(
-            "reasoning".to_string(),
-            serde_json::json!({ "effort": effort }),
-        );
+    if provider_options.reasoning_effort.is_some() {
+        let mut reasoning = Map::<String, Value>::new();
+        if let Some(effort) = provider_options.reasoning_effort {
+            reasoning.insert("effort".to_string(), serde_json::json!(effort));
+        }
+        body.insert("reasoning".to_string(), Value::Object(reasoning));
     }
     if let Some(response_format) = provider_options.response_format.as_ref() {
         body.insert(
