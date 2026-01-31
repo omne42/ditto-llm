@@ -7,16 +7,16 @@ pub fn fs_delete_file_tool() -> Tool {
     Tool {
         name: TOOL_FS_DELETE_FILE.to_string(),
         description: Some(
-            "Delete a file under the configured root directory.\n\n\
+            "Delete a file or directory under the configured root directory.\n\n\
 Implemented via `safe-fs-tools`.\n\
-Note: directory deletion (recursive or not) is not supported yet."
+Directory deletion is supported with `recursive=true`."
                 .to_string(),
         ),
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
                 "path": { "type": "string", "description": "Path relative to the configured root directory." },
-                "recursive": { "type": "boolean", "description": "Not supported yet: safe-fs-tools delete does not support directories." },
+                "recursive": { "type": "boolean", "description": "If true, allow deleting directories recursively." },
                 "ignore_missing": { "type": "boolean", "description": "If true, succeed when the path does not exist." },
             },
             "required": ["path"]
@@ -30,15 +30,15 @@ pub fn fs_mkdir_tool() -> Tool {
         name: TOOL_FS_MKDIR.to_string(),
         description: Some(
             "Create a directory under the configured root directory.\n\n\
-Not supported yet: `safe-fs-tools` currently has no mkdir API."
+Implemented via `safe-fs-tools`."
                 .to_string(),
         ),
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
                 "path": { "type": "string", "description": "Path relative to the configured root directory." },
-                "create_parents": { "type": "boolean", "description": "Not supported yet." },
-                "ignore_existing": { "type": "boolean", "description": "Not supported yet." },
+                "create_parents": { "type": "boolean", "description": "If true, create missing parent directories." },
+                "ignore_existing": { "type": "boolean", "description": "If true, succeed when the directory already exists." },
             },
             "required": ["path"]
         }),
@@ -50,8 +50,8 @@ pub fn fs_move_tool() -> Tool {
     Tool {
         name: TOOL_FS_MOVE.to_string(),
         description: Some(
-            "Move (rename) a file under the configured root directory.\n\n\
-Not supported yet: `safe-fs-tools` currently has no move/rename API."
+            "Move (rename) a file or directory under the configured root directory.\n\n\
+Implemented via `safe-fs-tools`."
                 .to_string(),
         ),
         parameters: serde_json::json!({
@@ -59,8 +59,8 @@ Not supported yet: `safe-fs-tools` currently has no move/rename API."
             "properties": {
                 "from": { "type": "string", "description": "Source path relative to the configured root directory." },
                 "to": { "type": "string", "description": "Destination path relative to the configured root directory." },
-                "overwrite": { "type": "boolean", "description": "Not supported yet." },
-                "create_parents": { "type": "boolean", "description": "Not supported yet." },
+                "overwrite": { "type": "boolean", "description": "If true, allow overwriting an existing destination file." },
+                "create_parents": { "type": "boolean", "description": "If true, create missing parent directories for the destination path." },
             },
             "required": ["from", "to"]
         }),
@@ -73,7 +73,7 @@ pub fn fs_copy_file_tool() -> Tool {
         name: TOOL_FS_COPY_FILE.to_string(),
         description: Some(
             "Copy a file under the configured root directory.\n\n\
-Not supported yet: `safe-fs-tools` currently has no copy API (and cannot create new files)."
+Implemented via `safe-fs-tools`."
                 .to_string(),
         ),
         parameters: serde_json::json!({
@@ -81,8 +81,8 @@ Not supported yet: `safe-fs-tools` currently has no copy API (and cannot create 
             "properties": {
                 "from": { "type": "string", "description": "Source path relative to the configured root directory." },
                 "to": { "type": "string", "description": "Destination path relative to the configured root directory." },
-                "overwrite": { "type": "boolean", "description": "Not supported yet." },
-                "create_parents": { "type": "boolean", "description": "Not supported yet." },
+                "overwrite": { "type": "boolean", "description": "If true, allow overwriting an existing destination file." },
+                "create_parents": { "type": "boolean", "description": "If true, create missing parent directories for the destination path." },
             },
             "required": ["from", "to"]
         }),
@@ -149,9 +149,11 @@ impl FsToolExecutor {
 
         let delete = tokio::task::spawn_blocking(move || {
             let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
-            ctx.delete_file(safe_fs_tools::DeleteRequest {
+            ctx.delete_path(DeletePathRequest {
                 root_id: SAFE_FS_ROOT_ID.to_string(),
                 path: PathBuf::from(raw_path),
+                recursive,
+                ignore_missing,
             })
         })
         .await
@@ -161,48 +163,28 @@ impl FsToolExecutor {
             )))
         })?;
 
-        match delete {
-            Ok(_) => {
-                let out = serde_json::json!({
-                    "path": args.path,
-                    "deleted": true,
-                    "type": "file",
-                });
-
-                Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: out.to_string(),
-                    is_error: None,
-                })
-            }
-            Err(err) if ignore_missing && safe_fs_is_not_found(&err) => {
-                let out = serde_json::json!({
-                    "path": args.path,
-                    "deleted": false,
-                    "type": "missing",
-                });
-
-                Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: out.to_string(),
-                    is_error: None,
-                })
-            }
+        let resp = match delete {
+            Ok(resp) => resp,
             Err(err) => {
-                let msg = if recursive {
-                    format!(
-                        "fs_delete_file failed: {err} (note: safe-fs-tools delete cannot delete directories yet)"
-                    )
-                } else {
-                    format!("fs_delete_file failed: {err}")
-                };
-                Ok(ToolResult {
+                return Ok(ToolResult {
                     tool_call_id: call.id,
-                    content: msg,
+                    content: format!("fs_delete_file failed: {err}"),
                     is_error: Some(true),
-                })
+                });
             }
-        }
+        };
+
+        let out = serde_json::json!({
+            "path": args.path,
+            "deleted": resp.deleted,
+            "type": resp.kind,
+        });
+
+        Ok(ToolResult {
+            tool_call_id: call.id,
+            content: out.to_string(),
+            is_error: None,
+        })
     }
 
     async fn execute_mkdir(&self, call: ToolCall) -> Result<ToolResult> {
@@ -217,13 +199,45 @@ impl FsToolExecutor {
             }
         };
 
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let raw_path = args.path.clone();
+        let create_parents = args.create_parents;
+        let ignore_existing = args.ignore_existing;
+
+        let mkdir_result = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.mkdir(MkdirRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(raw_path),
+                create_parents,
+                ignore_existing,
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_mkdir join error: {err}"))))?;
+
+        let resp = match mkdir_result {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_mkdir failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "path": args.path,
+            "created": resp.created,
+        });
+
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: format!(
-                "fs_mkdir is not supported yet (safe-fs-tools has no mkdir API): path={:?} create_parents={} ignore_existing={}",
-                args.path, args.create_parents, args.ignore_existing
-            ),
-            is_error: Some(true),
+            content: out.to_string(),
+            is_error: None,
         })
     }
 
@@ -239,13 +253,49 @@ impl FsToolExecutor {
             }
         };
 
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let from = args.from.clone();
+        let to = args.to.clone();
+        let overwrite = args.overwrite;
+        let create_parents = args.create_parents;
+
+        let move_result = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.move_path(MovePathRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                from: PathBuf::from(from),
+                to: PathBuf::from(to),
+                overwrite,
+                create_parents,
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_move join error: {err}"))))?;
+
+        let resp = match move_result {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_move failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "from": args.from,
+            "to": args.to,
+            "moved": resp.moved,
+            "type": resp.kind,
+        });
+
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: format!(
-                "fs_move is not supported yet (safe-fs-tools has no move/rename API): from={:?} to={:?} overwrite={} create_parents={}",
-                args.from, args.to, args.overwrite, args.create_parents
-            ),
-            is_error: Some(true),
+            content: out.to_string(),
+            is_error: None,
         })
     }
 
@@ -261,13 +311,49 @@ impl FsToolExecutor {
             }
         };
 
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let from = args.from.clone();
+        let to = args.to.clone();
+        let overwrite = args.overwrite;
+        let create_parents = args.create_parents;
+
+        let copy_result = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.copy_file(CopyFileRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                from: PathBuf::from(from),
+                to: PathBuf::from(to),
+                overwrite,
+                create_parents,
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_copy_file join error: {err}"))))?;
+
+        let resp = match copy_result {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_copy_file failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "from": args.from,
+            "to": args.to,
+            "copied": resp.copied,
+            "bytes": resp.bytes,
+        });
+
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: format!(
-                "fs_copy_file is not supported yet (safe-fs-tools has no copy API): from={:?} to={:?} overwrite={} create_parents={}",
-                args.from, args.to, args.overwrite, args.create_parents
-            ),
-            is_error: Some(true),
+            content: out.to_string(),
+            is_error: None,
         })
     }
 }

@@ -291,7 +291,20 @@ async fn fs_list_dir_lists_entries() -> Result<()> {
     };
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    let entries = value
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(
+        entries[0].get("name").and_then(|v| v.as_str()),
+        Some("a.txt")
+    );
+    assert_eq!(entries[1].get("name").and_then(|v| v.as_str()), Some("sub"));
 
     Ok(())
 }
@@ -313,9 +326,10 @@ async fn fs_move_tool_moves_files() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
-    assert!(dir.path().join("a.txt").exists());
-    assert!(!dir.path().join("b.txt").exists());
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("a.txt").exists());
+    assert!(dir.path().join("b.txt").exists());
+    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
     Ok(())
 }
 
@@ -336,9 +350,9 @@ async fn fs_copy_file_tool_copies_files() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
+    assert_eq!(result.is_error, None);
     assert_eq!(std::fs::read_to_string(dir.path().join("a.txt"))?, "hi");
-    assert!(!dir.path().join("b.txt").exists());
+    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
     Ok(())
 }
 
@@ -441,7 +455,12 @@ async fn fs_stat_tool_reports_metadata() -> Result<()> {
     };
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
+    assert_eq!(result.is_error, None);
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    let stat = value.get("stat").cloned().unwrap_or_default();
+    assert_eq!(stat.get("type").and_then(|v| v.as_str()), Some("file"));
+    assert_eq!(stat.get("size_bytes").and_then(|v| v.as_u64()), Some(2));
     Ok(())
 }
 
@@ -488,8 +507,8 @@ async fn fs_delete_file_tool_deletes_dirs_recursively() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
-    assert!(dir.path().join("sub").is_dir());
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("sub").exists());
     Ok(())
 }
 
@@ -532,8 +551,8 @@ async fn fs_mkdir_tool_creates_directory() -> Result<()> {
 
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
-    assert_eq!(result.is_error, Some(true));
-    assert!(!dir.path().join("sub").exists());
+    assert_eq!(result.is_error, None);
+    assert!(dir.path().join("sub").is_dir());
     Ok(())
 }
 

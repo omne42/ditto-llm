@@ -1,4 +1,7 @@
-use safe_fs_tools::{GlobRequest, GrepRequest, PatchRequest, ReadRequest, RootMode, SandboxPolicy};
+use safe_fs_tools::{
+    CopyFileRequest, DeletePathRequest, GlobRequest, GrepRequest, ListDirRequest, MkdirRequest,
+    MovePathRequest, ReadRequest, RootMode, SandboxPolicy, StatRequest, WriteFileRequest,
+};
 
 const SAFE_FS_ROOT_ID: &str = "root";
 
@@ -18,24 +21,17 @@ fn safe_fs_ctx(
     policy.permissions.read = true;
     policy.permissions.glob = true;
     policy.permissions.grep = true;
-    policy.permissions.patch = true;
     policy.permissions.delete = true;
+    policy.permissions.list_dir = true;
+    policy.permissions.stat = true;
+    policy.permissions.mkdir = true;
+    policy.permissions.write = true;
+    policy.permissions.move_path = true;
+    policy.permissions.copy_file = true;
     policy.limits.max_read_bytes = max_read_bytes;
-    policy.limits.max_patch_bytes = Some(max_read_bytes.saturating_mul(2));
     policy.limits.max_write_bytes = max_write_bytes;
     policy.limits.max_results = max_results.max(1);
     safe_fs_tools::Context::new(policy)
-}
-
-fn safe_fs_is_not_found(err: &safe_fs_tools::Error) -> bool {
-    match err {
-        safe_fs_tools::Error::Io(err) => err.kind() == std::io::ErrorKind::NotFound,
-        safe_fs_tools::Error::IoPath { source, .. } => source.kind() == std::io::ErrorKind::NotFound,
-        safe_fs_tools::Error::WalkDirRoot { source, .. } => {
-            source.kind() == std::io::ErrorKind::NotFound
-        }
-        _ => false,
-    }
 }
 
 fn path_depth_under(base: &Path, path: &Path) -> usize {
@@ -144,45 +140,22 @@ impl FsToolExecutor {
             });
         }
 
-        if args.create_parents {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: "create_parents is not supported (safe-fs-tools cannot create directories)"
-                    .to_string(),
-                is_error: Some(true),
-            });
-        }
-
-        if !args.overwrite {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: "refusing to modify files without overwrite=true (safe-fs-tools cannot create new files)"
-                    .to_string(),
-                is_error: Some(true),
-            });
-        }
-
         let root = self.root.clone();
         let max_bytes = self.max_bytes as u64;
         let max_results = self.max_list_entries;
         let raw_path = args.path.clone();
         let desired = args.content.clone();
+        let overwrite = args.overwrite;
+        let create_parents = args.create_parents;
 
         let write = tokio::task::spawn_blocking(move || {
             let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
-
-            let before = ctx.read_file(ReadRequest {
+            ctx.write_file(WriteFileRequest {
                 root_id: SAFE_FS_ROOT_ID.to_string(),
                 path: PathBuf::from(&raw_path),
-                start_line: None,
-                end_line: None,
-            })?;
-
-            let patch = diffy::create_patch(&before.content, &desired).to_string();
-            ctx.apply_unified_patch(PatchRequest {
-                root_id: SAFE_FS_ROOT_ID.to_string(),
-                path: PathBuf::from(&raw_path),
-                patch,
+                content: desired,
+                overwrite,
+                create_parents,
             })
         })
         .await
@@ -191,15 +164,9 @@ impl FsToolExecutor {
         let resp = match write {
             Ok(resp) => resp,
             Err(err) => {
-                let msg = if safe_fs_is_not_found(&err) {
-                    "fs_write_file failed: file does not exist (safe-fs-tools cannot create new files yet)"
-                        .to_string()
-                } else {
-                    format!("fs_write_file failed: {err}")
-                };
                 return Ok(ToolResult {
                     tool_call_id: call.id,
-                    content: msg,
+                    content: format!("fs_write_file failed: {err}"),
                     is_error: Some(true),
                 });
             }
@@ -209,6 +176,7 @@ impl FsToolExecutor {
             "path": args.path,
             "written": true,
             "bytes_written": resp.bytes_written,
+            "created": resp.created,
         });
 
         Ok(ToolResult {
@@ -231,15 +199,62 @@ impl FsToolExecutor {
         };
 
         let requested = args.path.unwrap_or_else(|| ".".to_string());
-        let max_entries = args.max_entries.unwrap_or(self.max_list_entries);
+        let max_entries = args
+            .max_entries
+            .unwrap_or(self.max_list_entries)
+            .min(self.max_list_entries)
+            .max(1);
+
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let raw_path = requested.clone();
+
+        let list = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.list_dir(ListDirRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(raw_path),
+                max_entries: Some(max_entries),
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_list_dir join error: {err}"))))?;
+
+        let resp = match list {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_list_dir failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let entries: Vec<Value> = resp
+            .entries
+            .into_iter()
+            .map(|entry| {
+                serde_json::json!({
+                    "path": entry.path.to_string_lossy(),
+                    "name": entry.name,
+                    "type": entry.kind,
+                    "size_bytes": entry.size_bytes,
+                })
+            })
+            .collect();
+
+        let out = serde_json::json!({
+            "path": requested,
+            "entries": entries,
+            "truncated": resp.truncated,
+        });
 
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: format!(
-                "fs_list_dir is not supported (safe-fs-tools has no directory listing API yet): path={requested:?} max_entries={max_entries}"
-            )
-                .to_string(),
-            is_error: Some(true),
+            content: out.to_string(),
+            is_error: None,
         })
     }
 
@@ -528,13 +543,45 @@ impl FsToolExecutor {
             }
         };
 
+        let root = self.root.clone();
+        let max_bytes = self.max_bytes as u64;
+        let max_results = self.max_list_entries;
+        let raw_path = args.path.clone();
+
+        let stat_value = tokio::task::spawn_blocking(move || {
+            let ctx = safe_fs_ctx(root, max_bytes, max_bytes, max_results)?;
+            ctx.stat(StatRequest {
+                root_id: SAFE_FS_ROOT_ID.to_string(),
+                path: PathBuf::from(raw_path),
+            })
+        })
+        .await
+        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_stat join error: {err}"))))?;
+
+        let resp = match stat_value {
+            Ok(resp) => resp,
+            Err(err) => {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("fs_stat failed: {err}"),
+                    is_error: Some(true),
+                });
+            }
+        };
+
+        let out = serde_json::json!({
+            "path": args.path,
+            "stat": {
+                "type": resp.kind,
+                "size_bytes": resp.size_bytes,
+                "modified_ms": resp.modified_ms,
+            }
+        });
+
         Ok(ToolResult {
             tool_call_id: call.id,
-            content: format!(
-                "fs_stat is not supported (safe-fs-tools has no stat API yet): path={:?}",
-                args.path
-            ),
-            is_error: Some(true),
+            content: out.to_string(),
+            is_error: None,
         })
     }
 }

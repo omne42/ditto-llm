@@ -27,9 +27,14 @@ pub fn toolbox_tools() -> Vec<Tool> {
         http_fetch_tool(),
         fs_read_file_tool(),
         fs_write_file_tool(),
+        fs_list_dir_tool(),
         fs_delete_file_tool(),
+        fs_mkdir_tool(),
+        fs_move_tool(),
+        fs_copy_file_tool(),
         fs_find_tool(),
         fs_grep_tool(),
+        fs_stat_tool(),
         shell_exec_tool(),
     ]
 }
@@ -83,9 +88,9 @@ pub fn fs_write_file_tool() -> Tool {
     Tool {
         name: TOOL_FS_WRITE_FILE.to_string(),
         description: Some(
-            "Overwrite an existing file under the configured root directory.\n\n\
-This tool is implemented via `safe-fs-tools` (atomic patching), and currently does not support\n\
-creating new files or parent directories."
+            "Write a file under the configured root directory.\n\n\
+Implemented via `safe-fs-tools`. When `overwrite=false`, this tool refuses to modify existing files.\n\
+When `create_parents=true`, it creates missing parent directories."
                 .to_string(),
         ),
         parameters: serde_json::json!({
@@ -94,7 +99,7 @@ creating new files or parent directories."
                 "path": { "type": "string", "description": "Path relative to the configured root directory." },
                 "content": { "type": "string", "description": "File contents (UTF-8 string)." },
                 "overwrite": { "type": "boolean", "description": "Overwrite existing files (default: false)." },
-                "create_parents": { "type": "boolean", "description": "Not supported yet: safe-fs-tools cannot create directories." }
+                "create_parents": { "type": "boolean", "description": "Create missing parent directories (default: false)." }
             },
             "required": ["path", "content"]
         }),

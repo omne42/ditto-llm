@@ -334,7 +334,6 @@ dependencies = [
  "axum",
  "base64",
  "bytes",
- "diffy",
  "futures-util",
  "hmac",
  "httpmock",

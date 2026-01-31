@@ -85,13 +85,13 @@
   - [x] `fs_read_file` tool + executor（feature `agent`，`safe-fs-tools`，限制 root）
   - [x] `fs_find` tool + executor（feature `agent`，`safe-fs-tools` glob；files-only）
   - [x] `fs_grep` tool + executor（feature `agent`，`safe-fs-tools` grep）
-  - [x] `fs_write_file` tool + executor（feature `agent`，`safe-fs-tools` patch；仅覆盖已存在文件；需要 `overwrite=true`；不支持 `create_parents`）
-  - [x] `fs_delete_file` tool + executor（feature `agent`，`safe-fs-tools` delete；files-only；支持 `ignore_missing=true`）
-  - [ ] `fs_list_dir` tool + executor（TODO：`safe-fs-tools` 暂无 list-dir API）
-  - [ ] `fs_stat` tool + executor（TODO：`safe-fs-tools` 暂无 stat API）
-  - [ ] `fs_mkdir` tool + executor（TODO：`safe-fs-tools` 暂无 mkdir API）
-  - [ ] `fs_move` tool + executor（TODO：`safe-fs-tools` 暂无 move/rename API）
-  - [ ] `fs_copy_file` tool + executor（TODO：`safe-fs-tools` 暂无 copy API）
+  - [x] `fs_write_file` tool + executor（feature `agent`，`safe-fs-tools` `write_file`；支持创建新文件；支持 `create_parents`；需要 `overwrite=true` 才会覆盖已存在文件）
+  - [x] `fs_delete_file` tool + executor（feature `agent`，`safe-fs-tools` `delete_path`；支持 `recursive=true` 删除目录；支持 `ignore_missing=true`）
+  - [x] `fs_list_dir` tool + executor（feature `agent`，`safe-fs-tools` `list_dir`）
+  - [x] `fs_stat` tool + executor（feature `agent`，`safe-fs-tools` `stat`）
+  - [x] `fs_mkdir` tool + executor（feature `agent`，`safe-fs-tools` `mkdir`）
+  - [x] `fs_move` tool + executor（feature `agent`，`safe-fs-tools` `move_path`）
+  - [x] `fs_copy_file` tool + executor（feature `agent`，`safe-fs-tools` `copy_file`）
   - [x] `shell_exec` tool（feature `agent`，allowlist + cwd 限制 root）
 
 ### 2.2 Gateway：LiteLLM parity（OpenAI HTTP surface）
