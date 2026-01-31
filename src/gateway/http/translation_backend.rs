@@ -781,7 +781,7 @@ async fn attempt_translation_backend(
                 } else {
                     metrics.record_proxy_backend_failure(backend_name);
                 }
-                metrics.record_proxy_response_status(status.as_u16());
+                metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
                 metrics
                     .observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
             }

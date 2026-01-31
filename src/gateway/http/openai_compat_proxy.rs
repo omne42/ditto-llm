@@ -607,7 +607,7 @@ async fn handle_openai_compat_proxy(
                 metrics.record_proxy_cache_hit();
                 metrics.record_proxy_cache_hit_by_source(cache_source);
                 metrics.record_proxy_cache_hit_by_path(&metrics_path);
-                metrics.record_proxy_response_status(cached.status);
+                metrics.record_proxy_response_status_by_path(&metrics_path, cached.status);
                 metrics
                     .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
             }
@@ -840,7 +840,7 @@ async fn handle_openai_compat_proxy(
             .map(|(status, _)| status.as_u16())
             .unwrap_or(StatusCode::BAD_GATEWAY.as_u16());
         let mut metrics = metrics.lock().await;
-        metrics.record_proxy_response_status(status);
+        metrics.record_proxy_response_status_by_path(&metrics_path, status);
         metrics.observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
     }
 
@@ -853,4 +853,3 @@ async fn handle_openai_compat_proxy(
         )
     }))
 }
-

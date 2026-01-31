@@ -51,6 +51,7 @@ pub struct PrometheusMetrics {
     proxy_request_duration_seconds: HashMap<String, DurationHistogram>,
 
     proxy_responses_by_status: HashMap<u16, u64>,
+    proxy_responses_by_path_status: HashMap<String, HashMap<u16, u64>>,
 }
 
 impl PrometheusMetrics {
@@ -78,6 +79,7 @@ impl PrometheusMetrics {
             proxy_backend_request_duration_seconds: HashMap::new(),
             proxy_request_duration_seconds: HashMap::new(),
             proxy_responses_by_status: HashMap::new(),
+            proxy_responses_by_path_status: HashMap::new(),
         }
     }
 
@@ -222,6 +224,21 @@ impl PrometheusMetrics {
 
     pub fn record_proxy_response_status(&mut self, status: u16) {
         *self.proxy_responses_by_status.entry(status).or_default() += 1;
+    }
+
+    pub fn record_proxy_response_status_by_path(&mut self, path: &str, status: u16) {
+        self.record_proxy_response_status(status);
+        let path = limit_label(
+            path,
+            &mut self.proxy_responses_by_path_status,
+            self.config.max_path_series,
+        );
+        *self
+            .proxy_responses_by_path_status
+            .entry(path)
+            .or_default()
+            .entry(status)
+            .or_default() += 1;
     }
 
     pub fn render(&self) -> String {
@@ -396,6 +413,24 @@ impl PrometheusMetrics {
                 "ditto_gateway_proxy_responses_total{{status=\"{}\"}} {}\n",
                 status, value
             ));
+        }
+
+        out.push_str(
+            "# HELP ditto_gateway_proxy_responses_by_path_status_total Total proxy responses grouped by path and status.\n",
+        );
+        out.push_str("# TYPE ditto_gateway_proxy_responses_by_path_status_total counter\n");
+        let mut path_entries: Vec<_> = self.proxy_responses_by_path_status.iter().collect();
+        path_entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+        for (path, status_map) in path_entries {
+            let mut status_entries: Vec<_> = status_map.iter().collect();
+            status_entries.sort_by_key(|(status, _)| *status);
+            for (status, count) in status_entries {
+                out.push_str(&format!(
+                    "ditto_gateway_proxy_responses_by_path_status_total{{path=\"{}\",status=\"{}\"}} {count}\n",
+                    escape_label_value(path),
+                    status
+                ));
+            }
         }
 
         out
