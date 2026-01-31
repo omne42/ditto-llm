@@ -111,6 +111,38 @@ async fn http_fetch_tool_respects_max_response_bytes_override() -> Result<()> {
 }
 
 #[tokio::test]
+async fn http_fetch_tool_marks_error_for_non_2xx_responses() -> Result<()> {
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(GET).path("/fail");
+        then.status(500)
+            .header("content-type", "text/plain")
+            .body("nope");
+    });
+
+    let url = format!("{}/fail", upstream.base_url());
+    let executor = HttpToolExecutor::new().with_max_response_bytes(1024);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_HTTP_FETCH.to_string(),
+        arguments: json!({
+            "url": url,
+            "method": "GET",
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("ok").and_then(|v| v.as_bool()), Some(false));
+    assert_eq!(value.get("status").and_then(|v| v.as_u64()), Some(500));
+    assert!(value.get("elapsed_ms").and_then(|v| v.as_u64()).is_some());
+    Ok(())
+}
+
+#[tokio::test]
 async fn fs_read_file_tool_reads_within_root() -> Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::write(dir.path().join("hello.txt"), "hi")?;

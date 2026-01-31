@@ -389,6 +389,7 @@ impl ToolExecutor for HttpToolExecutor {
             .unwrap_or(self.max_response_bytes);
         let parse_json = args.parse_json.unwrap_or(false);
 
+        let start = std::time::Instant::now();
         let response = match builder.send().await {
             Ok(response) => response,
             Err(err) => {
@@ -405,25 +406,30 @@ impl ToolExecutor for HttpToolExecutor {
         let (body_bytes, truncated, read_error) =
             read_limited_bytes(response.bytes_stream(), max_response_bytes).await;
         let body = String::from_utf8_lossy(&body_bytes).to_string();
+        let elapsed_ms = start.elapsed().as_millis();
+        let elapsed_ms = u64::try_from(elapsed_ms).unwrap_or(u64::MAX);
         let body_json = if parse_json {
             serde_json::from_slice::<Value>(&body_bytes).ok()
         } else {
             None
         };
+        let ok = status < 400 && read_error.is_none();
 
         let mut out = serde_json::json!({
             "url": url.as_str(),
-            "ok": status < 400,
+            "ok": ok,
             "status": status,
             "headers": headers,
             "body": body,
             "truncated": truncated,
+            "elapsed_ms": elapsed_ms,
         });
         if parse_json {
             if let Some(obj) = out.as_object_mut() {
                 obj.insert("body_json".to_string(), body_json.unwrap_or(Value::Null));
             }
         }
+        let is_error = !ok;
         if let Some(read_error) = read_error {
             if let Some(obj) = out.as_object_mut() {
                 obj.insert(
@@ -436,7 +442,7 @@ impl ToolExecutor for HttpToolExecutor {
         Ok(ToolResult {
             tool_call_id: call.id,
             content: out.to_string(),
-            is_error: None,
+            is_error: if is_error { Some(true) } else { None },
         })
     }
 }
