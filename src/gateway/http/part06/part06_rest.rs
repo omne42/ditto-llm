@@ -65,7 +65,7 @@
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -163,7 +163,7 @@
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -266,7 +266,7 @@
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -371,8 +371,8 @@
                         headers.remove("content-length");
                         apply_proxy_response_headers(
                             &mut headers,
-                            &backend_name,
-                            &request_id,
+                            backend_name,
+                            request_id,
                             false,
                         );
 
@@ -437,8 +437,8 @@
                         );
                         apply_proxy_response_headers(
                             &mut headers,
-                            &backend_name,
-                            &request_id,
+                            backend_name,
+                            request_id,
                             false,
                         );
 

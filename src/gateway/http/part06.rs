@@ -98,7 +98,7 @@ async fn attempt_translation_backend(
                 ))));
             }
 
-            let mut proxy_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+            let mut proxy_permits = match try_acquire_proxy_permits(state, backend_name)? {
                 ProxyPermitOutcome::Acquired(permits) => permits,
                 ProxyPermitOutcome::BackendRateLimited(err) => {
                     return Ok(BackendAttemptOutcome::Continue(Some(err)));
@@ -115,8 +115,8 @@ async fn attempt_translation_backend(
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
-                metrics.record_proxy_backend_attempt(&backend_name);
-                metrics.record_proxy_backend_in_flight_inc(&backend_name);
+                metrics.record_proxy_backend_attempt(backend_name);
+                metrics.record_proxy_backend_in_flight_inc(backend_name);
             }
 
             let default_spend = ProxySpend {
@@ -128,6 +128,7 @@ async fn attempt_translation_backend(
                 (axum::response::Response, ProxySpend),
                 (StatusCode, Json<OpenAiErrorResponse>),
             > = 'translation_backend_attempt: {
+                #[allow(clippy::collapsible_else_if)]
                 if models_root && parts.method == axum::http::Method::GET {
                     let models = translation::collect_models_from_translation_backends(
                         state.translation_backends.as_ref(),
@@ -140,7 +141,7 @@ async fn attempt_translation_backend(
                     let mut headers = HeaderMap::new();
                     headers.insert("content-type", "application/json".parse().unwrap());
                     headers.insert("x-ditto-translation", "multi".parse().unwrap());
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -176,7 +177,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -226,7 +227,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -290,7 +291,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -323,7 +324,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -365,7 +366,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -448,7 +449,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -491,7 +492,7 @@ async fn attempt_translation_backend(
 
                     let request = match translation::audio_transcriptions_request_to_request(
                         content_type,
-                        &body,
+                        body,
                     ) {
                         Ok(request) => request,
                         Err(err) => {
@@ -566,7 +567,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -660,7 +661,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(
                         Bytes::from(spoken.audio),
@@ -738,7 +739,7 @@ async fn attempt_translation_backend(
                             .parse()
                             .unwrap_or_else(|_| "enabled".parse().unwrap()),
                     );
-                    apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
                     let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
                     let mut response = axum::response::Response::new(body);
@@ -753,9 +754,9 @@ async fn attempt_translation_backend(
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
-                metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                metrics.record_proxy_backend_in_flight_dec(backend_name);
                 metrics.observe_proxy_backend_request_duration(
-                    &backend_name,
+                    backend_name,
                     backend_timer_start.elapsed(),
                 );
             }
@@ -776,20 +777,20 @@ async fn attempt_translation_backend(
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 if spend_tokens {
-                    metrics.record_proxy_backend_success(&backend_name);
+                    metrics.record_proxy_backend_success(backend_name);
                 } else {
-                    metrics.record_proxy_backend_failure(&backend_name);
+                    metrics.record_proxy_backend_failure(backend_name);
                 }
                 metrics.record_proxy_response_status(status.as_u16());
                 metrics
-                    .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
+                    .observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
             }
 
             #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
             if !token_budget_reservation_ids.is_empty() {
                 settle_proxy_token_budget_reservations(
-                    &state,
-                    &token_budget_reservation_ids,
+                    state,
+                    token_budget_reservation_ids,
                     spend_tokens,
                     spent_tokens,
                 )
@@ -876,8 +877,8 @@ async fn attempt_translation_backend(
             ))]
             if !cost_budget_reservation_ids.is_empty() {
                 settle_proxy_cost_budget_reservations(
-                    &state,
-                    &cost_budget_reservation_ids,
+                    state,
+                    cost_budget_reservation_ids,
                     spend_tokens,
                     spent_cost_usd_micros.unwrap_or_default(),
                 )
@@ -937,7 +938,7 @@ async fn attempt_translation_backend(
             }
 
             emit_json_log(
-                &state,
+                state,
                 "proxy.response",
                 serde_json::json!({
                     "request_id": &request_id,
@@ -962,5 +963,5 @@ async fn attempt_translation_backend(
                 );
             }
 
-            return Ok(BackendAttemptOutcome::Response(response));
+            Ok(BackendAttemptOutcome::Response(response))
 }

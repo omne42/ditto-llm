@@ -49,8 +49,8 @@
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         if !token_budget_reservation_ids.is_empty() {
             settle_proxy_token_budget_reservations(
-                &state,
-                &token_budget_reservation_ids,
+                state,
+                token_budget_reservation_ids,
                 spend_tokens,
                 spent_tokens,
             )
@@ -133,8 +133,8 @@
         ))]
         if !cost_budget_reservation_ids.is_empty() {
             settle_proxy_cost_budget_reservations(
-                &state,
-                &cost_budget_reservation_ids,
+                state,
+                cost_budget_reservation_ids,
                 spend_tokens,
                 spent_cost_usd_micros.unwrap_or_default(),
             )
@@ -194,7 +194,7 @@
         }
 
         emit_json_log(
-            &state,
+            state,
             "proxy.response",
             serde_json::json!({
                 "request_id": &request_id,
@@ -233,7 +233,7 @@
                     body: bytes.clone(),
                     backend: backend_name.clone(),
                 };
-                store_proxy_cache_response(&state, cache_key, cached, now_epoch_seconds()).await;
+                store_proxy_cache_response(state, cache_key, cached, now_epoch_seconds()).await;
             }
         }
 
@@ -249,5 +249,5 @@
         let mut response = axum::response::Response::new(body);
         *response.status_mut() = status;
         *response.headers_mut() = headers;
-        return Ok(BackendAttemptOutcome::Response(response));
+        Ok(BackendAttemptOutcome::Response(response))
 }

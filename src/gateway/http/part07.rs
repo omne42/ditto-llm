@@ -59,7 +59,7 @@ async fn attempt_proxy_backend(
             }
         };
 
-        let mut proxy_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+        let mut proxy_permits = match try_acquire_proxy_permits(state, &backend_name)? {
             ProxyPermitOutcome::Acquired(permits) => permits,
             ProxyPermitOutcome::BackendRateLimited(err) => {
                 return Ok(BackendAttemptOutcome::Continue(Some(err)));
@@ -156,7 +156,7 @@ async fn attempt_proxy_backend(
                 }
                 #[cfg(feature = "gateway-routing-advanced")]
                 record_proxy_backend_failure(
-                    &state,
+                    state,
                     &backend_name,
                     _now_epoch_seconds,
                     FailureKind::Network,
@@ -206,7 +206,7 @@ async fn attempt_proxy_backend(
                 }
 
                 emit_json_log(
-                    &state,
+                    state,
                     "proxy.responses_shim",
                     serde_json::json!({
                         "request_id": &request_id,
@@ -253,7 +253,7 @@ async fn attempt_proxy_backend(
                     );
                 }
 
-                let shim_permits = match try_acquire_proxy_permits(&state, &backend_name)? {
+                let shim_permits = match try_acquire_proxy_permits(state, &backend_name)? {
                     ProxyPermitOutcome::Acquired(permits) => permits,
                     ProxyPermitOutcome::BackendRateLimited(err) => {
                         return Ok(BackendAttemptOutcome::Continue(Some(err)));
@@ -291,7 +291,7 @@ async fn attempt_proxy_backend(
                         }
                         #[cfg(feature = "gateway-routing-advanced")]
                         record_proxy_backend_failure(
-                            &state,
+                            state,
                             &backend_name,
                             _now_epoch_seconds,
                             FailureKind::Network,
@@ -328,7 +328,7 @@ async fn attempt_proxy_backend(
                             .record_proxy_backend_failure(&backend_name);
                     }
                     record_proxy_backend_failure(
-                        &state,
+                        state,
                         &backend_name,
                         _now_epoch_seconds,
                         FailureKind::RetryableStatus(status.as_u16()),
@@ -337,7 +337,7 @@ async fn attempt_proxy_backend(
                     .await;
 
                     emit_json_log(
-                        &state,
+                        state,
                         "proxy.retry",
                         serde_json::json!({
                             "request_id": &request_id,
@@ -371,7 +371,7 @@ async fn attempt_proxy_backend(
                 #[cfg(feature = "gateway-routing-advanced")]
                 if retry_config.retry_status_codes.contains(&status.as_u16()) {
                     record_proxy_backend_failure(
-                        &state,
+                        state,
                         &backend_name,
                         _now_epoch_seconds,
                         FailureKind::RetryableStatus(status.as_u16()),
@@ -379,7 +379,7 @@ async fn attempt_proxy_backend(
                     )
                     .await;
                 } else {
-                    record_proxy_backend_success(&state, &backend_name).await;
+                    record_proxy_backend_success(state, &backend_name).await;
                 }
 
                 let spend_tokens = status.is_success();
@@ -404,7 +404,7 @@ async fn attempt_proxy_backend(
                     }
                     metrics.record_proxy_response_status(status.as_u16());
                     metrics.observe_proxy_request_duration(
-                        &metrics_path,
+                        metrics_path,
                         metrics_timer_start.elapsed(),
                     );
                 }
@@ -412,8 +412,8 @@ async fn attempt_proxy_backend(
                 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
                 if !token_budget_reservation_ids.is_empty() {
                     settle_proxy_token_budget_reservations(
-                        &state,
-                        &token_budget_reservation_ids,
+                        state,
+                        token_budget_reservation_ids,
                         spend_tokens,
                         u64::MAX,
                     )
@@ -517,8 +517,8 @@ async fn attempt_proxy_backend(
                 ))]
                 if !cost_budget_reservation_ids.is_empty() {
                     settle_proxy_cost_budget_reservations(
-                        &state,
-                        &cost_budget_reservation_ids,
+                        state,
+                        cost_budget_reservation_ids,
                         spend_tokens,
                         u64::MAX,
                     )
@@ -582,7 +582,7 @@ async fn attempt_proxy_backend(
                 }
 
                 emit_json_log(
-                    &state,
+                    state,
                     "proxy.response",
                     serde_json::json!({
                         "request_id": &request_id,
@@ -614,7 +614,7 @@ async fn attempt_proxy_backend(
 
                 if status.is_success() {
                     match responses_shim_response(
-                        &state,
+                        state,
                         shim_response,
                         backend_name.clone(),
                         request_id.clone(),
@@ -633,7 +633,7 @@ async fn attempt_proxy_backend(
                     }
                 } else {
                     return Ok(BackendAttemptOutcome::Response(proxy_response(
-                        &state,
+                        state,
                         shim_response,
                         backend_name,
                         request_id.clone(),
@@ -661,7 +661,7 @@ async fn attempt_proxy_backend(
                     .record_proxy_backend_failure(&backend_name);
             }
             record_proxy_backend_failure(
-                &state,
+                state,
                 &backend_name,
                 _now_epoch_seconds,
                 FailureKind::RetryableStatus(status.as_u16()),
@@ -670,7 +670,7 @@ async fn attempt_proxy_backend(
             .await;
 
             emit_json_log(
-                &state,
+                state,
                 "proxy.retry",
                 serde_json::json!({
                     "request_id": &request_id,
@@ -699,7 +699,7 @@ async fn attempt_proxy_backend(
         #[cfg(feature = "gateway-routing-advanced")]
         if retry_config.retry_status_codes.contains(&status.as_u16()) {
             record_proxy_backend_failure(
-                &state,
+                state,
                 &backend_name,
                 _now_epoch_seconds,
                 FailureKind::RetryableStatus(status.as_u16()),
@@ -707,7 +707,7 @@ async fn attempt_proxy_backend(
             )
             .await;
         } else {
-            record_proxy_backend_success(&state, &backend_name).await;
+            record_proxy_backend_success(state, &backend_name).await;
         }
 
         let spend_tokens = status.is_success();
@@ -731,7 +731,7 @@ async fn attempt_proxy_backend(
                 metrics.record_proxy_backend_success(&backend_name);
             }
             metrics.record_proxy_response_status(status.as_u16());
-            metrics.observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
+            metrics.observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
         }
 
         let upstream_headers = upstream_response.headers().clone();
@@ -757,8 +757,8 @@ async fn attempt_proxy_backend(
             #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
             if !token_budget_reservation_ids.is_empty() {
                 settle_proxy_token_budget_reservations(
-                    &state,
-                    &token_budget_reservation_ids,
+                    state,
+                    token_budget_reservation_ids,
                     spend_tokens,
                     spent_tokens,
                 )
@@ -845,8 +845,8 @@ async fn attempt_proxy_backend(
             ))]
             if !cost_budget_reservation_ids.is_empty() {
                 settle_proxy_cost_budget_reservations(
-                    &state,
-                    &cost_budget_reservation_ids,
+                    state,
+                    cost_budget_reservation_ids,
                     spend_tokens,
                     spent_cost_usd_micros.unwrap_or_default(),
                 )
@@ -905,7 +905,7 @@ async fn attempt_proxy_backend(
             }
 
             emit_json_log(
-                &state,
+                state,
                 "proxy.response",
                 serde_json::json!({
                     "request_id": &request_id,
@@ -936,7 +936,7 @@ async fn attempt_proxy_backend(
             }
 
             return Ok(BackendAttemptOutcome::Response(proxy_response(
-                &state,
+                state,
                 upstream_response,
                 backend_name,
                 request_id.clone(),
@@ -949,5 +949,5 @@ async fn attempt_proxy_backend(
             .await));
         }
 
-        include!("part07/part07_nonstream.rs");
+        include!("part07/part07_nonstream.rs")
 }
