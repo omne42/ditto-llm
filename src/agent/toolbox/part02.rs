@@ -9,6 +9,7 @@ impl ToolExecutor for FsToolExecutor {
         match call.name.as_str() {
             TOOL_FS_READ_FILE => self.execute_read_file(call).await,
             TOOL_FS_WRITE_FILE => self.execute_write_file(call).await,
+            TOOL_FS_MOVE => self.execute_move(call).await,
             TOOL_FS_DELETE_FILE => self.execute_delete_file(call).await,
             TOOL_FS_MKDIR => self.execute_mkdir(call).await,
             TOOL_FS_LIST_DIR => self.execute_list_dir(call).await,

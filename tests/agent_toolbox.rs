@@ -7,7 +7,7 @@ use serde_json::json;
 use ditto_llm::Result;
 use ditto_llm::agent::{
     FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_DELETE_FILE, TOOL_FS_FIND,
-    TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_MKDIR, TOOL_FS_READ_FILE, TOOL_FS_STAT,
+    TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_MKDIR, TOOL_FS_MOVE, TOOL_FS_READ_FILE, TOOL_FS_STAT,
     TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
 
@@ -304,6 +304,120 @@ async fn fs_list_dir_lists_entries() -> Result<()> {
         .collect();
     assert!(names.contains(&"a.txt".to_string()));
     assert!(names.contains(&"sub".to_string()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_move_tool_moves_files() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MOVE.to_string(),
+        arguments: json!({
+            "from": "a.txt",
+            "to": "b.txt",
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("a.txt").exists());
+    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("file"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_move_tool_creates_parents_for_destination() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MOVE.to_string(),
+        arguments: json!({
+            "from": "a.txt",
+            "to": "sub/b.txt",
+            "create_parents": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("a.txt").exists());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("sub").join("b.txt"))?,
+        "hi"
+    );
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
+    Ok(())
+}
+
+#[tokio::test]
+async fn fs_move_tool_overwrites_destination_file() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+    std::fs::write(dir.path().join("b.txt"), "bye")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MOVE.to_string(),
+        arguments: json!({
+            "from": "a.txt",
+            "to": "b.txt",
+            "overwrite": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, None);
+    assert!(!dir.path().join("a.txt").exists());
+    assert_eq!(std::fs::read_to_string(dir.path().join("b.txt"))?, "hi");
+
+    let value: serde_json::Value = serde_json::from_str(&result.content)?;
+    assert_eq!(value.get("moved").and_then(|v| v.as_bool()), Some(true));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fs_move_tool_rejects_symlink_escape_without_side_effects() -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempfile::tempdir()?;
+    let outside = tempfile::tempdir()?;
+    symlink(outside.path(), dir.path().join("link"))?;
+    std::fs::write(dir.path().join("a.txt"), "hi")?;
+
+    let executor = FsToolExecutor::new(dir.path())?;
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_FS_MOVE.to_string(),
+        arguments: json!({
+            "from": "a.txt",
+            "to": "link/b.txt",
+            "create_parents": true
+        }),
+    };
+
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+    assert!(dir.path().join("a.txt").exists());
+    assert!(!outside.path().join("b.txt").exists());
     Ok(())
 }
 
