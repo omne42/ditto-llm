@@ -115,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Format: rustfmt cleanup (no behavior changes).
 - Format: rustfmt cleanup (imports order).
 - Dev: pre-commit rejects oversized staged Rust files (default 1000 lines; configurable via `DITTO_MAX_RS_LINES`).
+- Refactor: split `gateway::translation` module into sub-files (no behavior changes).
 
 ### Fixed
 
