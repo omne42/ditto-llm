@@ -120,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor: split `gateway::translation` module into sub-files (no behavior changes).
 - Refactor: split `gateway::http` module into sub-files (no behavior changes).
 - Refactor: split `gateway::interop` module into sub-files (no behavior changes).
+- Refactor: split `gateway::redis_store` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai` module into sub-files (no behavior changes).
 - Refactor: split `providers::openai_compatible` module into sub-files (no behavior changes).
 - Refactor: split `providers::anthropic` module into sub-files (no behavior changes).
