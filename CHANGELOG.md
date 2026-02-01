@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Providers: deduplicate OpenAI/OpenAI-compatible images/audio/moderations adapters via shared OpenAI-like core helpers.
 - Providers: reduce boilerplate in OpenAI/OpenAI-compatible images/audio/moderations wrappers (re-export modules + macro-based wrappers).
 - Providers: deduplicate OpenAI/OpenAI-compatible batches adapters via a shared `openai_batches_common` implementation.
+- Providers: deduplicate OpenAI/OpenAI-compatible embeddings adapters via a shared `openai_embeddings_common` implementation.
 - Audio: allow forwarding `provider_options` on multipart transcription/translation requests (skipping reserved keys like `model`/`file`).
 - SDK: split `sdk::http` implementation into include parts to stay well under the pre-commit file size limit.
 - Gateway: split translation backend routing/settlement into smaller include parts to stay under the pre-commit file size limit.

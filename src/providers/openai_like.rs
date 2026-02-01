@@ -96,7 +96,8 @@ pub(crate) fn apply_auth(
     feature = "images",
     feature = "audio",
     feature = "moderations",
-    feature = "batches"
+    feature = "batches",
+    feature = "embeddings"
 ))]
 #[derive(Clone)]
 pub(crate) struct OpenAiLikeClient {
@@ -111,7 +112,8 @@ pub(crate) struct OpenAiLikeClient {
     feature = "images",
     feature = "audio",
     feature = "moderations",
-    feature = "batches"
+    feature = "batches",
+    feature = "embeddings"
 ))]
 impl OpenAiLikeClient {
     pub(crate) fn new(api_key: impl Into<String>) -> Self {

@@ -35,6 +35,8 @@ pub mod vertex;
 mod openai_audio_common;
 #[cfg(all(feature = "batches", feature = "openai"))]
 mod openai_batches_common;
+#[cfg(all(feature = "embeddings", feature = "openai"))]
+mod openai_embeddings_common;
 #[cfg(all(feature = "images", feature = "openai"))]
 mod openai_images_common;
 #[cfg(feature = "openai")]

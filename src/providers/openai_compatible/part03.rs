@@ -1,41 +1,29 @@
 #[cfg(feature = "embeddings")]
 #[derive(Clone)]
 pub struct OpenAICompatibleEmbeddings {
-    http: reqwest::Client,
-    base_url: String,
-    auth: Option<RequestAuth>,
-    model: String,
-    http_query_params: BTreeMap<String, String>,
+    client: openai_like::OpenAiLikeClient,
 }
 
 #[cfg(feature = "embeddings")]
 impl OpenAICompatibleEmbeddings {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let api_key = api_key.into();
-        let http = openai_like::default_http_client();
-        let auth = openai_like::auth_from_api_key(&api_key);
-
         Self {
-            http,
-            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
-            auth,
-            model: String::new(),
-            http_query_params: BTreeMap::new(),
+            client: openai_like::OpenAiLikeClient::new(api_key),
         }
     }
 
     pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
-        self.http = http;
+        self.client = self.client.with_http_client(http);
         self
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url);
         self
     }
 
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
+        self.client = self.client.with_model(model);
         self
     }
 
@@ -45,60 +33,21 @@ impl OpenAICompatibleEmbeddings {
             "OPENAI_API_KEY",
             "CODE_PM_OPENAI_API_KEY",
         ];
-        let auth = openai_like::resolve_auth_optional(config, env, DEFAULT_KEYS).await?;
-
-        let mut out = Self::new("");
-        out.auth = auth;
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                openai_like::HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
-            out = out.with_base_url(base_url);
-        }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            out = out.with_model(model);
-        }
-        Ok(out)
-    }
-
-    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
-    }
-
-    fn embeddings_url(&self) -> String {
-        openai_like::join_endpoint(&self.base_url, "embeddings")
+        Ok(Self {
+            client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
+                .await?,
+        })
     }
 
     fn resolve_model(&self) -> Result<&str> {
-        if !self.model.trim().is_empty() {
-            return Ok(self.model.as_str());
+        if !self.client.model.trim().is_empty() {
+            return Ok(self.client.model.as_str());
         }
         Err(DittoError::InvalidResponse(
             "openai-compatible embedding model is not set (set OpenAICompatibleEmbeddings::with_model)"
                 .to_string(),
         ))
     }
-}
-
-#[cfg(feature = "embeddings")]
-#[derive(Debug, Deserialize)]
-struct EmbeddingsResponse {
-    #[serde(default)]
-    data: Vec<EmbeddingsItem>,
-}
-
-#[cfg(feature = "embeddings")]
-#[derive(Debug, Deserialize)]
-struct EmbeddingsItem {
-    embedding: Vec<f32>,
 }
 
 #[cfg(feature = "embeddings")]
@@ -109,28 +58,12 @@ impl EmbeddingModel for OpenAICompatibleEmbeddings {
     }
 
     fn model_id(&self) -> &str {
-        self.model.as_str()
+        self.client.model.as_str()
     }
 
     async fn embed(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         let model = self.resolve_model()?;
-        let url = self.embeddings_url();
-
-        let req = self.http.post(url);
-        let response = self
-            .apply_auth(req)
-            .json(&serde_json::json!({ "model": model, "input": texts }))
-            .send()
-            .await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<EmbeddingsResponse>().await?;
-        Ok(parsed.data.into_iter().map(|item| item.embedding).collect())
+        super::openai_embeddings_common::embed(&self.client, model, texts).await
     }
 }
 
