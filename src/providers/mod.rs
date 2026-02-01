@@ -33,6 +33,8 @@ pub mod vertex;
 
 #[cfg(all(feature = "audio", feature = "openai"))]
 mod openai_audio_common;
+#[cfg(all(feature = "batches", feature = "openai"))]
+mod openai_batches_common;
 #[cfg(all(feature = "images", feature = "openai"))]
 mod openai_images_common;
 #[cfg(feature = "openai")]

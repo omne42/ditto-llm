@@ -211,6 +211,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn transcribe_merges_provider_options_into_multipart_form() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/audio/transcriptions")
+                    .body_includes("name=\"model\"")
+                    .body_includes("whisper-1")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello")
+                    .body_includes("name=\"extra\"")
+                    .body_includes("ok")
+                    .body_includes("name=\"tags\"")
+                    .body_includes("tag-a")
+                    .body_includes("tag-b")
+                    .body_excludes("evil-model");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"text\":\"ok\"}");
+            })
+            .await;
+
+        let client = OpenAIAudioTranscription::new("")
+            .with_base_url(server.url("/v1"))
+            .with_model("whisper-1");
+        let response = client
+            .transcribe(AudioTranscriptionRequest {
+                audio: b"hello".to_vec(),
+                filename: "audio.wav".to_string(),
+                media_type: Some("audio/wav".to_string()),
+                model: None,
+                language: None,
+                prompt: None,
+                response_format: Some(TranscriptionResponseFormat::Json),
+                temperature: None,
+                provider_options: Some(serde_json::json!({
+                    "extra": "ok",
+                    "tags": ["tag-a", "tag-b"],
+                    "model": "evil-model"
+                })),
+            })
+            .await?;
+
+        mock.assert_async().await;
+        assert_eq!(response.text, "ok");
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn translate_posts_multipart_and_parses_json() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());

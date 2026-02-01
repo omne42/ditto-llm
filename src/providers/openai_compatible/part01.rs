@@ -118,10 +118,12 @@ impl OpenAICompatible {
             url,
             self.auth.as_ref(),
             &self.http_query_params,
-            filename,
-            bytes,
-            purpose,
-            media_type,
+            crate::file::FileUploadRequest {
+                filename: filename.into(),
+                bytes,
+                purpose: purpose.into(),
+                media_type: media_type.map(|s| s.to_string()),
+            },
         )
         .await
     }

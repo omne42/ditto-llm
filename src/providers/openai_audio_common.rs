@@ -37,19 +37,74 @@ fn speech_format_to_str(format: SpeechResponseFormat) -> &'static str {
     }
 }
 
-fn warn_unsupported_multipart_provider_options(
+fn merge_provider_options_into_multipart_form(
+    mut form: Form,
     options: Option<&Value>,
+    reserved_keys: &[&str],
+    feature: &str,
     warnings: &mut Vec<Warning>,
-) {
+) -> Form {
     let Some(options) = options else {
-        return;
+        return form;
     };
-    warnings.push(Warning::Unsupported {
-        feature: "audio.provider_options".to_string(),
-        details: Some(format!(
-            "provider_options are not supported for audio multipart requests; got {options:?}"
-        )),
-    });
+
+    let Some(obj) = options.as_object() else {
+        warnings.push(Warning::Unsupported {
+            feature: feature.to_string(),
+            details: Some("expected provider_options to be a JSON object".to_string()),
+        });
+        return form;
+    };
+
+    for (key, value) in obj {
+        if reserved_keys.contains(&key.as_str()) {
+            continue;
+        }
+
+        match value {
+            Value::Null => {}
+            Value::String(value) => {
+                form = form.text(key.clone(), value.clone());
+            }
+            Value::Number(value) => {
+                form = form.text(key.clone(), value.to_string());
+            }
+            Value::Bool(value) => {
+                form = form.text(key.clone(), if *value { "true" } else { "false" });
+            }
+            Value::Array(items) => {
+                for item in items {
+                    match item {
+                        Value::Null => {}
+                        Value::String(value) => {
+                            form = form.text(key.clone(), value.clone());
+                        }
+                        Value::Number(value) => {
+                            form = form.text(key.clone(), value.to_string());
+                        }
+                        Value::Bool(value) => {
+                            form = form.text(
+                                key.clone(),
+                                if *value {
+                                    "true".to_string()
+                                } else {
+                                    "false".to_string()
+                                },
+                            );
+                        }
+                        Value::Object(_) | Value::Array(_) => {
+                            form = form.text(key.clone(), item.to_string());
+                        }
+                    }
+                }
+            }
+            Value::Object(_) => {
+                form = form.text(key.clone(), value.to_string());
+            }
+        }
+    }
+
+    form
 }
 
 pub(super) async fn transcribe(
@@ -123,7 +178,20 @@ async fn transcribe_to_endpoint(
         }
     }
 
-    warn_unsupported_multipart_provider_options(selected_provider_options.as_ref(), &mut warnings);
+    form = merge_provider_options_into_multipart_form(
+        form,
+        selected_provider_options.as_ref(),
+        &[
+            "model",
+            "file",
+            "language",
+            "prompt",
+            "response_format",
+            "temperature",
+        ],
+        "audio.provider_options",
+        &mut warnings,
+    );
 
     let url = client.endpoint(endpoint);
     let response = client

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use crate::file::{FileContent, FileDeleteResponse, FileObject};
+use crate::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
@@ -92,7 +92,12 @@ pub(crate) fn apply_auth(
     apply_http_query_params(req, http_query_params)
 }
 
-#[cfg(any(feature = "images", feature = "audio", feature = "moderations"))]
+#[cfg(any(
+    feature = "images",
+    feature = "audio",
+    feature = "moderations",
+    feature = "batches"
+))]
 #[derive(Clone)]
 pub(crate) struct OpenAiLikeClient {
     pub(crate) http: reqwest::Client,
@@ -102,7 +107,12 @@ pub(crate) struct OpenAiLikeClient {
     pub(crate) http_query_params: BTreeMap<String, String>,
 }
 
-#[cfg(any(feature = "images", feature = "audio", feature = "moderations"))]
+#[cfg(any(
+    feature = "images",
+    feature = "audio",
+    feature = "moderations",
+    feature = "batches"
+))]
 impl OpenAiLikeClient {
     pub(crate) fn new(api_key: impl Into<String>) -> Self {
         let api_key = api_key.into();
@@ -205,26 +215,22 @@ pub(crate) async fn upload_file_with_purpose(
     url: String,
     auth: Option<&RequestAuth>,
     http_query_params: &BTreeMap<String, String>,
-    filename: impl Into<String>,
-    bytes: Vec<u8>,
-    purpose: impl Into<String>,
-    media_type: Option<&str>,
+    request: FileUploadRequest,
 ) -> Result<String> {
     #[derive(Deserialize)]
     struct FilesUploadResponse {
         id: String,
     }
 
-    let filename = filename.into();
-    let mut file_part = Part::bytes(bytes).file_name(filename);
-    if let Some(media_type) = media_type {
+    let mut file_part = Part::bytes(request.bytes).file_name(request.filename);
+    if let Some(media_type) = request.media_type.as_deref() {
         file_part = file_part.mime_str(media_type).map_err(|err| {
             DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
         })?;
     }
 
     let form = Form::new()
-        .text("purpose", purpose.into())
+        .text("purpose", request.purpose)
         .part("file", file_part);
 
     let mut req = http.post(url);
