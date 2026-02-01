@@ -92,13 +92,6 @@ pub(crate) fn apply_auth(
     apply_http_query_params(req, http_query_params)
 }
 
-#[cfg(any(
-    feature = "images",
-    feature = "audio",
-    feature = "moderations",
-    feature = "batches",
-    feature = "embeddings"
-))]
 #[derive(Clone)]
 pub(crate) struct OpenAiLikeClient {
     pub(crate) http: reqwest::Client,
@@ -108,13 +101,6 @@ pub(crate) struct OpenAiLikeClient {
     pub(crate) http_query_params: BTreeMap<String, String>,
 }
 
-#[cfg(any(
-    feature = "images",
-    feature = "audio",
-    feature = "moderations",
-    feature = "batches",
-    feature = "embeddings"
-))]
 impl OpenAiLikeClient {
     pub(crate) fn new(api_key: impl Into<String>) -> Self {
         let api_key = api_key.into();
@@ -209,6 +195,46 @@ impl OpenAiLikeClient {
 
     pub(crate) fn endpoint(&self, endpoint: &str) -> String {
         join_endpoint(&self.base_url, endpoint)
+    }
+
+    pub(crate) async fn upload_file_with_purpose(
+        &self,
+        request: FileUploadRequest,
+    ) -> Result<String> {
+        self::upload_file_with_purpose(
+            &self.http,
+            self.endpoint("files"),
+            self.auth.as_ref(),
+            &self.http_query_params,
+            request,
+        )
+        .await
+    }
+
+    pub(crate) async fn list_files(&self) -> Result<Vec<FileObject>> {
+        self::list_files(
+            &self.http,
+            self.endpoint("files"),
+            self.auth.as_ref(),
+            &self.http_query_params,
+        )
+        .await
+    }
+
+    pub(crate) async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
+        let url = format!("{}/{}", self.endpoint("files"), file_id.trim());
+        self::retrieve_file(&self.http, url, self.auth.as_ref(), &self.http_query_params).await
+    }
+
+    pub(crate) async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
+        let url = format!("{}/{}", self.endpoint("files"), file_id.trim());
+        self::delete_file(&self.http, url, self.auth.as_ref(), &self.http_query_params).await
+    }
+
+    pub(crate) async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
+        let url = format!("{}/{}/content", self.endpoint("files"), file_id.trim());
+        self::download_file_content(&self.http, url, self.auth.as_ref(), &self.http_query_params)
+            .await
     }
 }
 

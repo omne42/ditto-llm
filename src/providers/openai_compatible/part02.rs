@@ -346,7 +346,7 @@ impl LanguageModel for OpenAICompatible {
     }
 
     fn model_id(&self) -> &str {
-        self.default_model.as_str()
+        self.client.model.as_str()
     }
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
@@ -456,7 +456,7 @@ impl LanguageModel for OpenAICompatible {
         );
 
         let url = self.chat_completions_url();
-        let mut req = self.http.post(url);
+        let mut req = self.client.http.post(url);
         req = self.apply_auth(req);
         let response = req.json(&body).send().await?;
 
@@ -673,6 +673,7 @@ impl LanguageModel for OpenAICompatible {
 
             let url = self.chat_completions_url();
             let req = self
+                .client
                 .http
                 .post(url)
                 .header("Accept", "text/event-stream")
@@ -746,4 +747,3 @@ impl LanguageModel for OpenAICompatible {
         }
     }
 }
-

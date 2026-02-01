@@ -135,7 +135,7 @@ impl LanguageModel for OpenAI {
     }
 
     fn model_id(&self) -> &str {
-        self.default_model.as_str()
+        self.client.model.as_str()
     }
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
@@ -231,7 +231,7 @@ impl LanguageModel for OpenAI {
         );
 
         let url = self.responses_url();
-        let req = self.http.post(url);
+        let req = self.client.http.post(url);
         let response = self.apply_auth(req).json(&body).send().await?;
 
         let status = response.status();
@@ -374,7 +374,7 @@ impl LanguageModel for OpenAI {
             );
 
             let url = self.responses_url();
-            let req = self.http.post(url);
+            let req = self.client.http.post(url);
             let response = self
                 .apply_auth(req)
                 .header("Accept", "text/event-stream")
@@ -555,4 +555,3 @@ impl LanguageModel for OpenAI {
         }
     }
 }
-

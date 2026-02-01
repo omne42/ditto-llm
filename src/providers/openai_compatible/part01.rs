@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -12,7 +12,7 @@ use super::openai_like;
 use crate::embedding::EmbeddingModel;
 use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderConfig, RequestAuth};
+use crate::profile::{Env, ProviderConfig};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
@@ -21,40 +21,28 @@ use crate::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OpenAICompatible {
-    http: reqwest::Client,
-    base_url: String,
-    auth: Option<RequestAuth>,
-    default_model: String,
-    http_query_params: BTreeMap<String, String>,
+    client: openai_like::OpenAiLikeClient,
 }
 
 impl OpenAICompatible {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let api_key = api_key.into();
-        let http = openai_like::default_http_client();
-        let auth = openai_like::auth_from_api_key(&api_key);
-
         Self {
-            http,
-            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
-            auth,
-            default_model: String::new(),
-            http_query_params: BTreeMap::new(),
+            client: openai_like::OpenAiLikeClient::new(api_key),
         }
     }
 
     pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
-        self.http = http;
+        self.client = self.client.with_http_client(http);
         self
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url);
         self
     }
 
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.default_model = model.into();
+        self.client = self.client.with_model(model);
         self
     }
 
@@ -64,40 +52,18 @@ impl OpenAICompatible {
             "OPENAI_API_KEY",
             "CODE_PM_OPENAI_API_KEY",
         ];
-        let auth = openai_like::resolve_auth_optional(config, env, DEFAULT_KEYS).await?;
-
-        let mut out = Self::new("");
-        out.auth = auth;
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                openai_like::HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
-            out = out.with_base_url(base_url);
-        }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            out = out.with_model(model);
-        }
-        Ok(out)
+        Ok(Self {
+            client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
+                .await?,
+        })
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
+        self.client.apply_auth(req)
     }
 
     fn chat_completions_url(&self) -> String {
-        openai_like::join_endpoint(&self.base_url, "chat/completions")
-    }
-
-    fn files_url(&self) -> String {
-        openai_like::join_endpoint(&self.base_url, "files")
+        self.client.endpoint("chat/completions")
     }
 
     pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {
@@ -112,72 +78,38 @@ impl OpenAICompatible {
         purpose: impl Into<String>,
         media_type: Option<&str>,
     ) -> Result<String> {
-        let url = self.files_url();
-        openai_like::upload_file_with_purpose(
-            &self.http,
-            url,
-            self.auth.as_ref(),
-            &self.http_query_params,
-            crate::file::FileUploadRequest {
+        self.client
+            .upload_file_with_purpose(crate::file::FileUploadRequest {
                 filename: filename.into(),
                 bytes,
                 purpose: purpose.into(),
                 media_type: media_type.map(|s| s.to_string()),
-            },
-        )
-        .await
+            })
+            .await
     }
 
     pub async fn list_files(&self) -> Result<Vec<FileObject>> {
-        let url = self.files_url();
-        openai_like::list_files(
-            &self.http,
-            url,
-            self.auth.as_ref(),
-            &self.http_query_params,
-        )
-        .await
+        self.client.list_files().await
     }
 
     pub async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
-        let url = format!("{}/{}", self.files_url(), file_id.trim());
-        openai_like::retrieve_file(
-            &self.http,
-            url,
-            self.auth.as_ref(),
-            &self.http_query_params,
-        )
-        .await
+        self.client.retrieve_file(file_id).await
     }
 
     pub async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
-        let url = format!("{}/{}", self.files_url(), file_id.trim());
-        openai_like::delete_file(
-            &self.http,
-            url,
-            self.auth.as_ref(),
-            &self.http_query_params,
-        )
-        .await
+        self.client.delete_file(file_id).await
     }
 
     pub async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
-        let url = format!("{}/{}/content", self.files_url(), file_id.trim());
-        openai_like::download_file_content(
-            &self.http,
-            url,
-            self.auth.as_ref(),
-            &self.http_query_params,
-        )
-        .await
+        self.client.download_file_content(file_id).await
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
         }
-        if !self.default_model.trim().is_empty() {
-            return Ok(self.default_model.as_str());
+        if !self.client.model.trim().is_empty() {
+            return Ok(self.client.model.as_str());
         }
         Err(DittoError::InvalidResponse(
             "openai-compatible model is not set (set request.model or OpenAICompatible::with_model)"
