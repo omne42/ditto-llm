@@ -248,10 +248,10 @@ pub fn files_upload_request_to_request(
     content_type: &str,
     body: &Bytes,
 ) -> ParseResult<FileUploadRequest> {
-    let mut file: Option<MultipartPart> = None;
+    let mut file: Option<super::multipart::MultipartPart> = None;
     let mut purpose: Option<String> = None;
 
-    let parts = parse_multipart_form(content_type, body)?;
+    let parts = super::multipart::parse_multipart_form(content_type, body)?;
     for part in parts {
         match part.name.as_str() {
             "file" => file = Some(part),

@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audio: allow forwarding `provider_options` on multipart transcription/translation requests (skipping reserved keys like `model`/`file`).
 - SDK: split `sdk::http` implementation into include parts to stay well under the pre-commit file size limit.
 - Gateway: split translation backend routing/settlement into smaller include parts to stay under the pre-commit file size limit.
+- Gateway: extend request schema validation to cover multipart `/v1/audio/transcriptions`, `/v1/audio/translations`, and `POST /v1/files`.
 - Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
 - `provider_options` supports per-provider buckets (`"*"` + provider ids) and passes through additional provider-specific keys where supported (conflicts are ignored with warnings).
 - `provider_options`: accept `openai_compatible` as an alias bucket for `openai-compatible`, and add `bedrock`/`vertex` buckets.

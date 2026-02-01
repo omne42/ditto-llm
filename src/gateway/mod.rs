@@ -12,6 +12,7 @@ mod interop;
 pub mod limits;
 #[cfg(feature = "gateway-metrics-prometheus")]
 pub mod metrics_prometheus;
+mod multipart;
 pub mod observability;
 #[cfg(feature = "gateway-otel")]
 pub mod otel;

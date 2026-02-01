@@ -257,6 +257,148 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_transcriptions_request()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/audio/transcriptions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"text":"ok"}"#);
+    });
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.guardrails.validate_schema = true;
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "BOUNDARY";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n\
+Content-Type: application/octet-stream\r\n\
+\r\n\
+abc\r\n\
+--{boundary}--\r\n"
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/audio/transcriptions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", content_type)
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert_eq!(
+        parsed
+            .get("error")
+            .and_then(|value| value.get("code"))
+            .and_then(|value| value.as_str()),
+        Some("invalid_request")
+    );
+    mock.assert_calls(0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn openai_compat_proxy_schema_validation_rejects_invalid_files_upload_request()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/files")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"file-ok"}"#);
+    });
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.guardrails.validate_schema = true;
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "BOUNDARY";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"example.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+hello\r\n\
+--{boundary}--\r\n"
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/files")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", content_type)
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert_eq!(
+        parsed
+            .get("error")
+            .and_then(|value| value.get("code"))
+            .and_then(|value| value.as_str()),
+        Some("invalid_request")
+    );
+    mock.assert_calls(0);
+    Ok(())
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_applies_route_guardrails_override() {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return;
