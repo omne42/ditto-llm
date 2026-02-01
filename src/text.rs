@@ -1,10 +1,11 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::stream;
 use serde_json::Value;
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::stream::StreamCollector;
@@ -85,6 +86,9 @@ impl StreamTextHandle {
 
 pub struct StreamTextResult {
     handle: StreamTextHandle,
+    ready: Arc<Notify>,
+    text_enabled: Arc<AtomicBool>,
+    full_enabled: Arc<AtomicBool>,
     pub text_stream: stream::BoxStream<'static, Result<String>>,
     pub full_stream: stream::BoxStream<'static, Result<StreamChunk>>,
 }
@@ -97,6 +101,9 @@ impl StreamTextResult {
     pub fn into_text_stream(
         self,
     ) -> (StreamTextHandle, stream::BoxStream<'static, Result<String>>) {
+        self.text_enabled.store(true, Ordering::Relaxed);
+        self.full_enabled.store(false, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.text_stream)
     }
 
@@ -106,6 +113,9 @@ impl StreamTextResult {
         StreamTextHandle,
         stream::BoxStream<'static, Result<StreamChunk>>,
     ) {
+        self.text_enabled.store(false, Ordering::Relaxed);
+        self.full_enabled.store(true, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.full_stream)
     }
 
@@ -116,6 +126,9 @@ impl StreamTextResult {
         stream::BoxStream<'static, Result<String>>,
         stream::BoxStream<'static, Result<StreamChunk>>,
     ) {
+        self.text_enabled.store(true, Ordering::Relaxed);
+        self.full_enabled.store(true, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.text_stream, self.full_stream)
     }
 
@@ -153,15 +166,34 @@ pub trait LanguageModelTextExt: LanguageModel {
 impl<T> LanguageModelTextExt for T where T: LanguageModel + ?Sized {}
 
 pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
+    const FANOUT_BUFFER: usize = 256;
+
     let state = Arc::new(Mutex::new(StreamTextState::default()));
     let state_task = state.clone();
     let handle = StreamTextHandle { state };
 
-    let (text_tx, text_rx) = mpsc::unbounded_channel::<Result<String>>();
-    let (full_tx, full_rx) = mpsc::unbounded_channel::<Result<StreamChunk>>();
+    let ready = Arc::new(Notify::new());
+    let text_enabled = Arc::new(AtomicBool::new(false));
+    let full_enabled = Arc::new(AtomicBool::new(false));
+
+    let ready_task = ready.clone();
+    let text_enabled_task = text_enabled.clone();
+    let full_enabled_task = full_enabled.clone();
+
+    let (text_tx, text_rx) = mpsc::channel::<Result<String>>(FANOUT_BUFFER);
+    let (full_tx, full_rx) = mpsc::channel::<Result<StreamChunk>>(FANOUT_BUFFER);
 
     let task = tokio::spawn(async move {
         let mut inner = stream;
+
+        loop {
+            if text_enabled_task.load(Ordering::Acquire)
+                || full_enabled_task.load(Ordering::Acquire)
+            {
+                break;
+            }
+            ready_task.notified().await;
+        }
 
         let mut collector = StreamCollector::default();
 
@@ -170,12 +202,16 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                 Ok(chunk) => {
                     if let StreamChunk::TextDelta { text } = &chunk {
                         if !text.is_empty() {
-                            let _ = text_tx.send(Ok(text.to_string()));
+                            if text_enabled_task.load(Ordering::Relaxed) {
+                                let _ = text_tx.send(Ok(text.to_string())).await;
+                            }
                         }
                     }
 
                     collector.observe(&chunk);
-                    let _ = full_tx.send(Ok(chunk));
+                    if full_enabled_task.load(Ordering::Relaxed) {
+                        let _ = full_tx.send(Ok(chunk)).await;
+                    }
                 }
                 Err(err) => {
                     let err_string = err.to_string();
@@ -183,8 +219,14 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                         state.done = true;
                         state.final_error = Some(format!("stream failed: {err_string}"));
                     }
-                    let _ = text_tx.send(Err(DittoError::InvalidResponse(err_string)));
-                    let _ = full_tx.send(Err(err));
+                    if text_enabled_task.load(Ordering::Relaxed) {
+                        let _ = text_tx
+                            .send(Err(DittoError::InvalidResponse(err_string)))
+                            .await;
+                    }
+                    if full_enabled_task.load(Ordering::Relaxed) {
+                        let _ = full_tx.send(Err(err)).await;
+                    }
                     return;
                 }
             }
@@ -200,18 +242,42 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
 
     let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
-    let text_stream = stream::unfold((text_rx, aborter.clone()), |(mut rx, aborter)| async move {
-        rx.recv().await.map(|item| (item, (rx, aborter)))
-    })
+    let text_stream = stream::unfold(
+        (
+            text_rx,
+            aborter.clone(),
+            text_enabled.clone(),
+            ready.clone(),
+        ),
+        |(mut rx, aborter, enabled, ready)| async move {
+            if !enabled.swap(true, Ordering::AcqRel) {
+                ready.notify_one();
+            }
+            rx.recv()
+                .await
+                .map(|item| (item, (rx, aborter, enabled, ready)))
+        },
+    )
     .boxed();
 
-    let full_stream = stream::unfold((full_rx, aborter), |(mut rx, aborter)| async move {
-        rx.recv().await.map(|item| (item, (rx, aborter)))
-    })
+    let full_stream = stream::unfold(
+        (full_rx, aborter, full_enabled.clone(), ready.clone()),
+        |(mut rx, aborter, enabled, ready)| async move {
+            if !enabled.swap(true, Ordering::AcqRel) {
+                ready.notify_one();
+            }
+            rx.recv()
+                .await
+                .map(|item| (item, (rx, aborter, enabled, ready)))
+        },
+    )
     .boxed();
 
     StreamTextResult {
         handle,
+        ready,
+        text_enabled,
+        full_enabled,
         text_stream,
         full_stream,
     }
@@ -332,23 +398,32 @@ mod tests {
         ];
 
         let inner: StreamResult = stream::iter(chunks).boxed();
-        let mut result = stream_text_from_stream(inner);
+        let (handle, mut text_stream, mut full_stream) =
+            stream_text_from_stream(inner).into_streams();
 
-        let mut deltas = String::new();
-        while let Some(delta) = result.text_stream.next().await {
-            deltas.push_str(&delta?);
-        }
-        assert_eq!(deltas, "hello world".to_string());
-
-        let mut seen_finish = false;
-        while let Some(evt) = result.full_stream.next().await {
-            if matches!(evt?, StreamChunk::FinishReason(_)) {
-                seen_finish = true;
+        let collect_text = async move {
+            let mut deltas = String::new();
+            while let Some(delta) = text_stream.next().await {
+                deltas.push_str(&delta?);
             }
-        }
+            Ok::<_, DittoError>(deltas)
+        };
+
+        let collect_full = async move {
+            let mut seen_finish = false;
+            while let Some(evt) = full_stream.next().await {
+                if matches!(evt?, StreamChunk::FinishReason(_)) {
+                    seen_finish = true;
+                }
+            }
+            Ok::<_, DittoError>(seen_finish)
+        };
+
+        let (deltas, seen_finish) = tokio::try_join!(collect_text, collect_full)?;
+        assert_eq!(deltas, "hello world".to_string());
         assert!(seen_finish);
 
-        let response = result.final_response()?.unwrap();
+        let response = handle.final_response()?.unwrap();
         assert_eq!(response.text(), "hello world".to_string());
         assert_eq!(response.finish_reason, FinishReason::ToolCalls);
         assert_eq!(response.usage.total_tokens, Some(10));

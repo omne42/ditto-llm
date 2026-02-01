@@ -82,13 +82,13 @@ async fn main() -> ditto_llm::Result<()> {
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
     let req = vec![Message::user("Stream one sentence.")].into();
 
-    let mut result = llm.stream_text(req).await?;
-    while let Some(delta) = result.text_stream.next().await {
+    let (handle, mut text_stream) = llm.stream_text(req).await?.into_text_stream();
+    while let Some(delta) = text_stream.next().await {
         print!("{}", delta?);
     }
     println!();
 
-    let summary = result.final_summary()?;
+    let summary = handle.final_summary()?;
     println!("summary: {summary:?}");
     Ok(())
 }

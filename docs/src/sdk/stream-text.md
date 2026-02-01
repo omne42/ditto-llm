@@ -72,12 +72,12 @@ let _final = handle.final_summary()?;
 - **默认行为**：丢弃/Drop `StreamTextResult` 或其中任一 stream，会触发内部 task abort（通过 `AbortOnDrop`）。
 - **显式 abort**：如果你想拿到一个可调用的 handle，请使用 `abortable_stream` 包装底层 `llm.stream(...)`（见 README 的 “Streaming Cancellation”）。
 
-## 注意：无界缓冲的内存增长风险
+## 注意：有界 fan-out 与背压
 
-当前实现内部使用 `mpsc::unbounded_channel` fan-out `text_stream` 与 `full_stream`。
+`stream_text` 内部使用**有界** `mpsc::channel` fan-out 到 `text_stream` / `full_stream`，避免“未消费的 stream 导致无界缓冲”的 OOM 风险。
 
 含义：
 
-- 如果你只需要其中一个 stream，请尽早丢弃另一个（推荐使用 `into_text_stream()` / `into_full_stream()`），避免不必要的缓冲。
-- 如果你同时需要两条 stream，请确保两者都被持续消费（例如分别 spawn task），否则内存可能持续增长（更像 backpressure 问题，而不是“泄漏”）。
-- 生产环境建议为上游请求设置合理的超时/并发控制，并确保下游持续消费或及时 abort。
+- 建议使用 `into_text_stream()` / `into_full_stream()` / `into_streams()` 明确你要消费哪条/哪些 stream（只启用被消费的 fan-out）。
+- 如果你启用了两条 stream（`into_streams()`），请确保两者都被持续消费（例如分别 `tokio::spawn`），否则慢的一侧会通过有界缓冲对上游施加 backpressure（表现为吞吐降低/等待），而不是内存持续增长。
+- 只想拿最终 `GenerateResponse` 时，优先用 `collect_stream()` / `generate_text()`。

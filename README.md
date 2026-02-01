@@ -247,11 +247,14 @@ Streaming:
 use futures_util::StreamExt;
 use ditto_llm::{GenerateRequest, LanguageModelTextExt};
 
-let mut result = llm.stream_text(GenerateRequest::from(messages)).await?;
-while let Some(delta) = result.text_stream.next().await {
+let (handle, mut text_stream) = llm
+    .stream_text(GenerateRequest::from(messages))
+    .await?
+    .into_text_stream();
+while let Some(delta) = text_stream.next().await {
     print!("{}", delta?);
 }
-let final_text = result.final_text()?.unwrap();
+let final_text = handle.final_text()?.unwrap();
 println!("\nfinal={final_text}");
 ```
 

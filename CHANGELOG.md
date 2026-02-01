@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
 - Profile: add prompt-cache capability/config flags (`ProviderCapabilities.prompt_cache` and `ModelConfig.prompt_cache`).
 - Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).
+- SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - Dev: pre-commit blocks `partNN.*` filenames in staged changes.
 - Refactor: rename remaining `partNN.rs` files to descriptive module names.
 - Dev: update the commit hook example scope to avoid legacy naming.
