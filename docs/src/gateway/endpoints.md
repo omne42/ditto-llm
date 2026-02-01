@@ -1,0 +1,89 @@
+# HTTP Endpoints
+
+Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
+
+> 说明：本页重点描述 Ditto Gateway 自己暴露的端点与语义；对于 `/v1/*` passthrough 的具体请求/响应格式，请参考 OpenAI-compatible API（Ditto 尽量不变形）。
+
+## Health
+
+- `GET /health` → `{ "status": "ok" }`
+
+## Core metrics（JSON）
+
+- `GET /metrics` → `ObservabilitySnapshot`（简单计数器：requests/cache_hits/rate_limited/...）
+
+## Prometheus metrics（可选）
+
+需要启用 feature `gateway-metrics-prometheus` 并传 `--prometheus-metrics`：
+
+- `GET /metrics/prometheus`
+
+## OpenAI-compatible proxy（passthrough）
+
+- `ANY /v1/*`
+
+行为要点：
+
+- 如果 `virtual_keys` 为空：client 的 `Authorization` 会原样转发到 upstream（你仍可在 backend headers 里注入额外 header）。
+- 如果 `virtual_keys` 非空：
+  - client 必须提供 virtual key（`Authorization: Bearer <vk>` / `x-ditto-virtual-key` / `x-api-key`）
+  - client 的 `Authorization` 被视为 virtual key，不会转发到 upstream
+  - upstream 的鉴权由 backend 的 `headers` / `query_params` 决定
+
+### /v1/responses shim（重要）
+
+当 upstream 不支持 `POST /v1/responses`（例如返回 404/405/501），Ditto 会自动 fallback 到 `POST /v1/chat/completions` 并返回 best-effort 的 “Responses-like” response/stream：
+
+- 返回头会包含 `x-ditto-shim: responses_via_chat_completions`
+
+这使得你可以在同一个 gateway 下兼容“只支持 chat/completions 的 OpenAI-compatible 服务”。
+
+## OpenAI-compatible translation（可选）
+
+启用 feature `gateway-translation` 后，以下端点可由 translation backend（配置了 `provider` 的 backend）直接服务：
+
+- `GET /v1/models`、`GET /v1/models/*`
+- `POST /v1/chat/completions`、`POST /v1/completions`
+- `POST /v1/responses`、`POST /v1/responses/compact`
+- `POST /v1/embeddings`
+- `POST /v1/moderations`
+- `POST /v1/images/generations`
+- `POST /v1/audio/transcriptions`、`POST /v1/audio/translations`、`POST /v1/audio/speech`
+- `POST /v1/rerank`
+- `/v1/batches`（以及 retrieve/cancel）
+
+当请求由 translation backend 处理时，响应会包含：
+
+- `x-ditto-translation: <provider>`
+
+## Control-plane demo endpoint
+
+- `POST /v1/gateway`
+  - 请求体：`GatewayRequest`（包含 `virtual_key/model/prompt/input_tokens/max_output_tokens/passthrough`）
+  - 响应体：`GatewayResponse`（包含 `content/output_tokens/backend/cached`）
+
+这个端点主要用于“演示控制面能力”（预算/限流/缓存/路由/策略）；实际生产更多使用 `/v1/*` passthrough 或 translation。
+
+## Admin endpoints（可选）
+
+当你通过 `--admin-token`（或 `--admin-token-env`）启用 admin token 后，会开放 `/admin/*`。
+
+常见端点：
+
+- `GET|POST /admin/keys`、`PUT|DELETE /admin/keys/:id`
+- `POST /admin/proxy_cache/purge`（需要启用 proxy cache）
+- `GET /admin/backends`、`POST /admin/backends/:name/reset`（需要启用 `gateway-routing-advanced`）
+- `GET /admin/audit`、`GET /admin/budgets*`（需要启用 sqlite/redis store）
+- `GET /admin/costs*`（需要启用 sqlite/redis store + `gateway-costing`）
+
+详细见「Admin API」。
+
+## 响应头（Observability）
+
+Ditto 会尽量为每个响应附加以下头（便于排障/观测）：
+
+- `x-ditto-backend`: 实际使用的 backend 名称
+- `x-ditto-request-id`: request id（复用或生成 `x-request-id`）
+- `x-ditto-cache`: `hit`（当 proxy cache 命中时）
+- `x-ditto-cache-key`: cache key（当 cacheable 时）
+- `x-ditto-cache-source`: `memory` 或 `redis`（当 cache 命中时）

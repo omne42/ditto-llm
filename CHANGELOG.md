@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
+
 ### Changed
 
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.

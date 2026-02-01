@@ -40,6 +40,17 @@ Non-goals (for now):
 See `PROVIDERS.md` for a pragmatic provider/capability matrix (native adapters + OpenAI-compatible
 gateway coverage).
 
+## Docs
+
+This repo includes an `mdBook` under `docs/`.
+
+```bash
+cargo install mdbook
+mdbook serve docs
+```
+
+If you don’t want to install mdBook, you can still read the Markdown directly in `docs/src`.
+
 ## Tool Schemas
 
 For Google function calling, Ditto-LLM converts tool parameter JSON Schema into an OpenAPI-style
