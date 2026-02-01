@@ -58,6 +58,25 @@ pub(super) async fn transcribe(
     model: String,
     request: AudioTranscriptionRequest,
 ) -> Result<AudioTranscriptionResponse> {
+    transcribe_to_endpoint(provider, client, model, request, "audio/transcriptions").await
+}
+
+pub(super) async fn translate(
+    provider: &str,
+    client: &OpenAiLikeClient,
+    model: String,
+    request: AudioTranscriptionRequest,
+) -> Result<AudioTranscriptionResponse> {
+    transcribe_to_endpoint(provider, client, model, request, "audio/translations").await
+}
+
+async fn transcribe_to_endpoint(
+    provider: &str,
+    client: &OpenAiLikeClient,
+    model: String,
+    request: AudioTranscriptionRequest,
+    endpoint: &str,
+) -> Result<AudioTranscriptionResponse> {
     let AudioTranscriptionRequest {
         audio,
         filename,
@@ -106,7 +125,7 @@ pub(super) async fn transcribe(
 
     warn_unsupported_multipart_provider_options(selected_provider_options.as_ref(), &mut warnings);
 
-    let url = client.endpoint("audio/transcriptions");
+    let url = client.endpoint(endpoint);
     let response = client
         .apply_auth(client.http.post(url))
         .multipart(form)

@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: pricing table supports LiteLLM service tier costs (`*_priority`, `*_flex`) and uses request `service_tier` for USD budget estimates.
 - Gateway: cost budgeting accounts for per-backend `model_map` when pricing entries exist for the mapped model.
 - Image generation: `ImageGenerationModel` + OpenAI/OpenAI-compatible `/images/generations`.
-- Audio: `AudioTranscriptionModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
+- Audio: `AudioTranscriptionModel` + `AudioTranslationModel` + `SpeechModel` for OpenAI/OpenAI-compatible `/audio/*`.
 - Moderations: `ModerationModel` for OpenAI/OpenAI-compatible `/moderations`.
 - Rerank: `RerankModel` + Cohere `/rerank`.
 - Batches: `BatchClient` + OpenAI/OpenAI-compatible `/batches`.
@@ -106,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway translation: support legacy `POST /v1/completions` (non-streaming + streaming).
 - Gateway translation: serve `GET /v1/models` and `GET /v1/models/*` locally (no upstream OpenAI-compatible required).
 - Gateway translation: support `POST /v1/audio/translations` (same parsing/response as transcriptions).
+- SDK: add `AudioTranslationModel` (request/response aliases of transcription types).
 - Gateway translation: support `POST /v1/files`, `GET /v1/files`, `GET|DELETE /v1/files/*`, and `GET /v1/files/*/content`.
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.

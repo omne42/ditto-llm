@@ -18,7 +18,7 @@ This file tracks coverage using two paths:
 | JSON Schema output | `ProviderOptions.response_format` | OpenAI `/responses` | pass-through (depends on upstream) |
 | Embeddings | `EmbeddingModel::embed` | OpenAI, Google, Cohere | `/embeddings` |
 | Images | `ImageGenerationModel::generate` | OpenAI | `/images/generations` |
-| Audio | `AudioTranscriptionModel` / `SpeechModel` | OpenAI | `/audio/*` |
+| Audio | `AudioTranscriptionModel` / `AudioTranslationModel` / `SpeechModel` | OpenAI | `/audio/*` |
 | Moderations | `ModerationModel::moderate` | OpenAI | `/moderations` |
 | Rerank | `RerankModel::rerank` | Cohere | (gateway-dependent) |
 | Batches | `BatchClient::{create,retrieve,cancel,list}` | OpenAI | `/batches` |

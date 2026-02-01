@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use super::openai_audio_common;
 use super::openai_like;
 
-use crate::audio::{AudioTranscriptionModel, SpeechModel};
+use crate::audio::{AudioTranscriptionModel, AudioTranslationModel, SpeechModel};
 use crate::profile::{Env, ProviderConfig};
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, SpeechRequest, SpeechResponse,
@@ -74,7 +74,26 @@ impl AudioTranscriptionModel for OpenAIAudioTranscription {
         request: AudioTranscriptionRequest,
     ) -> Result<AudioTranscriptionResponse> {
         let model = self.resolve_model(&request)?.to_string();
-        openai_audio_common::transcribe(self.provider(), &self.client, model, request).await
+        openai_audio_common::transcribe("openai", &self.client, model, request).await
+    }
+}
+
+#[async_trait]
+impl AudioTranslationModel for OpenAIAudioTranscription {
+    fn provider(&self) -> &str {
+        "openai"
+    }
+
+    fn model_id(&self) -> &str {
+        self.client.model.as_str()
+    }
+
+    async fn translate(
+        &self,
+        request: AudioTranscriptionRequest,
+    ) -> Result<AudioTranscriptionResponse> {
+        let model = self.resolve_model(&request)?.to_string();
+        openai_audio_common::translate("openai", &self.client, model, request).await
     }
 }
 
@@ -174,6 +193,48 @@ mod tests {
             .with_model("whisper-1");
         let response = client
             .transcribe(AudioTranscriptionRequest {
+                audio: b"hello".to_vec(),
+                filename: "audio.wav".to_string(),
+                media_type: Some("audio/wav".to_string()),
+                model: None,
+                language: None,
+                prompt: None,
+                response_format: Some(TranscriptionResponseFormat::Json),
+                temperature: None,
+                provider_options: None,
+            })
+            .await?;
+
+        mock.assert_async().await;
+        assert_eq!(response.text, "ok");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn translate_posts_multipart_and_parses_json() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/v1/audio/translations")
+                    .body_includes("name=\"model\"")
+                    .body_includes("whisper-1")
+                    .body_includes("name=\"file\"")
+                    .body_includes("hello");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body("{\"text\":\"ok\"}");
+            })
+            .await;
+
+        let client = OpenAIAudioTranscription::new("")
+            .with_base_url(server.url("/v1"))
+            .with_model("whisper-1");
+        let response = client
+            .translate(AudioTranscriptionRequest {
                 audio: b"hello".to_vec(),
                 filename: "audio.wav".to_string(),
                 media_type: Some("audio/wav".to_string()),

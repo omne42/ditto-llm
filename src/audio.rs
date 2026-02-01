@@ -16,6 +16,18 @@ pub trait AudioTranscriptionModel: Send + Sync {
     ) -> Result<AudioTranscriptionResponse>;
 }
 
+pub type AudioTranslationRequest = AudioTranscriptionRequest;
+pub type AudioTranslationResponse = AudioTranscriptionResponse;
+
+#[async_trait]
+pub trait AudioTranslationModel: Send + Sync {
+    fn provider(&self) -> &str;
+    fn model_id(&self) -> &str;
+
+    async fn translate(&self, request: AudioTranslationRequest)
+    -> Result<AudioTranslationResponse>;
+}
+
 #[async_trait]
 pub trait SpeechModel: Send + Sync {
     fn provider(&self) -> &str;

@@ -33,7 +33,7 @@ pub use profile::{
     resolve_auth_token_with_default_keys, select_model_config,
 };
 
-pub use audio::{AudioTranscriptionModel, SpeechModel};
+pub use audio::{AudioTranscriptionModel, AudioTranslationModel, SpeechModel};
 pub use batch::BatchClient;
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
 pub use file::{FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
