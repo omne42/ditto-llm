@@ -67,6 +67,8 @@ redis 相关：
 - `--proxy-cache`：启用
 - `--proxy-cache-ttl SECS`：TTL（隐式启用 cache；默认 60；最小 1）
 - `--proxy-cache-max-entries N`：内存缓存容量（隐式启用 cache；默认 1024；最小 1）
+- `--proxy-cache-max-body-bytes N`：单条响应最大 body bytes（隐式启用 cache；默认 1048576；最小 1）
+- `--proxy-cache-max-total-body-bytes N`：内存缓存总 body budget（隐式启用 cache；默认 67108864；最小 1）
 
 如果同时启用 redis store，cache 会作为 L2 写入 redis（共享）。
 

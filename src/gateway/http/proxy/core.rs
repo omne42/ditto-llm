@@ -683,6 +683,12 @@ async fn store_proxy_cache_response(
     cached: CachedProxyResponse,
     now_epoch_seconds: u64,
 ) {
+    if let Some(config) = state.proxy_cache_config.as_ref() {
+        if cached.body.len() > config.max_body_bytes {
+            return;
+        }
+    }
+
     #[cfg(feature = "gateway-metrics-prometheus")]
     let mut redis_store_error: Option<bool> = None;
 

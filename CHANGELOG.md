@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
 - Docs: expand SDK/Gateway guides with recipes and advanced topics (agents, middleware, stream protocol v1, devtools/telemetry/MCP).
+- Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
+- Utils: add bounded SSE parsing with `SseLimits` (max line/event bytes) to reduce OOM risk.
 
 ### Changed
 
@@ -25,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: remove `OpenAiProvider` in favor of `OpenAiModelsProvider` (breaking).
 - Refactor: deduplicate stream aggregation via `stream::StreamCollector`.
 - Refactor: add `utils::task::AbortOnDrop` for aborting background tasks on drop.
+- OpenAI: parse raw Responses SSE via bounded SSE data parsing and truncate invalid event payloads in errors.
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
+- Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
 - Docs: remove legacy external repo references.
 
 ## [0.1.2] - 2026-02-01

@@ -194,56 +194,45 @@ fn parse_raw_responses_event(
 }
 
 async fn process_raw_responses_sse<R>(
-    mut lines: tokio::io::Lines<R>,
+    reader: R,
     tx_event: mpsc::Sender<Result<OpenAIResponsesRawEvent>>,
 ) where
-    R: tokio::io::AsyncBufRead + Unpin,
+    R: tokio::io::AsyncBufRead + Unpin + Send + 'static,
 {
-    let mut data = String::new();
-    loop {
-        match lines.next_line().await {
-            Ok(Some(line)) => {
-                let line = line.trim_end_matches('\r');
-                if line.is_empty() {
-                    if data.is_empty() {
-                        continue;
-                    }
-                    if data == "[DONE]" {
-                        break;
-                    }
+    fn truncate_for_error(value: &str, max_bytes: usize) -> &str {
+        if value.len() <= max_bytes {
+            return value;
+        }
+        let mut end = max_bytes;
+        while end > 0 && !value.is_char_boundary(end) {
+            end = end.saturating_sub(1);
+        }
+        &value[..end]
+    }
 
-                    let event =
-                        serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
-                            DittoError::InvalidResponse(format!(
-                                "failed to parse responses SSE event: {err}; data={data}"
-                            ))
-                        });
-                    match event.and_then(parse_raw_responses_event) {
-                        Ok(Some(parsed)) => {
-                            let _ = tx_event.send(Ok(parsed)).await;
-                        }
-                        Ok(None) => {}
-                        Err(err) => {
-                            let _ = tx_event.send(Err(err)).await;
-                        }
+    let mut data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
+    while let Some(next) = data_stream.next().await {
+        match next {
+            Ok(data) => {
+                let event =
+                    serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
+                        DittoError::InvalidResponse(format!(
+                            "failed to parse responses SSE event: {err}; data_prefix={}",
+                            truncate_for_error(&data, 1024)
+                        ))
+                    });
+                match event.and_then(parse_raw_responses_event) {
+                    Ok(Some(parsed)) => {
+                        let _ = tx_event.send(Ok(parsed)).await;
                     }
-
-                    data.clear();
-                    continue;
+                    Ok(None) => {}
+                    Err(err) => {
+                        let _ = tx_event.send(Err(err)).await;
+                    }
                 }
-
-                let Some(rest) = line.strip_prefix("data:") else {
-                    continue;
-                };
-                let rest = rest.trim_start();
-                if !data.is_empty() {
-                    data.push('\n');
-                }
-                data.push_str(rest);
             }
-            Ok(None) => break,
             Err(err) => {
-                let _ = tx_event.send(Err(DittoError::Io(err))).await;
+                let _ = tx_event.send(Err(err)).await;
                 break;
             }
         }
@@ -256,7 +245,6 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use serde_json::json;
     use std::collections::BTreeMap;
-    use tokio::io::AsyncBufReadExt;
     use tokio::sync::mpsc;
 
     #[tokio::test]
@@ -378,9 +366,8 @@ mod tests {
         );
 
         let reader = tokio::io::BufReader::new(sse.as_bytes());
-        let lines = reader.lines();
         let (tx_event, mut rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(16);
-        tokio::spawn(process_raw_responses_sse(lines, tx_event));
+        tokio::spawn(process_raw_responses_sse(reader, tx_event));
 
         let mut events = Vec::new();
         while let Some(evt) = rx_event.recv().await {

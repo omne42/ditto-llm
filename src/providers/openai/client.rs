@@ -4,7 +4,6 @@ use futures_util::TryStreamExt;
 use futures_util::stream;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
@@ -537,10 +536,10 @@ impl OpenAI {
 
         let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
         let reader = StreamReader::new(byte_stream);
-        let lines = tokio::io::BufReader::new(reader).lines();
+        let reader = tokio::io::BufReader::new(reader);
 
         let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(512);
-        let task = tokio::spawn(process_raw_responses_sse(lines, tx_event));
+        let task = tokio::spawn(process_raw_responses_sse(reader, tx_event));
         Ok(OpenAIResponsesRawEventStream { rx_event, task })
     }
 }

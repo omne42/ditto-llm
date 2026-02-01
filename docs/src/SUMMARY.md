@@ -58,4 +58,5 @@
   - [从 Vercel AI SDK 迁移（概念对照）](./migration/from-ai-sdk.md)
 
 - [Roadmap](./roadmap/index.md)
+  - [Gap Analysis（对标 LiteLLM + AI SDK）](./roadmap/gaps.md)
   - [企业与合规能力清单](./roadmap/enterprise.md)

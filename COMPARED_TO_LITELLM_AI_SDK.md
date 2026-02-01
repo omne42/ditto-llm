@@ -30,6 +30,7 @@
 ### 仍缺（但属于“超集可选项”）
 
 - 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `shell_exec` + `safe-fs-tools` 驱动的 `fs_read_file`/`fs_find`/`fs_grep`/`fs_write_file`/`fs_delete_file`/`fs_list_dir`/`fs_stat`/`fs_mkdir`/`fs_move`/`fs_copy_file`）
+- “模板/脚手架”生态：AI SDK 的强项是大量可复制模板；Ditto 需要补齐 Rust 示例与多语言调用网关的最小模板（属于 docs/工程化层面的超集项）
 
 ---
 
@@ -56,6 +57,8 @@
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
+- 企业平台能力：缺 RBAC/SSO、多租户隔离、分布式限流（全局 rpm/tpm）、防篡改审计/保留期/导出、配置版本化/灰度/回滚与运维资产（告警/dashboard）
+- 平台扩展项：LiteLLM 侧还有 A2A agent gateway、MCP gateway 等方向；Ditto 当前偏 SDK 工具/协议适配，后续可以按真实企业需求扩到网关侧
 
 ---
 
