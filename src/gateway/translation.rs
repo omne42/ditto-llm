@@ -3,3 +3,4 @@ include!("translation/part01.rs");
 include!("translation/part02.rs");
 include!("translation/part03.rs");
 include!("translation/part04.rs");
+include!("translation/part05.rs");

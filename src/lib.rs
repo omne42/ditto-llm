@@ -36,7 +36,7 @@ pub use profile::{
 pub use audio::{AudioTranscriptionModel, SpeechModel};
 pub use batch::BatchClient;
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
-pub use file::{FileClient, FileUploadRequest};
+pub use file::{FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
 pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
 pub use moderation::ModerationModel;

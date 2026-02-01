@@ -14,6 +14,7 @@ use super::openai_like;
 
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
+use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderConfig, RequestAuth};
 use crate::types::{
@@ -125,6 +126,50 @@ impl OpenAI {
             bytes,
             purpose,
             media_type,
+        )
+        .await
+    }
+
+    pub async fn list_files(&self) -> Result<Vec<FileObject>> {
+        let url = self.files_url();
+        openai_like::list_files(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
+        )
+        .await
+    }
+
+    pub async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
+        let url = format!("{}/{}", self.files_url(), file_id.trim());
+        openai_like::retrieve_file(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
+        )
+        .await
+    }
+
+    pub async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
+        let url = format!("{}/{}", self.files_url(), file_id.trim());
+        openai_like::delete_file(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
+        )
+        .await
+    }
+
+    pub async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
+        let url = format!("{}/{}/content", self.files_url(), file_id.trim());
+        openai_like::download_file_content(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
         )
         .await
     }

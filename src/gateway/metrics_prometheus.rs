@@ -469,6 +469,12 @@ pub(crate) fn normalize_proxy_path_label(path_and_query: &str) -> String {
                 }
                 return "/v1/batches/*".to_string();
             }
+            if path.starts_with("/v1/files/") {
+                if path.ends_with("/content") {
+                    return "/v1/files/*/content".to_string();
+                }
+                return "/v1/files/*".to_string();
+            }
             if path.starts_with("/v1/responses/") {
                 return "/v1/responses/*".to_string();
             }

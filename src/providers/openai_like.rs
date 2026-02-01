@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
@@ -130,4 +131,93 @@ pub(crate) async fn upload_file_with_purpose(
 
     let parsed = response.json::<FilesUploadResponse>().await?;
     Ok(parsed.id)
+}
+
+pub(crate) async fn list_files(
+    http: &reqwest::Client,
+    url: String,
+    auth: Option<&RequestAuth>,
+    http_query_params: &BTreeMap<String, String>,
+) -> Result<Vec<FileObject>> {
+    #[derive(Deserialize)]
+    struct FilesListResponse {
+        data: Vec<FileObject>,
+    }
+
+    let mut req = http.get(url);
+    req = apply_auth(req, auth, http_query_params);
+    let response = req.send().await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(DittoError::Api { status, body: text });
+    }
+
+    let parsed = response.json::<FilesListResponse>().await?;
+    Ok(parsed.data)
+}
+
+pub(crate) async fn retrieve_file(
+    http: &reqwest::Client,
+    url: String,
+    auth: Option<&RequestAuth>,
+    http_query_params: &BTreeMap<String, String>,
+) -> Result<FileObject> {
+    let mut req = http.get(url);
+    req = apply_auth(req, auth, http_query_params);
+    let response = req.send().await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(DittoError::Api { status, body: text });
+    }
+
+    Ok(response.json::<FileObject>().await?)
+}
+
+pub(crate) async fn delete_file(
+    http: &reqwest::Client,
+    url: String,
+    auth: Option<&RequestAuth>,
+    http_query_params: &BTreeMap<String, String>,
+) -> Result<FileDeleteResponse> {
+    let mut req = http.delete(url);
+    req = apply_auth(req, auth, http_query_params);
+    let response = req.send().await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(DittoError::Api { status, body: text });
+    }
+
+    Ok(response.json::<FileDeleteResponse>().await?)
+}
+
+pub(crate) async fn download_file_content(
+    http: &reqwest::Client,
+    url: String,
+    auth: Option<&RequestAuth>,
+    http_query_params: &BTreeMap<String, String>,
+) -> Result<FileContent> {
+    let mut req = http.get(url);
+    req = apply_auth(req, auth, http_query_params);
+    let response = req.send().await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(DittoError::Api { status, body: text });
+    }
+
+    let media_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string());
+    let bytes = response.bytes().await?.to_vec();
+
+    Ok(FileContent { bytes, media_type })
 }

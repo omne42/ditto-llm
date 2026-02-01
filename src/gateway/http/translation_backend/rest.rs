@@ -72,7 +72,7 @@
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
-                } else if files_root {
+                } else if files_root && parts.method == axum::http::Method::POST {
                     if _stream_requested {
                         break 'translation_backend_attempt Err(openai_error(
                             StatusCode::BAD_REQUEST,
@@ -107,18 +107,18 @@
                         ));
                     }
 
-                    let request = match translation::files_upload_request_to_request(content_type, body)
-                    {
-                        Ok(request) => request,
-                        Err(err) => {
-                            break 'translation_backend_attempt Err(openai_error(
-                                StatusCode::BAD_REQUEST,
-                                "invalid_request_error",
-                                Some("invalid_request"),
-                                err,
-                            ));
-                        }
-                    };
+                    let request =
+                        match translation::files_upload_request_to_request(content_type, body) {
+                            Ok(request) => request,
+                            Err(err) => {
+                                break 'translation_backend_attempt Err(openai_error(
+                                    StatusCode::BAD_REQUEST,
+                                    "invalid_request_error",
+                                    Some("invalid_request"),
+                                    err,
+                                ));
+                            }
+                        };
 
                     let bytes_len = request.bytes.len();
                     let filename = request.filename.clone();
@@ -141,6 +141,164 @@
                         bytes_len,
                         _now_epoch_seconds,
                     );
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
+                } else if files_root && parts.method == axum::http::Method::GET {
+                    if _stream_requested {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files endpoint does not support stream=true",
+                        ));
+                    }
+
+                    let files = match translation_backend.list_files().await {
+                        Ok(files) => files,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
+                        }
+                    };
+
+                    let value = translation::file_list_response_to_openai(&files);
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
+                } else if let Some(file_id) = files_content_id.as_deref()
+                    && parts.method == axum::http::Method::GET
+                {
+                    if _stream_requested {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files endpoint does not support stream=true",
+                        ));
+                    }
+
+                    let content = match translation_backend.download_file_content(file_id).await {
+                        Ok(content) => content,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
+                        }
+                    };
+
+                    let content_type = content
+                        .media_type
+                        .unwrap_or_else(|| "application/octet-stream".to_string());
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert(
+                        "content-type",
+                        content_type
+                            .parse()
+                            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+                    );
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(
+                        Bytes::from(content.bytes),
+                        proxy_permits.take(),
+                    );
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
+                } else if let Some(file_id) = files_retrieve_id.as_deref() {
+                    if _stream_requested {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files endpoint does not support stream=true",
+                        ));
+                    }
+
+                    let value = if parts.method == axum::http::Method::GET {
+                        let file = match translation_backend.retrieve_file(file_id).await {
+                            Ok(file) => file,
+                            Err(err) => {
+                                let (status, kind, code, message) =
+                                    translation::map_provider_error_to_openai(err);
+                                break 'translation_backend_attempt Err(openai_error(
+                                    status, kind, code, message,
+                                ));
+                            }
+                        };
+
+                        translation::file_to_openai(&file)
+                    } else if parts.method == axum::http::Method::DELETE {
+                        let deleted = match translation_backend.delete_file(file_id).await {
+                            Ok(deleted) => deleted,
+                            Err(err) => {
+                                let (status, kind, code, message) =
+                                    translation::map_provider_error_to_openai(err);
+                                break 'translation_backend_attempt Err(openai_error(
+                                    status, kind, code, message,
+                                ));
+                            }
+                        };
+
+                        translation::file_delete_response_to_openai(&deleted)
+                    } else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::NOT_IMPLEMENTED,
+                            "invalid_request_error",
+                            Some("unsupported_endpoint"),
+                            format!("translation backend does not support {} {}", parts.method, path_and_query),
+                        ));
+                    };
+
                     let bytes = serde_json::to_vec(&value)
                         .map(Bytes::from)
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));

@@ -5,7 +5,7 @@
 ))]
 
 use ditto_llm::gateway::translation::{
-    build_audio_transcription_model, build_batch_client, build_embedding_model,
+    build_audio_transcription_model, build_batch_client, build_embedding_model, build_file_client,
     build_image_generation_model, build_language_model, build_moderation_model, build_speech_model,
 };
 use ditto_llm::{Env, ProviderConfig};
@@ -94,6 +94,8 @@ async fn openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<
         assert!(build_batch_client(alias, &config, &env).await?.is_some());
         #[cfg(not(feature = "batches"))]
         assert!(build_batch_client(alias, &config, &env).await?.is_none());
+
+        assert!(build_file_client(alias, &config, &env).await?.is_some());
     }
 
     Ok(())

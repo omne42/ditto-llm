@@ -210,6 +210,40 @@ pub fn is_files_path(path_and_query: &str) -> bool {
     path == "/v1/files" || path == "/v1/files/"
 }
 
+pub fn files_retrieve_id(path_and_query: &str) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/files/")?;
+    if rest.trim().is_empty() {
+        return None;
+    }
+    if rest.contains('/') {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
+pub fn files_content_id(path_and_query: &str) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/files/")?;
+    let (file_id, suffix) = rest.split_once('/')?;
+    if suffix != "content" {
+        return None;
+    }
+    let file_id = file_id.trim();
+    if file_id.is_empty() {
+        return None;
+    }
+    Some(file_id.to_string())
+}
+
 pub fn files_upload_request_to_request(
     content_type: &str,
     body: &Bytes,
@@ -263,6 +297,47 @@ pub fn file_upload_response_to_openai(
         "created_at": created_at,
         "filename": filename,
         "purpose": purpose,
+    })
+}
+
+pub fn file_to_openai(file: &crate::file::FileObject) -> Value {
+    let mut out = Map::<String, Value>::new();
+    out.insert("id".to_string(), Value::String(file.id.clone()));
+    out.insert("object".to_string(), Value::String("file".to_string()));
+    out.insert("bytes".to_string(), Value::Number(file.bytes.into()));
+    out.insert(
+        "created_at".to_string(),
+        Value::Number(file.created_at.into()),
+    );
+    out.insert(
+        "filename".to_string(),
+        Value::String(file.filename.clone()),
+    );
+    out.insert("purpose".to_string(), Value::String(file.purpose.clone()));
+    if let Some(status) = file.status.as_deref() {
+        out.insert("status".to_string(), Value::String(status.to_string()));
+    }
+    if let Some(details) = file.status_details.clone() {
+        out.insert("status_details".to_string(), details);
+    }
+    Value::Object(out)
+}
+
+pub fn file_list_response_to_openai(files: &[crate::file::FileObject]) -> Value {
+    Value::Object(Map::from_iter([
+        ("object".to_string(), Value::String("list".to_string())),
+        (
+            "data".to_string(),
+            Value::Array(files.iter().map(file_to_openai).collect()),
+        ),
+    ]))
+}
+
+pub fn file_delete_response_to_openai(response: &crate::file::FileDeleteResponse) -> Value {
+    serde_json::json!({
+        "id": response.id,
+        "object": "file",
+        "deleted": response.deleted,
     })
 }
 

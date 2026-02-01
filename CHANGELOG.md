@@ -106,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway translation: support legacy `POST /v1/completions` (non-streaming + streaming).
 - Gateway translation: serve `GET /v1/models` and `GET /v1/models/*` locally (no upstream OpenAI-compatible required).
 - Gateway translation: support `POST /v1/audio/translations` (same parsing/response as transcriptions).
-- Gateway translation: support `POST /v1/files` (multipart upload).
+- Gateway translation: support `POST /v1/files`, `GET /v1/files`, `GET|DELETE /v1/files/*`, and `GET /v1/files/*/content`.
 - Gateway: add `--json-logs`, `--proxy-cache*`, and `--otel*` CLI flags to `ditto-gateway`.
 - Gateway admin key listing redacts tokens by default; `?include_tokens=true` returns full tokens.
 - Multimodal example requires `--features base64` to enable base64 encoding dependency.
