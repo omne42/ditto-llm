@@ -2,6 +2,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ThinkingIntensity {
@@ -39,6 +43,8 @@ pub struct ModelConfig {
         alias = "best_context_window"
     )]
     pub auto_compact_token_limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache: Option<bool>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -217,6 +223,8 @@ pub struct ProviderCapabilities {
     pub json_schema: bool,
     #[serde(default)]
     pub streaming: bool,
+    #[serde(default = "default_true")]
+    pub prompt_cache: bool,
 }
 
 impl ProviderCapabilities {
@@ -227,6 +235,7 @@ impl ProviderCapabilities {
             reasoning: true,
             json_schema: true,
             streaming: true,
+            prompt_cache: true,
         }
     }
 }

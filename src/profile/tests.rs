@@ -128,6 +128,7 @@ fn http_headers_reject_invalid_value() {
 fn thinking_intensity_defaults_to_medium() {
     let parsed = toml::from_str::<ModelConfig>("").expect("parse toml");
     assert_eq!(parsed.thinking, ThinkingIntensity::Medium);
+    assert_eq!(parsed.prompt_cache, None);
 }
 
 #[test]
@@ -141,6 +142,17 @@ best_context = 9000
     .expect("parse toml");
     assert_eq!(parsed.context_window, Some(12345));
     assert_eq!(parsed.auto_compact_token_limit, Some(9000));
+}
+
+#[test]
+fn model_config_parses_prompt_cache() {
+    let parsed = toml::from_str::<ModelConfig>(
+        r#"
+prompt_cache = false
+"#,
+    )
+    .expect("parse toml");
+    assert_eq!(parsed.prompt_cache, Some(false));
 }
 
 #[test]
@@ -194,6 +206,7 @@ streaming = false
             reasoning: true,
             json_schema: true,
             streaming: false,
+            prompt_cache: true,
         })
     );
 }

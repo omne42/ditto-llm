@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
+- Profile: add prompt-cache capability/config flags (`ProviderCapabilities.prompt_cache` and `ModelConfig.prompt_cache`).
 - Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).
 - Dev: pre-commit blocks `partNN.*` filenames in staged changes.
 - Dev: update the commit hook example scope to avoid legacy naming.
