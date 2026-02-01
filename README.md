@@ -292,11 +292,14 @@ Streaming (partial objects):
 ```rust
 use futures_util::StreamExt;
 
-let mut result = llm.stream_object(GenerateRequest::from(messages), schema).await?;
-while let Some(partial) = result.partial_object_stream.next().await {
+let (handle, mut partial_object_stream) = llm
+    .stream_object(GenerateRequest::from(messages), schema)
+    .await?
+    .into_partial_stream();
+while let Some(partial) = partial_object_stream.next().await {
     println!("{:?}", partial?);
 }
-let final_obj = result.final_json()?.unwrap();
+let final_obj = handle.final_json()?.unwrap();
 println!("{final_obj}");
 ```
 

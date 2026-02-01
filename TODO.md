@@ -143,7 +143,7 @@
 - [x] 内存安全：proxy cache 增加体积上限（单条/总量）
 - [x] 内存安全：SSE parsing 增加单行/单事件上限（防止异常上游导致 OOM）
 - [x] 内存安全：`stream_text` fan-out 改为有界缓冲（避免未消费 stream 的无界增长）
-- [ ] 内存安全：`stream_object` fan-out 改为有界缓冲 + 明确 backpressure 策略（替换 `mpsc::unbounded_channel`）
+- [x] 内存安全：`stream_object` fan-out 改为有界缓冲（替换 `mpsc::unbounded_channel`）
 
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
 

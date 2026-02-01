@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -5,7 +6,7 @@ use futures_util::StreamExt;
 use futures_util::stream;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::types::{
@@ -83,6 +84,9 @@ struct StreamObjectState {
 
 pub struct StreamObjectResult {
     handle: StreamObjectHandle,
+    ready: Arc<Notify>,
+    partial_enabled: Arc<AtomicBool>,
+    element_enabled: Arc<AtomicBool>,
     pub partial_object_stream: stream::BoxStream<'static, Result<Value>>,
     pub element_stream: stream::BoxStream<'static, Result<Value>>,
 }
@@ -95,12 +99,18 @@ impl StreamObjectResult {
     pub fn into_partial_stream(
         self,
     ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+        self.partial_enabled.store(true, Ordering::Relaxed);
+        self.element_enabled.store(false, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.partial_object_stream)
     }
 
     pub fn into_element_stream(
         self,
     ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+        self.partial_enabled.store(false, Ordering::Relaxed);
+        self.element_enabled.store(true, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.element_stream)
     }
 
@@ -111,6 +121,9 @@ impl StreamObjectResult {
         stream::BoxStream<'static, Result<Value>>,
         stream::BoxStream<'static, Result<Value>>,
     ) {
+        self.partial_enabled.store(true, Ordering::Relaxed);
+        self.element_enabled.store(true, Ordering::Relaxed);
+        self.ready.notify_one();
         (self.handle, self.partial_object_stream, self.element_stream)
     }
 
@@ -292,6 +305,8 @@ fn stream_object_from_stream_with_config(
     stream: StreamResult,
     config: StreamObjectConfig,
 ) -> StreamObjectResult {
+    const FANOUT_BUFFER: usize = 64;
+
     let state = Arc::new(Mutex::new(StreamObjectState {
         output: config.output,
         strategy: config.strategy,
@@ -300,11 +315,28 @@ fn stream_object_from_stream_with_config(
     let state_task = state.clone();
     let handle = StreamObjectHandle { state };
 
-    let (partial_tx, partial_rx) = mpsc::unbounded_channel::<Result<Value>>();
-    let (element_tx, element_rx) = mpsc::unbounded_channel::<Result<Value>>();
+    let ready = Arc::new(Notify::new());
+    let partial_enabled = Arc::new(AtomicBool::new(false));
+    let element_enabled = Arc::new(AtomicBool::new(false));
+
+    let ready_task = ready.clone();
+    let partial_enabled_task = partial_enabled.clone();
+    let element_enabled_task = element_enabled.clone();
+
+    let (partial_tx, partial_rx) = mpsc::channel::<Result<Value>>(FANOUT_BUFFER);
+    let (element_tx, element_rx) = mpsc::channel::<Result<Value>>(FANOUT_BUFFER);
 
     let task = tokio::spawn(async move {
         let mut inner = stream;
+
+        loop {
+            if partial_enabled_task.load(Ordering::Acquire)
+                || element_enabled_task.load(Ordering::Acquire)
+            {
+                break;
+            }
+            ready_task.notified().await;
+        }
 
         while let Some(next) = inner.next().await {
             match next {
@@ -313,12 +345,16 @@ fn stream_object_from_stream_with_config(
                         let mut state = match state_task.lock() {
                             Ok(guard) => guard,
                             Err(_) => {
-                                let _ = partial_tx.send(Err(DittoError::InvalidResponse(
-                                    "stream object state lock is poisoned".to_string(),
-                                )));
-                                let _ = element_tx.send(Err(DittoError::InvalidResponse(
-                                    "stream object state lock is poisoned".to_string(),
-                                )));
+                                if partial_enabled_task.load(Ordering::Relaxed) {
+                                    let _ = partial_tx.try_send(Err(DittoError::InvalidResponse(
+                                        "stream object state lock is poisoned".to_string(),
+                                    )));
+                                }
+                                if element_enabled_task.load(Ordering::Relaxed) {
+                                    let _ = element_tx.try_send(Err(DittoError::InvalidResponse(
+                                        "stream object state lock is poisoned".to_string(),
+                                    )));
+                                }
                                 return;
                             }
                         };
@@ -402,10 +438,14 @@ fn stream_object_from_stream_with_config(
                     };
 
                     if let Some(value) = parsed {
-                        let _ = partial_tx.send(Ok(value));
+                        if partial_enabled_task.load(Ordering::Relaxed) {
+                            let _ = partial_tx.send(Ok(value)).await;
+                        }
                     }
-                    for element in new_elements {
-                        let _ = element_tx.send(Ok(element));
+                    if element_enabled_task.load(Ordering::Relaxed) {
+                        for element in new_elements {
+                            let _ = element_tx.send(Ok(element)).await;
+                        }
                     }
                 }
                 Err(err) => {
@@ -414,8 +454,14 @@ fn stream_object_from_stream_with_config(
                         state.done = true;
                         state.final_error = Some(format!("stream failed: {err_string}"));
                     }
-                    let _ = partial_tx.send(Err(err));
-                    let _ = element_tx.send(Err(DittoError::InvalidResponse(err_string)));
+                    if partial_enabled_task.load(Ordering::Relaxed) {
+                        let _ = partial_tx.send(Err(err)).await;
+                    }
+                    if element_enabled_task.load(Ordering::Relaxed) {
+                        let _ = element_tx
+                            .send(Err(DittoError::InvalidResponse(err_string)))
+                            .await;
+                    }
                     return;
                 }
             }
@@ -425,12 +471,16 @@ fn stream_object_from_stream_with_config(
             let mut state = match state_task.lock() {
                 Ok(guard) => guard,
                 Err(_) => {
-                    let _ = partial_tx.send(Err(DittoError::InvalidResponse(
-                        "stream object state lock is poisoned".to_string(),
-                    )));
-                    let _ = element_tx.send(Err(DittoError::InvalidResponse(
-                        "stream object state lock is poisoned".to_string(),
-                    )));
+                    if partial_enabled_task.load(Ordering::Relaxed) {
+                        let _ = partial_tx.try_send(Err(DittoError::InvalidResponse(
+                            "stream object state lock is poisoned".to_string(),
+                        )));
+                    }
+                    if element_enabled_task.load(Ordering::Relaxed) {
+                        let _ = element_tx.try_send(Err(DittoError::InvalidResponse(
+                            "stream object state lock is poisoned".to_string(),
+                        )));
+                    }
                     return;
                 }
             };
@@ -470,10 +520,14 @@ fn stream_object_from_stream_with_config(
                 }
 
                 if should_emit_final {
-                    let _ = partial_tx.send(Ok(value));
+                    if partial_enabled_task.load(Ordering::Relaxed) {
+                        let _ = partial_tx.send(Ok(value)).await;
+                    }
                 }
-                for element in remaining_elements {
-                    let _ = element_tx.send(Ok(element));
+                if element_enabled_task.load(Ordering::Relaxed) {
+                    for element in remaining_elements {
+                        let _ = element_tx.send(Ok(element)).await;
+                    }
                 }
             }
             Err(err) => {
@@ -481,8 +535,14 @@ fn stream_object_from_stream_with_config(
                 if let Ok(mut state) = state_task.lock() {
                     state.final_error = Some(err_string.clone());
                 }
-                let _ = partial_tx.send(Err(err));
-                let _ = element_tx.send(Err(DittoError::InvalidResponse(err_string)));
+                if partial_enabled_task.load(Ordering::Relaxed) {
+                    let _ = partial_tx.send(Err(err)).await;
+                }
+                if element_enabled_task.load(Ordering::Relaxed) {
+                    let _ = element_tx
+                        .send(Err(DittoError::InvalidResponse(err_string)))
+                        .await;
+                }
             }
         }
     });
@@ -490,18 +550,36 @@ fn stream_object_from_stream_with_config(
     let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let partial_object_stream = stream::unfold(
-        (partial_rx, aborter.clone()),
-        |(mut rx, aborter)| async move { rx.recv().await.map(|item| (item, (rx, aborter))) },
+        (partial_rx, aborter.clone(), partial_enabled.clone(), ready.clone()),
+        |(mut rx, aborter, enabled, ready)| async move {
+            if !enabled.swap(true, Ordering::AcqRel) {
+                ready.notify_one();
+            }
+            rx.recv()
+                .await
+                .map(|item| (item, (rx, aborter, enabled, ready)))
+        },
     )
     .boxed();
 
-    let element_stream = stream::unfold((element_rx, aborter), |(mut rx, aborter)| async move {
-        rx.recv().await.map(|item| (item, (rx, aborter)))
-    })
+    let element_stream = stream::unfold(
+        (element_rx, aborter, element_enabled.clone(), ready.clone()),
+        |(mut rx, aborter, enabled, ready)| async move {
+            if !enabled.swap(true, Ordering::AcqRel) {
+                ready.notify_one();
+            }
+            rx.recv()
+                .await
+                .map(|item| (item, (rx, aborter, enabled, ready)))
+        },
+    )
     .boxed();
 
     StreamObjectResult {
         handle,
+        ready,
+        partial_enabled,
+        element_enabled,
         partial_object_stream,
         element_stream,
     }
@@ -773,171 +851,4 @@ fn merge_response_format_into_provider_options(
             "provider_options must be a JSON object".to_string(),
         )),
     }
-}
-
-fn parse_json_from_response_text(text: &str) -> Result<(Value, Option<Warning>)> {
-    let raw = text.trim();
-    if raw.is_empty() {
-        return Err(DittoError::InvalidResponse(
-            "model returned an empty response; expected JSON".to_string(),
-        ));
-    }
-
-    if let Ok(parsed) = serde_json::from_str::<Value>(raw) {
-        return Ok((parsed, None));
-    }
-
-    if let Some(block) = extract_code_fence(raw) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(block.trim()) {
-            return Ok((
-                parsed,
-                Some(Warning::Compatibility {
-                    feature: "object.json_extraction".to_string(),
-                    details: "extracted JSON from a fenced code block".to_string(),
-                }),
-            ));
-        }
-    }
-
-    if let Some(substring) = extract_balanced_json(raw) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(substring.trim()) {
-            return Ok((
-                parsed,
-                Some(Warning::Compatibility {
-                    feature: "object.json_extraction".to_string(),
-                    details: "extracted JSON from a larger text response".to_string(),
-                }),
-            ));
-        }
-    }
-
-    Err(DittoError::InvalidResponse(format!(
-        "failed to parse model response as JSON (response starts with {:?})",
-        raw.chars().take(120).collect::<String>()
-    )))
-}
-
-fn extract_code_fence(text: &str) -> Option<String> {
-    let start = text.find("```")?;
-    let after_start = &text[start + 3..];
-    let start_content_rel = after_start.find('\n').map(|idx| idx + 1)?;
-    let start_content = start + 3 + start_content_rel;
-
-    let remaining = &text[start_content..];
-    let end_rel = remaining.find("```")?;
-    let end = start_content + end_rel;
-    let block = text[start_content..end].trim();
-    if block.is_empty() {
-        None
-    } else {
-        Some(block.to_string())
-    }
-}
-
-fn extract_balanced_json(text: &str) -> Option<&str> {
-    let start = text.find(['{', '['])?;
-    let bytes = text.as_bytes();
-    let mut in_string = false;
-    let mut escape = false;
-    let mut stack: Vec<u8> = Vec::new();
-    let mut last_end: Option<usize> = None;
-
-    for (offset, &b) in bytes[start..].iter().enumerate() {
-        if in_string {
-            if escape {
-                escape = false;
-                continue;
-            }
-            match b {
-                b'\\' => escape = true,
-                b'"' => in_string = false,
-                _ => {}
-            }
-            continue;
-        }
-
-        match b {
-            b'"' => in_string = true,
-            b'{' => stack.push(b'}'),
-            b'[' => stack.push(b']'),
-            b'}' | b']' => {
-                if stack.last() == Some(&b) {
-                    stack.pop();
-                    if stack.is_empty() {
-                        last_end = Some(start + offset + 1);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    last_end.map(|end| &text[start..end])
-}
-
-fn parse_partial_json(text: &str) -> Option<Value> {
-    let start = text.find(['{', '['])?;
-    let bytes = text.as_bytes();
-    let mut in_string = false;
-    let mut escape = false;
-    let mut stack: Vec<u8> = Vec::new();
-    let mut last_complete_end: Option<usize> = None;
-
-    for (offset, &b) in bytes[start..].iter().enumerate() {
-        if in_string {
-            if escape {
-                escape = false;
-                continue;
-            }
-            match b {
-                b'\\' => escape = true,
-                b'"' => in_string = false,
-                _ => {}
-            }
-            continue;
-        }
-
-        match b {
-            b'"' => in_string = true,
-            b'{' => stack.push(b'}'),
-            b'[' => stack.push(b']'),
-            b'}' | b']' => {
-                if stack.last() == Some(&b) {
-                    stack.pop();
-                    if stack.is_empty() {
-                        last_complete_end = Some(start + offset + 1);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if in_string || escape {
-        return None;
-    }
-
-    if let Some(end) = last_complete_end {
-        return serde_json::from_str::<Value>(text[start..end].trim()).ok();
-    }
-
-    let mut candidate = text[start..].to_string();
-
-    loop {
-        let trimmed = candidate.trim_end();
-        let Some(last) = trimmed.as_bytes().last().copied() else {
-            break;
-        };
-        if last == b',' || last == b':' {
-            candidate.truncate(trimmed.len().saturating_sub(1));
-            continue;
-        }
-        break;
-    }
-
-    for &closing in stack.iter().rev() {
-        candidate.push(closing as char);
-    }
-
-    serde_json::from_str::<Value>(candidate.trim()).ok()
 }

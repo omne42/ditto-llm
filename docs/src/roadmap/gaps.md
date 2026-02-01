@@ -79,7 +79,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 
 ### 3.2 仍建议做（P0）
 
-- **stream fan-out 的背压策略**：从“无界缓冲”升级为“有界 + 明确 backpressure/丢弃策略（可配置）”，把慢消费从“内存增长”变成“吞吐降低/可观测告警”。
+- **stream fan-out 的背压策略（仍可加强）**：`stream_text`/`stream_object` 已从“无界缓冲”升级为“有界缓冲 + 显式启用”，把慢消费从“内存增长”变成“吞吐降低/等待”；后续建议把 buffer 大小/策略做成可配置，并在 lag/backpressure 时打点或告警。
 - **按 endpoint/内容类型细化 body 上限**：`/v1/*` 统一 64MiB 的上限对企业不够细；建议对 JSON/multipart/files/audio 分级限制并配合并发背压。
 
 ---
