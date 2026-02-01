@@ -31,8 +31,14 @@ pub mod openai_moderations;
 #[cfg(feature = "vertex")]
 pub mod vertex;
 
+#[cfg(all(feature = "audio", feature = "openai"))]
+mod openai_audio_common;
+#[cfg(all(feature = "images", feature = "openai"))]
+mod openai_images_common;
 #[cfg(feature = "openai")]
 mod openai_like;
+#[cfg(all(feature = "moderations", feature = "openai"))]
+mod openai_moderations_common;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;

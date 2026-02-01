@@ -114,6 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Refactor crate layout into modules (`embedding`/`model`/`providers`/`types`/`utils`).
+- Providers: deduplicate OpenAI/OpenAI-compatible images/audio/moderations adapters via shared OpenAI-like core helpers.
+- Gateway: split translation backend routing/settlement into smaller include parts to stay under the pre-commit file size limit.
 - Extend `DittoError` with `Api` and `Io` variants for richer provider and streaming errors.
 - `provider_options` supports per-provider buckets (`"*"` + provider ids) and passes through additional provider-specific keys where supported (conflicts are ignored with warnings).
 - `provider_options`: accept `openai_compatible` as an alias bucket for `openai-compatible`, and add `bedrock`/`vertex` buckets.

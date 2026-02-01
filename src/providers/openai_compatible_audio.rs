@@ -1,55 +1,39 @@
 use async_trait::async_trait;
-use reqwest::multipart::{Form, Part};
-use serde::Deserialize;
-use serde_json::{Map, Value};
-use std::collections::BTreeMap;
 
+use super::openai_audio_common;
 use super::openai_like;
 
 use crate::audio::{AudioTranscriptionModel, SpeechModel};
-use crate::profile::{Env, ProviderConfig, RequestAuth};
+use crate::profile::{Env, ProviderConfig};
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, SpeechRequest, SpeechResponse,
-    SpeechResponseFormat, TranscriptionResponseFormat, Warning,
 };
 use crate::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OpenAICompatibleAudioTranscription {
-    http: reqwest::Client,
-    base_url: String,
-    auth: Option<RequestAuth>,
-    model: String,
-    http_query_params: BTreeMap<String, String>,
+    client: openai_like::OpenAiLikeClient,
 }
 
 impl OpenAICompatibleAudioTranscription {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let api_key = api_key.into();
-        let http = openai_like::default_http_client();
-        let auth = openai_like::auth_from_api_key(&api_key);
-
         Self {
-            http,
-            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
-            auth,
-            model: String::new(),
-            http_query_params: BTreeMap::new(),
+            client: openai_like::OpenAiLikeClient::new(api_key),
         }
     }
 
     pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
-        self.http = http;
+        self.client = self.client.with_http_client(http);
         self
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url);
         self
     }
 
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
+        self.client = self.client.with_model(model);
         self
     }
 
@@ -59,83 +43,24 @@ impl OpenAICompatibleAudioTranscription {
             "OPENAI_API_KEY",
             "CODE_PM_OPENAI_API_KEY",
         ];
-        let auth = openai_like::resolve_auth_optional(config, env, DEFAULT_KEYS).await?;
-
-        let mut out = Self::new("");
-        out.auth = auth;
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                openai_like::HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
-            out = out.with_base_url(base_url);
-        }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            out = out.with_model(model);
-        }
-        Ok(out)
-    }
-
-    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
-    }
-
-    fn transcriptions_url(&self) -> String {
-        openai_like::join_endpoint(&self.base_url, "audio/transcriptions")
+        Ok(Self {
+            client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
+                .await?,
+        })
     }
 
     fn resolve_model<'a>(&'a self, request: &'a AudioTranscriptionRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
         }
-        if !self.model.trim().is_empty() {
-            return Ok(self.model.as_str());
+        if !self.client.model.trim().is_empty() {
+            return Ok(self.client.model.as_str());
         }
         Err(DittoError::InvalidResponse(
             "openai-compatible audio transcription model is not set (set request.model or OpenAICompatibleAudioTranscription::with_model)"
                 .to_string(),
         ))
     }
-
-    fn transcription_format_to_str(format: TranscriptionResponseFormat) -> &'static str {
-        match format {
-            TranscriptionResponseFormat::Json => "json",
-            TranscriptionResponseFormat::Text => "text",
-            TranscriptionResponseFormat::Srt => "srt",
-            TranscriptionResponseFormat::VerboseJson => "verbose_json",
-            TranscriptionResponseFormat::Vtt => "vtt",
-        }
-    }
-
-    fn merge_provider_options(
-        form: Form,
-        options: Option<&Value>,
-        warnings: &mut Vec<Warning>,
-    ) -> Form {
-        let Some(options) = options else {
-            return form;
-        };
-        warnings.push(Warning::Unsupported {
-            feature: "audio.provider_options".to_string(),
-            details: Some(format!(
-                "provider_options are not supported for audio multipart requests; got {options:?}"
-            )),
-        });
-        form
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct TranscriptionJsonResponse {
-    #[serde(default)]
-    text: String,
 }
 
 #[async_trait]
@@ -145,7 +70,7 @@ impl AudioTranscriptionModel for OpenAICompatibleAudioTranscription {
     }
 
     fn model_id(&self) -> &str {
-        self.model.as_str()
+        self.client.model.as_str()
     }
 
     async fn transcribe(
@@ -153,132 +78,34 @@ impl AudioTranscriptionModel for OpenAICompatibleAudioTranscription {
         request: AudioTranscriptionRequest,
     ) -> Result<AudioTranscriptionResponse> {
         let model = self.resolve_model(&request)?.to_string();
-        let selected_provider_options = crate::types::select_provider_options_value(
-            request.provider_options.as_ref(),
-            self.provider(),
-        )?;
-        let mut warnings = Vec::<Warning>::new();
-
-        let mut file_part = Part::bytes(request.audio).file_name(request.filename);
-        if let Some(media_type) = request
-            .media_type
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            file_part = file_part.mime_str(media_type).map_err(|err| {
-                DittoError::InvalidResponse(format!("invalid transcription media type: {err}"))
-            })?;
-        }
-
-        let mut form = Form::new()
-            .text("model", model.clone())
-            .part("file", file_part);
-        if let Some(language) = request.language.as_deref().filter(|s| !s.trim().is_empty()) {
-            form = form.text("language", language.to_string());
-        }
-        if let Some(prompt) = request.prompt.as_deref().filter(|s| !s.trim().is_empty()) {
-            form = form.text("prompt", prompt.to_string());
-        }
-        if let Some(format) = request.response_format {
-            form = form.text("response_format", Self::transcription_format_to_str(format));
-        }
-        if let Some(temperature) = request.temperature {
-            if temperature.is_finite() {
-                form = form.text("temperature", temperature.to_string());
-            } else {
-                warnings.push(Warning::Compatibility {
-                    feature: "temperature".to_string(),
-                    details: format!("temperature is not finite ({temperature}); dropping"),
-                });
-            }
-        }
-
-        form =
-            Self::merge_provider_options(form, selected_provider_options.as_ref(), &mut warnings);
-
-        let url = self.transcriptions_url();
-        let response = self
-            .apply_auth(self.http.post(url))
-            .multipart(form)
-            .send()
-            .await?;
-
-        let status = response.status();
-        let body = response.bytes().await?;
-        if !status.is_success() {
-            let text = String::from_utf8_lossy(&body).to_string();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let format = request
-            .response_format
-            .unwrap_or(TranscriptionResponseFormat::Json);
-        let text = match format {
-            TranscriptionResponseFormat::Text
-            | TranscriptionResponseFormat::Srt
-            | TranscriptionResponseFormat::Vtt => String::from_utf8_lossy(&body).to_string(),
-            TranscriptionResponseFormat::Json | TranscriptionResponseFormat::VerboseJson => {
-                match serde_json::from_slice::<TranscriptionJsonResponse>(&body) {
-                    Ok(parsed) => parsed.text,
-                    Err(err) => {
-                        warnings.push(Warning::Compatibility {
-                            feature: "audio.transcription.json".to_string(),
-                            details: format!(
-                                "failed to parse transcription JSON response; falling back to text: {err}"
-                            ),
-                        });
-                        String::from_utf8_lossy(&body).to_string()
-                    }
-                }
-            }
-        };
-
-        Ok(AudioTranscriptionResponse {
-            text,
-            warnings,
-            provider_metadata: Some(
-                serde_json::json!({ "model": model, "response_format": Self::transcription_format_to_str(format) }),
-            ),
-        })
+        openai_audio_common::transcribe(self.provider(), &self.client, model, request).await
     }
 }
 
 #[derive(Clone)]
 pub struct OpenAICompatibleSpeech {
-    http: reqwest::Client,
-    base_url: String,
-    auth: Option<RequestAuth>,
-    model: String,
-    http_query_params: BTreeMap<String, String>,
+    client: openai_like::OpenAiLikeClient,
 }
 
 impl OpenAICompatibleSpeech {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let api_key = api_key.into();
-        let http = openai_like::default_http_client();
-        let auth = openai_like::auth_from_api_key(&api_key);
-
         Self {
-            http,
-            base_url: openai_like::DEFAULT_BASE_URL.to_string(),
-            auth,
-            model: String::new(),
-            http_query_params: BTreeMap::new(),
+            client: openai_like::OpenAiLikeClient::new(api_key),
         }
     }
 
     pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
-        self.http = http;
+        self.client = self.client.with_http_client(http);
         self
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url);
         self
     }
 
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
+        self.client = self.client.with_model(model);
         self
     }
 
@@ -288,88 +115,23 @@ impl OpenAICompatibleSpeech {
             "OPENAI_API_KEY",
             "CODE_PM_OPENAI_API_KEY",
         ];
-        let auth = openai_like::resolve_auth_optional(config, env, DEFAULT_KEYS).await?;
-
-        let mut out = Self::new("");
-        out.auth = auth;
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                openai_like::HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
-            out = out.with_base_url(base_url);
-        }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            out = out.with_model(model);
-        }
-        Ok(out)
-    }
-
-    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        openai_like::apply_auth(req, self.auth.as_ref(), &self.http_query_params)
-    }
-
-    fn speech_url(&self) -> String {
-        openai_like::join_endpoint(&self.base_url, "audio/speech")
+        Ok(Self {
+            client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
+                .await?,
+        })
     }
 
     fn resolve_model<'a>(&'a self, request: &'a SpeechRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
         }
-        if !self.model.trim().is_empty() {
-            return Ok(self.model.as_str());
+        if !self.client.model.trim().is_empty() {
+            return Ok(self.client.model.as_str());
         }
         Err(DittoError::InvalidResponse(
             "openai-compatible speech model is not set (set request.model or OpenAICompatibleSpeech::with_model)"
                 .to_string(),
         ))
-    }
-
-    fn speech_format_to_str(format: SpeechResponseFormat) -> &'static str {
-        match format {
-            SpeechResponseFormat::Mp3 => "mp3",
-            SpeechResponseFormat::Opus => "opus",
-            SpeechResponseFormat::Aac => "aac",
-            SpeechResponseFormat::Flac => "flac",
-            SpeechResponseFormat::Wav => "wav",
-            SpeechResponseFormat::Pcm => "pcm",
-        }
-    }
-
-    fn merge_provider_options(
-        body: &mut Map<String, Value>,
-        options: Option<&Value>,
-        warnings: &mut Vec<Warning>,
-    ) {
-        let Some(options) = options else {
-            return;
-        };
-        let Some(obj) = options.as_object() else {
-            warnings.push(Warning::Unsupported {
-                feature: "audio.provider_options".to_string(),
-                details: Some("expected provider_options to be a JSON object".to_string()),
-            });
-            return;
-        };
-
-        for (key, value) in obj {
-            if body.contains_key(key) {
-                warnings.push(Warning::Compatibility {
-                    feature: "audio.provider_options".to_string(),
-                    details: format!("provider_options overrides {key}; ignoring override"),
-                });
-                continue;
-            }
-            body.insert(key.clone(), value.clone());
-        }
     }
 }
 
@@ -380,77 +142,19 @@ impl SpeechModel for OpenAICompatibleSpeech {
     }
 
     fn model_id(&self) -> &str {
-        self.model.as_str()
+        self.client.model.as_str()
     }
 
     async fn speak(&self, request: SpeechRequest) -> Result<SpeechResponse> {
         let model = self.resolve_model(&request)?.to_string();
-        let selected_provider_options = crate::types::select_provider_options_value(
-            request.provider_options.as_ref(),
-            self.provider(),
-        )?;
-        let mut warnings = Vec::<Warning>::new();
-
-        let mut body = Map::<String, Value>::new();
-        body.insert("model".to_string(), Value::String(model.clone()));
-        body.insert("input".to_string(), Value::String(request.input));
-        body.insert("voice".to_string(), Value::String(request.voice));
-        if let Some(format) = request.response_format {
-            body.insert(
-                "response_format".to_string(),
-                Value::String(Self::speech_format_to_str(format).to_string()),
-            );
-        }
-        if let Some(speed) = request.speed {
-            if speed.is_finite() {
-                body.insert(
-                    "speed".to_string(),
-                    Value::Number(
-                        serde_json::Number::from_f64(speed as f64).unwrap_or_else(|| 1.into()),
-                    ),
-                );
-            } else {
-                warnings.push(Warning::Compatibility {
-                    feature: "speed".to_string(),
-                    details: format!("speed is not finite ({speed}); dropping"),
-                });
-            }
-        }
-
-        Self::merge_provider_options(&mut body, selected_provider_options.as_ref(), &mut warnings);
-
-        let url = self.speech_url();
-        let response = self
-            .apply_auth(self.http.post(url))
-            .json(&body)
-            .send()
-            .await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let media_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.to_string());
-        let bytes = response.bytes().await?;
-
-        Ok(SpeechResponse {
-            audio: bytes.to_vec(),
-            media_type,
-            warnings,
-            provider_metadata: Some(serde_json::json!({ "model": model })),
-        })
+        openai_audio_common::speak(self.provider(), &self.client, model, request).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{SpeechResponseFormat, TranscriptionResponseFormat, Warning};
     use httpmock::{Method::POST, MockServer};
 
     #[tokio::test]

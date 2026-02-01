@@ -92,6 +92,114 @@ pub(crate) fn apply_auth(
     apply_http_query_params(req, http_query_params)
 }
 
+#[cfg(any(feature = "images", feature = "audio", feature = "moderations"))]
+#[derive(Clone)]
+pub(crate) struct OpenAiLikeClient {
+    pub(crate) http: reqwest::Client,
+    pub(crate) base_url: String,
+    pub(crate) auth: Option<RequestAuth>,
+    pub(crate) model: String,
+    pub(crate) http_query_params: BTreeMap<String, String>,
+}
+
+#[cfg(any(feature = "images", feature = "audio", feature = "moderations"))]
+impl OpenAiLikeClient {
+    pub(crate) fn new(api_key: impl Into<String>) -> Self {
+        let api_key = api_key.into();
+        let http = default_http_client();
+        let auth = auth_from_api_key(&api_key);
+
+        Self {
+            http,
+            base_url: DEFAULT_BASE_URL.to_string(),
+            auth,
+            model: String::new(),
+            http_query_params: BTreeMap::new(),
+        }
+    }
+
+    pub(crate) fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
+    }
+
+    pub(crate) fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    pub(crate) fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    pub(crate) async fn from_config_required(
+        config: &ProviderConfig,
+        env: &Env,
+        default_keys: &[&str],
+    ) -> Result<Self> {
+        let auth_header = resolve_auth_required(config, env, default_keys).await?;
+
+        let mut out = Self::new("");
+        out.auth = Some(auth_header);
+        out.http_query_params = config.http_query_params.clone();
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                HTTP_TIMEOUT,
+                &config.http_headers,
+            )?);
+        }
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
+    }
+
+    pub(crate) async fn from_config_optional(
+        config: &ProviderConfig,
+        env: &Env,
+        default_keys: &[&str],
+    ) -> Result<Self> {
+        let auth = resolve_auth_optional(config, env, default_keys).await?;
+
+        let mut out = Self::new("");
+        out.auth = auth;
+        out.http_query_params = config.http_query_params.clone();
+        if !config.http_headers.is_empty() {
+            out = out.with_http_client(crate::profile::build_http_client(
+                HTTP_TIMEOUT,
+                &config.http_headers,
+            )?);
+        }
+        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+            out = out.with_base_url(base_url);
+        }
+        if let Some(model) = config
+            .default_model
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            out = out.with_model(model);
+        }
+        Ok(out)
+    }
+
+    pub(crate) fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        apply_auth(req, self.auth.as_ref(), &self.http_query_params)
+    }
+
+    pub(crate) fn endpoint(&self, endpoint: &str) -> String {
+        join_endpoint(&self.base_url, endpoint)
+    }
+}
+
 pub(crate) async fn upload_file_with_purpose(
     http: &reqwest::Client,
     url: String,
