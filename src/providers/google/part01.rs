@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -73,8 +73,7 @@ impl Google {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] =
-            &["GOOGLE_API_KEY", "GEMINI_API_KEY", "CODE_PM_GOOGLE_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &["GOOGLE_API_KEY", "GEMINI_API_KEY"];
         let auth = config
             .auth
             .clone()
@@ -180,4 +179,3 @@ impl Google {
         genai::parse_usage_metadata(value)
     }
 }
-

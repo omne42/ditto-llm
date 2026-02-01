@@ -5,10 +5,10 @@ mod tests {
     #[tokio::test]
     async fn resolves_auth_token_with_custom_default_keys() -> Result<()> {
         let env = Env {
-            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
         };
         let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
-        let token = resolve_auth_token_with_default_keys(&auth, &env, &["CODEPM_TEST_KEY"]).await?;
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
         assert_eq!(token, "sk-test");
         Ok(())
     }
@@ -16,17 +16,17 @@ mod tests {
     #[tokio::test]
     async fn resolves_http_header_env_auth() -> Result<()> {
         let env = Env {
-            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
         };
         let auth = ProviderAuth::HttpHeaderEnv {
             header: "api-key".to_string(),
-            keys: vec!["CODEPM_TEST_KEY".to_string()],
+            keys: vec!["DITTO_TEST_KEY".to_string()],
             prefix: None,
         };
         let resolved = resolve_request_auth_with_default_keys(
             &auth,
             &env,
-            &["CODEPM_TEST_KEY"],
+            &["DITTO_TEST_KEY"],
             "authorization",
             Some("Bearer "),
         )
@@ -42,17 +42,17 @@ mod tests {
     #[tokio::test]
     async fn resolves_query_param_env_auth() -> Result<()> {
         let env = Env {
-            dotenv: BTreeMap::from([("CODEPM_TEST_KEY".to_string(), "sk-test".to_string())]),
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
         };
         let auth = ProviderAuth::QueryParamEnv {
             param: "api_key".to_string(),
-            keys: vec!["CODEPM_TEST_KEY".to_string()],
+            keys: vec!["DITTO_TEST_KEY".to_string()],
             prefix: None,
         };
         let resolved = resolve_request_auth_with_default_keys(
             &auth,
             &env,
-            &["CODEPM_TEST_KEY"],
+            &["DITTO_TEST_KEY"],
             "authorization",
             Some("Bearer "),
         )

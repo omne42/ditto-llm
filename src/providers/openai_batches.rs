@@ -31,7 +31,7 @@ impl OpenAIBatches {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY"];
         Ok(Self {
             client: openai_like::OpenAiLikeClient::from_config_required(config, env, DEFAULT_KEYS)
                 .await?,

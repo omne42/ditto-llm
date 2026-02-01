@@ -11,6 +11,7 @@ mod stream;
 pub mod text;
 
 pub mod embedding;
+pub mod layer;
 pub mod model;
 pub mod providers;
 pub mod types;
@@ -38,6 +39,7 @@ pub use batch::BatchClient;
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
 pub use file::{FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
 pub use image::ImageGenerationModel;
+pub use layer::{LanguageModelLayer, LanguageModelLayerExt, LayeredLanguageModel};
 pub use model::{LanguageModel, StreamResult};
 pub use moderation::ModerationModel;
 pub use object::{

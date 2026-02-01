@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -195,24 +195,18 @@ impl LanguageModel for Vertex {
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        if provider_options.reasoning_effort.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "reasoning_effort".to_string(),
-                details: Some("Vertex GenAI does not support reasoning_effort".to_string()),
-            });
-        }
-        if provider_options.response_format.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "response_format".to_string(),
-                details: Some("Vertex GenAI does not support response_format".to_string()),
-            });
-        }
-        if provider_options.parallel_tool_calls == Some(true) {
-            warnings.push(Warning::Unsupported {
-                feature: "parallel_tool_calls".to_string(),
-                details: Some("Vertex GenAI does not support parallel_tool_calls".to_string()),
-            });
-        }
+        crate::types::warn_unsupported_provider_options(
+            "Vertex GenAI",
+            &provider_options,
+            crate::types::ProviderOptionsSupport::NONE,
+            &mut warnings,
+        );
+        crate::types::warn_unsupported_generate_request_options(
+            "Vertex GenAI",
+            &request,
+            crate::types::GenerateRequestSupport::NONE,
+            &mut warnings,
+        );
 
         let tool_names = genai::build_tool_name_map(&request.messages);
         let (contents, system_instruction) =
@@ -367,24 +361,18 @@ impl LanguageModel for Vertex {
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            if provider_options.reasoning_effort.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "reasoning_effort".to_string(),
-                    details: Some("Vertex GenAI does not support reasoning_effort".to_string()),
-                });
-            }
-            if provider_options.response_format.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "response_format".to_string(),
-                    details: Some("Vertex GenAI does not support response_format".to_string()),
-                });
-            }
-            if provider_options.parallel_tool_calls == Some(true) {
-                warnings.push(Warning::Unsupported {
-                    feature: "parallel_tool_calls".to_string(),
-                    details: Some("Vertex GenAI does not support parallel_tool_calls".to_string()),
-                });
-            }
+            crate::types::warn_unsupported_provider_options(
+                "Vertex GenAI",
+                &provider_options,
+                crate::types::ProviderOptionsSupport::NONE,
+                &mut warnings,
+            );
+            crate::types::warn_unsupported_generate_request_options(
+                "Vertex GenAI",
+                &request,
+                crate::types::GenerateRequestSupport::NONE,
+                &mut warnings,
+            );
 
             let tool_names = genai::build_tool_name_map(&request.messages);
             let (contents, system_instruction) =
@@ -483,11 +471,8 @@ impl LanguageModel for Vertex {
             let req = self.apply_auth(req).await?;
             let response = crate::utils::http::send_checked(req).await?;
 
-            let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
-            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
-            if !warnings.is_empty() {
-                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
-            }
+            let (data_stream, buffer) =
+                crate::utils::streaming::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (

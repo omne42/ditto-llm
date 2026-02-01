@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -78,7 +78,7 @@ impl Anthropic {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &["ANTHROPIC_API_KEY", "CODE_PM_ANTHROPIC_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &["ANTHROPIC_API_KEY"];
         let auth = config
             .auth
             .clone()
@@ -413,4 +413,3 @@ impl Anthropic {
         usage
     }
 }
-

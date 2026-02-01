@@ -88,7 +88,7 @@ macro_rules! define_openai_like_images {
 define_openai_like_images!(
     OpenAIImages,
     provider = "openai",
-    default_keys = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"],
+    default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
     missing_model_error =
         "openai image model is not set (set request.model or OpenAIImages::with_model)",
@@ -98,11 +98,7 @@ define_openai_like_images!(
 define_openai_like_images!(
     OpenAICompatibleImages,
     provider = "openai-compatible",
-    default_keys = &[
-        "OPENAI_COMPAT_API_KEY",
-        "OPENAI_API_KEY",
-        "CODE_PM_OPENAI_API_KEY",
-    ],
+    default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY",],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
     missing_model_error = "openai-compatible image model is not set (set request.model or OpenAICompatibleImages::with_model)",
 );

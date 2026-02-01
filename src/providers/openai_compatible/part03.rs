@@ -31,7 +31,6 @@ impl OpenAICompatibleEmbeddings {
         const DEFAULT_KEYS: &[&str] = &[
             "OPENAI_COMPAT_API_KEY",
             "OPENAI_API_KEY",
-            "CODE_PM_OPENAI_API_KEY",
         ];
         Ok(Self {
             client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
@@ -80,13 +79,13 @@ mod tests {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-model".to_string()),
             auth: Some(crate::ProviderAuth::ApiKeyEnv {
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: std::collections::BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };
@@ -123,14 +122,14 @@ mod tests {
             default_model: Some("test-model".to_string()),
             auth: Some(crate::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };
@@ -174,14 +173,14 @@ mod tests {
             )]),
             auth: Some(crate::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };
@@ -220,14 +219,14 @@ mod tests {
             default_model: Some("test-model".to_string()),
             auth: Some(crate::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };
@@ -247,13 +246,13 @@ mod tests {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-embed-model".to_string()),
             auth: Some(crate::ProviderAuth::ApiKeyEnv {
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: std::collections::BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };
@@ -289,14 +288,14 @@ mod tests {
             default_model: Some("test-embed-model".to_string()),
             auth: Some(crate::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
-                keys: vec!["CODEPM_TEST_OPENAI_COMPAT_KEY".to_string()],
+                keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
             dotenv: BTreeMap::from([(
-                "CODEPM_TEST_OPENAI_COMPAT_KEY".to_string(),
+                "DITTO_TEST_OPENAI_COMPAT_KEY".to_string(),
                 "sk-test".to_string(),
             )]),
         };

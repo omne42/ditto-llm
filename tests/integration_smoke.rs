@@ -11,8 +11,8 @@ fn env_nonempty(key: &str) -> Option<String> {
 #[cfg(feature = "openai")]
 #[tokio::test]
 async fn openai_generate_smoke() -> Result<()> {
-    let api_key = env_nonempty("OPENAI_API_KEY").or_else(|| env_nonempty("CODE_PM_OPENAI_API_KEY"));
-    let model = env_nonempty("OPENAI_MODEL").or_else(|| env_nonempty("CODE_PM_OPENAI_MODEL"));
+    let api_key = env_nonempty("OPENAI_API_KEY");
+    let model = env_nonempty("OPENAI_MODEL");
     let (Some(api_key), Some(model)) = (api_key, model) else {
         return Ok(());
     };
@@ -61,9 +61,8 @@ async fn openai_compatible_generate_smoke() -> Result<()> {
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 #[tokio::test]
 async fn openai_embeddings_smoke() -> Result<()> {
-    let api_key = env_nonempty("OPENAI_API_KEY").or_else(|| env_nonempty("CODE_PM_OPENAI_API_KEY"));
-    let model = env_nonempty("OPENAI_EMBEDDING_MODEL")
-        .or_else(|| env_nonempty("CODE_PM_OPENAI_EMBEDDING_MODEL"));
+    let api_key = env_nonempty("OPENAI_API_KEY");
+    let model = env_nonempty("OPENAI_EMBEDDING_MODEL");
     let (Some(api_key), Some(model)) = (api_key, model) else {
         return Ok(());
     };
@@ -78,15 +77,12 @@ async fn openai_embeddings_smoke() -> Result<()> {
 #[tokio::test]
 async fn openai_compatible_embeddings_smoke() -> Result<()> {
     let base_url = env_nonempty("OPENAI_COMPAT_BASE_URL");
-    let model = env_nonempty("OPENAI_COMPAT_EMBEDDING_MODEL")
-        .or_else(|| env_nonempty("CODE_PM_OPENAI_COMPAT_EMBEDDING_MODEL"));
+    let model = env_nonempty("OPENAI_COMPAT_EMBEDDING_MODEL");
     let (Some(base_url), Some(model)) = (base_url, model) else {
         return Ok(());
     };
 
-    let api_key = env_nonempty("OPENAI_COMPAT_API_KEY")
-        .or_else(|| env_nonempty("CODE_PM_OPENAI_COMPAT_API_KEY"))
-        .unwrap_or_default();
+    let api_key = env_nonempty("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 
     let client = ditto_llm::OpenAICompatibleEmbeddings::new(api_key)
         .with_base_url(base_url)

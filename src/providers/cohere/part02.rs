@@ -65,6 +65,12 @@ impl LanguageModel for Cohere {
         let selected_provider_options = request.provider_options_value_for(self.provider())?;
 
         let (messages, mut warnings) = Self::messages_to_cohere_messages(&request.messages);
+        crate::types::warn_unsupported_generate_request_options(
+            "Cohere Chat API",
+            &request,
+            crate::types::GenerateRequestSupport::NONE,
+            &mut warnings,
+        );
 
         let mut body = serde_json::Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));
@@ -183,17 +189,12 @@ impl LanguageModel for Cohere {
                 continue;
             }
 
-            let raw = call.function.arguments.trim();
-            let raw_json = if raw.is_empty() { "{}" } else { raw };
-            let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
-                warnings.push(Warning::Compatibility {
-                    feature: "tool_call.arguments".to_string(),
-                    details: format!(
-                        "failed to parse tool_call arguments as JSON for id={id}: {err}; preserving raw string"
-                    ),
-                });
-                Value::String(call.function.arguments.to_string())
-            });
+            let arguments_raw = call.function.arguments.as_str();
+            let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                arguments_raw,
+                &format!("id={id}"),
+                &mut warnings,
+            );
 
             content.push(ContentPart::ToolCall {
                 id: id.to_string(),
@@ -249,6 +250,12 @@ impl LanguageModel for Cohere {
             let selected_provider_options = request.provider_options_value_for(self.provider())?;
 
             let (messages, mut warnings) = Self::messages_to_cohere_messages(&request.messages);
+            crate::types::warn_unsupported_generate_request_options(
+                "Cohere Chat API",
+                &request,
+                crate::types::GenerateRequestSupport::NONE,
+                &mut warnings,
+            );
 
             let mut body = serde_json::Map::<String, Value>::new();
             body.insert("model".to_string(), Value::String(model.to_string()));
@@ -335,11 +342,8 @@ impl LanguageModel for Cohere {
             )
             .await?;
 
-            let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
-            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
-            if !warnings.is_empty() {
-                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
-            }
+            let (data_stream, buffer) =
+                crate::utils::streaming::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (

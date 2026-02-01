@@ -5,6 +5,18 @@ use serde_json::{Map, Value};
 
 use crate::{DittoError, Result};
 
+mod generate_request_support;
+mod provider_options_support;
+mod tool_call;
+
+pub(crate) use generate_request_support::{
+    GenerateRequestSupport, warn_unsupported_generate_request_options,
+};
+pub(crate) use provider_options_support::{
+    ProviderOptionsSupport, warn_unsupported_provider_options,
+};
+pub(crate) use tool_call::parse_tool_call_arguments_json_or_string;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -410,6 +422,18 @@ pub struct GenerateRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logprobs: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_logprobs: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_sequences: Option<Vec<String>>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -465,6 +489,12 @@ impl From<Vec<Message>> for GenerateRequest {
             temperature: None,
             max_tokens: None,
             top_p: None,
+            seed: None,
+            presence_penalty: None,
+            frequency_penalty: None,
+            logprobs: None,
+            top_logprobs: None,
+            user: None,
             stop_sequences: None,
             tools: None,
             tool_choice: None,

@@ -30,24 +30,18 @@ impl LanguageModel for Bedrock {
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        if provider_options.reasoning_effort.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "reasoning_effort".to_string(),
-                details: Some("Bedrock Anthropic does not support reasoning_effort".to_string()),
-            });
-        }
-        if provider_options.response_format.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "response_format".to_string(),
-                details: Some("Bedrock Anthropic does not support response_format".to_string()),
-            });
-        }
-        if provider_options.parallel_tool_calls == Some(true) {
-            warnings.push(Warning::Unsupported {
-                feature: "parallel_tool_calls".to_string(),
-                details: Some("Bedrock Anthropic does not support parallel_tool_calls".to_string()),
-            });
-        }
+        crate::types::warn_unsupported_provider_options(
+            "Bedrock Anthropic",
+            &provider_options,
+            crate::types::ProviderOptionsSupport::NONE,
+            &mut warnings,
+        );
+        crate::types::warn_unsupported_generate_request_options(
+            "Bedrock Anthropic",
+            &request,
+            crate::types::GenerateRequestSupport::NONE,
+            &mut warnings,
+        );
 
         let body = Self::build_bedrock_body(&request, model, &mut warnings)?;
         let url = self.build_url_with_query(&self.invoke_url(model))?;
@@ -91,28 +85,18 @@ impl LanguageModel for Bedrock {
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            if provider_options.reasoning_effort.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "reasoning_effort".to_string(),
-                    details: Some(
-                        "Bedrock Anthropic does not support reasoning_effort".to_string(),
-                    ),
-                });
-            }
-            if provider_options.response_format.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "response_format".to_string(),
-                    details: Some("Bedrock Anthropic does not support response_format".to_string()),
-                });
-            }
-            if provider_options.parallel_tool_calls == Some(true) {
-                warnings.push(Warning::Unsupported {
-                    feature: "parallel_tool_calls".to_string(),
-                    details: Some(
-                        "Bedrock Anthropic does not support parallel_tool_calls".to_string(),
-                    ),
-                });
-            }
+            crate::types::warn_unsupported_provider_options(
+                "Bedrock Anthropic",
+                &provider_options,
+                crate::types::ProviderOptionsSupport::NONE,
+                &mut warnings,
+            );
+            crate::types::warn_unsupported_generate_request_options(
+                "Bedrock Anthropic",
+                &request,
+                crate::types::GenerateRequestSupport::NONE,
+                &mut warnings,
+            );
 
             let body = Self::build_bedrock_body(&request, model, &mut warnings)?;
             let url = self.build_url_with_query(&self.invoke_stream_url(model))?;

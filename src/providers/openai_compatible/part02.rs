@@ -386,18 +386,12 @@ impl LanguageModel for OpenAICompatible {
             Some(tool_calls) if !tool_calls.is_empty() => {
                 for tool_call in tool_calls {
                     let arguments_raw = tool_call.function.arguments.as_str();
-                    let raw = arguments_raw.trim();
-                    let raw_json = if raw.is_empty() { "{}" } else { raw };
-                    let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
-                        warnings.push(Warning::Compatibility {
-                            feature: "tool_call.arguments".to_string(),
-                            details: format!(
-                                "failed to parse tool_call arguments as JSON for id={}: {err}; preserving raw string",
-                                tool_call.id
-                            ),
-                        });
-                        Value::String(arguments_raw.to_string())
-                    });
+                    let context = format!("id={}", tool_call.id);
+                    let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                        arguments_raw,
+                        &context,
+                        &mut warnings,
+                    );
                     content.push(ContentPart::ToolCall {
                         id: tool_call.id.clone(),
                         name: tool_call.function.name.clone(),
@@ -415,23 +409,18 @@ impl LanguageModel for OpenAICompatible {
             });
 
                     let name = function_call.name.trim();
-                    if !name.is_empty() {
-                        let arguments_raw = function_call.arguments.as_str();
-                        let raw = arguments_raw.trim();
-                        let raw_json = if raw.is_empty() { "{}" } else { raw };
-                        let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
-                    warnings.push(Warning::Compatibility {
-                        feature: "tool_call.arguments".to_string(),
-                        details: format!(
-                            "failed to parse function_call arguments as JSON for name={name}: {err}; preserving raw string",
-                        ),
-                    });
-                    Value::String(arguments_raw.to_string())
-                });
-                        content.push(ContentPart::ToolCall {
-                            id: "call_0".to_string(),
-                            name: name.to_string(),
-                            arguments,
+                        if !name.is_empty() {
+                            let arguments_raw = function_call.arguments.as_str();
+                            let context = format!("name={name}");
+                            let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                                arguments_raw,
+                                &context,
+                                &mut warnings,
+                            );
+                            content.push(ContentPart::ToolCall {
+                                id: "call_0".to_string(),
+                                name: name.to_string(),
+                                arguments,
                         });
                     } else {
                         warnings.push(Warning::Compatibility {
@@ -496,11 +485,8 @@ impl LanguageModel for OpenAICompatible {
                 .json(&body);
             let response = crate::utils::http::send_checked(self.apply_auth(req)).await?;
 
-            let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
-            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
-            if !warnings.is_empty() {
-                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
-            }
+            let (data_stream, buffer) =
+                crate::utils::streaming::init_sse_stream(response, warnings);
             let stream = stream::unfold(
                 (data_stream, buffer, StreamState::default(), false),
                 |(mut data_stream, mut buffer, mut state, mut done)| async move {

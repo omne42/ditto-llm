@@ -51,12 +51,15 @@ mod tests {
             base_url: Some(server.url("/v2")),
             default_model: Some("command-r".to_string()),
             auth: Some(crate::ProviderAuth::ApiKeyEnv {
-                keys: vec!["CODEPM_TEST_COHERE_KEY".to_string()],
+                keys: vec!["DITTO_TEST_COHERE_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([("CODEPM_TEST_COHERE_KEY".to_string(), "sk-test".to_string())]),
+            dotenv: BTreeMap::from([(
+                "DITTO_TEST_COHERE_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
         };
 
         let tool = Tool {
@@ -91,6 +94,12 @@ mod tests {
                 temperature: None,
                 max_tokens: None,
                 top_p: None,
+                seed: None,
+                presence_penalty: None,
+                frequency_penalty: None,
+                logprobs: None,
+                top_logprobs: None,
+                user: None,
                 stop_sequences: None,
                 tools: Some(vec![tool]),
                 tool_choice: Some(ToolChoice::Required),
@@ -209,12 +218,15 @@ mod tests {
             base_url: Some(server.url("/v2")),
             default_model: Some("rerank-v3.5".to_string()),
             auth: Some(crate::ProviderAuth::ApiKeyEnv {
-                keys: vec!["CODEPM_TEST_COHERE_KEY".to_string()],
+                keys: vec!["DITTO_TEST_COHERE_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([("CODEPM_TEST_COHERE_KEY".to_string(), "sk-test".to_string())]),
+            dotenv: BTreeMap::from([(
+                "DITTO_TEST_COHERE_KEY".to_string(),
+                "sk-test".to_string(),
+            )]),
         };
 
         let client = CohereRerank::from_config(&config, &env).await?;

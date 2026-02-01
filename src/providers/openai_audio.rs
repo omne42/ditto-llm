@@ -184,7 +184,7 @@ macro_rules! define_openai_like_speech {
 define_openai_like_audio_transcription!(
     OpenAIAudioTranscription,
     provider = "openai",
-    default_keys = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"],
+    default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
     missing_model_error = "openai audio transcription model is not set (set request.model or OpenAIAudioTranscription::with_model)",
 );
@@ -192,7 +192,7 @@ define_openai_like_audio_transcription!(
 define_openai_like_speech!(
     OpenAISpeech,
     provider = "openai",
-    default_keys = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"],
+    default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
     missing_model_error =
         "openai speech model is not set (set request.model or OpenAISpeech::with_model)",
@@ -202,11 +202,7 @@ define_openai_like_speech!(
 define_openai_like_audio_transcription!(
     OpenAICompatibleAudioTranscription,
     provider = "openai-compatible",
-    default_keys = &[
-        "OPENAI_COMPAT_API_KEY",
-        "OPENAI_API_KEY",
-        "CODE_PM_OPENAI_API_KEY",
-    ],
+    default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY",],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
     missing_model_error = "openai-compatible audio transcription model is not set (set request.model or OpenAICompatibleAudioTranscription::with_model)",
 );
@@ -215,11 +211,7 @@ define_openai_like_audio_transcription!(
 define_openai_like_speech!(
     OpenAICompatibleSpeech,
     provider = "openai-compatible",
-    default_keys = &[
-        "OPENAI_COMPAT_API_KEY",
-        "OPENAI_API_KEY",
-        "CODE_PM_OPENAI_API_KEY",
-    ],
+    default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY",],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
     missing_model_error = "openai-compatible speech model is not set (set request.model or OpenAICompatibleSpeech::with_model)",
 );

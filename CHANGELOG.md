@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Unified SDK: `LanguageModel` / `EmbeddingModel` + core request/response types.
+- Model middleware: `LanguageModelLayer` + `LayeredLanguageModel` + `LanguageModelLayerExt` for composable wrappers.
+- Generate request: add optional OpenAI-style fields (`seed`, `presence_penalty`, `frequency_penalty`, `logprobs`, `top_logprobs`, `user`) with OpenAI-compatible mapping and warnings when unsupported.
 - AI SDK-aligned helpers: `generate_text` / `stream_text`, `generate_object_json` / `stream_object` (structured outputs), and `embed_many` aliases.
 - Structured output options: `ObjectOptions` (`output=Object|Array`, `strategy=Auto|NativeSchema|ToolCall|TextJson`) and streaming `element_stream` for array outputs.
 - Multi-modal message parts: `ContentPart::Image` (images) and `ContentPart::File` (PDFs) with `FileSource` support.
@@ -157,6 +159,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor: split `object` module into sub-files (no behavior changes).
 - Refactor: split `profile` module into sub-files (no behavior changes).
 - Dev: fix clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`).
+
+### Changed
+
+- Providers: centralize tool-call argument JSON parsing + warnings via `types::parse_tool_call_arguments_json_or_string`.
+- Providers: reuse `utils::streaming::init_sse_stream` across SSE streaming adapters.
+- Providers: centralize unsupported provider-options warnings via `types::warn_unsupported_provider_options`.
+- Auth/Profile: remove `OMNE_AGENT_*` env-key aliases (use standard provider env keys or configure `ProviderAuth` explicitly).
 
 ### Fixed
 

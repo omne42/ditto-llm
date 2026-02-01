@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::stream;
@@ -50,7 +48,6 @@ impl OpenAICompatible {
         const DEFAULT_KEYS: &[&str] = &[
             "OPENAI_COMPAT_API_KEY",
             "OPENAI_API_KEY",
-            "CODE_PM_OPENAI_API_KEY",
         ];
         Ok(Self {
             client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
@@ -395,6 +392,62 @@ impl OpenAICompatible {
                 &mut warnings,
             ) {
                 body.insert("top_p".to_string(), Value::Number(value));
+            }
+        }
+        if let Some(seed) = request.seed {
+            body.insert("seed".to_string(), Value::Number(seed.into()));
+        }
+        if let Some(presence_penalty) = request.presence_penalty {
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "presence_penalty",
+                presence_penalty,
+                -2.0,
+                2.0,
+                &mut warnings,
+            ) {
+                body.insert("presence_penalty".to_string(), Value::Number(value));
+            }
+        }
+        if let Some(frequency_penalty) = request.frequency_penalty {
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "frequency_penalty",
+                frequency_penalty,
+                -2.0,
+                2.0,
+                &mut warnings,
+            ) {
+                body.insert("frequency_penalty".to_string(), Value::Number(value));
+            }
+        }
+        if let Some(user) = request.user.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            body.insert("user".to_string(), Value::String(user.to_string()));
+        }
+        match request.logprobs {
+            Some(true) => {
+                body.insert("logprobs".to_string(), Value::Bool(true));
+            }
+            Some(false) => {
+                body.insert("logprobs".to_string(), Value::Bool(false));
+            }
+            None => {}
+        }
+        if let Some(top_logprobs) = request.top_logprobs {
+            if request.logprobs == Some(false) {
+                warnings.push(Warning::Compatibility {
+                    feature: "top_logprobs".to_string(),
+                    details: "top_logprobs requires logprobs=true; dropping".to_string(),
+                });
+            } else if top_logprobs == 0 || top_logprobs > 20 {
+                warnings.push(Warning::Compatibility {
+                    feature: "top_logprobs".to_string(),
+                    details: format!("top_logprobs must be between 1 and 20 (got {top_logprobs}); dropping"),
+                });
+            } else {
+                body.insert("logprobs".to_string(), Value::Bool(true));
+                body.insert(
+                    "top_logprobs".to_string(),
+                    Value::Number((top_logprobs as u64).into()),
+                );
             }
         }
         if let Some(stops) = request.stop_sequences.as_ref() {

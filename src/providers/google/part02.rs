@@ -34,24 +34,18 @@ impl LanguageModel for Google {
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        if provider_options.reasoning_effort.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "reasoning_effort".to_string(),
-                details: Some("Google GenAI does not support reasoning_effort".to_string()),
-            });
-        }
-        if provider_options.response_format.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "response_format".to_string(),
-                details: Some("Google GenAI does not support response_format".to_string()),
-            });
-        }
-        if provider_options.parallel_tool_calls == Some(true) {
-            warnings.push(Warning::Unsupported {
-                feature: "parallel_tool_calls".to_string(),
-                details: Some("Google GenAI does not support parallel_tool_calls".to_string()),
-            });
-        }
+        crate::types::warn_unsupported_provider_options(
+            "Google GenAI",
+            &provider_options,
+            crate::types::ProviderOptionsSupport::NONE,
+            &mut warnings,
+        );
+        crate::types::warn_unsupported_generate_request_options(
+            "Google GenAI",
+            &request,
+            crate::types::GenerateRequestSupport::NONE,
+            &mut warnings,
+        );
         let tool_names = Self::build_tool_name_map(&request.messages);
         let (contents, system_instruction) =
             Self::convert_messages(&model, &request.messages, &tool_names, &mut warnings)?;
@@ -204,24 +198,18 @@ impl LanguageModel for Google {
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            if provider_options.reasoning_effort.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "reasoning_effort".to_string(),
-                    details: Some("Google GenAI does not support reasoning_effort".to_string()),
-                });
-            }
-            if provider_options.response_format.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "response_format".to_string(),
-                    details: Some("Google GenAI does not support response_format".to_string()),
-                });
-            }
-            if provider_options.parallel_tool_calls == Some(true) {
-                warnings.push(Warning::Unsupported {
-                    feature: "parallel_tool_calls".to_string(),
-                    details: Some("Google GenAI does not support parallel_tool_calls".to_string()),
-                });
-            }
+            crate::types::warn_unsupported_provider_options(
+                "Google GenAI",
+                &provider_options,
+                crate::types::ProviderOptionsSupport::NONE,
+                &mut warnings,
+            );
+            crate::types::warn_unsupported_generate_request_options(
+                "Google GenAI",
+                &request,
+                crate::types::GenerateRequestSupport::NONE,
+                &mut warnings,
+            );
             let tool_names = Self::build_tool_name_map(&request.messages);
             let (contents, system_instruction) =
                 Self::convert_messages(&model, &request.messages, &tool_names, &mut warnings)?;
@@ -320,11 +308,8 @@ impl LanguageModel for Google {
             )
             .await?;
 
-            let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
-            let mut buffer = VecDeque::<Result<StreamChunk>>::new();
-            if !warnings.is_empty() {
-                buffer.push_back(Ok(StreamChunk::Warnings { warnings }));
-            }
+            let (data_stream, buffer) =
+                crate::utils::streaming::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (

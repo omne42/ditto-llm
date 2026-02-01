@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -51,7 +49,7 @@ impl OpenAI {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY"];
         Ok(Self {
             client: openai_like::OpenAiLikeClient::from_config_required(config, env, DEFAULT_KEYS)
                 .await?,
@@ -362,6 +360,12 @@ impl OpenAI {
                 ),
             });
         }
+        crate::types::warn_unsupported_generate_request_options(
+            "OpenAI Responses API",
+            request,
+            crate::types::GenerateRequestSupport::NONE,
+            &mut warnings,
+        );
 
         let mut body = Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));

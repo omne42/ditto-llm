@@ -505,6 +505,33 @@ pub fn chat_completions_request_to_generate_request(
             out.top_p = Some(top_p as f32);
         }
     }
+    if let Some(seed) = obj.get("seed").and_then(Value::as_u64) {
+        out.seed = Some(seed);
+    }
+    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64) {
+        if presence_penalty.is_finite() {
+            out.presence_penalty = Some(presence_penalty as f32);
+        }
+    }
+    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64) {
+        if frequency_penalty.is_finite() {
+            out.frequency_penalty = Some(frequency_penalty as f32);
+        }
+    }
+    if let Some(user) = obj
+        .get("user")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.user = Some(user.to_string());
+    }
+    if let Some(logprobs) = obj.get("logprobs").and_then(Value::as_bool) {
+        out.logprobs = Some(logprobs);
+    }
+    if let Some(top_logprobs) = obj.get("top_logprobs").and_then(Value::as_u64) {
+        out.top_logprobs = Some(top_logprobs.min(u64::from(u32::MAX)) as u32);
+    }
     if let Some(max_tokens) = obj.get("max_tokens").and_then(Value::as_u64) {
         out.max_tokens = Some(max_tokens.min(u64::from(u32::MAX)) as u32);
     }
@@ -578,6 +605,33 @@ pub fn completions_request_to_generate_request(request: &Value) -> ParseResult<G
     if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64) {
         if top_p.is_finite() {
             out.top_p = Some(top_p as f32);
+        }
+    }
+    if let Some(seed) = obj.get("seed").and_then(Value::as_u64) {
+        out.seed = Some(seed);
+    }
+    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64) {
+        if presence_penalty.is_finite() {
+            out.presence_penalty = Some(presence_penalty as f32);
+        }
+    }
+    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64) {
+        if frequency_penalty.is_finite() {
+            out.frequency_penalty = Some(frequency_penalty as f32);
+        }
+    }
+    if let Some(user) = obj
+        .get("user")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.user = Some(user.to_string());
+    }
+    if let Some(logprobs) = obj.get("logprobs").and_then(Value::as_u64) {
+        if logprobs > 0 {
+            out.logprobs = Some(true);
+            out.top_logprobs = Some(logprobs.min(u64::from(u32::MAX)) as u32);
         }
     }
     if let Some(max_tokens) = obj.get("max_tokens").and_then(Value::as_u64) {

@@ -454,11 +454,7 @@ impl OpenAiProvider {
         config: &ProviderConfig,
         env: &Env,
     ) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &[
-            "OPENAI_API_KEY",
-            "CODE_PM_OPENAI_API_KEY",
-            "OPENAI_COMPAT_API_KEY",
-        ];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
 
         let base_url = config.base_url.as_deref().ok_or_else(|| {
             DittoError::InvalidResponse("provider base_url is missing".to_string())
@@ -711,11 +707,7 @@ pub fn filter_models_whitelist(models: Vec<String>, whitelist: &[String]) -> Vec
 }
 
 pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Result<Vec<String>> {
-    const DEFAULT_KEYS: &[&str] = &[
-        "OPENAI_API_KEY",
-        "CODE_PM_OPENAI_API_KEY",
-        "OPENAI_COMPAT_API_KEY",
-    ];
+    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
 
     let base_url = provider
         .base_url
@@ -746,7 +738,7 @@ pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Resu
 }
 
 pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String> {
-    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"];
+    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
     resolve_auth_token_with_default_keys(auth, env, DEFAULT_KEYS).await
 }
 
@@ -821,4 +813,3 @@ pub async fn resolve_auth_token_with_default_keys(
         }
     }
 }
-

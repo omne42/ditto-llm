@@ -85,7 +85,7 @@ macro_rules! define_openai_like_moderations {
 define_openai_like_moderations!(
     OpenAIModerations,
     provider = "openai",
-    default_keys = &["OPENAI_API_KEY", "CODE_PM_OPENAI_API_KEY"],
+    default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
     missing_model_error =
         "openai moderation model is not set (set request.model or OpenAIModerations::with_model)",
@@ -95,11 +95,7 @@ define_openai_like_moderations!(
 define_openai_like_moderations!(
     OpenAICompatibleModerations,
     provider = "openai-compatible",
-    default_keys = &[
-        "OPENAI_COMPAT_API_KEY",
-        "OPENAI_API_KEY",
-        "CODE_PM_OPENAI_API_KEY",
-    ],
+    default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY",],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
     missing_model_error = "openai-compatible moderation model is not set (set request.model or OpenAICompatibleModerations::with_model)",
 );
