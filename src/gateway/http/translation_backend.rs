@@ -45,6 +45,7 @@ async fn attempt_translation_backend(
             let batches_root = translation::is_batches_path(path_and_query);
             let models_root = translation::is_models_path(path_and_query);
             let models_retrieve_id = translation::models_retrieve_id(path_and_query);
+            let files_root = translation::is_files_path(path_and_query);
 
             let supported_path = translation::is_chat_completions_path(path_and_query)
                 || translation::is_completions_path(path_and_query)
@@ -59,6 +60,7 @@ async fn attempt_translation_backend(
                 || translation::is_audio_speech_path(path_and_query)
                 || translation::is_rerank_path(path_and_query)
                 || batches_root
+                || files_root
                 || batch_cancel_id.is_some()
                 || batch_retrieve_id.is_some()
                 || models_retrieve_id.is_some();
@@ -76,6 +78,7 @@ async fn attempt_translation_backend(
                     || translation::is_audio_speech_path(path_and_query)
                     || translation::is_rerank_path(path_and_query)
                     || batches_root
+                    || files_root
                     || batch_cancel_id.is_some()
             } else if parts.method == axum::http::Method::GET {
                 batches_root

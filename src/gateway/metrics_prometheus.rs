@@ -453,6 +453,7 @@ pub(crate) fn normalize_proxy_path_label(path_and_query: &str) -> String {
         | "/v1/audio/transcriptions"
         | "/v1/audio/translations"
         | "/v1/audio/speech"
+        | "/v1/files"
         | "/v1/rerank"
         | "/v1/batches"
         | "/v1/models"

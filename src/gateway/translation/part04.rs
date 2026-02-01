@@ -201,3 +201,105 @@ fn sse_event_bytes(value: Value) -> Bytes {
     let json = value.to_string();
     Bytes::from(format!("data: {json}\n\n"))
 }
+
+pub fn is_files_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/files" || path == "/v1/files/"
+}
+
+pub fn files_upload_request_to_request(
+    content_type: &str,
+    body: &Bytes,
+) -> ParseResult<FileUploadRequest> {
+    let mut file: Option<MultipartPart> = None;
+    let mut purpose: Option<String> = None;
+
+    let parts = parse_multipart_form(content_type, body)?;
+    for part in parts {
+        match part.name.as_str() {
+            "file" => file = Some(part),
+            "purpose" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    purpose = Some(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let file = file.ok_or_else(|| "files request missing file".to_string())?;
+    let purpose = purpose.ok_or_else(|| "files request missing purpose".to_string())?;
+    let filename = file
+        .filename
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "file".to_string());
+
+    Ok(FileUploadRequest {
+        filename,
+        bytes: file.data.to_vec(),
+        purpose,
+        media_type: file.content_type.clone(),
+    })
+}
+
+pub fn file_upload_response_to_openai(
+    file_id: &str,
+    filename: String,
+    purpose: String,
+    bytes: usize,
+    created_at: u64,
+) -> Value {
+    serde_json::json!({
+        "id": file_id,
+        "object": "file",
+        "bytes": bytes,
+        "created_at": created_at,
+        "filename": filename,
+        "purpose": purpose,
+    })
+}
+
+pub async fn build_file_client(
+    provider: &str,
+    config: &ProviderConfig,
+    env: &Env,
+) -> crate::Result<Option<Arc<dyn FileClient>>> {
+    let _ = (config, env);
+    let provider = provider.trim();
+
+    match provider {
+        "openai" => {
+            #[cfg(feature = "openai")]
+            {
+                Ok(Some(Arc::new(crate::OpenAI::from_config(config, env).await?)))
+            }
+            #[cfg(not(feature = "openai"))]
+            {
+                Ok(None)
+            }
+        }
+        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
+        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
+        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
+        | "ollama" => {
+            #[cfg(feature = "openai-compatible")]
+            {
+                Ok(Some(Arc::new(
+                    crate::OpenAICompatible::from_config(config, env).await?,
+                )))
+            }
+            #[cfg(not(feature = "openai-compatible"))]
+            {
+                Ok(None)
+            }
+        }
+        _ => Ok(None),
+    }
+}

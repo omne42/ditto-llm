@@ -72,6 +72,95 @@
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
+                } else if files_root {
+                    if _stream_requested {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files endpoint does not support stream=true",
+                        ));
+                    }
+
+                    let Some(content_type) = parts
+                        .headers
+                        .get("content-type")
+                        .and_then(|value| value.to_str().ok())
+                    else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files request missing content-type",
+                        ));
+                    };
+
+                    if !content_type
+                        .to_ascii_lowercase()
+                        .starts_with("multipart/form-data")
+                    {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_request"),
+                            "files request must be multipart/form-data",
+                        ));
+                    }
+
+                    let request = match translation::files_upload_request_to_request(content_type, body)
+                    {
+                        Ok(request) => request,
+                        Err(err) => {
+                            break 'translation_backend_attempt Err(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("invalid_request"),
+                                err,
+                            ));
+                        }
+                    };
+
+                    let bytes_len = request.bytes.len();
+                    let filename = request.filename.clone();
+                    let purpose = request.purpose.clone();
+                    let file_id = match translation_backend.upload_file(request).await {
+                        Ok(file_id) => file_id,
+                        Err(err) => {
+                            let (status, kind, code, message) =
+                                translation::map_provider_error_to_openai(err);
+                            break 'translation_backend_attempt Err(openai_error(
+                                status, kind, code, message,
+                            ));
+                        }
+                    };
+
+                    let value = translation::file_upload_response_to_openai(
+                        &file_id,
+                        filename,
+                        purpose,
+                        bytes_len,
+                        _now_epoch_seconds,
+                    );
+                    let bytes = serde_json::to_vec(&value)
+                        .map(Bytes::from)
+                        .unwrap_or_else(|_| Bytes::from(value.to_string()));
+
+                    let mut headers = HeaderMap::new();
+                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        "x-ditto-translation",
+                        translation_backend
+                            .provider
+                            .parse()
+                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                    );
+                    apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
+
+                    let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+                    let mut response = axum::response::Response::new(body);
+                    *response.status_mut() = StatusCode::OK;
+                    *response.headers_mut() = headers;
+                    Ok((response, default_spend))
                 } else if translation::is_responses_compact_path(path_and_query) {
                     let Some(parsed_json) = parsed_json.as_ref() else {
                         break 'translation_backend_attempt Err(openai_error(

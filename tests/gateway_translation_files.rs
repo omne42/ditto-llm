@@ -1,0 +1,139 @@
+#![cfg(all(feature = "gateway", feature = "gateway-translation"))]
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use axum::body::{Body, to_bytes};
+use axum::http::{Request, StatusCode};
+use ditto_llm::gateway::{
+    Gateway, GatewayConfig, GatewayHttpState, RouterConfig, TranslationBackend,
+};
+use ditto_llm::model::{LanguageModel, StreamResult};
+use ditto_llm::types::{GenerateRequest, GenerateResponse};
+use ditto_llm::{DittoError, FileClient, FileUploadRequest};
+use tower::util::ServiceExt;
+
+#[derive(Clone)]
+struct FakeModel;
+
+#[async_trait]
+impl LanguageModel for FakeModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-model"
+    }
+
+    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::Result<GenerateResponse> {
+        Err(DittoError::InvalidResponse(
+            "FakeModel.generate should not be called".to_string(),
+        ))
+    }
+
+    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::Result<StreamResult> {
+        Err(DittoError::InvalidResponse(
+            "FakeModel.stream should not be called".to_string(),
+        ))
+    }
+}
+
+#[derive(Clone)]
+struct FakeFileClient;
+
+#[async_trait]
+impl FileClient for FakeFileClient {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    async fn upload_file_with_purpose(
+        &self,
+        request: FileUploadRequest,
+    ) -> ditto_llm::Result<String> {
+        assert_eq!(request.filename, "hello.txt");
+        assert_eq!(request.purpose, "fine-tune");
+        assert_eq!(request.bytes, b"hello world".to_vec());
+        assert_eq!(request.media_type.as_deref(), Some("text/plain"));
+        Ok("file_fake".to_string())
+    }
+}
+
+fn base_gateway() -> Gateway {
+    Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: Vec::new(),
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    })
+}
+
+#[tokio::test]
+async fn gateway_translation_files_upload() -> ditto_llm::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_file_client(Arc::new(FakeFileClient)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "ditto_boundary";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"purpose\"\r\n\
+\r\n\
+fine-tune\r\n\
+--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+hello world\r\n\
+--{boundary}--\r\n"
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/files")
+        .header("content-type", content_type)
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|value| value.to_str().ok()),
+        Some("fake")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("file_fake"));
+    assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("file"));
+    assert_eq!(
+        parsed.get("filename").and_then(|v| v.as_str()),
+        Some("hello.txt")
+    );
+    assert_eq!(
+        parsed.get("purpose").and_then(|v| v.as_str()),
+        Some("fine-tune")
+    );
+    assert_eq!(parsed.get("bytes").and_then(|v| v.as_u64()), Some(11));
+    assert!(parsed.get("created_at").and_then(|v| v.as_u64()).is_some());
+
+    Ok(())
+}

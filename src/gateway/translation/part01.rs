@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use crate::audio::{AudioTranscriptionModel, SpeechModel};
 use crate::batch::BatchClient;
 use crate::embedding::EmbeddingModel;
+use crate::file::{FileClient, FileUploadRequest};
 use crate::image::ImageGenerationModel;
 use crate::model::{LanguageModel, StreamResult};
 use crate::moderation::ModerationModel;
@@ -39,6 +40,7 @@ pub struct TranslationBackend {
     pub speech_model: Option<Arc<dyn SpeechModel>>,
     pub rerank_model: Option<Arc<dyn RerankModel>>,
     pub batch_client: Option<Arc<dyn BatchClient>>,
+    pub file_client: Option<Arc<dyn FileClient>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
     env: Env,
@@ -50,6 +52,7 @@ pub struct TranslationBackend {
     speech_cache: Arc<Mutex<HashMap<String, Arc<dyn SpeechModel>>>>,
     rerank_cache: Arc<Mutex<HashMap<String, Arc<dyn RerankModel>>>>,
     batch_cache: Arc<Mutex<Option<Arc<dyn BatchClient>>>>,
+    file_cache: Arc<Mutex<Option<Arc<dyn FileClient>>>>,
 }
 
 impl TranslationBackend {
@@ -63,6 +66,7 @@ impl TranslationBackend {
             speech_model: None,
             rerank_model: None,
             batch_client: None,
+            file_client: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
             env: Env::default(),
@@ -74,6 +78,7 @@ impl TranslationBackend {
             speech_cache: Arc::new(Mutex::new(HashMap::new())),
             rerank_cache: Arc::new(Mutex::new(HashMap::new())),
             batch_cache: Arc::new(Mutex::new(None)),
+            file_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -133,6 +138,11 @@ impl TranslationBackend {
         self
     }
 
+    pub fn with_file_client(mut self, file_client: Arc<dyn FileClient>) -> Self {
+        self.file_client = Some(file_client);
+        self
+    }
+
     pub fn map_model(&self, requested: &str) -> String {
         if let Some(mapped) = self.model_map.get(requested) {
             return mapped.clone();
@@ -149,6 +159,33 @@ impl TranslationBackend {
         }
 
         requested.to_string()
+    }
+
+    pub async fn upload_file(&self, request: FileUploadRequest) -> crate::Result<String> {
+        if let Some(client) = self.file_client.as_ref() {
+            return client.upload_file_with_purpose(request).await;
+        }
+
+        let cached = self.file_cache.lock().await.clone();
+        if let Some(client) = cached {
+            return client.upload_file_with_purpose(request).await;
+        }
+
+        let client = build_file_client(self.provider.as_str(), &self.provider_config, &self.env)
+            .await?
+            .ok_or_else(|| {
+                DittoError::InvalidResponse(format!(
+                    "provider backend does not support files: {}",
+                    self.provider
+                ))
+            })?;
+
+        {
+            let mut cache = self.file_cache.lock().await;
+            *cache = Some(client.clone());
+        }
+
+        client.upload_file_with_purpose(request).await
     }
 
     pub async fn embed(&self, model: &str, texts: Vec<String>) -> crate::Result<Vec<Vec<f32>>> {

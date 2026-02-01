@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod batch;
 mod error;
+pub mod file;
 pub mod image;
 pub mod moderation;
 pub mod object;
@@ -35,6 +36,7 @@ pub use profile::{
 pub use audio::{AudioTranscriptionModel, SpeechModel};
 pub use batch::BatchClient;
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
+pub use file::{FileClient, FileUploadRequest};
 pub use image::ImageGenerationModel;
 pub use model::{LanguageModel, StreamResult};
 pub use moderation::ModerationModel;
