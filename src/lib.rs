@@ -44,14 +44,16 @@ pub use model::{LanguageModel, StreamResult};
 pub use moderation::ModerationModel;
 pub use object::{
     GenerateObjectResponse, LanguageModelObjectExt, ObjectOptions, ObjectOutput, ObjectStrategy,
-    StreamObjectFinal, StreamObjectResult,
+    StreamObjectFinal, StreamObjectHandle, StreamObjectResult,
 };
 pub use rerank::RerankModel;
 pub use stream::{
     AbortableStream, CollectedStream, LanguageModelExt, StreamAbortHandle, abortable_stream,
     collect_stream,
 };
-pub use text::{GenerateTextResponse, LanguageModelTextExt, StreamTextFinal, StreamTextResult};
+pub use text::{
+    GenerateTextResponse, LanguageModelTextExt, StreamTextFinal, StreamTextHandle, StreamTextResult,
+};
 pub use types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchRequestCounts, BatchResponse, BatchStatus, ContentPart, FileSource,

@@ -25,13 +25,13 @@ async fn main() -> ditto_llm::Result<()> {
         Message::user("Stream a short poem about Rust."),
     ]);
 
-    let mut result = llm.stream_text(req).await?;
+    let (handle, mut text_stream) = llm.stream_text(req).await?.into_text_stream();
 
-    while let Some(delta) = result.text_stream.next().await {
+    while let Some(delta) = text_stream.next().await {
         print!("{}", delta?);
     }
 
-    let final_text = result.final_text()?.unwrap_or_default();
+    let final_text = handle.final_text()?.unwrap_or_default();
     println!("\nfinal={final_text}");
     Ok(())
 }
@@ -51,8 +51,10 @@ async fn main() -> ditto_llm::Result<()> {
 use futures_util::StreamExt;
 use ditto_llm::{GenerateRequest, LanguageModelTextExt, Message, OpenAI, StreamChunk};
 
-let mut result = llm.stream_text(GenerateRequest::from(vec![Message::user("hi")])).await?;
-while let Some(chunk) = result.full_stream.next().await {
+let (handle, mut full_stream) =
+    llm.stream_text(GenerateRequest::from(vec![Message::user("hi")])).await?.into_full_stream();
+
+while let Some(chunk) = full_stream.next().await {
     match chunk? {
         StreamChunk::TextDelta { text } => print!("{text}"),
         StreamChunk::Warnings { warnings } => eprintln!("warnings: {warnings:?}"),
@@ -61,6 +63,8 @@ while let Some(chunk) = result.full_stream.next().await {
         _ => {}
     }
 }
+
+let _final = handle.final_summary()?;
 ```
 
 ## 取消与资源释放
@@ -74,5 +78,6 @@ while let Some(chunk) = result.full_stream.next().await {
 
 含义：
 
-- 如果你的消费者**处理很慢**或**完全不消费**，内存可能持续增长（更像 backpressure 问题，而不是“泄漏”）。
+- 如果你只需要其中一个 stream，请尽早丢弃另一个（推荐使用 `into_text_stream()` / `into_full_stream()`），避免不必要的缓冲。
+- 如果你同时需要两条 stream，请确保两者都被持续消费（例如分别 spawn task），否则内存可能持续增长（更像 backpressure 问题，而不是“泄漏”）。
 - 生产环境建议为上游请求设置合理的超时/并发控制，并确保下游持续消费或及时 abort。

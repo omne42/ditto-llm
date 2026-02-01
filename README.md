@@ -184,6 +184,8 @@ CLI options:
 - `--proxy-cache` enables a best-effort cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`). When combined with `--redis`, responses are also cached in Redis (shared across instances).
 - `--proxy-cache-ttl SECS` sets the proxy cache TTL (implies `--proxy-cache`).
 - `--proxy-cache-max-entries N` sets the in-memory proxy cache capacity (implies `--proxy-cache`).
+- `--proxy-cache-max-body-bytes N` sets the maximum cached body size per entry (implies `--proxy-cache`).
+- `--proxy-cache-max-total-body-bytes N` sets the in-memory total cached body budget (implies `--proxy-cache`).
 - `--proxy-retry` enables retry on retryable statuses (requires `--features gateway-routing-advanced`).
 - `--proxy-retry-status-codes CODES` overrides retry status codes (comma-separated; implies `--proxy-retry`).
 - `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
 - Docs: expand SDK/Gateway guides with recipes and advanced topics (agents, middleware, stream protocol v1, devtools/telemetry/MCP).
+- SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
+- Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
 
 ### Changed
 

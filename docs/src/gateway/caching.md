@@ -60,8 +60,14 @@ Proxy cache 需要：
 
 ```bash
 cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gateway.json \
-  --proxy-cache --proxy-cache-ttl 60 --proxy-cache-max-entries 2048
+  --proxy-cache \
+  --proxy-cache-ttl 60 \
+  --proxy-cache-max-entries 2048 \
+  --proxy-cache-max-body-bytes 1048576 \
+  --proxy-cache-max-total-body-bytes 67108864
 ```
+
+> `--proxy-cache-max-body-bytes` 会跳过缓存“过大的响应”；`--proxy-cache-max-total-body-bytes` 用于限制总缓存体积，避免内存被打爆。
 
 ### 2.2 缓存范围（What gets cached）
 

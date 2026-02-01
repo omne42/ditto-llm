@@ -82,63 +82,52 @@ struct StreamObjectState {
 }
 
 pub struct StreamObjectResult {
-    state: Arc<Mutex<StreamObjectState>>,
+    handle: StreamObjectHandle,
     pub partial_object_stream: stream::BoxStream<'static, Result<Value>>,
     pub element_stream: stream::BoxStream<'static, Result<Value>>,
 }
 
 impl StreamObjectResult {
+    pub fn handle(&self) -> StreamObjectHandle {
+        self.handle.clone()
+    }
+
+    pub fn into_partial_stream(
+        self,
+    ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+        (self.handle, self.partial_object_stream)
+    }
+
+    pub fn into_element_stream(
+        self,
+    ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+        (self.handle, self.element_stream)
+    }
+
+    pub fn into_streams(
+        self,
+    ) -> (
+        StreamObjectHandle,
+        stream::BoxStream<'static, Result<Value>>,
+        stream::BoxStream<'static, Result<Value>>,
+    ) {
+        (self.handle, self.partial_object_stream, self.element_stream)
+    }
+
     pub fn is_done(&self) -> bool {
-        self.state.lock().map(|s| s.done).unwrap_or(false)
+        self.handle.is_done()
     }
 
     pub fn final_json(&self) -> Result<Option<Value>> {
-        let state = self.state.lock().map_err(|_| {
-            DittoError::InvalidResponse("stream object state lock is poisoned".to_string())
-        })?;
-        if !state.done {
-            return Ok(None);
-        }
-        if let Some(err) = state.final_error.as_deref() {
-            return Err(DittoError::InvalidResponse(err.to_string()));
-        }
-        Ok(state.final_object.clone())
+        self.handle.final_json()
     }
 
     pub fn final_object<T: DeserializeOwned>(&self) -> Result<Option<T>> {
-        self.final_json()?
-            .map(|value| {
-                serde_json::from_value::<T>(value).map_err(|err| {
-                    DittoError::InvalidResponse(format!(
-                        "failed to deserialize final object: {err}"
-                    ))
-                })
-            })
-            .transpose()
+        self.handle.final_object()
     }
 
     pub fn final_summary(&self) -> Result<Option<StreamObjectFinal>> {
-        let state = self.state.lock().map_err(|_| {
-            DittoError::InvalidResponse("stream object state lock is poisoned".to_string())
-        })?;
-        if !state.done {
-            return Ok(None);
-        }
-        if let Some(err) = state.final_error.as_deref() {
-            return Err(DittoError::InvalidResponse(err.to_string()));
-        }
-        let Some(object) = state.final_object.clone() else {
-            return Ok(None);
-        };
-        let mut usage = state.usage.clone();
-        usage.merge_total();
-        Ok(Some(StreamObjectFinal {
-            object,
-            response_id: state.response_id.clone(),
-            warnings: state.warnings.clone(),
-            finish_reason: state.finish_reason,
-            usage,
-        }))
+        self.handle.final_summary()
     }
 }
 
@@ -308,11 +297,11 @@ fn stream_object_from_stream_with_config(
         strategy: config.strategy,
         ..StreamObjectState::default()
     }));
+    let state_task = state.clone();
+    let handle = StreamObjectHandle { state };
 
     let (partial_tx, partial_rx) = mpsc::unbounded_channel::<Result<Value>>();
     let (element_tx, element_rx) = mpsc::unbounded_channel::<Result<Value>>();
-
-    let state_task = state.clone();
 
     let task = tokio::spawn(async move {
         let mut inner = stream;
@@ -512,7 +501,7 @@ fn stream_object_from_stream_with_config(
     .boxed();
 
     StreamObjectResult {
-        state,
+        handle,
         partial_object_stream,
         element_stream,
     }

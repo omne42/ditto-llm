@@ -7,6 +7,8 @@ use bytes::Bytes;
 pub struct ProxyCacheConfig {
     pub ttl_seconds: u64,
     pub max_entries: usize,
+    pub max_body_bytes: usize,
+    pub max_total_body_bytes: usize,
 }
 
 impl Default for ProxyCacheConfig {
@@ -14,6 +16,8 @@ impl Default for ProxyCacheConfig {
         Self {
             ttl_seconds: 60,
             max_entries: 1024,
+            max_body_bytes: 1024 * 1024,
+            max_total_body_bytes: 64 * 1024 * 1024,
         }
     }
 }
@@ -37,6 +41,7 @@ pub struct ProxyResponseCache {
     config: ProxyCacheConfig,
     entries: HashMap<String, CacheEntry>,
     order: VecDeque<String>,
+    total_body_bytes: usize,
 }
 
 impl ProxyResponseCache {
@@ -45,13 +50,18 @@ impl ProxyResponseCache {
             config,
             entries: HashMap::new(),
             order: VecDeque::new(),
+            total_body_bytes: 0,
         }
     }
 
     pub fn get(&mut self, key: &str, now: u64) -> Option<CachedProxyResponse> {
         let expires_at = self.entries.get(key)?.expires_at;
         if now >= expires_at {
-            self.entries.remove(key);
+            if let Some(entry) = self.entries.remove(key) {
+                self.total_body_bytes = self
+                    .total_body_bytes
+                    .saturating_sub(entry.response.body.len());
+            }
             self.order.retain(|candidate| candidate != key);
             return None;
         }
@@ -59,7 +69,16 @@ impl ProxyResponseCache {
     }
 
     pub fn insert(&mut self, key: String, response: CachedProxyResponse, now: u64) {
-        if self.config.ttl_seconds == 0 || self.config.max_entries == 0 {
+        if self.config.ttl_seconds == 0
+            || self.config.max_entries == 0
+            || self.config.max_body_bytes == 0
+            || self.config.max_total_body_bytes == 0
+        {
+            return;
+        }
+
+        let body_len = response.body.len();
+        if body_len > self.config.max_body_bytes || body_len > self.config.max_total_body_bytes {
             return;
         }
 
@@ -73,7 +92,10 @@ impl ProxyResponseCache {
 
         match self.entries.entry(key.clone()) {
             Entry::Occupied(mut occupied) => {
+                let old_body_len = occupied.get().response.body.len();
+                self.total_body_bytes = self.total_body_bytes.saturating_sub(old_body_len);
                 occupied.insert(entry);
+                self.total_body_bytes = self.total_body_bytes.saturating_add(body_len);
                 self.order.retain(|candidate| candidate != &key);
                 self.order.push_back(key);
                 return;
@@ -83,18 +105,32 @@ impl ProxyResponseCache {
             }
         }
 
+        self.total_body_bytes = self.total_body_bytes.saturating_add(body_len);
         self.order.push_back(key);
 
-        while self.entries.len() > self.config.max_entries {
+        while self.entries.len() > self.config.max_entries
+            || self.total_body_bytes > self.config.max_total_body_bytes
+        {
             let Some(candidate) = self.order.pop_front() else {
                 break;
             };
-            self.entries.remove(&candidate);
+            if let Some(entry) = self.entries.remove(&candidate) {
+                self.total_body_bytes = self
+                    .total_body_bytes
+                    .saturating_sub(entry.response.body.len());
+            }
         }
     }
 
     pub fn remove(&mut self, key: &str) -> bool {
-        let existed = self.entries.remove(key).is_some();
+        let existed = if let Some(entry) = self.entries.remove(key) {
+            self.total_body_bytes = self
+                .total_body_bytes
+                .saturating_sub(entry.response.body.len());
+            true
+        } else {
+            false
+        };
         if existed {
             self.order.retain(|candidate| candidate != key);
         }
@@ -104,6 +140,7 @@ impl ProxyResponseCache {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.order.clear();
+        self.total_body_bytes = 0;
     }
 }
 
@@ -116,6 +153,8 @@ mod tests {
         let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
             ttl_seconds: 1,
             max_entries: 10,
+            max_body_bytes: 1024,
+            max_total_body_bytes: 1024,
         });
         cache.insert(
             "k".to_string(),
@@ -137,6 +176,8 @@ mod tests {
         let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
             ttl_seconds: 1,
             max_entries: 10,
+            max_body_bytes: 1024,
+            max_total_body_bytes: 1024,
         });
         cache.insert(
             "k".to_string(),
@@ -159,6 +200,8 @@ mod tests {
         let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
             ttl_seconds: 60,
             max_entries: 2,
+            max_body_bytes: 1024,
+            max_total_body_bytes: 1024,
         });
 
         for key in ["a", "b", "c"] {
@@ -177,5 +220,60 @@ mod tests {
         assert!(cache.get("a", 0).is_none());
         assert!(cache.get("b", 0).is_some());
         assert!(cache.get("c", 0).is_some());
+    }
+
+    #[test]
+    fn cache_skips_entries_larger_than_max_body_bytes() {
+        let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
+            ttl_seconds: 60,
+            max_entries: 10,
+            max_body_bytes: 2,
+            max_total_body_bytes: 100,
+        });
+        cache.insert(
+            "k".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"too big"),
+                backend: "b".to_string(),
+            },
+            0,
+        );
+        assert!(cache.get("k", 0).is_none());
+    }
+
+    #[test]
+    fn cache_evicts_until_under_total_body_bytes_budget() {
+        let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
+            ttl_seconds: 60,
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 3,
+        });
+
+        cache.insert(
+            "a".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"aa"),
+                backend: "b".to_string(),
+            },
+            0,
+        );
+        cache.insert(
+            "b".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"bb"),
+                backend: "b".to_string(),
+            },
+            0,
+        );
+
+        assert!(cache.get("a", 0).is_none());
+        assert!(cache.get("b", 0).is_some());
     }
 }

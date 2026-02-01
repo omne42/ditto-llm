@@ -75,15 +75,16 @@ Ditto 通过 `ObjectOptions.strategy` 控制策略（默认 `Auto`）：
 use futures_util::StreamExt;
 use ditto_llm::{GenerateRequest, LanguageModelObjectExt, Message};
 
-let mut result = llm
+let (handle, mut partial_object_stream) = llm
     .stream_object(GenerateRequest::from(vec![Message::user("Generate JSON.")]), schema)
-    .await?;
+    .await?
+    .into_partial_stream();
 
-while let Some(partial) = result.partial_object_stream.next().await {
+while let Some(partial) = partial_object_stream.next().await {
     println!("partial={}", partial?);
 }
 
-let final_json = result.final_json()?.unwrap();
+let final_json = handle.final_json()?.unwrap();
 println!("final={final_json}");
 ```
 
@@ -93,7 +94,7 @@ Streaming arrays：
 use futures_util::StreamExt;
 use ditto_llm::{GenerateRequest, LanguageModelObjectExt, Message, ObjectOptions, ObjectOutput};
 
-let mut result = llm
+let (handle, mut element_stream) = llm
     .stream_object_with(
         GenerateRequest::from(vec![Message::user("List items as JSON array.")]),
         schema, // schema for a single element
@@ -102,11 +103,14 @@ let mut result = llm
             ..ObjectOptions::default()
         },
     )
-    .await?;
+    .await?
+    .into_element_stream();
 
-while let Some(element) = result.element_stream.next().await {
+while let Some(element) = element_stream.next().await {
     println!("element={}", element?);
 }
+
+let _final = handle.final_summary()?;
 ```
 
 ## 建议与坑

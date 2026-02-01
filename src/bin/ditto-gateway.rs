@@ -3,7 +3,7 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
@@ -21,6 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut proxy_cache_enabled = false;
     let mut proxy_cache_ttl_seconds: Option<u64> = None;
     let mut proxy_cache_max_entries: Option<usize> = None;
+    let mut proxy_cache_max_body_bytes: Option<usize> = None;
+    let mut proxy_cache_max_total_body_bytes: Option<usize> = None;
     let mut proxy_max_in_flight: Option<usize> = None;
     let mut pricing_litellm_path: Option<String> = None;
     let mut prometheus_metrics_enabled = false;
@@ -100,6 +102,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 proxy_cache_max_entries = Some(
                     raw.parse::<usize>()
                         .map_err(|_| "invalid --proxy-cache-max-entries")?,
+                );
+            }
+            "--proxy-cache-max-body-bytes" => {
+                proxy_cache_enabled = true;
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-cache-max-body-bytes")?;
+                proxy_cache_max_body_bytes = Some(
+                    raw.parse::<usize>()
+                        .map_err(|_| "invalid --proxy-cache-max-body-bytes")?,
+                );
+            }
+            "--proxy-cache-max-total-body-bytes" => {
+                proxy_cache_enabled = true;
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-cache-max-total-body-bytes")?;
+                proxy_cache_max_total_body_bytes = Some(
+                    raw.parse::<usize>()
+                        .map_err(|_| "invalid --proxy-cache-max-total-body-bytes")?,
                 );
             }
             "--proxy-max-in-flight" => {
@@ -468,6 +490,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_cache_enabled,
         proxy_cache_ttl_seconds,
         proxy_cache_max_entries,
+        proxy_cache_max_body_bytes,
+        proxy_cache_max_total_body_bytes,
     )?;
     state = attach_proxy_backpressure(state, proxy_max_in_flight)?;
     state = attach_pricing_table(state, pricing_litellm_path)?;
@@ -564,15 +588,22 @@ fn attach_proxy_cache(
     enabled: bool,
     ttl_seconds: Option<u64>,
     max_entries: Option<usize>,
+    max_body_bytes: Option<usize>,
+    max_total_body_bytes: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if !enabled {
         return Ok(state);
     }
 
-    let config = ditto_llm::gateway::ProxyCacheConfig {
-        ttl_seconds: ttl_seconds.unwrap_or(60).max(1),
-        max_entries: max_entries.unwrap_or(1024).max(1),
-    };
+    let mut config = ditto_llm::gateway::ProxyCacheConfig::default();
+    config.ttl_seconds = ttl_seconds.unwrap_or(config.ttl_seconds).max(1);
+    config.max_entries = max_entries.unwrap_or(config.max_entries).max(1);
+    if let Some(max_body_bytes) = max_body_bytes {
+        config.max_body_bytes = max_body_bytes.max(1);
+    }
+    if let Some(max_total_body_bytes) = max_total_body_bytes {
+        config.max_total_body_bytes = max_total_body_bytes.max(1);
+    }
     Ok(state.with_proxy_cache(config))
 }
 
@@ -582,6 +613,8 @@ fn attach_proxy_cache(
     enabled: bool,
     _ttl_seconds: Option<u64>,
     _max_entries: Option<usize>,
+    _max_body_bytes: Option<usize>,
+    _max_total_body_bytes: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if enabled {
         return Err("proxy cache requires `--features gateway-proxy-cache`".into());

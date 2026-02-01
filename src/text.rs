@@ -34,13 +34,12 @@ struct StreamTextState {
     final_error: Option<String>,
 }
 
-pub struct StreamTextResult {
+#[derive(Clone)]
+pub struct StreamTextHandle {
     state: Arc<Mutex<StreamTextState>>,
-    pub text_stream: stream::BoxStream<'static, Result<String>>,
-    pub full_stream: stream::BoxStream<'static, Result<StreamChunk>>,
 }
 
-impl StreamTextResult {
+impl StreamTextHandle {
     pub fn is_done(&self) -> bool {
         self.state.lock().map(|s| s.done).unwrap_or(false)
     }
@@ -84,6 +83,59 @@ impl StreamTextResult {
     }
 }
 
+pub struct StreamTextResult {
+    handle: StreamTextHandle,
+    pub text_stream: stream::BoxStream<'static, Result<String>>,
+    pub full_stream: stream::BoxStream<'static, Result<StreamChunk>>,
+}
+
+impl StreamTextResult {
+    pub fn handle(&self) -> StreamTextHandle {
+        self.handle.clone()
+    }
+
+    pub fn into_text_stream(
+        self,
+    ) -> (StreamTextHandle, stream::BoxStream<'static, Result<String>>) {
+        (self.handle, self.text_stream)
+    }
+
+    pub fn into_full_stream(
+        self,
+    ) -> (
+        StreamTextHandle,
+        stream::BoxStream<'static, Result<StreamChunk>>,
+    ) {
+        (self.handle, self.full_stream)
+    }
+
+    pub fn into_streams(
+        self,
+    ) -> (
+        StreamTextHandle,
+        stream::BoxStream<'static, Result<String>>,
+        stream::BoxStream<'static, Result<StreamChunk>>,
+    ) {
+        (self.handle, self.text_stream, self.full_stream)
+    }
+
+    pub fn is_done(&self) -> bool {
+        self.handle.is_done()
+    }
+
+    pub fn final_response(&self) -> Result<Option<GenerateResponse>> {
+        self.handle.final_response()
+    }
+
+    pub fn final_text(&self) -> Result<Option<String>> {
+        self.handle.final_text()
+    }
+
+    pub fn final_summary(&self) -> Result<Option<StreamTextFinal>> {
+        self.handle.final_summary()
+    }
+}
+
 #[async_trait]
 pub trait LanguageModelTextExt: LanguageModel {
     async fn generate_text(&self, request: GenerateRequest) -> Result<GenerateTextResponse> {
@@ -103,6 +155,7 @@ impl<T> LanguageModelTextExt for T where T: LanguageModel + ?Sized {}
 pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let state = Arc::new(Mutex::new(StreamTextState::default()));
     let state_task = state.clone();
+    let handle = StreamTextHandle { state };
 
     let (text_tx, text_rx) = mpsc::unbounded_channel::<Result<String>>();
     let (full_tx, full_rx) = mpsc::unbounded_channel::<Result<StreamChunk>>();
@@ -158,7 +211,7 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     .boxed();
 
     StreamTextResult {
-        state,
+        handle,
         text_stream,
         full_stream,
     }
