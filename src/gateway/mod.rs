@@ -98,6 +98,27 @@ impl GatewayRequest {
     }
 }
 
+fn control_plane_cache_key(key_id: &str, request: &GatewayRequest) -> String {
+    let prompt_hash = hash64_fnv1a(request.prompt.as_bytes());
+    format!(
+        "ditto-gateway-cache-v1|{key_id}|{}|{}|{}|{:016x}|{}",
+        request.model,
+        request.input_tokens,
+        request.max_output_tokens,
+        prompt_hash,
+        request.prompt.len()
+    )
+}
+
+fn hash64_fnv1a(bytes: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayResponse {
     pub content: String,
@@ -255,8 +276,10 @@ impl Gateway {
         let backend_name = self.router.select_backend(&request, key)?;
 
         let bypass_cache = key.passthrough.bypass_cache(&request);
-        if key.cache.enabled && !bypass_cache {
-            if let Some(mut cached) = self.cache.get(&request.cache_key(), now) {
+        let cache_key = (key.cache.enabled && !bypass_cache)
+            .then(|| control_plane_cache_key(&key.id, &request));
+        if let Some(cache_key) = cache_key.as_deref() {
+            if let Some(mut cached) = self.cache.get(&key.id, cache_key, now) {
                 cached.cached = true;
                 self.observability.record_cache_hit();
                 return Ok(cached);
@@ -338,11 +361,13 @@ impl Gateway {
             self.budget.spend(&scope, user_budget, u64::from(tokens));
         }
 
-        if key.cache.enabled && !bypass_cache {
+        if let Some(cache_key) = cache_key {
             self.cache.insert(
-                request.cache_key(),
+                &key.id,
+                cache_key,
                 response.clone(),
                 key.cache.ttl_seconds,
+                key.cache.max_entries,
                 now,
             );
         }

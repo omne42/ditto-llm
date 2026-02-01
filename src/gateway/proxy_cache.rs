@@ -49,12 +49,13 @@ impl ProxyResponseCache {
     }
 
     pub fn get(&mut self, key: &str, now: u64) -> Option<CachedProxyResponse> {
-        let entry = self.entries.get(key)?;
-        if now >= entry.expires_at {
+        let expires_at = self.entries.get(key)?.expires_at;
+        if now >= expires_at {
             self.entries.remove(key);
+            self.order.retain(|candidate| candidate != key);
             return None;
         }
-        Some(entry.response.clone())
+        Some(self.entries.get(key)?.response.clone())
     }
 
     pub fn insert(&mut self, key: String, response: CachedProxyResponse, now: u64) {
@@ -73,6 +74,8 @@ impl ProxyResponseCache {
         match self.entries.entry(key.clone()) {
             Entry::Occupied(mut occupied) => {
                 occupied.insert(entry);
+                self.order.retain(|candidate| candidate != &key);
+                self.order.push_back(key);
                 return;
             }
             Entry::Vacant(vacant) => {
@@ -127,6 +130,28 @@ mod tests {
 
         assert!(cache.get("k", 10).is_some());
         assert!(cache.get("k", 11).is_none());
+    }
+
+    #[test]
+    fn cache_does_not_retain_expired_entries_in_order() {
+        let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
+            ttl_seconds: 1,
+            max_entries: 10,
+        });
+        cache.insert(
+            "k".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"ok"),
+                backend: "b".to_string(),
+            },
+            10,
+        );
+
+        assert_eq!(cache.order.len(), 1);
+        assert!(cache.get("k", 11).is_none());
+        assert!(cache.order.is_empty());
     }
 
     #[test]

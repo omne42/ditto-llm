@@ -1,28 +1,3 @@
-
-pub async fn build_rerank_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn RerankModel>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "cohere" => {
-            #[cfg(all(feature = "cohere", feature = "rerank"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::CohereRerank::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "cohere", feature = "rerank")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
 pub fn is_chat_completions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')

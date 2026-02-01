@@ -30,6 +30,50 @@ use crate::{DittoError, Env, ProviderConfig};
 type ParseResult<T> = std::result::Result<T, String>;
 type IoResult<T> = std::result::Result<T, std::io::Error>;
 
+const DEFAULT_TRANSLATION_MODEL_CACHE_MAX_ENTRIES: usize = 64;
+const MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES: usize = 256;
+
+#[derive(Debug)]
+struct ModelCache<V> {
+    entries: HashMap<String, V>,
+    order: VecDeque<String>,
+}
+
+impl<V> Default for ModelCache<V> {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+}
+
+impl<V: Clone> ModelCache<V> {
+    fn get(&mut self, key: &str) -> Option<V> {
+        let value = self.entries.get(key).cloned()?;
+        self.order.retain(|candidate| candidate != key);
+        self.order.push_back(key.to_string());
+        Some(value)
+    }
+
+    fn insert(&mut self, key: String, value: V, max_entries: usize) {
+        if max_entries == 0 {
+            return;
+        }
+
+        self.entries.insert(key.clone(), value);
+        self.order.retain(|candidate| candidate != &key);
+        self.order.push_back(key);
+
+        while self.entries.len() > max_entries {
+            let Some(candidate) = self.order.pop_front() else {
+                break;
+            };
+            self.entries.remove(&candidate);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct TranslationBackend {
     pub model: Arc<dyn LanguageModel>,
@@ -43,14 +87,15 @@ pub struct TranslationBackend {
     pub file_client: Option<Arc<dyn FileClient>>,
     pub provider: String,
     pub model_map: BTreeMap<String, String>,
+    model_cache_max_entries: usize,
     env: Env,
     provider_config: ProviderConfig,
-    embedding_cache: Arc<Mutex<HashMap<String, Arc<dyn EmbeddingModel>>>>,
+    embedding_cache: Arc<Mutex<ModelCache<Arc<dyn EmbeddingModel>>>>,
     moderation_cache: Arc<Mutex<Option<Arc<dyn ModerationModel>>>>,
     image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
-    audio_transcription_cache: Arc<Mutex<HashMap<String, Arc<dyn AudioTranscriptionModel>>>>,
-    speech_cache: Arc<Mutex<HashMap<String, Arc<dyn SpeechModel>>>>,
-    rerank_cache: Arc<Mutex<HashMap<String, Arc<dyn RerankModel>>>>,
+    audio_transcription_cache: Arc<Mutex<ModelCache<Arc<dyn AudioTranscriptionModel>>>>,
+    speech_cache: Arc<Mutex<ModelCache<Arc<dyn SpeechModel>>>>,
+    rerank_cache: Arc<Mutex<ModelCache<Arc<dyn RerankModel>>>>,
     batch_cache: Arc<Mutex<Option<Arc<dyn BatchClient>>>>,
     file_cache: Arc<Mutex<Option<Arc<dyn FileClient>>>>,
 }
@@ -69,17 +114,23 @@ impl TranslationBackend {
             file_client: None,
             provider: provider.into(),
             model_map: BTreeMap::new(),
+            model_cache_max_entries: DEFAULT_TRANSLATION_MODEL_CACHE_MAX_ENTRIES,
             env: Env::default(),
             provider_config: ProviderConfig::default(),
-            embedding_cache: Arc::new(Mutex::new(HashMap::new())),
+            embedding_cache: Arc::new(Mutex::new(ModelCache::default())),
             moderation_cache: Arc::new(Mutex::new(None)),
             image_generation_cache: Arc::new(Mutex::new(None)),
-            audio_transcription_cache: Arc::new(Mutex::new(HashMap::new())),
-            speech_cache: Arc::new(Mutex::new(HashMap::new())),
-            rerank_cache: Arc::new(Mutex::new(HashMap::new())),
+            audio_transcription_cache: Arc::new(Mutex::new(ModelCache::default())),
+            speech_cache: Arc::new(Mutex::new(ModelCache::default())),
+            rerank_cache: Arc::new(Mutex::new(ModelCache::default())),
             batch_cache: Arc::new(Mutex::new(None)),
             file_cache: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn with_model_cache_max_entries(mut self, max_entries: usize) -> Self {
+        self.model_cache_max_entries = max_entries;
+        self
     }
 
     pub fn with_provider_config(mut self, provider_config: ProviderConfig) -> Self {
@@ -200,8 +251,13 @@ impl TranslationBackend {
             ));
         }
 
-        if let Some(model_impl) = self.embedding_cache.lock().await.get(model).cloned() {
-            return model_impl.embed(texts).await;
+        let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
+            && self.model_cache_max_entries > 0;
+
+        if cacheable {
+            if let Some(model_impl) = self.embedding_cache.lock().await.get(model) {
+                return model_impl.embed(texts).await;
+            }
         }
 
         let mut cfg = self.provider_config.clone();
@@ -216,9 +272,13 @@ impl TranslationBackend {
                 ))
             })?;
 
-        {
+        if cacheable {
             let mut cache = self.embedding_cache.lock().await;
-            cache.insert(model.to_string(), model_impl.clone());
+            cache.insert(
+                model.to_string(),
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
         }
 
         model_impl.embed(texts).await
@@ -306,15 +366,13 @@ impl TranslationBackend {
             ));
         }
 
-        if let Some(model_impl) = self
-            .audio_transcription_cache
-            .lock()
-            .await
-            .get(model)
-            .cloned()
-        {
-            request.model = Some(model.to_string());
-            return model_impl.transcribe(request).await;
+        let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
+            && self.model_cache_max_entries > 0;
+        if cacheable {
+            if let Some(model_impl) = self.audio_transcription_cache.lock().await.get(model) {
+                request.model = Some(model.to_string());
+                return model_impl.transcribe(request).await;
+            }
         }
 
         let mut cfg = self.provider_config.clone();
@@ -329,9 +387,13 @@ impl TranslationBackend {
                 ))
             })?;
 
-        {
+        if cacheable {
             let mut cache = self.audio_transcription_cache.lock().await;
-            cache.insert(model.to_string(), model_impl.clone());
+            cache.insert(
+                model.to_string(),
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
         }
 
         request.model = Some(model.to_string());
@@ -361,9 +423,13 @@ impl TranslationBackend {
             ));
         }
 
-        if let Some(model_impl) = self.speech_cache.lock().await.get(model).cloned() {
-            request.model = Some(model.to_string());
-            return model_impl.speak(request).await;
+        let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
+            && self.model_cache_max_entries > 0;
+        if cacheable {
+            if let Some(model_impl) = self.speech_cache.lock().await.get(model) {
+                request.model = Some(model.to_string());
+                return model_impl.speak(request).await;
+            }
         }
 
         let mut cfg = self.provider_config.clone();
@@ -378,9 +444,13 @@ impl TranslationBackend {
                 ))
             })?;
 
-        {
+        if cacheable {
             let mut cache = self.speech_cache.lock().await;
-            cache.insert(model.to_string(), model_impl.clone());
+            cache.insert(
+                model.to_string(),
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
         }
 
         request.model = Some(model.to_string());
@@ -410,9 +480,13 @@ impl TranslationBackend {
             ));
         }
 
-        if let Some(model_impl) = self.rerank_cache.lock().await.get(model).cloned() {
-            request.model = Some(model.to_string());
-            return model_impl.rerank(request).await;
+        let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
+            && self.model_cache_max_entries > 0;
+        if cacheable {
+            if let Some(model_impl) = self.rerank_cache.lock().await.get(model) {
+                request.model = Some(model.to_string());
+                return model_impl.rerank(request).await;
+            }
         }
 
         let mut cfg = self.provider_config.clone();
@@ -427,9 +501,13 @@ impl TranslationBackend {
                 ))
             })?;
 
-        {
+        if cacheable {
             let mut cache = self.rerank_cache.lock().await;
-            cache.insert(model.to_string(), model_impl.clone());
+            cache.insert(
+                model.to_string(),
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
         }
 
         request.model = Some(model.to_string());
@@ -637,364 +715,5 @@ impl TranslationBackend {
         let mut usage = out.response.usage;
         usage.merge_total();
         Ok((items, usage))
-    }
-}
-
-pub async fn build_language_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Arc<dyn LanguageModel>> {
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(feature = "openai")]
-            {
-                Ok(Arc::new(crate::OpenAI::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "openai"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without openai feature".to_string(),
-                ))
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(feature = "openai-compatible")]
-            {
-                Ok(Arc::new(
-                    crate::OpenAICompatible::from_config(config, env).await?,
-                ))
-            }
-            #[cfg(not(feature = "openai-compatible"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without openai-compatible feature".to_string(),
-                ))
-            }
-        }
-        "anthropic" => {
-            #[cfg(feature = "anthropic")]
-            {
-                Ok(Arc::new(crate::Anthropic::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "anthropic"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without anthropic feature".to_string(),
-                ))
-            }
-        }
-        "google" => {
-            #[cfg(feature = "google")]
-            {
-                Ok(Arc::new(crate::Google::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "google"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without google feature".to_string(),
-                ))
-            }
-        }
-        "cohere" => {
-            #[cfg(feature = "cohere")]
-            {
-                Ok(Arc::new(crate::Cohere::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "cohere"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without cohere feature".to_string(),
-                ))
-            }
-        }
-        "bedrock" => {
-            #[cfg(feature = "bedrock")]
-            {
-                Ok(Arc::new(crate::Bedrock::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "bedrock"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without bedrock feature".to_string(),
-                ))
-            }
-        }
-        "vertex" => {
-            #[cfg(feature = "vertex")]
-            {
-                Ok(Arc::new(crate::Vertex::from_config(config, env).await?))
-            }
-            #[cfg(not(feature = "vertex"))]
-            {
-                Err(DittoError::InvalidResponse(
-                    "ditto-llm built without vertex feature".to_string(),
-                ))
-            }
-        }
-        other => Err(DittoError::InvalidResponse(format!(
-            "unsupported provider backend: {other}"
-        ))),
-    }
-}
-
-pub async fn build_embedding_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn EmbeddingModel>>> {
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "embeddings"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAIEmbeddings::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "embeddings")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleEmbeddings::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "embeddings")))]
-            {
-                Ok(None)
-            }
-        }
-        "google" => {
-            #[cfg(all(feature = "google", feature = "embeddings"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::GoogleEmbeddings::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "google", feature = "embeddings")))]
-            {
-                Ok(None)
-            }
-        }
-        "cohere" => {
-            #[cfg(all(feature = "cohere", feature = "embeddings"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::CohereEmbeddings::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "cohere", feature = "embeddings")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
-pub async fn build_moderation_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn ModerationModel>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "moderations"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAIModerations::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "moderations")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "moderations"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleModerations::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "moderations")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
-pub async fn build_image_generation_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn ImageGenerationModel>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "images"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAIImages::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "images")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "images"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleImages::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "images")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
-pub async fn build_audio_transcription_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn AudioTranscriptionModel>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "audio"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAIAudioTranscription::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "audio")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleAudioTranscription::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
-pub async fn build_speech_model(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn SpeechModel>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "audio"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAISpeech::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "audio")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleSpeech::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
-    }
-}
-
-pub async fn build_batch_client(
-    provider: &str,
-    config: &ProviderConfig,
-    env: &Env,
-) -> crate::Result<Option<Arc<dyn BatchClient>>> {
-    let _ = (config, env);
-    let provider = provider.trim();
-    match provider {
-        "openai" => {
-            #[cfg(all(feature = "openai", feature = "batches"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAIBatches::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai", feature = "batches")))]
-            {
-                Ok(None)
-            }
-        }
-        "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
-        | "azure_openai" | "deepseek" | "qwen" | "groq" | "mistral" | "together"
-        | "together-ai" | "together_ai" | "fireworks" | "xai" | "perplexity" | "openrouter"
-        | "ollama" => {
-            #[cfg(all(feature = "openai-compatible", feature = "batches"))]
-            {
-                Ok(Some(Arc::new(
-                    crate::OpenAICompatibleBatches::from_config(config, env).await?,
-                )))
-            }
-            #[cfg(not(all(feature = "openai-compatible", feature = "batches")))]
-            {
-                Ok(None)
-            }
-        }
-        _ => Ok(None),
     }
 }

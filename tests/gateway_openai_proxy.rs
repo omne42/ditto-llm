@@ -44,6 +44,6 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
 }
 
 // This file is intentionally split to keep each staged Rust file under the pre-commit size limit.
-include!("gateway_openai_proxy/part01.rs");
-include!("gateway_openai_proxy/part02.rs");
-include!("gateway_openai_proxy/part03.rs");
+include!("gateway_openai_proxy/basic_proxying.rs");
+include!("gateway_openai_proxy/routing.rs");
+include!("gateway_openai_proxy/validation.rs");

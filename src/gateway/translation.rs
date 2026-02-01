@@ -1,6 +1,7 @@
 // This file is intentionally split to keep each staged Rust file under the pre-commit size limit.
-include!("translation/part01.rs");
-include!("translation/part02.rs");
-include!("translation/part03.rs");
-include!("translation/part04.rs");
-include!("translation/part05.rs");
+include!("translation/backend.rs");
+include!("translation/model_builders.rs");
+include!("translation/openai_endpoints.rs");
+include!("translation/openai_protocol.rs");
+include!("translation/openai_protocol_helpers.rs");
+include!("translation/files_api.rs");
