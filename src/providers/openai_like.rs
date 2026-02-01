@@ -263,15 +263,8 @@ pub(crate) async fn upload_file_with_purpose(
 
     let mut req = http.post(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = req.multipart(form).send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let parsed = response.json::<FilesUploadResponse>().await?;
+    let parsed =
+        crate::utils::http::send_checked_json::<FilesUploadResponse>(req.multipart(form)).await?;
     Ok(parsed.id)
 }
 
@@ -288,15 +281,7 @@ pub(crate) async fn list_files(
 
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = req.send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let parsed = response.json::<FilesListResponse>().await?;
+    let parsed = crate::utils::http::send_checked_json::<FilesListResponse>(req).await?;
     Ok(parsed.data)
 }
 
@@ -308,15 +293,7 @@ pub(crate) async fn retrieve_file(
 ) -> Result<FileObject> {
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = req.send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    Ok(response.json::<FileObject>().await?)
+    crate::utils::http::send_checked_json::<FileObject>(req).await
 }
 
 pub(crate) async fn delete_file(
@@ -327,15 +304,7 @@ pub(crate) async fn delete_file(
 ) -> Result<FileDeleteResponse> {
     let mut req = http.delete(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = req.send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    Ok(response.json::<FileDeleteResponse>().await?)
+    crate::utils::http::send_checked_json::<FileDeleteResponse>(req).await
 }
 
 pub(crate) async fn download_file_content(
@@ -346,13 +315,7 @@ pub(crate) async fn download_file_content(
 ) -> Result<FileContent> {
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = req.send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
+    let response = crate::utils::http::send_checked(req).await?;
 
     let media_type = response
         .headers()

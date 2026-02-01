@@ -5,8 +5,8 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::Result;
 use crate::types::{ModerationRequest, ModerationResponse, ModerationResult, Warning};
-use crate::{DittoError, Result};
 
 #[derive(Debug, Deserialize)]
 struct ModerationsResponse {
@@ -57,19 +57,10 @@ pub(super) async fn moderate(
     );
 
     let url = client.endpoint("moderations");
-    let response = client
-        .apply_auth(client.http.post(url))
-        .json(&body)
-        .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let parsed = response.json::<ModerationsResponse>().await?;
+    let parsed = crate::utils::http::send_checked_json::<ModerationsResponse>(
+        client.apply_auth(client.http.post(url)).json(&body),
+    )
+    .await?;
 
     let results = parsed
         .results

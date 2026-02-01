@@ -449,15 +449,10 @@ impl OpenAI {
 
         let url = self.responses_compact_url();
         let req = self.client.http.post(url);
-        let response = self.apply_auth(req).json(request).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<CompactionResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<CompactionResponse>(
+            self.apply_auth(req).json(request),
+        )
+        .await?;
         Ok(parsed.output)
     }
 
@@ -534,13 +529,7 @@ impl OpenAI {
             req = req.header(name, value);
         }
         req = req.header("Accept", "text/event-stream");
-        let response = req.send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
+        let response = crate::utils::http::send_checked(req).await?;
 
         let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
         let reader = StreamReader::new(byte_stream);

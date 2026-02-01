@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor gateway HTTP module: split `src/gateway/http.rs` into smaller include parts (core/proxy/admin/translation/proxy-backend) to reduce duplication and keep modules under the repo size limit.
 - Refactor OpenAI-family providers: reuse shared `providers::openai_like` helpers across OpenAI and OpenAI-compatible adapters (embeddings/audio/images/moderations/batches).
 - Refactor OpenAI-family providers: centralize endpoint URL joining via `providers::openai_like::join_endpoint` to reduce adapter duplication.
+- Providers/Auth: centralize non-2xx HTTP status/body handling via `utils::http` helpers (`send_checked*`).
 - Tests: split `tests/gateway_openai_proxy.rs` into parts and skip `httpmock`-based tests when the environment disallows binding `127.0.0.1` (sandbox compatibility).
 - Tests: reuse `utils::test_support::should_skip_httpmock` for `httpmock`-based OAuth test (sandbox compatibility).
 - Metrics: add `ditto_gateway_proxy_responses_by_path_status_total` counter for per-path response statuses (Prometheus).

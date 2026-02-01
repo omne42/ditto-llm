@@ -148,22 +148,13 @@ impl EmbeddingModel for GoogleEmbeddings {
         if texts.len() == 1 {
             let url = self.embed_url("embedContent");
             let req = self.http.post(url);
-            let response = self
-                .apply_auth(req)
-                .json(&serde_json::json!({
+            let parsed = crate::utils::http::send_checked_json::<SingleEmbedResponse>(
+                self.apply_auth(req).json(&serde_json::json!({
                     "model": Google::model_path(self.model.as_str()),
                     "content": { "parts": [{ "text": texts[0] }] }
-                }))
-                .send()
-                .await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
-
-            let parsed = response.json::<SingleEmbedResponse>().await?;
+                })),
+            )
+            .await?;
             return Ok(vec![parsed.embedding.values]);
         }
 
@@ -179,20 +170,11 @@ impl EmbeddingModel for GoogleEmbeddings {
             .collect::<Vec<_>>();
 
         let req = self.http.post(url);
-        let response = self
-            .apply_auth(req)
-            .json(&serde_json::json!({ "requests": requests }))
-            .send()
-            .await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<BatchEmbedResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<BatchEmbedResponse>(
+            self.apply_auth(req)
+                .json(&serde_json::json!({ "requests": requests })),
+        )
+        .await?;
         Ok(parsed.embeddings.into_iter().map(|e| e.values).collect())
     }
 }
-

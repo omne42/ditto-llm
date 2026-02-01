@@ -611,8 +611,6 @@ impl Bedrock {
         }
         req = signed.headers.apply(req);
 
-        let response = req.send().await?;
-        Ok(response)
+        crate::utils::http::send_checked(req).await
     }
 }
-

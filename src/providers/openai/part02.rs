@@ -157,15 +157,10 @@ impl LanguageModel for OpenAI {
 
         let url = self.responses_url();
         let req = self.client.http.post(url);
-        let response = self.apply_auth(req).json(&body).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<ResponsesApiResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<ResponsesApiResponse>(
+            self.apply_auth(req).json(&body),
+        )
+        .await?;
         let content = parse_openai_output(&parsed.output, &mut warnings);
         let has_tool_calls = content
             .iter()
@@ -223,18 +218,12 @@ impl LanguageModel for OpenAI {
 
             let url = self.responses_url();
             let req = self.client.http.post(url);
-            let response = self
-                .apply_auth(req)
-                .header("Accept", "text/event-stream")
-                .json(&body)
-                .send()
-                .await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
+            let response = crate::utils::http::send_checked(
+                self.apply_auth(req)
+                    .header("Accept", "text/event-stream")
+                    .json(&body),
+            )
+            .await?;
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();

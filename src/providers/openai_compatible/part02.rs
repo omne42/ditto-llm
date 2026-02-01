@@ -369,15 +369,9 @@ impl LanguageModel for OpenAICompatible {
         let url = self.chat_completions_url();
         let mut req = self.client.http.post(url);
         req = self.apply_auth(req);
-        let response = req.json(&body).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<ChatCompletionsResponse>().await?;
+        let parsed =
+            crate::utils::http::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
+                .await?;
         let choice = parsed.choices.first().ok_or_else(|| {
             DittoError::InvalidResponse("chat/completions response has no choices".to_string())
         })?;
@@ -500,13 +494,7 @@ impl LanguageModel for OpenAICompatible {
                 .post(url)
                 .header("Accept", "text/event-stream")
                 .json(&body);
-            let response = self.apply_auth(req).send().await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
+            let response = crate::utils::http::send_checked(self.apply_auth(req)).await?;
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();

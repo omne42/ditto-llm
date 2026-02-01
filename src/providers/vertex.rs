@@ -310,15 +310,7 @@ impl LanguageModel for Vertex {
         let req = self.http.post(url).json(&body);
         let req = self.apply_headers(req);
         let req = self.apply_auth(req).await?;
-        let response = req.send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<VertexGenerateResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<VertexGenerateResponse>(req).await?;
         let mut tool_call_seq = 0u64;
         let mut has_tool_calls = false;
         let mut content = Vec::<ContentPart>::new();
@@ -489,13 +481,7 @@ impl LanguageModel for Vertex {
             let req = self.apply_headers(req);
             let req = req.header("Accept", "text/event-stream").json(&body);
             let req = self.apply_auth(req).await?;
-            let response = req.send().await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
+            let response = crate::utils::http::send_checked(req).await?;
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();

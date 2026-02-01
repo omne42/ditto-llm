@@ -194,18 +194,10 @@ async fn transcribe_to_endpoint(
     );
 
     let url = client.endpoint(endpoint);
-    let response = client
-        .apply_auth(client.http.post(url))
-        .multipart(form)
-        .send()
-        .await?;
-
-    let status = response.status();
-    let body = response.bytes().await?;
-    if !status.is_success() {
-        let text = String::from_utf8_lossy(&body).to_string();
-        return Err(DittoError::Api { status, body: text });
-    }
+    let body = crate::utils::http::send_checked_bytes(
+        client.apply_auth(client.http.post(url)).multipart(form),
+    )
+    .await?;
 
     let format = response_format.unwrap_or(TranscriptionResponseFormat::Json);
     let text = match format {
@@ -291,17 +283,9 @@ pub(super) async fn speak(
     );
 
     let url = client.endpoint("audio/speech");
-    let response = client
-        .apply_auth(client.http.post(url))
-        .json(&body)
-        .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
+    let response =
+        crate::utils::http::send_checked(client.apply_auth(client.http.post(url)).json(&body))
+            .await?;
 
     let media_type = response
         .headers()

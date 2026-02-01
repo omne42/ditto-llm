@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::{DittoError, Result};
+use crate::Result;
 
 #[derive(Debug, Deserialize)]
 struct EmbeddingsResponse {
@@ -21,18 +21,11 @@ pub(crate) async fn embed(
     texts: Vec<String>,
 ) -> Result<Vec<Vec<f32>>> {
     let url = client.endpoint("embeddings");
-    let response = client
-        .apply_auth(client.http.post(url))
-        .json(&serde_json::json!({ "model": model, "input": texts }))
-        .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let parsed = response.json::<EmbeddingsResponse>().await?;
+    let parsed = crate::utils::http::send_checked_json::<EmbeddingsResponse>(
+        client
+            .apply_auth(client.http.post(url))
+            .json(&serde_json::json!({ "model": model, "input": texts })),
+    )
+    .await?;
     Ok(parsed.data.into_iter().map(|item| item.embedding).collect())
 }

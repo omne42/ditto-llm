@@ -210,15 +210,8 @@ impl RerankModel for CohereRerank {
 
         let mut req = self.http.post(url);
         req = self.apply_auth(req);
-        let response = req.json(&body).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<WireResponse>().await?;
+        let parsed =
+            crate::utils::http::send_checked_json::<WireResponse>(req.json(&body)).await?;
         Ok(RerankResponse {
             ranking: parsed
                 .results
@@ -234,4 +227,3 @@ impl RerankModel for CohereRerank {
         })
     }
 }
-

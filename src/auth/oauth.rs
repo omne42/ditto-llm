@@ -124,18 +124,10 @@ impl OAuthClientCredentials {
             params.push((key.clone(), value.clone()));
         }
 
-        let response = http
-            .post(self.token_url.as_str())
-            .form(&params)
-            .send()
-            .await?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body });
-        }
-
-        let parsed = response.json::<TokenResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<TokenResponse>(
+            http.post(self.token_url.as_str()).form(&params),
+        )
+        .await?;
         let access_token = parsed
             .access_token
             .filter(|token| !token.trim().is_empty())

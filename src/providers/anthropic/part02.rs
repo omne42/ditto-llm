@@ -221,15 +221,10 @@ impl LanguageModel for Anthropic {
             request_builder = request_builder.header("anthropic-beta", betas.join(","));
         }
 
-        let response = request_builder.json(&body).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<MessagesApiResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<MessagesApiResponse>(
+            request_builder.json(&body),
+        )
+        .await?;
         let content = parse_anthropic_content(&parsed.content);
         let finish_reason = Self::stop_reason_to_finish_reason(parsed.stop_reason.as_deref());
         let usage = parsed
@@ -402,13 +397,7 @@ impl LanguageModel for Anthropic {
                 request_builder = request_builder.header("anthropic-beta", betas.join(","));
             }
 
-            let response = request_builder.json(&body).send().await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
+            let response = crate::utils::http::send_checked(request_builder.json(&body)).await?;
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();
@@ -617,4 +606,3 @@ impl LanguageModel for Anthropic {
         }
     }
 }
-

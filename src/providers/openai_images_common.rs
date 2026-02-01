@@ -3,8 +3,8 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::Result;
 use crate::types::{ImageGenerationRequest, ImageGenerationResponse, ImageSource, Usage, Warning};
-use crate::{DittoError, Result};
 
 #[derive(Debug, Deserialize)]
 struct ImagesGenerationResponse {
@@ -78,19 +78,10 @@ pub(super) async fn generate_images(
     );
 
     let url = client.endpoint("images/generations");
-    let response = client
-        .apply_auth(client.http.post(url))
-        .json(&body)
-        .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let parsed = response.json::<ImagesGenerationResponse>().await?;
+    let parsed = crate::utils::http::send_checked_json::<ImagesGenerationResponse>(
+        client.apply_auth(client.http.post(url)).json(&body),
+    )
+    .await?;
     let usage = parsed.usage.as_ref().map(parse_usage).unwrap_or_default();
 
     let mut images = Vec::<ImageSource>::new();

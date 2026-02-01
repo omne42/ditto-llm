@@ -3,8 +3,8 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::Result;
 use crate::types::{Batch, BatchCreateRequest, BatchListResponse, BatchResponse, Warning};
-use crate::{DittoError, Result};
 
 #[derive(Debug, Deserialize, Default)]
 struct BatchListObject {
@@ -66,18 +66,9 @@ pub(crate) async fn create(
     );
 
     let url = batches_url(client);
-    let response = client
-        .apply_auth(client.http.post(url))
-        .json(&body)
-        .send()
-        .await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
+    let response =
+        crate::utils::http::send_checked(client.apply_auth(client.http.post(url)).json(&body))
+            .await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -88,14 +79,8 @@ pub(crate) async fn create(
 
 pub(crate) async fn retrieve(client: &OpenAiLikeClient, batch_id: &str) -> Result<BatchResponse> {
     let url = batch_url(client, batch_id);
-    let response = client.apply_auth(client.http.get(url)).send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
+    let response =
+        crate::utils::http::send_checked(client.apply_auth(client.http.get(url))).await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -106,14 +91,8 @@ pub(crate) async fn retrieve(client: &OpenAiLikeClient, batch_id: &str) -> Resul
 
 pub(crate) async fn cancel(client: &OpenAiLikeClient, batch_id: &str) -> Result<BatchResponse> {
     let url = batch_cancel_url(client, batch_id);
-    let response = client.apply_auth(client.http.post(url)).send().await?;
-
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
+    let response =
+        crate::utils::http::send_checked(client.apply_auth(client.http.post(url))).await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -136,14 +115,7 @@ pub(crate) async fn list(
         req = req.query(&[("after", after)]);
     }
 
-    let response = client.apply_auth(req).send().await?;
-    let status = response.status();
-    if !status.is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(DittoError::Api { status, body: text });
-    }
-
-    let raw = response.json::<Value>().await?;
+    let raw = crate::utils::http::send_checked_json::<Value>(client.apply_auth(req)).await?;
     let parsed = serde_json::from_value::<BatchListObject>(raw.clone())?;
     let mut batches = Vec::<Batch>::new();
     for item in parsed.data {

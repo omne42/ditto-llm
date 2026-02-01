@@ -53,12 +53,6 @@ impl LanguageModel for Bedrock {
         let url = self.build_url_with_query(&self.invoke_url(model))?;
         let response = self.post_json(&url, &body, None).await?;
 
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
         let parsed = response.json::<MessagesApiResponse>().await?;
         let content = Self::parse_anthropic_content(&parsed.content);
         let finish_reason = Self::stop_reason_to_finish_reason(parsed.stop_reason.as_deref());
@@ -125,12 +119,6 @@ impl LanguageModel for Bedrock {
             let response = self
                 .post_json(&url, &body, Some("application/vnd.amazon.eventstream"))
                 .await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
 
             let data_stream = Box::pin(bedrock_event_stream_from_response(response));
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();
@@ -339,4 +327,3 @@ impl LanguageModel for Bedrock {
         }
     }
 }
-

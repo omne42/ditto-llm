@@ -145,15 +145,10 @@ impl LanguageModel for Google {
 
         let url = self.generate_url(&model);
         let req = self.http.post(url);
-        let response = self.apply_auth(req).json(&body).send().await?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(DittoError::Api { status, body: text });
-        }
-
-        let parsed = response.json::<GoogleGenerateResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<GoogleGenerateResponse>(
+            self.apply_auth(req).json(&body),
+        )
+        .await?;
         let mut tool_call_seq = 0u64;
         let mut has_tool_calls = false;
         let mut content = Vec::<ContentPart>::new();
@@ -318,18 +313,12 @@ impl LanguageModel for Google {
 
             let url = self.stream_url(&model);
             let req = self.http.post(url);
-            let response = self
-                .apply_auth(req)
-                .header("Accept", "text/event-stream")
-                .json(&body)
-                .send()
-                .await?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let text = response.text().await.unwrap_or_default();
-                return Err(DittoError::Api { status, body: text });
-            }
+            let response = crate::utils::http::send_checked(
+                self.apply_auth(req)
+                    .header("Accept", "text/event-stream")
+                    .json(&body),
+            )
+            .await?;
 
             let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
             let mut buffer = VecDeque::<Result<StreamChunk>>::new();
@@ -480,4 +469,3 @@ impl LanguageModel for Google {
         }
     }
 }
-
