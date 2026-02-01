@@ -8,6 +8,29 @@ if [[ -z "${staged_files//[[:space:]]/}" ]]; then
   exit 0
 fi
 
+staged_non_deleted_files="$(git diff --cached --name-only --diff-filter=ACMR || true)"
+part_name_offenders=()
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  base="$(basename "$path")"
+  if [[ "$base" =~ ^part[0-9]+\.[A-Za-z0-9]+$ ]]; then
+    part_name_offenders+=("$path")
+  fi
+done <<<"$staged_non_deleted_files"
+
+if [[ "${#part_name_offenders[@]}" -gt 0 ]]; then
+  cat >&2 <<EOF
+pre-commit: refusing to commit files with "partNN" style names.
+
+这类编号分片（例如 part01.rs / part02.rs）是无意义的拆分方式，会掩盖模块边界不清和职责混乱。
+请基于清晰的领域边界重新组织代码与命名（例如 auth/config/env/http/...），而不是继续堆叠 partXX。
+
+Offenders:
+$(printf '  - %s\n' "${part_name_offenders[@]}")
+EOF
+  exit 1
+fi
+
 has_changelog=0
 other_count=0
 while IFS= read -r path; do

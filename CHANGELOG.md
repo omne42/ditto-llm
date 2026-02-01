@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
+- Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).
+- Dev: pre-commit blocks `partNN.*` filenames in staged changes.
 - Dev: update the commit hook example scope to avoid legacy naming.
 - API: remove `OpenAiProvider` in favor of `OpenAiModelsProvider` (breaking).
 - Refactor: deduplicate stream aggregation via `stream::StreamCollector`.
