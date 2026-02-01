@@ -438,7 +438,10 @@ pub trait Provider: Send + Sync {
     async fn list_models(&self) -> Result<Vec<String>>;
 }
 
-pub struct OpenAiProvider {
+/// OpenAI-compatible `/models` discovery provider.
+///
+/// This is used for model listing/routing and does not implement text generation.
+pub struct OpenAiModelsProvider {
     name: String,
     base_url: String,
     auth: Option<RequestAuth>,
@@ -448,7 +451,7 @@ pub struct OpenAiProvider {
     http_query_params: BTreeMap<String, String>,
 }
 
-impl OpenAiProvider {
+impl OpenAiModelsProvider {
     pub async fn from_config(
         name: impl Into<String>,
         config: &ProviderConfig,
@@ -493,7 +496,7 @@ impl OpenAiProvider {
 }
 
 #[async_trait]
-impl Provider for OpenAiProvider {
+impl Provider for OpenAiModelsProvider {
     fn name(&self) -> &str {
         &self.name
     }
@@ -668,16 +671,8 @@ impl OpenAiCompatibleClient {
             req = auth.apply(req);
         }
         req = apply_http_query_params(req, &self.http_query_params);
-        let response = req.send().await?;
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(DittoError::InvalidResponse(format!(
-                "GET /models failed ({status})"
-            )));
-        }
-
-        let parsed = response.json::<ModelsResponse>().await?;
+        let parsed = crate::utils::http::send_checked_json::<ModelsResponse>(req).await?;
         let mut out = parsed
             .data
             .into_iter()

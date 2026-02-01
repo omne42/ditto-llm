@@ -12,6 +12,7 @@ use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, JsonSchemaFormat, ResponseFormat,
     StreamChunk, Tool, ToolChoice, Usage, Warning,
 };
+use crate::utils::task::AbortOnDrop;
 use crate::{DittoError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,14 +85,6 @@ pub struct StreamObjectResult {
     state: Arc<Mutex<StreamObjectState>>,
     pub partial_object_stream: stream::BoxStream<'static, Result<Value>>,
     pub element_stream: stream::BoxStream<'static, Result<Value>>,
-}
-
-struct TaskAbortOnDrop(tokio::task::AbortHandle);
-
-impl Drop for TaskAbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
 }
 
 impl StreamObjectResult {
@@ -505,7 +498,7 @@ fn stream_object_from_stream_with_config(
         }
     });
 
-    let aborter = Arc::new(TaskAbortOnDrop(task.abort_handle()));
+    let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let partial_object_stream = stream::unfold(
         (partial_rx, aborter.clone()),
@@ -959,4 +952,3 @@ fn parse_partial_json(text: &str) -> Option<Value> {
 
     serde_json::from_str::<Value>(candidate.trim()).ok()
 }
-

@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -8,9 +7,9 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 
 use crate::model::{LanguageModel, StreamResult};
-use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Usage, Warning,
-};
+use crate::stream::StreamCollector;
+use crate::types::{FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Usage, Warning};
+use crate::utils::task::AbortOnDrop;
 use crate::{DittoError, Result};
 
 #[derive(Debug, Clone)]
@@ -39,14 +38,6 @@ pub struct StreamTextResult {
     state: Arc<Mutex<StreamTextState>>,
     pub text_stream: stream::BoxStream<'static, Result<String>>,
     pub full_stream: stream::BoxStream<'static, Result<StreamChunk>>,
-}
-
-struct TaskAbortOnDrop(tokio::task::AbortHandle);
-
-impl Drop for TaskAbortOnDrop {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
 }
 
 impl StreamTextResult {
@@ -119,83 +110,18 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let task = tokio::spawn(async move {
         let mut inner = stream;
 
-        let mut warnings = Vec::<Warning>::new();
-        let mut response_id: Option<String> = None;
-        let mut finish_reason = FinishReason::Unknown;
-        let mut usage = Usage::default();
-
-        let mut parts = Vec::<CollectedPart>::new();
-        let mut tool_calls = HashMap::<String, ToolCallBuffer>::new();
-        let mut seen_tool_call_ids = HashSet::<String>::new();
+        let mut collector = StreamCollector::default();
 
         while let Some(next) = inner.next().await {
             match next {
                 Ok(chunk) => {
-                    match &chunk {
-                        StreamChunk::Warnings { warnings: w } => warnings.extend(w.clone()),
-                        StreamChunk::ResponseId { id } => {
-                            if response_id.is_none() && !id.trim().is_empty() {
-                                response_id = Some(id.to_string());
-                            }
+                    if let StreamChunk::TextDelta { text } = &chunk {
+                        if !text.is_empty() {
+                            let _ = text_tx.send(Ok(text.to_string()));
                         }
-                        StreamChunk::TextDelta { text } => {
-                            if !text.is_empty() {
-                                match parts.last_mut() {
-                                    Some(CollectedPart::Text(existing)) => existing.push_str(text),
-                                    _ => parts.push(CollectedPart::Text(text.to_string())),
-                                }
-                                let _ = text_tx.send(Ok(text.to_string()));
-                            }
-                        }
-                        StreamChunk::ReasoningDelta { text } => {
-                            if !text.is_empty() {
-                                match parts.last_mut() {
-                                    Some(CollectedPart::Reasoning(existing)) => {
-                                        existing.push_str(text);
-                                    }
-                                    _ => parts.push(CollectedPart::Reasoning(text.to_string())),
-                                }
-                            }
-                        }
-                        StreamChunk::ToolCallStart { id, name } => {
-                            if id.trim().is_empty() {
-                                warnings.push(Warning::Compatibility {
-                                    feature: "tool_call.id".to_string(),
-                                    details:
-                                        "stream emitted an empty tool_call id; dropping tool call"
-                                            .to_string(),
-                                });
-                            } else {
-                                let slot = tool_calls.entry(id.clone()).or_default();
-                                if slot.name.is_none() && !name.trim().is_empty() {
-                                    slot.name = Some(name.to_string());
-                                }
-                                if seen_tool_call_ids.insert(id.clone()) {
-                                    parts.push(CollectedPart::ToolCall { id: id.clone() });
-                                }
-                            }
-                        }
-                        StreamChunk::ToolCallDelta {
-                            id,
-                            arguments_delta,
-                        } => {
-                            if id.trim().is_empty() {
-                                warnings.push(Warning::Compatibility {
-                                    feature: "tool_call.id".to_string(),
-                                    details: "stream emitted an empty tool_call id for arguments; dropping tool call delta".to_string(),
-                                });
-                            } else {
-                                let slot = tool_calls.entry(id.clone()).or_default();
-                                slot.arguments.push_str(arguments_delta);
-                                if seen_tool_call_ids.insert(id.clone()) {
-                                    parts.push(CollectedPart::ToolCall { id: id.clone() });
-                                }
-                            }
-                        }
-                        StreamChunk::FinishReason(reason) => finish_reason = *reason,
-                        StreamChunk::Usage(u) => usage = u.clone(),
                     }
 
+                    collector.observe(&chunk);
                     let _ = full_tx.send(Ok(chunk));
                 }
                 Err(err) => {
@@ -211,72 +137,7 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
             }
         }
 
-        usage.merge_total();
-
-        let mut content = Vec::<ContentPart>::new();
-        for part in parts {
-            match part {
-                CollectedPart::Text(text) => {
-                    if !text.is_empty() {
-                        content.push(ContentPart::Text { text });
-                    }
-                }
-                CollectedPart::Reasoning(text) => {
-                    if !text.is_empty() {
-                        content.push(ContentPart::Reasoning { text });
-                    }
-                }
-                CollectedPart::ToolCall { id: tool_call_id } => {
-                    let Some(tool_call) = tool_calls.get(&tool_call_id) else {
-                        continue;
-                    };
-                    let Some(name) = tool_call
-                        .name
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|name| !name.is_empty())
-                    else {
-                        warnings.push(Warning::Compatibility {
-                            feature: "tool_call.name".to_string(),
-                            details: format!(
-                                "stream ended before tool_call name was received for id={tool_call_id}; dropping tool call"
-                            ),
-                        });
-                        continue;
-                    };
-
-                    let raw = tool_call.arguments.trim();
-                    let raw_json = if raw.is_empty() { "{}" } else { raw };
-                    let arguments = serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
-                        warnings.push(Warning::Compatibility {
-                            feature: "tool_call.arguments".to_string(),
-                            details: format!(
-                                "failed to parse tool_call arguments as JSON for id={tool_call_id}: {err}; preserving raw string"
-                            ),
-                        });
-                        Value::String(tool_call.arguments.clone())
-                    });
-
-                    content.push(ContentPart::ToolCall {
-                        id: tool_call_id,
-                        name: name.to_string(),
-                        arguments,
-                    });
-                }
-            }
-        }
-
-        let provider_metadata = response_id
-            .as_deref()
-            .map(|id| serde_json::json!({ "id": id }));
-
-        let response = GenerateResponse {
-            content,
-            finish_reason,
-            usage,
-            warnings,
-            provider_metadata,
-        };
+        let response = collector.finish();
 
         if let Ok(mut state) = state_task.lock() {
             state.done = true;
@@ -284,7 +145,7 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
         }
     });
 
-    let aborter = Arc::new(TaskAbortOnDrop(task.abort_handle()));
+    let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let text_stream = stream::unfold((text_rx, aborter.clone()), |(mut rx, aborter)| async move {
         rx.recv().await.map(|item| (item, (rx, aborter)))
@@ -303,22 +164,10 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     }
 }
 
-#[derive(Debug)]
-enum CollectedPart {
-    Text(String),
-    Reasoning(String),
-    ToolCall { id: String },
-}
-
-#[derive(Debug, Default)]
-struct ToolCallBuffer {
-    name: Option<String>,
-    arguments: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::ContentPart;
     use futures_util::StreamExt;
     use serde_json::json;
     use std::pin::Pin;

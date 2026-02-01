@@ -71,9 +71,9 @@
 
 ---
 
-## 4) omne-agent 的约束（为什么 Ditto 需要“不变形”模式）
+## 4) Codex CLI 对齐约束（为什么 Ditto 需要“不变形”模式）
 
-对 OpenAI Responses 场景，omne-agent 需要与 Codex CLI 对齐：`/responses` 原样 items 回放（含 encrypted compaction）+ `/responses/compact`。
+对 OpenAI Responses 场景，Ditto 需要与 Codex CLI 对齐：`/responses` 原样 items 回放（含 encrypted compaction）+ `/responses/compact`。
 
 因此 Ditto 需要同时支持两类路径：
 

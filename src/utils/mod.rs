@@ -11,5 +11,7 @@ pub mod params;
 
 pub(crate) mod http;
 
+pub(crate) mod task;
+
 #[doc(hidden)]
 pub mod test_support;

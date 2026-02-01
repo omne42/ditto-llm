@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Dev: update the commit hook example scope to avoid legacy naming.
+- API: remove `OpenAiProvider` in favor of `OpenAiModelsProvider` (breaking).
+- Refactor: deduplicate stream aggregation via `stream::StreamCollector`.
+- Refactor: add `utils::task::AbortOnDrop` for aborting background tasks on drop.
+- Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
+- Docs: remove legacy external repo references.
 
 ## [0.1.2] - 2026-02-01
 
@@ -169,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Providers: centralize tool-call argument JSON parsing + warnings via `types::parse_tool_call_arguments_json_or_string`.
 - Providers: reuse `utils::streaming::init_sse_stream` across SSE streaming adapters.
 - Providers: centralize unsupported provider-options warnings via `types::warn_unsupported_provider_options`.
-- Auth/Profile: remove `OMNE_AGENT_*` env-key aliases (use standard provider env keys or configure `ProviderAuth` explicitly).
+- Auth/Profile: remove legacy env-key aliases (use standard provider env keys or configure `ProviderAuth` explicitly).
 
 ### Fixed
 

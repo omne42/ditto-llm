@@ -8,7 +8,6 @@ use futures_util::Stream;
 use futures_util::StreamExt;
 use futures_util::stream;
 use futures_util::task::AtomicWaker;
-use serde_json::Value;
 
 use crate::model::LanguageModel;
 use crate::types::GenerateRequest;
@@ -32,6 +31,231 @@ enum CollectedPart {
 struct ToolCallBuffer {
     name: Option<String>,
     arguments: String,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct StreamCollector {
+    warnings: Vec<Warning>,
+    response_id: Option<String>,
+    finish_reason: FinishReason,
+    usage: Usage,
+    parts: Vec<CollectedPart>,
+    tool_calls: HashMap<String, ToolCallBuffer>,
+    seen_tool_call_ids: HashSet<String>,
+}
+
+impl StreamCollector {
+    pub(crate) fn observe(&mut self, chunk: &StreamChunk) {
+        match chunk {
+            StreamChunk::Warnings { warnings } => self.warnings.extend(warnings.clone()),
+            StreamChunk::ResponseId { id } => {
+                if self.response_id.is_none() && !id.trim().is_empty() {
+                    self.response_id = Some(id.to_string());
+                }
+            }
+            StreamChunk::TextDelta { text } => {
+                if text.is_empty() {
+                    return;
+                }
+                match self.parts.last_mut() {
+                    Some(CollectedPart::Text(existing)) => existing.push_str(text),
+                    _ => self.parts.push(CollectedPart::Text(text.to_string())),
+                }
+            }
+            StreamChunk::ReasoningDelta { text } => {
+                if text.is_empty() {
+                    return;
+                }
+                match self.parts.last_mut() {
+                    Some(CollectedPart::Reasoning(existing)) => existing.push_str(text),
+                    _ => self.parts.push(CollectedPart::Reasoning(text.to_string())),
+                }
+            }
+            StreamChunk::ToolCallStart { id, name } => {
+                if id.trim().is_empty() {
+                    self.warnings.push(Warning::Compatibility {
+                        feature: "tool_call.id".to_string(),
+                        details: "stream emitted an empty tool_call id; dropping tool call"
+                            .to_string(),
+                    });
+                    return;
+                }
+
+                let slot = self.tool_calls.entry(id.to_string()).or_default();
+                if slot.name.is_none() && !name.trim().is_empty() {
+                    slot.name = Some(name.to_string());
+                }
+                if self.seen_tool_call_ids.insert(id.to_string()) {
+                    self.parts
+                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                }
+            }
+            StreamChunk::ToolCallDelta {
+                id,
+                arguments_delta,
+            } => {
+                if id.trim().is_empty() {
+                    self.warnings.push(Warning::Compatibility {
+                        feature: "tool_call.id".to_string(),
+                        details: "stream emitted an empty tool_call id for arguments; dropping tool call delta".to_string(),
+                    });
+                    return;
+                }
+
+                let slot = self.tool_calls.entry(id.to_string()).or_default();
+                slot.arguments.push_str(arguments_delta);
+                if self.seen_tool_call_ids.insert(id.to_string()) {
+                    self.parts
+                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                }
+            }
+            StreamChunk::FinishReason(reason) => self.finish_reason = *reason,
+            StreamChunk::Usage(usage) => self.usage = usage.clone(),
+        }
+    }
+
+    pub(crate) fn observe_owned(&mut self, chunk: StreamChunk) {
+        match chunk {
+            StreamChunk::Warnings { warnings } => self.warnings.extend(warnings),
+            StreamChunk::ResponseId { id } => {
+                if self.response_id.is_none() && !id.trim().is_empty() {
+                    self.response_id = Some(id);
+                }
+            }
+            StreamChunk::TextDelta { text } => {
+                if text.is_empty() {
+                    return;
+                }
+                match self.parts.last_mut() {
+                    Some(CollectedPart::Text(existing)) => existing.push_str(&text),
+                    _ => self.parts.push(CollectedPart::Text(text)),
+                }
+            }
+            StreamChunk::ReasoningDelta { text } => {
+                if text.is_empty() {
+                    return;
+                }
+                match self.parts.last_mut() {
+                    Some(CollectedPart::Reasoning(existing)) => existing.push_str(&text),
+                    _ => self.parts.push(CollectedPart::Reasoning(text)),
+                }
+            }
+            StreamChunk::ToolCallStart { id, name } => {
+                if id.trim().is_empty() {
+                    self.warnings.push(Warning::Compatibility {
+                        feature: "tool_call.id".to_string(),
+                        details: "stream emitted an empty tool_call id; dropping tool call"
+                            .to_string(),
+                    });
+                    return;
+                }
+
+                let slot = self.tool_calls.entry(id.clone()).or_default();
+                if slot.name.is_none() && !name.trim().is_empty() {
+                    slot.name = Some(name);
+                }
+                if self.seen_tool_call_ids.insert(id.clone()) {
+                    self.parts.push(CollectedPart::ToolCall { id });
+                }
+            }
+            StreamChunk::ToolCallDelta {
+                id,
+                arguments_delta,
+            } => {
+                if id.trim().is_empty() {
+                    self.warnings.push(Warning::Compatibility {
+                        feature: "tool_call.id".to_string(),
+                        details: "stream emitted an empty tool_call id for arguments; dropping tool call delta"
+                            .to_string(),
+                    });
+                    return;
+                }
+
+                let slot = self.tool_calls.entry(id.clone()).or_default();
+                slot.arguments.push_str(&arguments_delta);
+                if self.seen_tool_call_ids.insert(id.clone()) {
+                    self.parts.push(CollectedPart::ToolCall { id });
+                }
+            }
+            StreamChunk::FinishReason(reason) => self.finish_reason = reason,
+            StreamChunk::Usage(usage) => self.usage = usage,
+        }
+    }
+
+    pub(crate) fn finish(mut self) -> GenerateResponse {
+        self.usage.merge_total();
+
+        let mut content = Vec::<ContentPart>::new();
+
+        for part in self.parts {
+            match part {
+                CollectedPart::Text(text) => {
+                    if !text.is_empty() {
+                        content.push(ContentPart::Text { text });
+                    }
+                }
+                CollectedPart::Reasoning(text) => {
+                    if !text.is_empty() {
+                        content.push(ContentPart::Reasoning { text });
+                    }
+                }
+                CollectedPart::ToolCall { id: tool_call_id } => {
+                    let Some(tool_call) = self.tool_calls.get(&tool_call_id) else {
+                        continue;
+                    };
+
+                    let Some(name) = tool_call
+                        .name
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                    else {
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "tool_call.name".to_string(),
+                            details: format!(
+                                "stream ended before tool_call name was received for id={tool_call_id}; dropping tool call"
+                            ),
+                        });
+                        continue;
+                    };
+
+                    let context = format!("id={tool_call_id}");
+                    let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                        tool_call.arguments.as_str(),
+                        &context,
+                        &mut self.warnings,
+                    );
+
+                    content.push(ContentPart::ToolCall {
+                        id: tool_call_id,
+                        name: name.to_string(),
+                        arguments,
+                    });
+                }
+            }
+        }
+
+        let provider_metadata = self
+            .response_id
+            .as_deref()
+            .map(|id| serde_json::json!({ "id": id }));
+
+        GenerateResponse {
+            content,
+            finish_reason: self.finish_reason,
+            usage: self.usage,
+            warnings: self.warnings,
+            provider_metadata,
+        }
+    }
+
+    pub(crate) fn finish_collected(self) -> CollectedStream {
+        let response_id = self.response_id.clone();
+        CollectedStream {
+            response_id,
+            response: self.finish(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -90,155 +314,11 @@ pub trait LanguageModelExt: LanguageModel {
 impl<T> LanguageModelExt for T where T: LanguageModel + ?Sized {}
 
 pub async fn collect_stream(mut stream: StreamResult) -> Result<CollectedStream> {
-    let mut warnings = Vec::<Warning>::new();
-    let mut response_id: Option<String> = None;
-    let mut finish_reason = FinishReason::Unknown;
-    let mut usage = Usage::default();
-
-    let mut parts = Vec::<CollectedPart>::new();
-    let mut tool_calls = HashMap::<String, ToolCallBuffer>::new();
-    let mut seen_tool_call_ids = HashSet::<String>::new();
-
+    let mut collector = StreamCollector::default();
     while let Some(chunk) = stream.next().await {
-        match chunk? {
-            StreamChunk::Warnings { warnings: w } => warnings.extend(w),
-            StreamChunk::ResponseId { id } => {
-                if response_id.is_none() && !id.trim().is_empty() {
-                    response_id = Some(id);
-                }
-            }
-            StreamChunk::TextDelta { text } => {
-                if text.is_empty() {
-                    continue;
-                }
-                match parts.last_mut() {
-                    Some(CollectedPart::Text(existing)) => existing.push_str(&text),
-                    _ => parts.push(CollectedPart::Text(text)),
-                }
-            }
-            StreamChunk::ReasoningDelta { text } => {
-                if text.is_empty() {
-                    continue;
-                }
-                match parts.last_mut() {
-                    Some(CollectedPart::Reasoning(existing)) => existing.push_str(&text),
-                    _ => parts.push(CollectedPart::Reasoning(text)),
-                }
-            }
-            StreamChunk::ToolCallStart { id, name } => {
-                if id.trim().is_empty() {
-                    warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id; dropping tool call"
-                            .to_string(),
-                    });
-                    continue;
-                }
-
-                let slot = tool_calls.entry(id.clone()).or_default();
-                if slot.name.is_none() && !name.trim().is_empty() {
-                    slot.name = Some(name);
-                }
-                if seen_tool_call_ids.insert(id.clone()) {
-                    parts.push(CollectedPart::ToolCall { id });
-                }
-            }
-            StreamChunk::ToolCallDelta {
-                id,
-                arguments_delta,
-            } => {
-                if id.trim().is_empty() {
-                    warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id for arguments; dropping tool call delta"
-                            .to_string(),
-                    });
-                    continue;
-                }
-
-                let slot = tool_calls.entry(id.clone()).or_default();
-                slot.arguments.push_str(&arguments_delta);
-                if seen_tool_call_ids.insert(id.clone()) {
-                    parts.push(CollectedPart::ToolCall { id });
-                }
-            }
-            StreamChunk::FinishReason(reason) => finish_reason = reason,
-            StreamChunk::Usage(u) => usage = u,
-        }
+        collector.observe_owned(chunk?);
     }
-
-    usage.merge_total();
-
-    let mut content = Vec::<ContentPart>::new();
-
-    for part in parts {
-        match part {
-            CollectedPart::Text(text) => {
-                if !text.is_empty() {
-                    content.push(ContentPart::Text { text });
-                }
-            }
-            CollectedPart::Reasoning(text) => {
-                if !text.is_empty() {
-                    content.push(ContentPart::Reasoning { text });
-                }
-            }
-            CollectedPart::ToolCall { id: tool_call_id } => {
-                let Some(tool_call) = tool_calls.get(&tool_call_id) else {
-                    continue;
-                };
-
-                let Some(name) = tool_call
-                    .name
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|name| !name.is_empty())
-                else {
-                    warnings.push(Warning::Compatibility {
-                        feature: "tool_call.name".to_string(),
-                        details: format!(
-                            "stream ended before tool_call name was received for id={tool_call_id}; dropping tool call"
-                        ),
-                    });
-                    continue;
-                };
-
-                let raw = tool_call.arguments.trim();
-                let raw_json = if raw.is_empty() { "{}" } else { raw };
-                let arguments =
-                    serde_json::from_str::<Value>(raw_json).unwrap_or_else(|err| {
-                        warnings.push(Warning::Compatibility {
-                            feature: "tool_call.arguments".to_string(),
-                            details: format!(
-                                "failed to parse tool_call arguments as JSON for id={tool_call_id}: {err}; preserving raw string"
-                            ),
-                        });
-                        Value::String(tool_call.arguments.clone())
-                    });
-
-                content.push(ContentPart::ToolCall {
-                    id: tool_call_id,
-                    name: name.to_string(),
-                    arguments,
-                });
-            }
-        }
-    }
-
-    let provider_metadata = response_id
-        .as_deref()
-        .map(|id| serde_json::json!({ "id": id }));
-
-    Ok(CollectedStream {
-        response_id,
-        response: GenerateResponse {
-            content,
-            finish_reason,
-            usage,
-            warnings,
-            provider_metadata,
-        },
-    })
+    Ok(collector.finish_collected())
 }
 
 #[cfg(test)]
@@ -246,6 +326,7 @@ mod tests {
     use super::*;
     use futures_util::FutureExt;
     use futures_util::stream;
+    use serde_json::Value;
 
     #[tokio::test]
     async fn collects_text_usage_finish_reason_and_id() -> Result<()> {

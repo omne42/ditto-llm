@@ -1,7 +1,5 @@
 # ditto-llm
 
-Standalone Rust crate extracted from omne-agent.
-
 Ditto-LLM is a small Rust SDK that provides a unified interface for calling multiple LLM providers.
 
 Current scope:
