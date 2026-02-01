@@ -201,6 +201,7 @@ pub fn stream_to_chat_completions_sse(
     fallback_id: String,
     model: String,
     created: u64,
+    include_usage: bool,
 ) -> futures_util::stream::BoxStream<'static, IoResult<Bytes>> {
     #[derive(Default)]
     struct State {
@@ -335,14 +336,17 @@ pub fn stream_to_chat_completions_sse(
                                 Some(finish_reason),
                                 None,
                             )));
-                            if let Some(usage) = state.usage.as_ref().and_then(usage_to_chat_usage)
-                            {
-                                buffer.push_back(Ok(chat_usage_chunk_bytes(
-                                    &state.response_id,
-                                    &model,
-                                    created,
-                                    usage,
-                                )));
+                            if include_usage {
+                                if let Some(usage) =
+                                    state.usage.as_ref().and_then(usage_to_chat_usage)
+                                {
+                                    buffer.push_back(Ok(chat_usage_chunk_bytes(
+                                        &state.response_id,
+                                        &model,
+                                        created,
+                                        usage,
+                                    )));
+                                }
                             }
                             buffer.push_back(Ok(Bytes::from("data: [DONE]\n\n")));
                             done = true;

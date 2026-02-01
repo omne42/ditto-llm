@@ -575,6 +575,14 @@
                             format!("resp_{request_id}")
                         };
 
+                    let include_usage = _stream_requested
+                        && translation::is_chat_completions_path(path_and_query)
+                        && parsed_json
+                            .get("stream_options")
+                            .and_then(|value| value.get("include_usage"))
+                            .and_then(|value| value.as_bool())
+                            .unwrap_or(false);
+
                     if _stream_requested {
                         let stream = match translation_backend.model.stream(generate_request).await
                         {
@@ -594,6 +602,7 @@
                                 fallback_response_id.clone(),
                                 original_model.clone(),
                                 _now_epoch_seconds,
+                                include_usage,
                             )
                         } else if translation::is_completions_path(path_and_query) {
                             translation::stream_to_completions_sse(
