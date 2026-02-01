@@ -357,103 +357,14 @@ impl LanguageModel for OpenAICompatible {
             .map(crate::types::ProviderOptions::from_value)
             .transpose()?
             .unwrap_or_default();
-        let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
-
-        let mut body = Map::<String, Value>::new();
-        body.insert("model".to_string(), Value::String(model.to_string()));
-        body.insert("messages".to_string(), Value::Array(messages));
-        body.insert("stream".to_string(), Value::Bool(false));
-
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                "temperature",
-                temperature,
-                0.0,
-                2.0,
-                &mut warnings,
-            ) {
-                body.insert("temperature".to_string(), Value::Number(value));
-            }
-        }
-        if let Some(max_tokens) = request.max_tokens {
-            body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
-        }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                "top_p",
-                top_p,
-                0.0,
-                1.0,
-                &mut warnings,
-            ) {
-                body.insert("top_p".to_string(), Value::Number(value));
-            }
-        }
-        if let Some(stops) = request.stop_sequences.as_ref() {
-            let stops =
-                crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
-            if !stops.is_empty() {
-                body.insert(
-                    "stop".to_string(),
-                    Value::Array(stops.into_iter().map(Value::String).collect()),
-                );
-            }
-        }
-
-        if let Some(tools) = request.tools {
-            if cfg!(feature = "tools") {
-                let mapped = tools
-                    .iter()
-                    .map(|t| Self::tool_to_openai(t, &mut warnings))
-                    .collect();
-                body.insert("tools".to_string(), Value::Array(mapped));
-            } else {
-                warnings.push(Warning::Unsupported {
-                    feature: "tools".to_string(),
-                    details: Some("ditto-llm built without tools feature".to_string()),
-                });
-            }
-        }
-        if let Some(tool_choice) = request.tool_choice {
-            if cfg!(feature = "tools") {
-                body.insert(
-                    "tool_choice".to_string(),
-                    Self::tool_choice_to_openai(&tool_choice),
-                );
-            } else {
-                warnings.push(Warning::Unsupported {
-                    feature: "tool_choice".to_string(),
-                    details: Some("ditto-llm built without tools feature".to_string()),
-                });
-            }
-        }
-
-        if let Some(effort) = provider_options.reasoning_effort {
-            body.insert(
-                "reasoning_effort".to_string(),
-                serde_json::to_value(effort)?,
-            );
-        }
-        if let Some(response_format) = provider_options.response_format.as_ref() {
-            body.insert(
-                "response_format".to_string(),
-                serde_json::to_value(response_format)?,
-            );
-        }
-        if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
-            body.insert(
-                "parallel_tool_calls".to_string(),
-                Value::Bool(parallel_tool_calls),
-            );
-        }
-
-        crate::types::merge_provider_options_into_body(
-            &mut body,
+        let (body, mut warnings) = Self::build_chat_completions_body(
+            &request,
+            model,
+            &provider_options,
             selected_provider_options.as_ref(),
-            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            false,
             "generate.provider_options",
-            &mut warnings,
-        );
+        )?;
 
         let url = self.chat_completions_url();
         let mut req = self.client.http.post(url);
@@ -573,103 +484,14 @@ impl LanguageModel for OpenAICompatible {
                 .map(crate::types::ProviderOptions::from_value)
                 .transpose()?
                 .unwrap_or_default();
-            let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
-
-            let mut body = Map::<String, Value>::new();
-            body.insert("model".to_string(), Value::String(model.to_string()));
-            body.insert("messages".to_string(), Value::Array(messages));
-            body.insert("stream".to_string(), Value::Bool(true));
-
-            if let Some(temperature) = request.temperature {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                    "temperature",
-                    temperature,
-                    0.0,
-                    2.0,
-                    &mut warnings,
-                ) {
-                    body.insert("temperature".to_string(), Value::Number(value));
-                }
-            }
-            if let Some(max_tokens) = request.max_tokens {
-                body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
-            }
-            if let Some(top_p) = request.top_p {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                    "top_p",
-                    top_p,
-                    0.0,
-                    1.0,
-                    &mut warnings,
-                ) {
-                    body.insert("top_p".to_string(), Value::Number(value));
-                }
-            }
-            if let Some(stops) = request.stop_sequences.as_ref() {
-                let stops =
-                    crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
-                if !stops.is_empty() {
-                    body.insert(
-                        "stop".to_string(),
-                        Value::Array(stops.into_iter().map(Value::String).collect()),
-                    );
-                }
-            }
-
-            if let Some(tools) = request.tools {
-                if cfg!(feature = "tools") {
-                    let mapped = tools
-                        .iter()
-                        .map(|t| Self::tool_to_openai(t, &mut warnings))
-                        .collect();
-                    body.insert("tools".to_string(), Value::Array(mapped));
-                } else {
-                    warnings.push(Warning::Unsupported {
-                        feature: "tools".to_string(),
-                        details: Some("ditto-llm built without tools feature".to_string()),
-                    });
-                }
-            }
-            if let Some(tool_choice) = request.tool_choice {
-                if cfg!(feature = "tools") {
-                    body.insert(
-                        "tool_choice".to_string(),
-                        Self::tool_choice_to_openai(&tool_choice),
-                    );
-                } else {
-                    warnings.push(Warning::Unsupported {
-                        feature: "tool_choice".to_string(),
-                        details: Some("ditto-llm built without tools feature".to_string()),
-                    });
-                }
-            }
-
-            if let Some(effort) = provider_options.reasoning_effort {
-                body.insert(
-                    "reasoning_effort".to_string(),
-                    serde_json::to_value(effort)?,
-                );
-            }
-            if let Some(response_format) = provider_options.response_format.as_ref() {
-                body.insert(
-                    "response_format".to_string(),
-                    serde_json::to_value(response_format)?,
-                );
-            }
-            if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
-                body.insert(
-                    "parallel_tool_calls".to_string(),
-                    Value::Bool(parallel_tool_calls),
-                );
-            }
-
-            crate::types::merge_provider_options_into_body(
-                &mut body,
+            let (body, warnings) = Self::build_chat_completions_body(
+                &request,
+                model,
+                &provider_options,
                 selected_provider_options.as_ref(),
-                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                true,
                 "stream.provider_options",
-                &mut warnings,
-            );
+            )?;
 
             let url = self.chat_completions_url();
             let req = self

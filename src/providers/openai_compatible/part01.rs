@@ -357,6 +357,114 @@ impl OpenAICompatible {
         (out, warnings)
     }
 
+    fn build_chat_completions_body(
+        request: &GenerateRequest,
+        model: &str,
+        provider_options: &crate::types::ProviderOptions,
+        selected_provider_options: Option<&Value>,
+        stream: bool,
+        provider_options_context: &'static str,
+    ) -> Result<(Map<String, Value>, Vec<Warning>)> {
+        let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
+
+        let mut body = Map::<String, Value>::new();
+        body.insert("model".to_string(), Value::String(model.to_string()));
+        body.insert("messages".to_string(), Value::Array(messages));
+        body.insert("stream".to_string(), Value::Bool(stream));
+
+        if let Some(temperature) = request.temperature {
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "temperature",
+                temperature,
+                0.0,
+                2.0,
+                &mut warnings,
+            ) {
+                body.insert("temperature".to_string(), Value::Number(value));
+            }
+        }
+        if let Some(max_tokens) = request.max_tokens {
+            body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
+        }
+        if let Some(top_p) = request.top_p {
+            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+                "top_p",
+                top_p,
+                0.0,
+                1.0,
+                &mut warnings,
+            ) {
+                body.insert("top_p".to_string(), Value::Number(value));
+            }
+        }
+        if let Some(stops) = request.stop_sequences.as_ref() {
+            let stops = crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
+            if !stops.is_empty() {
+                body.insert(
+                    "stop".to_string(),
+                    Value::Array(stops.into_iter().map(Value::String).collect()),
+                );
+            }
+        }
+
+        if let Some(tools) = request.tools.as_ref() {
+            if cfg!(feature = "tools") {
+                let mapped = tools
+                    .iter()
+                    .map(|t| Self::tool_to_openai(t, &mut warnings))
+                    .collect();
+                body.insert("tools".to_string(), Value::Array(mapped));
+            } else {
+                warnings.push(Warning::Unsupported {
+                    feature: "tools".to_string(),
+                    details: Some("ditto-llm built without tools feature".to_string()),
+                });
+            }
+        }
+        if let Some(tool_choice) = request.tool_choice.as_ref() {
+            if cfg!(feature = "tools") {
+                body.insert(
+                    "tool_choice".to_string(),
+                    Self::tool_choice_to_openai(tool_choice),
+                );
+            } else {
+                warnings.push(Warning::Unsupported {
+                    feature: "tool_choice".to_string(),
+                    details: Some("ditto-llm built without tools feature".to_string()),
+                });
+            }
+        }
+
+        if let Some(effort) = provider_options.reasoning_effort {
+            body.insert(
+                "reasoning_effort".to_string(),
+                serde_json::to_value(effort)?,
+            );
+        }
+        if let Some(response_format) = provider_options.response_format.as_ref() {
+            body.insert(
+                "response_format".to_string(),
+                serde_json::to_value(response_format)?,
+            );
+        }
+        if let Some(parallel_tool_calls) = provider_options.parallel_tool_calls {
+            body.insert(
+                "parallel_tool_calls".to_string(),
+                Value::Bool(parallel_tool_calls),
+            );
+        }
+
+        crate::types::merge_provider_options_into_body(
+            &mut body,
+            selected_provider_options,
+            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            provider_options_context,
+            &mut warnings,
+        );
+
+        Ok((body, warnings))
+    }
+
     fn parse_finish_reason(reason: Option<&str>) -> FinishReason {
         match reason {
             Some("stop") => FinishReason::Stop,

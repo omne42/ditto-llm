@@ -146,89 +146,14 @@ impl LanguageModel for OpenAI {
             .map(crate::types::ProviderOptions::from_value)
             .transpose()?
             .unwrap_or_default();
-        let (instructions, input, mut warnings) = Self::messages_to_input(&request.messages);
-
-        if request.stop_sequences.is_some() {
-            warnings.push(Warning::Unsupported {
-                feature: "stop_sequences".to_string(),
-                details: Some("OpenAI Responses API stop sequences are not supported".to_string()),
-            });
-        }
-
-        let mut body = Map::<String, Value>::new();
-        body.insert("model".to_string(), Value::String(model.to_string()));
-        if let Some(instructions) = instructions {
-            body.insert("instructions".to_string(), Value::String(instructions));
-        }
-        body.insert("input".to_string(), Value::Array(input));
-        body.insert("stream".to_string(), Value::Bool(false));
-        body.insert("store".to_string(), Value::Bool(false));
-
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                "temperature",
-                temperature,
-                0.0,
-                2.0,
-                &mut warnings,
-            ) {
-                body.insert("temperature".to_string(), Value::Number(value));
-            }
-        }
-        if let Some(max_tokens) = request.max_tokens {
-            body.insert(
-                "max_output_tokens".to_string(),
-                Value::Number(max_tokens.into()),
-            );
-        }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                "top_p",
-                top_p,
-                0.0,
-                1.0,
-                &mut warnings,
-            ) {
-                body.insert("top_p".to_string(), Value::Number(value));
-            }
-        }
-
-        if let Some(tools) = request.tools {
-            if cfg!(feature = "tools") {
-                let mapped = tools
-                    .into_iter()
-                    .map(|t| Self::tool_to_openai(&t))
-                    .collect();
-                body.insert("tools".to_string(), Value::Array(mapped));
-            } else {
-                warnings.push(Warning::Unsupported {
-                    feature: "tools".to_string(),
-                    details: Some("ditto-llm built without tools feature".to_string()),
-                });
-            }
-        }
-        if let Some(tool_choice) = request.tool_choice {
-            if cfg!(feature = "tools") {
-                body.insert(
-                    "tool_choice".to_string(),
-                    Self::tool_choice_to_openai(&tool_choice),
-                );
-            } else {
-                warnings.push(Warning::Unsupported {
-                    feature: "tool_choice".to_string(),
-                    details: Some("ditto-llm built without tools feature".to_string()),
-                });
-            }
-        }
-
-        apply_provider_options(&mut body, &provider_options)?;
-        crate::types::merge_provider_options_into_body(
-            &mut body,
+        let (body, mut warnings) = Self::build_responses_body(
+            &request,
+            model,
+            &provider_options,
             selected_provider_options.as_ref(),
-            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            false,
             "generate.provider_options",
-            &mut warnings,
-        );
+        )?;
 
         let url = self.responses_url();
         let req = self.client.http.post(url);
@@ -287,91 +212,14 @@ impl LanguageModel for OpenAI {
                 .map(crate::types::ProviderOptions::from_value)
                 .transpose()?
                 .unwrap_or_default();
-            let (instructions, input, mut warnings) = Self::messages_to_input(&request.messages);
-
-            let mut body = Map::<String, Value>::new();
-            body.insert("model".to_string(), Value::String(model.to_string()));
-            if let Some(instructions) = instructions {
-                body.insert("instructions".to_string(), Value::String(instructions));
-            }
-            body.insert("input".to_string(), Value::Array(input));
-            body.insert("stream".to_string(), Value::Bool(true));
-            body.insert("store".to_string(), Value::Bool(false));
-
-            if request.stop_sequences.is_some() {
-                warnings.push(Warning::Unsupported {
-                    feature: "stop_sequences".to_string(),
-                    details: Some(
-                        "OpenAI Responses API stop sequences are not supported".to_string(),
-                    ),
-                });
-            }
-
-            if let Some(temperature) = request.temperature {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                    "temperature",
-                    temperature,
-                    0.0,
-                    2.0,
-                    &mut warnings,
-                ) {
-                    body.insert("temperature".to_string(), Value::Number(value));
-                }
-            }
-            if let Some(max_tokens) = request.max_tokens {
-                body.insert(
-                    "max_output_tokens".to_string(),
-                    Value::Number(max_tokens.into()),
-                );
-            }
-            if let Some(top_p) = request.top_p {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
-                    "top_p",
-                    top_p,
-                    0.0,
-                    1.0,
-                    &mut warnings,
-                ) {
-                    body.insert("top_p".to_string(), Value::Number(value));
-                }
-            }
-
-            if let Some(tools) = request.tools {
-                if cfg!(feature = "tools") {
-                    let mapped = tools
-                        .into_iter()
-                        .map(|t| Self::tool_to_openai(&t))
-                        .collect();
-                    body.insert("tools".to_string(), Value::Array(mapped));
-                } else {
-                    warnings.push(Warning::Unsupported {
-                        feature: "tools".to_string(),
-                        details: Some("ditto-llm built without tools feature".to_string()),
-                    });
-                }
-            }
-            if let Some(tool_choice) = request.tool_choice {
-                if cfg!(feature = "tools") {
-                    body.insert(
-                        "tool_choice".to_string(),
-                        Self::tool_choice_to_openai(&tool_choice),
-                    );
-                } else {
-                    warnings.push(Warning::Unsupported {
-                        feature: "tool_choice".to_string(),
-                        details: Some("ditto-llm built without tools feature".to_string()),
-                    });
-                }
-            }
-
-            apply_provider_options(&mut body, &provider_options)?;
-            crate::types::merge_provider_options_into_body(
-                &mut body,
+            let (body, warnings) = Self::build_responses_body(
+                &request,
+                model,
+                &provider_options,
                 selected_provider_options.as_ref(),
-                &["reasoning_effort", "response_format", "parallel_tool_calls"],
+                true,
                 "stream.provider_options",
-                &mut warnings,
-            );
+            )?;
 
             let url = self.responses_url();
             let req = self.client.http.post(url);
