@@ -135,3 +135,5 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 - 运行时传 `--devtools <path>`
 
 > Devtools 日志包含敏感信息的风险更高；生产环境务必配合脱敏/权限控制。
+
+更多格式与用法见「SDK → Devtools（JSONL 日志）」。

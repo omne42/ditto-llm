@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
+- Docs: expand SDK/Gateway guides with recipes and advanced topics (agents, middleware, stream protocol v1, devtools/telemetry/MCP).
 
 ### Changed
 

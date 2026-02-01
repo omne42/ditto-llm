@@ -13,8 +13,10 @@ use ditto_llm::{GenerateRequest, LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let llm = OpenAI::new(std::env::var("OPENAI_API_KEY")?)
-        .with_model("gpt-4o-mini");
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 
     let req = GenerateRequest::from(vec![
         Message::system("You are a helpful assistant."),

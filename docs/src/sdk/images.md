@@ -14,8 +14,10 @@ use ditto_llm::{ImageGenerationRequest, ImageResponseFormat, OpenAIImages};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let images = OpenAIImages::new(std::env::var("OPENAI_API_KEY")?)
-        .with_model("gpt-image-1");
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let images = OpenAIImages::new(api_key).with_model("gpt-image-1");
 
     let resp = images
         .generate(ImageGenerationRequest {

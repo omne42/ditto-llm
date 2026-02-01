@@ -11,7 +11,7 @@
 `ditto-gateway` 的第一个参数必须是配置文件路径：
 
 ```bash
-ditto-gateway <config.json> [flags...]
+ditto-gateway <gateway.json> [flags...]
 ```
 
 开发期常见用法：

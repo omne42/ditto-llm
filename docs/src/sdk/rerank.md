@@ -11,8 +11,10 @@ use ditto_llm::{CohereRerank, RerankDocument, RerankRequest};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let rerank = CohereRerank::new(std::env::var("COHERE_API_KEY")?)
-        .with_model("rerank-english-v3.0");
+    let api_key = std::env::var("COHERE_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing COHERE_API_KEY".into())
+    })?;
+    let rerank = CohereRerank::new(api_key).with_model("rerank-english-v3.0");
 
     let resp = rerank
         .rerank(RerankRequest {

@@ -19,8 +19,10 @@ use ditto_llm::{ModerationInput, ModerationModel, ModerationRequest, OpenAIModer
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let client = OpenAIModerations::new(std::env::var("OPENAI_API_KEY")?)
-        .with_model("omni-moderation-latest");
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let client = OpenAIModerations::new(api_key).with_model("omni-moderation-latest");
 
     let resp = client
         .moderate(ModerationRequest {

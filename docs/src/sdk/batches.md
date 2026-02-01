@@ -28,7 +28,12 @@ use ditto_llm::{BatchClient, BatchCreateRequest, OpenAICompatible, OpenAICompati
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY")
-        .or_else(|_| std::env::var("OPENAI_API_KEY"))?;
+        .or_else(|_| std::env::var("OPENAI_API_KEY"))
+        .map_err(|_| {
+            ditto_llm::DittoError::InvalidResponse(
+                "missing OPENAI_COMPAT_API_KEY (or fallback OPENAI_API_KEY)".into(),
+            )
+        })?;
 
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))

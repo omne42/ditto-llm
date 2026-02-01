@@ -18,3 +18,5 @@ Gateway 同时支持两类路径：
 - **Translation proxy**（feature `gateway-translation`）：把 OpenAI in/out 翻译到 native providers（Anthropic/Google/...）。
 
 建议先从「运行网关」开始，跑通最小配置，再逐步加上 virtual keys / redis / routing / observability。
+
+如果你更偏好“按任务走”的教程（复制配置即可跑），请看「Gateway Recipes（可复制落地）」。

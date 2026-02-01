@@ -3,7 +3,7 @@
 Ditto 的工具调用是 “AI SDK Core” 常见用法的 Rust 化：把工具描述为 `Tool`（JSON Schema 参数），把模型输出的 tool calls 暴露为 `ContentPart::ToolCall`，由调用方决定是否、以及如何执行工具。
 
 > 重要：Ditto 的默认 helper（`generate_text` / `generate_object_json`）都是单次请求，不会自动执行工具循环。  
-> 如果你需要自动 loop，请看本文后半的「Tool Loop」或启用 feature `agent`。
+> 如果你需要自动 loop（多步工具调用），请看「SDK → Agents（Tool Loop）」：它提供 `ToolLoopAgent`（max_steps / stop_when / approval hook），语义上对标 AI SDK 的 `maxSteps` / `stopWhen`。
 
 ## 定义 Tool
 

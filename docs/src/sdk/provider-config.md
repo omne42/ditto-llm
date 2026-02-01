@@ -94,6 +94,41 @@ Ditto 支持多种鉴权方式，覆盖企业网关的常见形态。
 
 用于 Bedrock（SigV4）与 Vertex（OAuth client credentials）等场景。字段较多，建议结合你组织的密钥管理方案统一下发。
 
+#### SigV4（Bedrock / 自建 SigV4 网关）
+
+```json
+{
+  "auth": {
+    "type": "sigv4",
+    "access_keys": ["AWS_ACCESS_KEY_ID"],
+    "secret_keys": ["AWS_SECRET_ACCESS_KEY"],
+    "session_token_keys": ["AWS_SESSION_TOKEN"],
+    "region": "us-east-1",
+    "service": "bedrock"
+  }
+}
+```
+
+> `access_keys/secret_keys/session_token_keys` 是 env key 列表（按顺序尝试）；如果你只用静态 AK/SK，可以只填前两项。
+
+#### OAuth client credentials（Vertex / 企业 OAuth 网关）
+
+```json
+{
+  "auth": {
+    "type": "oauth_client_credentials",
+    "token_url": "https://example.com/oauth/token",
+    "client_id_keys": ["OAUTH_CLIENT_ID"],
+    "client_secret_keys": ["OAUTH_CLIENT_SECRET"],
+    "scope": "https://www.googleapis.com/auth/cloud-platform",
+    "audience": null,
+    "extra_params": {}
+  }
+}
+```
+
+> `client_id` / `client_secret` 字段也可以直接写死在配置里，但生产环境强烈不建议（用 env/secret 管理更安全）。
+
 ## ProviderOptions：请求级的 provider 特有字段
 
 除了 `ProviderConfig` 的“连接/默认配置”外，Ditto 还提供 `GenerateRequest.provider_options` 用于请求级覆盖。

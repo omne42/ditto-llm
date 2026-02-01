@@ -22,8 +22,10 @@ use ditto_llm::{AudioTranscriptionRequest, OpenAIAudioTranscription, Transcripti
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let model = OpenAIAudioTranscription::new(std::env::var("OPENAI_API_KEY")?)
-        .with_model("whisper-1");
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let model = OpenAIAudioTranscription::new(api_key).with_model("whisper-1");
 
     let resp = model
         .transcribe(AudioTranscriptionRequest {
@@ -51,8 +53,10 @@ use ditto_llm::{OpenAISpeech, SpeechRequest, SpeechResponseFormat};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let tts = OpenAISpeech::new(std::env::var("OPENAI_API_KEY")?)
-        .with_model("gpt-4o-mini-tts");
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let tts = OpenAISpeech::new(api_key).with_model("gpt-4o-mini-tts");
 
     let resp = tts
         .speak(SpeechRequest {

@@ -22,7 +22,10 @@ use ditto_llm::{LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let llm = OpenAI::new(std::env::var("OPENAI_API_KEY")?);
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let llm = OpenAI::new(api_key);
     let req = vec![
         Message::system("You are a helpful assistant."),
         Message::user("Say hello in one sentence."),

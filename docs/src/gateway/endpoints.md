@@ -24,7 +24,9 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 行为要点：
 
-- 如果 `virtual_keys` 为空：client 的 `Authorization` 会原样转发到 upstream（你仍可在 backend headers 里注入额外 header）。
+- 如果 `virtual_keys` 为空：
+  - Ditto 不会把 client 的 `Authorization` 当作 virtual key；它会随请求一起被转发到 upstream。
+  - **backend 的 `headers/query_params` 永远会被注入**，并且同名 header 会覆盖 client header（例如 backend 配了 `authorization` 时，会覆盖 client `Authorization`）。
 - 如果 `virtual_keys` 非空：
   - client 必须提供 virtual key（`Authorization: Bearer <vk>` / `x-ditto-virtual-key` / `x-api-key`）
   - client 的 `Authorization` 被视为 virtual key，不会转发到 upstream

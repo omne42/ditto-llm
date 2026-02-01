@@ -14,11 +14,21 @@ ditto-llm = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
-如果你希望最小化依赖（推荐用于生产镜像瘦身），可以关闭默认 features 并按需开启：
+如果你希望最小化依赖（适合生产镜像瘦身），可以关闭默认 features 并按需开启。
+
+例如：只用 OpenAI + streaming：
 
 ```toml
 [dependencies]
 ditto-llm = { version = "0.1", default-features = false, features = ["openai", "streaming"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+```
+
+例如：只用 OpenAI-compatible + streaming：
+
+```toml
+[dependencies]
+ditto-llm = { version = "0.1", default-features = false, features = ["openai-compatible", "streaming"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -27,7 +37,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ## 最小用法：OpenAI
 
 ```rust
-use ditto_llm::{LanguageModel, Message, OpenAI};
+use ditto_llm::{LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
@@ -41,13 +51,15 @@ async fn main() -> ditto_llm::Result<()> {
         Message::user("What is 2+2?"),
     ];
 
-    let resp = llm.generate(messages.into()).await?;
-    println!("{}", resp.text());
+    let resp = llm.generate_text(messages.into()).await?;
+    println!("{}", resp.text);
     Ok(())
 }
 ```
 
 ## 最小用法：OpenAI-compatible（LiteLLM / Azure / DeepSeek / Qwen / …）
+
+需要 features：`openai-compatible`（以及你是否需要 streaming/tools/embeddings 等能力）。
 
 OpenAI-compatible 适配器的关键在于：
 

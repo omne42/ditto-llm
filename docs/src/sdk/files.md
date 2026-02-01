@@ -26,7 +26,10 @@ use ditto_llm::{FileClient, FileUploadRequest, OpenAI};
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let client = OpenAI::new(std::env::var("OPENAI_API_KEY")?);
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+    })?;
+    let client = OpenAI::new(api_key);
 
     let file_id = client
         .upload_file_with_purpose(FileUploadRequest {
