@@ -1,6 +1,6 @@
 # ditto-llm
 
-Standalone Rust crate extracted from CodePM.
+Standalone Rust crate extracted from omne-agent (formerly CodePM).
 
 Ditto-LLM is a small Rust SDK that provides a unified interface for calling multiple LLM providers.
 

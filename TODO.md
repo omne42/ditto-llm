@@ -6,9 +6,9 @@
 
 - **SDK（AI SDK-like）**：覆盖 Vercel AI SDK 的核心开发体验（generate/stream/tools/structured output/agent loop），并保持 Rust 侧的可测试/可审计特性（warnings、严格的错误边界、最小依赖）。
 - **Gateway（LiteLLM-like）**：覆盖 LiteLLM Proxy 的核心平台能力（OpenAI-compatible HTTP surface、virtual keys、limits/budget/cache/routing、日志/指标），并提供“passthrough/translation”两种模式。
-- **不变形直通（OpenAI Responses）**：对 OpenAI `/responses`（含 `/responses/compact`）提供 raw passthrough，保证 items round-trip（CodePM parity 要求）。
+- **不变形直通（OpenAI Responses）**：对 OpenAI `/responses`（含 `/responses/compact`）提供 raw passthrough，保证 items round-trip（omne-agent parity 要求）。
 
-在 CodePM monorepo 内的相关背景文档（从本文件位置出发的相对路径）：
+在 omne-agent monorepo 内的相关背景文档（从本文件位置出发的相对路径）：
 
 - `../../docs/ditto_llm.md`
 - `../../docs/special_directives.md`
@@ -46,7 +46,7 @@
 - [x] Structured output：`generate_object_json` / `stream_object`
 - [x] Tool loop agent（feature `agent`）
 - [x] Providers：OpenAI `/responses`，OpenAI-compatible `/chat/completions`，Anthropic `/messages`，Google GenAI，Cohere（部分能力 feature-gated）
-- [x] Raw OpenAI Responses passthrough + `/responses/compact`（items round-trip，CodePM parity）
+- [x] Raw OpenAI Responses passthrough + `/responses/compact`（items round-trip，omne-agent parity）
 - [x] SDK utilities（feature `sdk`）：stream protocol v1、telemetry、devtools JSONL logger、MCP tool adapter
 
 ### 1.2 Gateway（LiteLLM-like，feature `gateway`）
