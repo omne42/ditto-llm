@@ -95,7 +95,7 @@
 
 当前状态：
 
-- audit log 可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs` 按时间戳清理）。
+- audit log 可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs` 按时间戳清理；默认 30 天）。
 - 但不可变/导出/签名仍需外部系统承接（或后续 Roadmap 补齐）。
 
 ### 2.5 配置中心与发布治理

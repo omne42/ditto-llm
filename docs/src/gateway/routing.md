@@ -143,6 +143,10 @@
 - `interval_seconds = 10`
 - `timeout_seconds = 2`
 
+实现细节：
+
+- 健康检查以后台任务形式运行；当 `ditto-gateway` 退出/被 drop 时会自动取消，避免进程内残留任务。
+
 启用后，gateway 会对每个 backend 定期发起 `GET <path>`：
 
 - 2xx → healthy

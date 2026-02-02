@@ -1,6 +1,8 @@
 #[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    const DEFAULT_AUDIT_RETENTION_SECS: u64 = 30 * 24 * 60 * 60;
+
     let mut args = std::env::args().skip(1);
     let usage = {
         #[cfg(feature = "gateway-config-yaml")]
@@ -92,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let secs = raw
                     .parse::<u64>()
                     .map_err(|_| "invalid --audit-retention-secs")?;
-                audit_retention_secs = (secs > 0).then_some(secs);
+                audit_retention_secs = Some(secs);
             }
             "--backend" => {
                 backend_specs.push(args.next().ok_or("missing value for --backend")?);
@@ -593,6 +595,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             health_check_timeout_secs: proxy_health_check_timeout_secs,
         },
     )?;
+    let effective_audit_retention_secs = match audit_retention_secs {
+        Some(0) => None,
+        Some(secs) => Some(secs),
+        None if _sqlite_path.is_some() || redis_url.is_some() => Some(DEFAULT_AUDIT_RETENTION_SECS),
+        None => None,
+    };
     if let Some(path) = state_path {
         state = state.with_state_file(path);
     }
@@ -600,7 +608,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(path) = _sqlite_path {
         state = state.with_sqlite_store(
             ditto_llm::gateway::SqliteStore::new(path)
-                .with_audit_retention_secs(audit_retention_secs),
+                .with_audit_retention_secs(effective_audit_retention_secs),
         );
     }
     #[cfg(feature = "gateway-store-redis")]
@@ -609,7 +617,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(prefix) = redis_prefix {
             store = store.with_prefix(prefix);
         }
-        store = store.with_audit_retention_secs(audit_retention_secs);
+        store = store.with_audit_retention_secs(effective_audit_retention_secs);
         state = state.with_redis_store(store);
     }
     state = attach_devtools(state, devtools_path)?;

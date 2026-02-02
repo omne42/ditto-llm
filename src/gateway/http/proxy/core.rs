@@ -843,15 +843,15 @@ async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
-fn start_proxy_health_checks(state: &GatewayHttpState) {
+fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop>> {
     let Some(config) = state.proxy_routing.as_ref() else {
-        return;
+        return None;
     };
     if !config.health_check.enabled {
-        return;
+        return None;
     }
     let Some(health) = state.proxy_backend_health.as_ref() else {
-        return;
+        return None;
     };
 
     let backends = state.proxy_backends.clone();
@@ -860,7 +860,7 @@ fn start_proxy_health_checks(state: &GatewayHttpState) {
     let interval = Duration::from_secs(config.health_check.interval_seconds.max(1));
     let timeout = Duration::from_secs(config.health_check.timeout_seconds.max(1));
 
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         loop {
             for (backend_name, backend) in backends.iter() {
                 let mut headers = HeaderMap::new();
@@ -892,6 +892,7 @@ fn start_proxy_health_checks(state: &GatewayHttpState) {
             tokio::time::sleep(interval).await;
         }
     });
+    Some(Arc::new(AbortOnDrop::new(task.abort_handle())))
 }
 
 #[cfg(feature = "gateway-proxy-cache")]

@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
+#[cfg(feature = "gateway-routing-advanced")]
+use crate::utils::task::AbortOnDrop;
+
 #[derive(Clone, Copy, Debug)]
 struct ProxySpend {
     tokens: u64,
@@ -98,6 +101,8 @@ pub struct GatewayHttpState {
     proxy_routing: Option<ProxyRoutingConfig>,
     #[cfg(feature = "gateway-routing-advanced")]
     proxy_backend_health: Option<Arc<Mutex<HashMap<String, BackendHealth>>>>,
+    #[cfg(feature = "gateway-routing-advanced")]
+    proxy_health_check_task: Option<Arc<AbortOnDrop>>,
     json_logs: bool,
     #[cfg(feature = "sdk")]
     devtools: Option<DevtoolsLogger>,
@@ -143,6 +148,8 @@ impl GatewayHttpState {
             proxy_routing: None,
             #[cfg(feature = "gateway-routing-advanced")]
             proxy_backend_health: None,
+            #[cfg(feature = "gateway-routing-advanced")]
+            proxy_health_check_task: None,
             json_logs: false,
             #[cfg(feature = "sdk")]
             devtools: None,
@@ -275,6 +282,7 @@ struct HealthResponse {
 }
 
 pub fn router(state: GatewayHttpState) -> Router {
+    let mut state = state;
     let mut router = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))
@@ -332,7 +340,9 @@ pub fn router(state: GatewayHttpState) -> Router {
     }
 
     #[cfg(feature = "gateway-routing-advanced")]
-    start_proxy_health_checks(&state);
+    {
+        state.proxy_health_check_task = start_proxy_health_checks(&state);
+    }
 
     router.with_state(state)
 }

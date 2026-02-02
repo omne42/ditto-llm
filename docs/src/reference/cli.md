@@ -53,7 +53,7 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 
 可选（适用于 sqlite/redis）：
 
-- `--audit-retention-secs SECS`：审计日志保留期（只保留最近 `SECS` 秒；0/不设置表示不做清理）
+- `--audit-retention-secs SECS`：审计日志保留期（只保留最近 `SECS` 秒；启用 sqlite/redis store 时默认 30 天；设置为 `0` 表示不做清理）
 
 redis 相关：
 

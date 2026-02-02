@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
+- Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).
 - Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).
 - Gateway: add `--proxy-usage-max-body-bytes` to cap response buffering for `usage` parsing (decoupled from proxy cache caps).
 - Gateway: add control-plane cache size caps (`cache.max_body_bytes` and `cache.max_total_body_bytes`) for `/v1/gateway`.
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: bounded proxy pre-buffering now accumulates into a single buffer (avoids per-chunk allocations on chunked responses; reduces memory/CPU overhead).
 - Gateway: Redis proxy-cache purge-all now deletes keys in SCAN batches (avoids building a huge in-memory key list).
 - Gateway: cap non-streaming `/v1/responses` shim buffering (chat/completions → responses) to avoid OOM on large upstream bodies.
+- Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.

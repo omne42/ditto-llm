@@ -76,7 +76,7 @@ cargo run --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gat
 - audit logs（`/admin/audit`）
 - token budgets ledger（`/admin/budgets*`）
 - cost budgets ledger（`/admin/costs*`，需要 `gateway-costing`）
-  - 建议配置 `--audit-retention-secs`，避免审计日志无限增长（见下文）
+  - 建议根据合规需求配置 `--audit-retention-secs`（默认 30 天），避免审计日志无限增长（见下文）
 
 限制：
 
@@ -120,7 +120,7 @@ cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gate
 - audit logs（共享）
 - token/cost budgets ledger（共享，支持多副本预算一致）
 - proxy cache（若启用 `gateway-proxy-cache`，会作为 L2 共享缓存）
-  - 建议配置 `--audit-retention-secs`，避免审计日志无限增长（见下文）
+  - 建议根据合规需求配置 `--audit-retention-secs`（默认 30 天），避免审计日志无限增长（见下文）
 
 适用：
 
@@ -146,4 +146,4 @@ cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gate
 
 - `--audit-retention-secs SECS`：只保留最近 `SECS` 秒的审计日志（sqlite/redis 都会按时间戳清理）
 
-不配置时，审计日志会随时间增长（取决于你的 QPS），可能导致 sqlite 文件或 redis 数据集不断变大。
+默认会按 30 天清理；如果你禁用清理（`--audit-retention-secs 0`），审计日志会随时间增长（取决于你的 QPS），可能导致 sqlite 文件或 redis 数据集不断变大。
