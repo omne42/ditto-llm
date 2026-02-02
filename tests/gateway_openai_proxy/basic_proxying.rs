@@ -668,3 +668,197 @@ async fn openai_compat_proxy_streams_text_event_stream() {
     mock.assert();
 }
 
+#[tokio::test]
+async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> ditto_llm::Result<()>
+{
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "stream_options": { "include_usage": true },
+        "messages": [{
+            "role": "user",
+            "content": "hello ".repeat(256),
+        }],
+    });
+    let body_string = body.to_string();
+
+    let input_tokens_estimate: u32 = {
+        #[cfg(feature = "gateway-tokenizer")]
+        {
+            ditto_llm::gateway::token_count::estimate_input_tokens(
+                "/v1/chat/completions",
+                "gpt-4o-mini",
+                &body,
+            )
+            .unwrap_or_else(|| (body_string.len().saturating_add(3) / 4) as u32)
+        }
+        #[cfg(not(feature = "gateway-tokenizer"))]
+        {
+            ((body_string.len().saturating_add(3) / 4) as u32)
+        }
+    };
+
+    assert!(
+        input_tokens_estimate >= 2,
+        "expected input token estimate to be >= 2"
+    );
+
+    let used_total = u64::from(input_tokens_estimate.saturating_sub(1));
+    let used_prompt = used_total.saturating_sub(1);
+    let used_completion = used_total.saturating_sub(used_prompt);
+
+    let chunk_1 = json!({
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": "gpt-4o-mini",
+        "choices": [{
+            "index": 0,
+            "delta": { "content": "hi" },
+            "finish_reason": serde_json::Value::Null,
+        }],
+    })
+    .to_string();
+    let chunk_2 = json!({
+        "id": "chatcmpl-test",
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": "gpt-4o-mini",
+        "choices": [],
+        "usage": {
+            "prompt_tokens": used_prompt,
+            "completion_tokens": used_completion,
+            "total_tokens": used_total,
+        },
+    })
+    .to_string();
+    let sse_body = format!("data: {chunk_1}\n\ndata: {chunk_2}\n\ndata: [DONE]\n\n");
+
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "text/event-stream")
+            .body(sse_body.clone());
+    });
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.budget.total_tokens =
+        Some(u64::from(input_tokens_estimate).saturating_mul(2).saturating_sub(1));
+
+    let config = GatewayConfig {
+        backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request_1 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .header("x-request-id", "req-1")
+        .body(Body::from(body_string.clone()))
+        .unwrap();
+    let response_1 = app.clone().oneshot(request_1).await.unwrap();
+    assert_eq!(response_1.status(), StatusCode::OK);
+    let _ = to_bytes(response_1.into_body(), usize::MAX).await.unwrap();
+
+    let request_2 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .header("x-request-id", "req-2")
+        .body(Body::from(body_string))
+        .unwrap();
+    let response_2 = app.oneshot(request_2).await.unwrap();
+    assert_eq!(response_2.status(), StatusCode::OK);
+    let _ = to_bytes(response_2.into_body(), usize::MAX).await.unwrap();
+
+    mock.assert_calls(2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn openai_compat_proxy_large_multipart_requests_stream_to_upstream() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/files")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"file-ok"}"#);
+    });
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.guardrails.validate_schema = true;
+
+    let config = GatewayConfig {
+        backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_max_body_bytes(1024);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let boundary = "BOUNDARY";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let file_blob = "a".repeat(2048);
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"purpose\"\r\n\
+\r\n\
+fine-tune\r\n\
+--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"example.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+{file_blob}\r\n\
+--{boundary}--\r\n"
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/files")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", content_type)
+        .header("content-length", body.len().to_string())
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert!(bytes.starts_with(b"{\"id\""));
+    mock.assert_calls(1);
+    Ok(())
+}

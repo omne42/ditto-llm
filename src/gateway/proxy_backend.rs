@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use axum::http::HeaderMap;
 use bytes::Bytes;
+use reqwest::Body as ReqwestBody;
 
 use super::GatewayError;
 
@@ -70,6 +71,29 @@ impl ProxyBackend {
         path: &str,
         headers: HeaderMap,
         body: Option<Bytes>,
+        timeout: Option<Duration>,
+    ) -> Result<reqwest::Response, GatewayError> {
+        self.request_with_timeout_body(method, path, headers, body.map(ReqwestBody::from), timeout)
+            .await
+    }
+
+    pub async fn request_stream(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        headers: HeaderMap,
+        body: Option<ReqwestBody>,
+    ) -> Result<reqwest::Response, GatewayError> {
+        self.request_with_timeout_body(method, path, headers, body, None)
+            .await
+    }
+
+    pub async fn request_with_timeout_body(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        headers: HeaderMap,
+        body: Option<ReqwestBody>,
         timeout: Option<Duration>,
     ) -> Result<reqwest::Response, GatewayError> {
         let url = join_base_url(&self.base_url, path);

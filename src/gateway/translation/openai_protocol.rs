@@ -676,6 +676,12 @@ pub fn map_provider_error_to_openai(
             let status = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
             (status, "api_error", Some("provider_error"), body)
         }
+        crate::DittoError::InvalidResponse(message) => (
+            StatusCode::NOT_IMPLEMENTED,
+            "invalid_request_error",
+            Some("unsupported_feature"),
+            message,
+        ),
         other => (
             StatusCode::BAD_GATEWAY,
             "api_error",

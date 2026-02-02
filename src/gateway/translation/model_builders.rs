@@ -116,7 +116,9 @@ pub async fn build_embedding_model(
             }
             #[cfg(not(all(feature = "openai", feature = "embeddings")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without embeddings support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -131,7 +133,10 @@ pub async fn build_embedding_model(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "embeddings")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without embeddings support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         "google" => {
@@ -143,7 +148,9 @@ pub async fn build_embedding_model(
             }
             #[cfg(not(all(feature = "google", feature = "embeddings")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without embeddings support for google provider".to_string(),
+                ))
             }
         }
         "cohere" => {
@@ -155,7 +162,9 @@ pub async fn build_embedding_model(
             }
             #[cfg(not(all(feature = "cohere", feature = "embeddings")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without embeddings support for cohere provider".to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -179,7 +188,9 @@ pub async fn build_moderation_model(
             }
             #[cfg(not(all(feature = "openai", feature = "moderations")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without moderations support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -194,7 +205,10 @@ pub async fn build_moderation_model(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "moderations")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without moderations support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -218,7 +232,9 @@ pub async fn build_image_generation_model(
             }
             #[cfg(not(all(feature = "openai", feature = "images")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without images support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -233,7 +249,10 @@ pub async fn build_image_generation_model(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "images")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without images support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -257,7 +276,9 @@ pub async fn build_audio_transcription_model(
             }
             #[cfg(not(all(feature = "openai", feature = "audio")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without audio support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -272,7 +293,10 @@ pub async fn build_audio_transcription_model(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without audio support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -296,7 +320,9 @@ pub async fn build_speech_model(
             }
             #[cfg(not(all(feature = "openai", feature = "audio")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without audio support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -311,7 +337,10 @@ pub async fn build_speech_model(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without audio support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -335,7 +364,9 @@ pub async fn build_batch_client(
             }
             #[cfg(not(all(feature = "openai", feature = "batches")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without batches support for openai provider".to_string(),
+                ))
             }
         }
         "openai-compatible" | "openai_compatible" | "litellm" | "azure" | "azure-openai"
@@ -350,7 +381,10 @@ pub async fn build_batch_client(
             }
             #[cfg(not(all(feature = "openai-compatible", feature = "batches")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without batches support for openai-compatible providers"
+                        .to_string(),
+                ))
             }
         }
         _ => Ok(None),
@@ -374,7 +408,9 @@ pub async fn build_rerank_model(
             }
             #[cfg(not(all(feature = "cohere", feature = "rerank")))]
             {
-                Ok(None)
+                Err(DittoError::InvalidResponse(
+                    "ditto-llm built without rerank support for cohere provider".to_string(),
+                ))
             }
         }
         _ => Ok(None),

@@ -33,7 +33,11 @@ fn ensure_admin(
     let has_tenant_tokens = !state.admin_tenant_tokens.is_empty();
 
     if write_token.is_none() && read_token.is_none() && !has_tenant_tokens {
-        return Ok(AdminContext { tenant_id: None });
+        return Err(error_response(
+            StatusCode::NOT_FOUND,
+            "not_configured",
+            "admin auth not configured",
+        ));
     }
 
     let provided = extract_bearer(headers)
@@ -220,4 +224,40 @@ async fn persist_virtual_keys(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod admin_auth_tests {
+    use super::*;
+
+    fn test_state() -> GatewayHttpState {
+        let config = crate::gateway::GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: Vec::new(),
+            router: crate::gateway::RouterConfig {
+                default_backend: "default".to_string(),
+                default_backends: Vec::new(),
+                rules: Vec::new(),
+            },
+        };
+        GatewayHttpState::new(crate::gateway::Gateway::new(config))
+    }
+
+    #[test]
+    fn ensure_admin_read_rejects_when_not_configured() {
+        let state = test_state();
+        let headers = HeaderMap::new();
+        let (status, Json(body)) = ensure_admin_read(&state, &headers).unwrap_err();
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body.error.code, "not_configured");
+    }
+
+    #[test]
+    fn ensure_admin_write_rejects_when_not_configured() {
+        let state = test_state();
+        let headers = HeaderMap::new();
+        let (status, Json(body)) = ensure_admin_write(&state, &headers).unwrap_err();
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body.error.code, "not_configured");
+    }
 }

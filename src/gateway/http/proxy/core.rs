@@ -381,6 +381,16 @@ fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
         headers.remove("authorization");
         headers.remove("x-api-key");
     }
+    headers.remove("proxy-authorization");
+    headers.remove("x-forwarded-authorization");
+    headers.remove("connection");
+    headers.remove("keep-alive");
+    headers.remove("proxy-authenticate");
+    headers.remove("proxy-connection");
+    headers.remove("te");
+    headers.remove("trailer");
+    headers.remove("transfer-encoding");
+    headers.remove("upgrade");
     headers.remove("x-ditto-virtual-key");
     headers.remove("x-ditto-cache-bypass");
     headers.remove("x-ditto-bypass-cache");

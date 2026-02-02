@@ -1,6 +1,7 @@
 include!("openai_compat_proxy/preamble.rs");
 include!("openai_compat_proxy/costing.rs");
 include!("openai_compat_proxy/rate_limit.rs");
+include!("openai_compat_proxy/streaming_multipart.rs");
 
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
@@ -9,10 +10,7 @@ async fn handle_openai_compat_proxy(
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     let max_body_bytes = state.proxy_max_body_bytes;
 
-    let (parts, body) = req.into_parts();
-    let body = to_bytes(body, max_body_bytes)
-        .await
-        .map_err(|err| openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err))?;
+    let (parts, incoming_body) = req.into_parts();
 
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -37,6 +35,22 @@ async fn handle_openai_compat_proxy(
     );
     #[cfg(feature = "gateway-otel")]
     let _proxy_span_guard = proxy_span.enter();
+
+    if should_stream_large_multipart_request(&parts, path_and_query, max_body_bytes) {
+        let path_and_query = path_and_query.to_string();
+        return handle_openai_compat_proxy_streaming_multipart(
+            state,
+            parts,
+            incoming_body,
+            request_id,
+            path_and_query,
+        )
+        .await;
+    }
+
+    let body = to_bytes(incoming_body, max_body_bytes)
+        .await
+        .map_err(|err| openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err))?;
 
     let content_type_is_json = parts
         .headers

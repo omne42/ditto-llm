@@ -79,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
+- Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
+- Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.
+- Gateway: settle passthrough SSE stream budgets using the final `usage` chunk when present (prefer actual usage over request estimates).
+- Gateway: stream large multipart uploads to upstream for `/v1/files` and `/v1/audio/{transcriptions,translations}` (avoid buffering the full request body).
+- Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).
 
 ## [0.1.2] - 2026-02-01
 
