@@ -4,7 +4,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+use std::time::Instant;
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{Path, Query, State};
@@ -23,6 +26,7 @@ use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 #[cfg(feature = "gateway-routing-advanced")]
 use crate::utils::task::AbortOnDrop;
 
+#[cfg(feature = "gateway-translation")]
 #[derive(Clone, Copy, Debug)]
 struct ProxySpend {
     tokens: u64,
@@ -282,7 +286,10 @@ struct HealthResponse {
 }
 
 pub fn router(state: GatewayHttpState) -> Router {
+    #[cfg(feature = "gateway-routing-advanced")]
     let mut state = state;
+    #[cfg(not(feature = "gateway-routing-advanced"))]
+    let state = state;
     let mut router = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics))

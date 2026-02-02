@@ -77,13 +77,13 @@
 
 当前状态：
 
-- 使用 redis store（`gateway-store-redis` + `--redis`）时：`/v1/*` proxy 的 rpm/tpm 已通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL）。
+- 使用 redis store（`gateway-store-redis` + `--redis`）时：`/v1/*` proxy 的 rpm/tpm 已通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL），并支持可选的 project/user shared limits。
 - 不使用 redis store 时：仍是进程内计数（单实例可用；多副本不一致）。
 
 建议承接方式：
 
 - 外层 API gateway/service mesh 仍适合承接更复杂维度（IP/route/tenant）与滑窗/令牌桶策略。
-- Ditto 后续可补齐：按 project/user/route 分组的限流与更强策略（Roadmap）。
+- Ditto 后续可补齐：按 route 分组的限流与更强策略（Roadmap）。
 
 ### 2.4 安全与合规（审计不可变、脱敏、保留期）
 

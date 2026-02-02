@@ -290,6 +290,7 @@ fn validate_openai_batches_schema(body: &serde_json::Value) -> Option<String> {
     None
 }
 
+#[cfg(feature = "gateway-costing")]
 fn clamp_u64_to_u32(value: u64) -> u32 {
     if value > u64::from(u32::MAX) {
         u32::MAX
@@ -313,9 +314,13 @@ fn estimate_tokens_from_bytes(body: &Bytes) -> u32 {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct ObservedUsage {
+    #[cfg(feature = "gateway-costing")]
     input_tokens: Option<u64>,
+    #[cfg(feature = "gateway-costing")]
     cache_input_tokens: Option<u64>,
+    #[cfg(feature = "gateway-costing")]
     cache_creation_input_tokens: Option<u64>,
+    #[cfg(feature = "gateway-costing")]
     output_tokens: Option<u64>,
     total_tokens: Option<u64>,
 }
@@ -328,20 +333,6 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
         .get("input_tokens")
         .or_else(|| usage.get("prompt_tokens"))
         .and_then(|v| v.as_u64());
-    let prompt_token_details = usage
-        .get("input_tokens_details")
-        .or_else(|| usage.get("prompt_tokens_details"));
-    let cache_input_tokens = prompt_token_details
-        .and_then(|details| details.get("cached_tokens"))
-        .and_then(|v| v.as_u64());
-    let cache_creation_input_tokens = usage
-        .get("cache_creation_input_tokens")
-        .and_then(|v| v.as_u64())
-        .or_else(|| {
-            prompt_token_details
-                .and_then(|details| details.get("cache_creation_tokens"))
-                .and_then(|v| v.as_u64())
-        });
     let output_tokens = usage
         .get("output_tokens")
         .or_else(|| usage.get("completion_tokens"))
@@ -349,13 +340,37 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
     let total_tokens = total_tokens.or_else(|| {
         input_tokens.and_then(|input| output_tokens.map(|output| input.saturating_add(output)))
     });
-    Some(ObservedUsage {
-        input_tokens,
-        cache_input_tokens,
-        cache_creation_input_tokens,
-        output_tokens,
-        total_tokens,
-    })
+
+    #[cfg(feature = "gateway-costing")]
+    {
+        let prompt_token_details = usage
+            .get("input_tokens_details")
+            .or_else(|| usage.get("prompt_tokens_details"));
+        let cache_input_tokens = prompt_token_details
+            .and_then(|details| details.get("cached_tokens"))
+            .and_then(|v| v.as_u64());
+        let cache_creation_input_tokens = usage
+            .get("cache_creation_input_tokens")
+            .and_then(|v| v.as_u64())
+            .or_else(|| {
+                prompt_token_details
+                    .and_then(|details| details.get("cache_creation_tokens"))
+                    .and_then(|v| v.as_u64())
+            });
+
+        Some(ObservedUsage {
+            input_tokens,
+            cache_input_tokens,
+            cache_creation_input_tokens,
+            output_tokens,
+            total_tokens,
+        })
+    }
+
+    #[cfg(not(feature = "gateway-costing"))]
+    {
+        Some(ObservedUsage { total_tokens })
+    }
 }
 
 fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
@@ -502,14 +517,15 @@ async fn proxy_response(
         response
     } else {
         let cacheable = status.is_success() && _cache_key.is_some();
-        let content_length = upstream_headers
-            .get("content-length")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.parse::<usize>().ok());
         let should_buffer = cacheable
             && {
                 #[cfg(feature = "gateway-proxy-cache")]
                 {
+                    let content_length = upstream_headers
+                        .get("content-length")
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(|value| value.parse::<usize>().ok());
+
                     _state.proxy_cache_config.as_ref().is_some_and(|config| {
                         content_length.is_some_and(|len| len <= config.max_body_bytes)
                     })

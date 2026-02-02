@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
@@ -102,6 +102,16 @@ impl ResponseCache {
 
         let body_bytes = response.content.len();
         if body_bytes > max_body_bytes || body_bytes > max_total_body_bytes {
+            if let Some(cache) = self.scopes.get_mut(scope) {
+                if let Some(entry) = cache.entries.remove(&key) {
+                    cache.total_body_bytes =
+                        cache.total_body_bytes.saturating_sub(entry.body_bytes);
+                }
+                cache.order.retain(|candidate| candidate != &key);
+                if cache.entries.is_empty() {
+                    self.scopes.remove(scope);
+                }
+            }
             return;
         }
 
@@ -164,6 +174,10 @@ impl ResponseCache {
         if cache.entries.is_empty() {
             self.scopes.remove(scope);
         }
+    }
+
+    pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
+        self.scopes.retain(|scope, _| scopes.contains(scope));
     }
 }
 

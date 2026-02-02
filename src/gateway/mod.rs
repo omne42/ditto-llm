@@ -35,7 +35,7 @@ pub mod token_count;
 #[cfg(feature = "gateway-translation")]
 pub mod translation;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -218,16 +218,49 @@ impl Gateway {
     pub fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
         if let Some(existing) = self.config.virtual_keys.iter_mut().find(|k| k.id == key.id) {
             *existing = key;
+            self.prune_internal_scopes();
             false
         } else {
             self.config.virtual_keys.push(key);
+            self.prune_internal_scopes();
             true
         }
     }
 
     pub fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
         let index = self.config.virtual_keys.iter().position(|k| k.id == id)?;
-        Some(self.config.virtual_keys.remove(index))
+        let removed = self.config.virtual_keys.remove(index);
+        self.prune_internal_scopes();
+        Some(removed)
+    }
+
+    fn prune_internal_scopes(&mut self) {
+        let mut scopes = HashSet::<String>::new();
+
+        for key in &self.config.virtual_keys {
+            scopes.insert(key.id.clone());
+
+            if let Some(project_id) = key
+                .project_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                scopes.insert(format!("project:{project_id}"));
+            }
+
+            if let Some(user_id) = key
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                scopes.insert(format!("user:{user_id}"));
+            }
+        }
+
+        self.budget.retain_scopes(&scopes);
+        self.cache.retain_scopes(&scopes);
     }
 
     pub async fn handle(
@@ -255,6 +288,40 @@ impl Gateway {
         {
             self.observability.record_rate_limited();
             return Err(err);
+        }
+
+        if let (Some(project_id), Some(project_limits)) = (
+            key.project_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.project_limits.as_ref(),
+        ) {
+            let scope = format!("project:{project_id}");
+            if let Err(err) = self
+                .limits
+                .check_and_consume(&scope, project_limits, tokens, minute)
+            {
+                self.observability.record_rate_limited();
+                return Err(err);
+            }
+        }
+
+        if let (Some(user_id), Some(user_limits)) = (
+            key.user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.user_limits.as_ref(),
+        ) {
+            let scope = format!("user:{user_id}");
+            if let Err(err) = self
+                .limits
+                .check_and_consume(&scope, user_limits, tokens, minute)
+            {
+                self.observability.record_rate_limited();
+                return Err(err);
+            }
         }
 
         let guardrails = self

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -69,5 +69,11 @@ impl BudgetTracker {
         }
         let entry = self.spent_usd_micros.entry(key_id.to_string()).or_insert(0);
         *entry = entry.saturating_add(usd_micros);
+    }
+
+    pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
+        self.spent_tokens.retain(|scope, _| scopes.contains(scope));
+        self.spent_usd_micros
+            .retain(|scope, _| scopes.contains(scope));
     }
 }

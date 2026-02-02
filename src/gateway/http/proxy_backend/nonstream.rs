@@ -155,6 +155,13 @@
         #[cfg(not(feature = "gateway-costing"))]
         let spent_cost_usd_micros: Option<u64> = None;
 
+        #[cfg(not(any(
+            feature = "gateway-costing",
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-redis"
+        )))]
+        let _ = spent_cost_usd_micros;
+
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         if !token_budget_reservation_ids.is_empty() {
             settle_proxy_token_budget_reservations(

@@ -33,7 +33,31 @@
 - **不启用 store / 使用 sqlite**：进程内计数（按分钟窗口滚动），单实例可用；多副本下每个副本各算各的，不等价于全局限流。
 - **使用 redis store**（`gateway-store-redis` + `--redis`）：通过 Redis 原子计数实现 **全局一致** 的 rpm/tpm（按 virtual key id 维度；窗口=分钟；计数 key 带 TTL，避免无界增长）。
 
-> 如果你需要更复杂的策略（滑动窗口、按 IP、按 route/project/user 分组等），仍建议外层 API gateway 承接；Ditto 也可以在后续里程碑补齐这些维度（见 Roadmap）。
+> 如果你需要更复杂的策略（滑动窗口、按 IP、按 route 分组等），仍建议外层 API gateway 承接；Ditto 也会在后续里程碑继续扩面（见 Roadmap）。
+
+### 1.1 Project/User shared limits（可选）
+
+除了 key 自身的 `limits` 外，你还可以配置“聚合限流”（多个 key 共享一个限流桶）：
+
+- `project_id` + `project_limits`
+- `user_id` + `user_limits`
+
+当启用 redis store 时，上述 shared limits 也会变成 **多副本全局一致** 的限流。
+
+示例：
+
+```json
+{
+  "id": "vk-1",
+  "token": "${VK_1}",
+  "enabled": true,
+  "project_id": "proj-a",
+  "project_limits": { "rpm": 120, "tpm": 40000 },
+  "user_id": "user-42",
+  "user_limits": { "rpm": 30, "tpm": 8000 },
+  "limits": { "rpm": 60, "tpm": 20000 }
+}
+```
 
 ---
 

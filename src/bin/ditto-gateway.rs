@@ -1,6 +1,7 @@
 #[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     const DEFAULT_AUDIT_RETENTION_SECS: u64 = 30 * 24 * 60 * 60;
 
     let mut args = std::env::args().skip(1);
@@ -25,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut redis_url: Option<String> = None;
     let mut redis_url_env: Option<String> = None;
     let mut redis_prefix: Option<String> = None;
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     let mut audit_retention_secs: Option<u64> = None;
     let mut backend_specs: Vec<String> = Vec::new();
     let mut upstream_specs: Vec<String> = Vec::new();
@@ -88,13 +90,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 redis_prefix = Some(args.next().ok_or("missing value for --redis-prefix")?);
             }
             "--audit-retention-secs" => {
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --audit-retention-secs")?;
-                let secs = raw
-                    .parse::<u64>()
-                    .map_err(|_| "invalid --audit-retention-secs")?;
-                audit_retention_secs = Some(secs);
+                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+                {
+                    let raw = args
+                        .next()
+                        .ok_or("missing value for --audit-retention-secs")?;
+                    let secs = raw
+                        .parse::<u64>()
+                        .map_err(|_| "invalid --audit-retention-secs")?;
+                    audit_retention_secs = Some(secs);
+                }
+
+                #[cfg(not(any(
+                    feature = "gateway-store-sqlite",
+                    feature = "gateway-store-redis"
+                )))]
+                {
+                    return Err(
+                        "--audit-retention-secs requires `--features gateway-store-sqlite` or `--features gateway-store-redis`"
+                            .into(),
+                    );
+                }
             }
             "--backend" => {
                 backend_specs.push(args.next().ok_or("missing value for --backend")?);
@@ -595,6 +611,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             health_check_timeout_secs: proxy_health_check_timeout_secs,
         },
     )?;
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     let effective_audit_retention_secs = match audit_retention_secs {
         Some(0) => None,
         Some(secs) => Some(secs),

@@ -74,6 +74,8 @@ fn base_key() -> VirtualKeyConfig {
         user_id: None,
         project_budget: None,
         user_budget: None,
+        project_limits: None,
+        user_limits: None,
         limits: LimitsConfig::default(),
         budget: BudgetConfig::default(),
         cache: CacheConfig::default(),
@@ -143,6 +145,52 @@ async fn rate_limit_tpm_blocks_overuse() {
 
     let mut request = base_request();
     request.input_tokens = 6;
+    request.max_output_tokens = 5;
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::RateLimited { .. }));
+}
+
+#[tokio::test]
+async fn project_rate_limit_rpm_blocks_second_request() {
+    let mut key = base_key();
+    key.project_id = Some("project-1".to_string());
+    key.project_limits = Some(LimitsConfig {
+        rpm: Some(1),
+        tpm: None,
+    });
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 240 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    gateway.handle(request.clone()).await.unwrap();
+    let err = gateway.handle(request).await.unwrap_err();
+    assert!(matches!(err, GatewayError::RateLimited { .. }));
+}
+
+#[tokio::test]
+async fn user_rate_limit_tpm_blocks_second_request() {
+    let mut key = base_key();
+    key.user_id = Some("user-1".to_string());
+    key.user_limits = Some(LimitsConfig {
+        rpm: None,
+        tpm: Some(10),
+    });
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 240 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, _calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut request = base_request();
+    request.input_tokens = 5;
+    request.max_output_tokens = 5;
+    gateway.handle(request.clone()).await.unwrap();
+    request.input_tokens = 1;
     request.max_output_tokens = 5;
     let err = gateway.handle(request).await.unwrap_err();
     assert!(matches!(err, GatewayError::RateLimited { .. }));

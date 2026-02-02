@@ -123,7 +123,7 @@ Ditto 的 proxy 会在一些位置“把内容读入内存”：
 
 当前 Ditto Gateway 已经具备多副本运行所需的关键积木（redis store + 预算预留 + 可选共享缓存），但“企业级调用”通常还需要：
 
-- 分布式限流：使用 redis store 时 rpm/tpm 已全局一致（按 virtual key）；更细粒度维度（project/user/route）仍在 Roadmap
+- 分布式限流：使用 redis store 时 rpm/tpm 已全局一致（按 virtual key；可选 project/user shared limits）；route 维度与更强策略仍在 Roadmap
 - RBAC/SSO、多租户隔离、权限模型
 - 配置中心/灰度发布、不可变审计、告警
 

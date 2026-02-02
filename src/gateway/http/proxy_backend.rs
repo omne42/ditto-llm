@@ -47,6 +47,22 @@ async fn attempt_proxy_backend(
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_timer_start = params.metrics_timer_start;
 
+    #[cfg(not(feature = "gateway-routing-advanced"))]
+    let _ = idx;
+
+    #[cfg(not(any(
+        feature = "gateway-costing",
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-redis"
+    )))]
+    let _ = service_tier;
+
+    #[cfg(not(feature = "gateway-costing"))]
+    let _ = use_persistent_budget;
+
+    #[cfg(not(feature = "gateway-routing-advanced"))]
+    let _ = max_attempts;
+
         let backend = match state.proxy_backends.get(&backend_name) {
             Some(backend) => backend.clone(),
             None => {
@@ -78,6 +94,7 @@ async fn attempt_proxy_backend(
                 .unwrap_or_default()
         };
 
+        #[cfg(feature = "gateway-metrics-prometheus")]
         let backend_timer_start = Instant::now();
 
         #[cfg(feature = "gateway-metrics-prometheus")]
@@ -259,6 +276,7 @@ async fn attempt_proxy_backend(
                         return Ok(BackendAttemptOutcome::Continue(Some(err)));
                     }
                 };
+                #[cfg(feature = "gateway-metrics-prometheus")]
                 let shim_timer_start = Instant::now();
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -753,6 +771,13 @@ async fn attempt_proxy_backend(
             } else {
                 None
             };
+
+            #[cfg(not(any(
+                feature = "gateway-costing",
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-redis"
+            )))]
+            let _ = spent_cost_usd_micros;
 
             #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
             if !token_budget_reservation_ids.is_empty() {

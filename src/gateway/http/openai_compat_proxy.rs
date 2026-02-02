@@ -44,94 +44,7 @@ enum BackendAttemptOutcome {
     Continue(Option<(StatusCode, Json<OpenAiErrorResponse>)>),
 }
 
-fn validate_openai_multipart_request_schema(
-    path_and_query: &str,
-    content_type: Option<&str>,
-    body: &Bytes,
-) -> Option<String> {
-    let path = path_and_query
-        .split_once('?')
-        .map(|(path, _)| path)
-        .unwrap_or(path_and_query)
-        .trim_end_matches('/');
-
-    let endpoint = if path == "/v1/audio/transcriptions" {
-        "audio/transcriptions"
-    } else if path == "/v1/audio/translations" {
-        "audio/translations"
-    } else if path == "/v1/files" {
-        "files"
-    } else {
-        return None;
-    };
-
-    let Some(content_type) = content_type else {
-        return Some(format!("{endpoint} request missing content-type"));
-    };
-    if !content_type
-        .to_ascii_lowercase()
-        .starts_with("multipart/form-data")
-    {
-        return Some(format!("{endpoint} request must be multipart/form-data"));
-    }
-
-    let parts = match super::multipart::parse_multipart_form(content_type, body) {
-        Ok(parts) => parts,
-        Err(err) => return Some(err),
-    };
-
-    if endpoint.starts_with("audio/") {
-        let mut has_file = false;
-        let mut has_model = false;
-        for part in parts {
-            match part.name.as_str() {
-                "file" => has_file = true,
-                "model" if part.filename.is_none() => {
-                    let value = String::from_utf8_lossy(part.data.as_ref())
-                        .trim()
-                        .to_string();
-                    if !value.is_empty() {
-                        has_model = true;
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if !has_file {
-            return Some(format!("{endpoint} request missing file"));
-        }
-        if !has_model {
-            return Some(format!("{endpoint} request missing model"));
-        }
-        return None;
-    }
-
-    let mut has_file = false;
-    let mut has_purpose = false;
-    for part in parts {
-        match part.name.as_str() {
-            "file" => has_file = true,
-            "purpose" if part.filename.is_none() => {
-                let value = String::from_utf8_lossy(part.data.as_ref())
-                    .trim()
-                    .to_string();
-                if !value.is_empty() {
-                    has_purpose = true;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if !has_file {
-        return Some("files request missing file".to_string());
-    }
-    if !has_purpose {
-        return Some("files request missing purpose".to_string());
-    }
-    None
-}
+include!("openai_compat_proxy/multipart_schema.rs");
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
@@ -238,6 +151,8 @@ async fn handle_openai_compat_proxy(
         budget,
         project_budget_scope,
         user_budget_scope,
+        project_limits_scope,
+        user_limits_scope,
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
@@ -288,35 +203,67 @@ async fn handle_openai_compat_proxy(
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
             let limits = Some(key.limits.clone());
-            let project_budget_scope = key
+            let project_scope = key
                 .project_id
                 .as_deref()
                 .map(str::trim)
                 .filter(|id| !id.is_empty())
-                .and_then(|id| {
-                    key.project_budget
-                        .as_ref()
-                        .map(|budget| (format!("project:{id}"), budget.clone()))
-                });
-            let user_budget_scope = key
+                .map(|id| format!("project:{id}"));
+            let project_budget_scope = project_scope.as_ref().and_then(|scope| {
+                key.project_budget
+                    .as_ref()
+                    .map(|budget| (scope.clone(), budget.clone()))
+            });
+            let project_limits_scope = project_scope.as_ref().and_then(|scope| {
+                key.project_limits
+                    .as_ref()
+                    .map(|limits| (scope.clone(), limits.clone()))
+            });
+
+            let user_scope = key
                 .user_id
                 .as_deref()
                 .map(str::trim)
                 .filter(|id| !id.is_empty())
-                .and_then(|id| {
-                    key.user_budget
-                        .as_ref()
-                        .map(|budget| (format!("user:{id}"), budget.clone()))
-                });
+                .map(|id| format!("user:{id}"));
+            let user_budget_scope = user_scope.as_ref().and_then(|scope| {
+                key.user_budget
+                    .as_ref()
+                    .map(|budget| (scope.clone(), budget.clone()))
+            });
+            let user_limits_scope = user_scope.as_ref().and_then(|scope| {
+                key.user_limits
+                    .as_ref()
+                    .map(|limits| (scope.clone(), limits.clone()))
+            });
 
             if !use_redis_budget {
-                if let Err(err) =
-                    gateway
-                        .limits
-                        .check_and_consume(&key.id, &key.limits, charge_tokens, minute)
+                if let Err(err) = gateway
+                    .limits
+                    .check_and_consume(&key.id, &key.limits, charge_tokens, minute)
                 {
                     gateway.observability.record_rate_limited();
                     return Err(map_openai_gateway_error(err));
+                }
+                if let Some((scope, limits)) = project_limits_scope.as_ref() {
+                    if let Err(err) =
+                        gateway
+                            .limits
+                            .check_and_consume(scope, limits, charge_tokens, minute)
+                    {
+                        gateway.observability.record_rate_limited();
+                        return Err(map_openai_gateway_error(err));
+                    }
+                }
+                if let Some((scope, limits)) = user_limits_scope.as_ref() {
+                    if let Err(err) =
+                        gateway
+                            .limits
+                            .check_and_consume(scope, limits, charge_tokens, minute)
+                    {
+                        gateway.observability.record_rate_limited();
+                        return Err(map_openai_gateway_error(err));
+                    }
                 }
             }
 
@@ -549,6 +496,8 @@ async fn handle_openai_compat_proxy(
                 budget,
                 project_budget_scope,
                 user_budget_scope,
+                project_limits_scope,
+                user_limits_scope,
                 backends,
                 strip_authorization,
                 charge_cost_usd_micros,
@@ -607,6 +556,8 @@ async fn handle_openai_compat_proxy(
                 None,
                 None,
                 None,
+                None,
+                None,
                 backends,
                 strip_authorization,
                 charge_cost_usd_micros,
@@ -614,12 +565,47 @@ async fn handle_openai_compat_proxy(
         }
     };
 
+    #[cfg(not(feature = "gateway-store-redis"))]
+    let _ = (&limits, &project_limits_scope, &user_limits_scope);
+
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some(virtual_key_id), Some(limits)) =
         (state.redis_store.as_ref(), virtual_key_id.as_deref(), limits.as_ref())
     {
         if let Err(err) = store
             .check_and_consume_rate_limits(virtual_key_id, limits, charge_tokens, minute)
+            .await
+        {
+            if matches!(err, GatewayError::RateLimited { .. }) {
+                let mut gateway = state.gateway.lock().await;
+                gateway.observability.record_rate_limited();
+            }
+            return Err(map_openai_gateway_error(err));
+        }
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let (Some(store), Some((scope, limits))) =
+        (state.redis_store.as_ref(), project_limits_scope.as_ref())
+    {
+        if let Err(err) = store
+            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
+            .await
+        {
+            if matches!(err, GatewayError::RateLimited { .. }) {
+                let mut gateway = state.gateway.lock().await;
+                gateway.observability.record_rate_limited();
+            }
+            return Err(map_openai_gateway_error(err));
+        }
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let (Some(store), Some((scope, limits))) =
+        (state.redis_store.as_ref(), user_limits_scope.as_ref())
+    {
+        if let Err(err) = store
+            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {

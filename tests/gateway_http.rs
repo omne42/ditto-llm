@@ -35,6 +35,8 @@ fn base_key() -> VirtualKeyConfig {
         user_id: None,
         project_budget: None,
         user_budget: None,
+        project_limits: None,
+        user_limits: None,
         limits: LimitsConfig::default(),
         budget: BudgetConfig::default(),
         cache: CacheConfig::default(),
