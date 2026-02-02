@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).
 - Gateway: passthrough proxy now avoids buffering large non-SSE responses (streams them) and only buffers when a response is small enough for usage accounting or proxy caching (reduces OOM risk on large downloads).
 - Gateway: proxy non-stream handler now uses bounded pre-buffering to enable usage parsing and proxy caching even when the upstream response omits `content-length` (falls back to streaming when the cap is exceeded).
+- Gateway: bounded proxy pre-buffering now accumulates into a single buffer (avoids per-chunk allocations on chunked responses; reduces memory/CPU overhead).
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 

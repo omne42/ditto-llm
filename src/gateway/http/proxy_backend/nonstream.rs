@@ -47,17 +47,15 @@
                 }
                 None => {
                     let mut upstream_stream = upstream_response.bytes_stream();
-                    let mut buffered: Vec<Bytes> = Vec::new();
-                    let mut buffered_len: usize = 0;
+                    let mut buffered = bytes::BytesMut::new();
                     let mut first_unbuffered: Option<Bytes> = None;
                     let mut stream_error: Option<std::io::Error> = None;
 
                     while let Some(next) = upstream_stream.next().await {
                         match next {
                             Ok(chunk) => {
-                                if buffered_len.saturating_add(chunk.len()) <= max_buffer_bytes {
-                                    buffered_len = buffered_len.saturating_add(chunk.len());
-                                    buffered.push(chunk);
+                                if buffered.len().saturating_add(chunk.len()) <= max_buffer_bytes {
+                                    buffered.extend_from_slice(chunk.as_ref());
                                 } else {
                                     first_unbuffered = Some(chunk);
                                     break;
@@ -71,21 +69,17 @@
                     }
 
                     if first_unbuffered.is_none() && stream_error.is_none() {
-                        if buffered.len() == 1 {
-                            (Some(buffered.pop().expect("buffered chunk")), None)
-                        } else {
-                            let mut combined = bytes::BytesMut::with_capacity(buffered_len);
-                            for chunk in buffered {
-                                combined.extend_from_slice(chunk.as_ref());
-                            }
-                            (Some(combined.freeze()), None)
-                        }
+                        (Some(buffered.freeze()), None)
                     } else if let Some(chunk) = first_unbuffered {
-                        let prefix = futures_util::stream::iter(
-                            buffered
-                                .into_iter()
-                                .map(|chunk| Ok::<Bytes, std::io::Error>(chunk)),
-                        );
+                        let prefix_bytes = buffered.freeze();
+                        let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
+                            futures_util::stream::empty().boxed()
+                        } else {
+                            futures_util::stream::once(async move {
+                                Ok::<Bytes, std::io::Error>(prefix_bytes)
+                            })
+                            .boxed()
+                        };
                         let first = futures_util::stream::once(async move {
                             Ok::<Bytes, std::io::Error>(chunk)
                         });
@@ -93,11 +87,15 @@
                         let stream = prefix.chain(first).chain(rest).boxed();
                         (None, Some(stream))
                     } else {
-                        let prefix = futures_util::stream::iter(
-                            buffered
-                                .into_iter()
-                                .map(|chunk| Ok::<Bytes, std::io::Error>(chunk)),
-                        );
+                        let prefix_bytes = buffered.freeze();
+                        let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
+                            futures_util::stream::empty().boxed()
+                        } else {
+                            futures_util::stream::once(async move {
+                                Ok::<Bytes, std::io::Error>(prefix_bytes)
+                            })
+                            .boxed()
+                        };
                         let err = stream_error.expect("upstream stream error");
                         let err_stream = futures_util::stream::once(async move {
                             Err::<Bytes, std::io::Error>(err)
