@@ -55,11 +55,12 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 
 ### 2.3 分布式限流（P0）
 
-- 当前 rpm/tpm limits 是进程内；多副本下需要 **Redis 全局一致** 的限流（按 key/project/user/route 分组）。
+- 已支持：启用 redis store（`gateway-store-redis` + `--redis`）时，rpm/tpm 通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL）。
+- 仍缺：按 project/user/route 分组的限流、滑窗/令牌桶等更强策略。
 
 ### 2.4 审计合规（P1→P2）
 
-- 当前审计可写入 sqlite/redis，但缺：
+- 当前审计可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs`），但仍缺：
   - 防篡改（hash-chain / WORM）
   - 保留期与导出（S3/GCS）
   - 全链路脱敏策略（logs/audit/devtools/metrics）
@@ -99,7 +100,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 ## 4) 推荐路线（M0/M1/M2）
 
 - **M0（企业试点可上线，单租户）**：配置 schema 校验 + 脱敏策略 + 审计 taxonomy + 运维模板 + 内存安全 P0。
-- **M1（多副本 + 多租户治理）**：Redis 全局限流 + tenant 模型 + RBAC-lite + 配置版本化/回滚。
+- **M1（多副本 + 多租户治理）**：Redis 全局限流（补齐更多分组维度） + tenant 模型 + RBAC-lite + 配置版本化/回滚。
 - **M2（合规 + FinOps）**：防篡改审计 + 导出/保留期 + usage/cost 归因导出 + SLO/告警/dashboard 套件。
 
 如果你愿意提供：

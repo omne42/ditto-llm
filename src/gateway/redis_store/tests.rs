@@ -163,4 +163,72 @@ mod tests {
             Err(RedisStoreError::CostBudgetExceeded { .. })
         ));
     }
+
+    #[tokio::test]
+    async fn redis_store_rate_limits_enforce_rpm() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        let minute = now_millis_u64() / 60_000;
+        let limits = super::super::LimitsConfig {
+            rpm: Some(2),
+            tpm: Some(1000),
+        };
+
+        store
+            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .await
+            .expect("first allowed");
+        store
+            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .await
+            .expect("second allowed");
+
+        let err = store
+            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .await
+            .expect_err("third blocked");
+        assert!(matches!(err, super::super::GatewayError::RateLimited { .. }));
+        if let super::super::GatewayError::RateLimited { limit } = err {
+            assert!(limit.starts_with("rpm>"));
+        }
+    }
+
+    #[tokio::test]
+    async fn redis_store_rate_limits_enforce_tpm() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        let minute = now_millis_u64() / 60_000;
+        let limits = super::super::LimitsConfig {
+            rpm: Some(1000),
+            tpm: Some(3),
+        };
+
+        store
+            .check_and_consume_rate_limits("key-tpm", &limits, 2, minute)
+            .await
+            .expect("first allowed");
+
+        let err = store
+            .check_and_consume_rate_limits("key-tpm", &limits, 2, minute)
+            .await
+            .expect_err("second blocked");
+        assert!(matches!(err, super::super::GatewayError::RateLimited { .. }));
+        if let super::super::GatewayError::RateLimited { limit } = err {
+            assert!(limit.starts_with("tpm>"));
+        }
+    }
 }

@@ -20,6 +20,7 @@ const DEFAULT_RESERVATION_TTL_SECS: u64 = 60 * 60;
 pub struct RedisStore {
     client: redis::Client,
     prefix: String,
+    audit_retention_secs: Option<u64>,
 }
 
 #[derive(Debug, Error)]
@@ -90,11 +91,17 @@ impl RedisStore {
         Ok(Self {
             client: redis::Client::open(url.as_ref())?,
             prefix: "ditto".to_string(),
+            audit_retention_secs: None,
         })
     }
 
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
+        self
+    }
+
+    pub fn with_audit_retention_secs(mut self, secs: Option<u64>) -> Self {
+        self.audit_retention_secs = secs.filter(|value| *value > 0);
         self
     }
 

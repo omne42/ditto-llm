@@ -3,7 +3,7 @@
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let path = args.next().ok_or(
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
     )?;
 
     let mut listen = "127.0.0.1:8080".to_string();
@@ -15,6 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut redis_url: Option<String> = None;
     let mut redis_url_env: Option<String> = None;
     let mut redis_prefix: Option<String> = None;
+    let mut audit_retention_secs: Option<u64> = None;
     let mut backend_specs: Vec<String> = Vec::new();
     let mut upstream_specs: Vec<String> = Vec::new();
     let mut json_logs = false;
@@ -73,6 +74,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--redis-prefix" => {
                 redis_prefix = Some(args.next().ok_or("missing value for --redis-prefix")?);
+            }
+            "--audit-retention-secs" => {
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --audit-retention-secs")?;
+                let secs = raw
+                    .parse::<u64>()
+                    .map_err(|_| "invalid --audit-retention-secs")?;
+                audit_retention_secs = (secs > 0).then_some(secs);
             }
             "--backend" => {
                 backend_specs.push(args.next().ok_or("missing value for --backend")?);
@@ -523,7 +533,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(path) = _sqlite_path {
-        state = state.with_sqlite_store(ditto_llm::gateway::SqliteStore::new(path));
+        state = state.with_sqlite_store(
+            ditto_llm::gateway::SqliteStore::new(path)
+                .with_audit_retention_secs(audit_retention_secs),
+        );
     }
     #[cfg(feature = "gateway-store-redis")]
     if let Some(redis_url) = redis_url {
@@ -531,6 +544,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(prefix) = redis_prefix {
             store = store.with_prefix(prefix);
         }
+        store = store.with_audit_retention_secs(audit_retention_secs);
         state = state.with_redis_store(store);
     }
     state = attach_devtools(state, devtools_path)?;

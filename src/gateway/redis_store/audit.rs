@@ -20,12 +20,28 @@ impl RedisStore {
         let record_key = self.key_audit_record(&member);
         let idx_key = self.key_audit_by_ts();
 
-        let _: () = redis::pipe()
-            .atomic()
-            .set(&record_key, serialized)
-            .zadd(&idx_key, member, ts_ms)
-            .query_async(&mut conn)
-            .await?;
+        let retention_secs = self.audit_retention_secs;
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+        if let Some(retention_secs) = retention_secs {
+            pipe.cmd("SET")
+                .arg(&record_key)
+                .arg(&serialized)
+                .arg("EX")
+                .arg(retention_secs.max(1));
+        } else {
+            pipe.set(&record_key, &serialized);
+        }
+        pipe.zadd(&idx_key, member, ts_ms);
+        if let Some(retention_secs) = retention_secs {
+            let retention_ms = retention_secs.saturating_mul(1000);
+            let cutoff_ms = ts_ms.saturating_sub(retention_ms);
+            pipe.cmd("ZREMRANGEBYSCORE")
+                .arg(&idx_key)
+                .arg("-inf")
+                .arg(cutoff_ms);
+        }
+        let _: () = pipe.query_async(&mut conn).await?;
         Ok(())
     }
 

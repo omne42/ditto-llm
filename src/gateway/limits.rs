@@ -13,6 +13,7 @@ pub struct LimitsConfig {
 #[derive(Debug, Default)]
 pub struct RateLimiter {
     usage: HashMap<String, MinuteUsage>,
+    last_gc_minute: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +31,11 @@ impl RateLimiter {
         tokens: u32,
         minute: u64,
     ) -> Result<(), GatewayError> {
+        if minute != self.last_gc_minute {
+            self.usage.retain(|_, usage| usage.minute >= minute);
+            self.last_gc_minute = minute;
+        }
+
         if limits.rpm.is_none() && limits.tpm.is_none() {
             return Ok(());
         }

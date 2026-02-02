@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
+- Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
+- Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Utils: add bounded SSE parsing with `SseLimits` (max line/event bytes) to reduce OOM risk.
 
 ### Changed
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI: parse raw Responses SSE via bounded SSE data parsing and truncate invalid event payloads in errors.
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
+- Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 

@@ -15,7 +15,7 @@
 
 ---
 
-## 1) Limits：rpm / tpm（注意：非分布式）
+## 1) Limits：rpm / tpm（默认进程内；Redis 可分布式）
 
 每个 `VirtualKeyConfig` 都有 `limits`：
 
@@ -28,12 +28,12 @@
 - `rpm`：每分钟请求数上限
 - `tpm`：每分钟 token 上限（token 计算见下文）
 
-当前实现是进程内存里的计数器（按分钟窗口滚动），所以：
+实现有两种模式：
 
-- **单实例**：可用
-- **多副本**：每个副本各算各的，不等价于全局限流
+- **不启用 store / 使用 sqlite**：进程内计数（按分钟窗口滚动），单实例可用；多副本下每个副本各算各的，不等价于全局限流。
+- **使用 redis store**（`gateway-store-redis` + `--redis`）：通过 Redis 原子计数实现 **全局一致** 的 rpm/tpm（按 virtual key id 维度；窗口=分钟；计数 key 带 TTL，避免无界增长）。
 
-> 如果你需要“真正的分布式限流”，建议把限流放到 API gateway（Envoy/Nginx/Kong）或后续在 Ditto 引入 Redis/令牌桶实现（见 Roadmap）。
+> 如果你需要更复杂的策略（滑动窗口、按 IP、按 route/project/user 分组等），仍建议外层 API gateway 承接；Ditto 也可以在后续里程碑补齐这些维度（见 Roadmap）。
 
 ---
 

@@ -2,5 +2,6 @@
 include!("redis_store/store.rs");
 include!("redis_store/virtual_keys_and_proxy_cache.rs");
 include!("redis_store/budget.rs");
+include!("redis_store/rate_limits.rs");
 include!("redis_store/audit.rs");
 include!("redis_store/tests.rs");

@@ -74,12 +74,13 @@
 
 当前状态：
 
-- `limits` 是进程内计数（不分布式）
+- 使用 redis store（`gateway-store-redis` + `--redis`）时：`/v1/*` proxy 的 rpm/tpm 已通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL）。
+- 不使用 redis store 时：仍是进程内计数（单实例可用；多副本不一致）。
 
 建议承接方式：
 
-- 先外置：API gateway/service mesh 的全局限流
-- 后续 Ditto 内部引入 redis 令牌桶或滑窗（Roadmap）
+- 外层 API gateway/service mesh 仍适合承接更复杂维度（IP/route/tenant）与滑窗/令牌桶策略。
+- Ditto 后续可补齐：按 project/user/route 分组的限流与更强策略（Roadmap）。
 
 ### 2.4 安全与合规（审计不可变、脱敏、保留期）
 
@@ -91,7 +92,8 @@
 
 当前状态：
 
-- audit log 可写入 sqlite/redis，但不可变/保留期/导出仍需外部系统承接
+- audit log 可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs` 按时间戳清理）。
+- 但不可变/导出/签名仍需外部系统承接（或后续 Roadmap 补齐）。
 
 ### 2.5 配置中心与发布治理
 

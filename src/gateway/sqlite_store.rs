@@ -9,6 +9,7 @@ use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, VirtualKeyConf
 #[derive(Clone, Debug)]
 pub struct SqliteStore {
     path: PathBuf,
+    audit_retention_secs: Option<u64>,
 }
 
 #[derive(Debug, Error)]
@@ -32,11 +33,19 @@ pub enum SqliteStoreError {
 
 impl SqliteStore {
     pub fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            audit_retention_secs: None,
+        }
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn with_audit_retention_secs(mut self, secs: Option<u64>) -> Self {
+        self.audit_retention_secs = secs.filter(|value| *value > 0);
+        self
     }
 
     pub async fn init(&self) -> Result<(), SqliteStoreError> {
@@ -519,6 +528,7 @@ impl SqliteStore {
         let kind = kind.into();
         let payload_json = serde_json::to_string(&payload)?;
         let ts_ms = now_millis();
+        let retention_secs = self.audit_retention_secs;
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let conn = open_connection(path)?;
@@ -527,6 +537,15 @@ impl SqliteStore {
                 "INSERT INTO audit_logs (ts_ms, kind, payload_json) VALUES (?1, ?2, ?3)",
                 rusqlite::params![ts_ms, kind, payload_json],
             )?;
+            if let Some(retention_secs) = retention_secs {
+                let retention_ms = retention_secs.saturating_mul(1000);
+                let retention_ms = i64::try_from(retention_ms).unwrap_or(i64::MAX);
+                let cutoff_ms = ts_ms.saturating_sub(retention_ms);
+                let _ = conn.execute(
+                    "DELETE FROM audit_logs WHERE ts_ms < ?1",
+                    rusqlite::params![cutoff_ms],
+                )?;
+            }
             Ok(())
         })
         .await?

@@ -87,6 +87,6 @@
 
 - RBAC/SSO（多角色、多租户权限模型）
 - 可配置的 IP allow/deny、mTLS 终止、WAF 集成
-- 分布式限流（全局 rpm/tpm）
+- 更复杂的分布式限流策略（IP/tenant/route 维度、滑窗/令牌桶等）
 
 这些能力通常由外层 API gateway / service mesh 提供；Ditto 侧的补齐计划见 Roadmap。

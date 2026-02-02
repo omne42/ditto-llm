@@ -229,8 +229,12 @@ async fn handle_openai_compat_proxy(
 
     let use_persistent_budget = use_sqlite_budget || use_redis_budget;
 
+    let _now_epoch_seconds = now_epoch_seconds();
+    let minute = _now_epoch_seconds / 60;
+
     let (
         virtual_key_id,
+        limits,
         budget,
         project_budget_scope,
         user_budget_scope,
@@ -283,6 +287,7 @@ async fn handle_openai_compat_proxy(
 
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
+            let limits = Some(key.limits.clone());
             let project_budget_scope = key
                 .project_id
                 .as_deref()
@@ -304,16 +309,15 @@ async fn handle_openai_compat_proxy(
                         .map(|budget| (format!("user:{id}"), budget.clone()))
                 });
 
-            let now = gateway.clock.now_epoch_seconds();
-            let minute = now / 60;
-
-            if let Err(err) =
-                gateway
-                    .limits
-                    .check_and_consume(&key.id, &key.limits, charge_tokens, minute)
-            {
-                gateway.observability.record_rate_limited();
-                return Err(map_openai_gateway_error(err));
+            if !use_redis_budget {
+                if let Err(err) =
+                    gateway
+                        .limits
+                        .check_and_consume(&key.id, &key.limits, charge_tokens, minute)
+                {
+                    gateway.observability.record_rate_limited();
+                    return Err(map_openai_gateway_error(err));
+                }
             }
 
             let guardrails = model
@@ -541,6 +545,7 @@ async fn handle_openai_compat_proxy(
 
             (
                 virtual_key_id,
+                limits,
                 budget,
                 project_budget_scope,
                 user_budget_scope,
@@ -601,6 +606,7 @@ async fn handle_openai_compat_proxy(
                 None,
                 None,
                 None,
+                None,
                 backends,
                 strip_authorization,
                 charge_cost_usd_micros,
@@ -608,12 +614,27 @@ async fn handle_openai_compat_proxy(
         }
     };
 
+    #[cfg(feature = "gateway-store-redis")]
+    if let (Some(store), Some(virtual_key_id), Some(limits)) =
+        (state.redis_store.as_ref(), virtual_key_id.as_deref(), limits.as_ref())
+    {
+        if let Err(err) = store
+            .check_and_consume_rate_limits(virtual_key_id, limits, charge_tokens, minute)
+            .await
+        {
+            if matches!(err, GatewayError::RateLimited { .. }) {
+                let mut gateway = state.gateway.lock().await;
+                gateway.observability.record_rate_limited();
+            }
+            return Err(map_openai_gateway_error(err));
+        }
+    }
+
     #[cfg(feature = "gateway-otel")]
     if let Some(virtual_key_id) = virtual_key_id.as_deref() {
         proxy_span.record("virtual_key_id", tracing::field::display(virtual_key_id));
     }
 
-    let _now_epoch_seconds = now_epoch_seconds();
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_path = super::metrics_prometheus::normalize_proxy_path_label(path_and_query);
     #[cfg(feature = "gateway-metrics-prometheus")]

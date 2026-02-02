@@ -49,6 +49,10 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 - `--sqlite PATH`：sqlite store（需要 `--features gateway-store-sqlite`）
 - `--redis URL`：redis store（需要 `--features gateway-store-redis`）
 
+可选（适用于 sqlite/redis）：
+
+- `--audit-retention-secs SECS`：审计日志保留期（只保留最近 `SECS` 秒；0/不设置表示不做清理）
+
 redis 相关：
 
 - `--redis-env ENV`：从环境变量读取 redis url（可配合 `--dotenv`；需要 `gateway-store-redis`）
