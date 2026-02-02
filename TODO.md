@@ -136,8 +136,8 @@
   - [x] token 计数（feature `gateway-tokenizer`；失败回退估算）
   - [x] pricing table（LiteLLM JSON；feature `gateway-costing`）
   - [x] spend ledger by virtual key（sqlite/redis + `/admin/budgets` + `/admin/costs`）
-  - [x] spend aggregation by project/user（`virtual_keys[].project_id/user_id` + `/admin/budgets/projects|users` + `/admin/costs/projects|users`）
-  - [x] budget by project/user（共享预算口径；TBD）
+  - [x] spend aggregation by tenant/project/user（`virtual_keys[].tenant_id/project_id/user_id` + `/admin/budgets/tenants|projects|users` + `/admin/costs/tenants|projects|users`）
+  - [x] shared budgets/limits by tenant/project/user（`tenant_budget/tenant_limits` 等；与 project/user 同语义）
 - [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
 - [x] Proxy caching（非流式请求；并提供显式绕过）
 - [x] 内存安全：proxy cache 增加体积上限（单条/总量）
@@ -145,9 +145,9 @@
 - [x] 内存安全：`stream_text` fan-out 改为有界缓冲（避免未消费 stream 的无界增长）
 - [x] 内存安全：`stream_object` fan-out 改为有界缓冲（替换 `mpsc::unbounded_channel`）
 - [x] 内存安全：`StreamCollector` / `stream_object` 内部缓冲区增加 max-bytes 上限（超限发出 warning）
-- [x] 企业：分布式限流（Redis 全局 rpm/tpm；按 virtual key id；窗口=分钟；计数 key 带 TTL）
-- [ ] 企业：分布式限流（按 project/user/route 分组；滑动窗口/令牌桶；与外层 API gateway 协同）
-- [ ] 企业：RBAC-lite + tenant 模型（keys/budgets/audit 的隔离边界）
+- [x] 企业：分布式限流（Redis 全局 rpm/tpm；按 virtual key id；窗口=分钟；计数 key 带 TTL；并支持可选的 tenant/project/user shared limits）
+- [ ] 企业：分布式限流（按 route 分组；滑动窗口/令牌桶；与外层 API gateway 协同）
+- [ ] 企业：RBAC-lite + tenant 隔离模型（keys/budgets/audit 的隔离边界：tenant 独立管理/跨 tenant 默认拒绝）
 - [x] 企业：审计保留期（sqlite/redis；`--audit-retention-secs`）
 - [ ] 企业：审计导出（S3/GCS）+ 防篡改（hash-chain / WORM）
 - [ ] 运维资产：Docker/Helm/K8s manifests + Grafana dashboard + SLO/告警规则

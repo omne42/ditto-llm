@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
 - Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
+- Gateway: add Admin API filters for large deployments (`GET /admin/keys` filters and `key_prefix` for `/admin/budgets` and `/admin/costs`).
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).
 - Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).

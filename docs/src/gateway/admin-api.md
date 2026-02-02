@@ -41,7 +41,12 @@ Admin API 用于“管理与观测控制面状态”：
 
 默认会把 `token` 字段替换为 `"redacted"`。
 
-- `GET /admin/keys?include_tokens=true`：返回真实 token（谨慎使用）。
+常用 query 参数：
+
+- `include_tokens=true`：返回真实 token（谨慎使用）。
+- `tenant_id` / `project_id` / `user_id`：按归因字段过滤。
+- `enabled=true|false`：按启用状态过滤。
+- `id_prefix=...`：按 key id 前缀过滤。
 
 ### 1.2 `POST /admin/keys`：upsert
 
@@ -156,6 +161,10 @@ Query 参数：
 - virtual key id（例如 `vk-dev`）
 - 也可能是 scope（例如 `tenant:tenant-a`、`project:proj-a`、`user:user-42`）
 
+常用 query 参数：
+
+- `key_prefix=tenant:` / `key_prefix=project:` / `key_prefix=user:`：按 ledger `key_id` 前缀过滤（便于大规模部署按 scope 查看）。
+
 ### 5.2 `GET /admin/budgets/tenants` / `GET /admin/budgets/projects` / `GET /admin/budgets/users`
 
 这是“按 virtual key 的 `tenant_id` / `project_id` / `user_id` 字段做聚合”的视图：
@@ -178,6 +187,10 @@ Query 参数：
 - `GET /admin/costs/tenants`
 - `GET /admin/costs/projects`
 - `GET /admin/costs/users`
+
+常用 query 参数：
+
+- `key_prefix=tenant:` / `key_prefix=project:` / `key_prefix=user:`：按 ledger `key_id` 前缀过滤。
 
 ---
 
