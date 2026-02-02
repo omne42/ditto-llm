@@ -5,6 +5,8 @@ use async_trait::async_trait;
 
 use super::{Backend, GatewayError, GatewayRequest, GatewayResponse};
 
+const MAX_BACKEND_ERROR_BODY_BYTES: usize = 64 * 1024;
+
 #[derive(Clone)]
 pub struct HttpBackend {
     url: String,
@@ -47,7 +49,9 @@ impl Backend for HttpBackend {
 
         let status = response.status();
         if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
+            let body =
+                crate::utils::http::response_text_truncated(response, MAX_BACKEND_ERROR_BODY_BYTES)
+                    .await;
             return Err(GatewayError::Backend {
                 message: format!("backend status {status}: {body}"),
             });

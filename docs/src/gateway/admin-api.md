@@ -92,6 +92,10 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 - `deleted_redis` 仅在启用 redis store 时出现
 
+实现细节与运维提示：
+
+- `{ "all": true }` 在启用 redis store 时会使用 `SCAN + DEL` 按批删除（不会把所有 key 一次性读进内存），但仍然是 O(N) 操作；大规模缓存场景建议优先依赖 TTL、并避免频繁 purge-all。
+
 ---
 
 ## 3) Backends：查看/重置健康状态（可选）

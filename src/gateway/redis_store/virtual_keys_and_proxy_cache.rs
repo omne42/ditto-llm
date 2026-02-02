@@ -77,24 +77,28 @@ impl RedisStore {
     #[cfg(feature = "gateway-proxy-cache")]
     pub async fn clear_proxy_cache(&self) -> Result<u64, RedisStoreError> {
         let pattern = format!("{}:proxy_cache:*", self.prefix);
-        let keys = {
-            let mut conn = self.connection().await?;
-            let mut iter = conn.scan_match::<_, String>(pattern).await?;
-            let mut keys = Vec::new();
-            while let Some(key) = iter.next_item().await {
-                keys.push(key?);
-            }
-            keys
-        };
-
-        if keys.is_empty() {
-            return Ok(0);
-        }
-
         let mut conn = self.connection().await?;
         let mut deleted = 0u64;
-        for chunk in keys.chunks(128) {
-            deleted = deleted.saturating_add(conn.del(chunk).await?);
+
+        let mut cursor = "0".to_string();
+        loop {
+            let (next_cursor, keys): (String, Vec<String>) = redis::cmd("SCAN")
+                .arg(&cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut conn)
+                .await?;
+
+            for chunk in keys.chunks(128) {
+                deleted = deleted.saturating_add(conn.del(chunk).await?);
+            }
+
+            if next_cursor == "0" {
+                break;
+            }
+            cursor = next_cursor;
         }
         Ok(deleted)
     }

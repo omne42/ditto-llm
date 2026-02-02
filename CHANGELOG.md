@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
 - Profile: add prompt-cache capability/config flags (`ProviderCapabilities.prompt_cache` and `ModelConfig.prompt_cache`).
 - Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).
+- Utils: truncate non-2xx error bodies (default 64KiB) to avoid OOM in error paths.
 - SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: add max-bytes caps for `StreamCollector` and `stream_object` internal buffers (emit warnings + truncate to reduce OOM risk on extremely large streams).
@@ -44,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: proxy non-stream handler now uses bounded pre-buffering to enable usage parsing and proxy caching even when the upstream response omits `content-length` (falls back to streaming when the cap is exceeded).
 - Gateway: proxy non-stream pre-buffering no longer trusts `content-length` and falls back to streaming when the actual body exceeds the cap.
 - Gateway: bounded proxy pre-buffering now accumulates into a single buffer (avoids per-chunk allocations on chunked responses; reduces memory/CPU overhead).
+- Gateway: Redis proxy-cache purge-all now deletes keys in SCAN batches (avoids building a huge in-memory key list).
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 
