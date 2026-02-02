@@ -97,7 +97,7 @@ cargo build --features gateway --bin ditto-gateway
 
 ## 3) 启动（第一个参数必须是 config 路径）
 
-`ditto-gateway` 的第一个参数必须是 `gateway.json` 或 `gateway.yaml` 路径：
+`ditto-gateway` 的第一个参数必须是 `gateway.json` 路径；如果你想用 `gateway.yaml`，需要编译启用 feature `gateway-config-yaml`：
 
 ```bash
 cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080

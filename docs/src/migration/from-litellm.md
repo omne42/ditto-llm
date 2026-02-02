@@ -79,7 +79,7 @@ Ditto 当前覆盖度：
 
 ### 3.1 配置格式与 env 展开
 
-- Ditto 配置支持 JSON 或 YAML（`gateway.json` / `gateway.yaml`）
+- Ditto 配置默认是 JSON（`gateway.json`）；如需 YAML（`gateway.yaml`），需要编译启用 feature `gateway-config-yaml`
 - 支持 `${ENV_VAR}` 占位符展开，并且 env 缺失会启动失败（避免 silent misconfig）
 
 ### 3.2 Virtual keys 的行为差异

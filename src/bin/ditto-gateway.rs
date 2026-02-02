@@ -2,9 +2,17 @@
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let path = args.next().ok_or(
-        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]",
-    )?;
+    let usage = {
+        #[cfg(feature = "gateway-config-yaml")]
+        {
+            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        }
+        #[cfg(not(feature = "gateway-config-yaml"))]
+        {
+            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        }
+    };
+    let path = args.next().ok_or(usage)?;
 
     let mut listen = "127.0.0.1:8080".to_string();
     let mut admin_token: Option<String> = None;
@@ -344,14 +352,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase());
     let mut config: ditto_llm::gateway::GatewayConfig = match config_ext.as_deref() {
-        Some("yaml") | Some("yml") => serde_yaml::from_str(&raw)?,
+        Some("yaml") | Some("yml") => {
+            #[cfg(feature = "gateway-config-yaml")]
+            {
+                serde_yaml::from_str(&raw)?
+            }
+            #[cfg(not(feature = "gateway-config-yaml"))]
+            {
+                return Err("yaml config requires `--features gateway-config-yaml`".into());
+            }
+        }
         _ => match serde_json::from_str(&raw) {
             Ok(config) => config,
             Err(json_err) => {
-                let yaml = serde_yaml::from_str(&raw).map_err(|yaml_err| {
-                    format!("failed to parse config as json ({json_err}) or yaml ({yaml_err})")
-                })?;
-                yaml
+                #[cfg(feature = "gateway-config-yaml")]
+                {
+                    let yaml = serde_yaml::from_str(&raw).map_err(|yaml_err| {
+                        format!("failed to parse config as json ({json_err}) or yaml ({yaml_err})")
+                    })?;
+                    yaml
+                }
+                #[cfg(not(feature = "gateway-config-yaml"))]
+                {
+                    return Err(format!(
+                        "failed to parse config as json ({json_err}); yaml requires `--features gateway-config-yaml`"
+                    )
+                    .into());
+                }
             }
         },
     };

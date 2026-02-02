@@ -14,6 +14,8 @@
 ditto-gateway <gateway.(json|yaml)> [flags...]
 ```
 
+> YAML 配置需要编译启用 feature `gateway-config-yaml`（否则只支持 JSON）。
+
 开发期常见用法：
 
 ```bash
