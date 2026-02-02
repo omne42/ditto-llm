@@ -145,9 +145,11 @@
 - [x] 内存安全：`stream_text` fan-out 改为有界缓冲（避免未消费 stream 的无界增长）
 - [x] 内存安全：`stream_object` fan-out 改为有界缓冲（替换 `mpsc::unbounded_channel`）
 - [x] 内存安全：`StreamCollector` / `stream_object` 内部缓冲区增加 max-bytes 上限（超限发出 warning）
-- [ ] 企业：分布式限流（Redis 全局 rpm/tpm；按 key/project/user/route）
+- [x] 企业：分布式限流（Redis 全局 rpm/tpm；按 virtual key id；窗口=分钟；计数 key 带 TTL）
+- [ ] 企业：分布式限流（按 project/user/route 分组；滑动窗口/令牌桶；与外层 API gateway 协同）
 - [ ] 企业：RBAC-lite + tenant 模型（keys/budgets/audit 的隔离边界）
-- [ ] 企业：审计保留期/导出（S3/GCS）+ 防篡改（hash-chain / WORM）
+- [x] 企业：审计保留期（sqlite/redis；`--audit-retention-secs`）
+- [ ] 企业：审计导出（S3/GCS）+ 防篡改（hash-chain / WORM）
 - [ ] 运维资产：Docker/Helm/K8s manifests + Grafana dashboard + SLO/告警规则
 - [ ] 安全：Secret Manager 适配（Vault/AWS/GCP/Azure；替代纯 env/command）
 - [ ] 管理面：Admin UI（或对接外部控制台的规范与示例）

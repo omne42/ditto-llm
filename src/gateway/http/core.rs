@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use axum::body::{Body, to_bytes};
 use axum::extract::{Path, Query, State};
@@ -677,7 +677,6 @@ async fn handle_anthropic_messages(
     if content_type.starts_with("text/event-stream") {
         #[cfg(feature = "streaming")]
         {
-            use tokio::io::AsyncBufReadExt;
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
@@ -690,8 +689,8 @@ async fn handle_anthropic_messages(
                 .into_data_stream()
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
-            let lines = tokio::io::BufReader::new(reader).lines();
-            let data_stream = crate::utils::sse::sse_data_stream_from_lines(lines);
+            let reader = tokio::io::BufReader::new(reader);
+            let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -854,6 +853,7 @@ async fn handle_anthropic_count_tokens(
             err.to_string(),
         )
     })?;
+    #[cfg(feature = "gateway-tokenizer")]
     let request_json: serde_json::Value = serde_json::from_slice(&body).map_err(|err| {
         anthropic_error(
             StatusCode::BAD_REQUEST,
@@ -861,24 +861,34 @@ async fn handle_anthropic_count_tokens(
             format!("invalid JSON: {err}"),
         )
     })?;
+
+    #[cfg(not(feature = "gateway-tokenizer"))]
+    let _request_json: serde_json::Value = serde_json::from_slice(&body).map_err(|err| {
+        anthropic_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request_error",
+            format!("invalid JSON: {err}"),
+        )
+    })?;
+
+    #[cfg(feature = "gateway-tokenizer")]
     let openai_request = interop::anthropic_messages_request_to_openai_chat_completions(
         &request_json,
     )
     .map_err(|err| anthropic_error(StatusCode::BAD_REQUEST, "invalid_request_error", err))?;
 
-    let model = openai_request
-        .get("model")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-
     #[cfg(feature = "gateway-tokenizer")]
-    let input_tokens =
+    let input_tokens = {
+        let model = openai_request
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         token_count::estimate_input_tokens("/v1/chat/completions", model, &openai_request)
-            .unwrap_or_else(|| estimate_tokens_from_bytes(&body));
+            .unwrap_or_else(|| estimate_tokens_from_bytes(&body))
+    };
 
     #[cfg(not(feature = "gateway-tokenizer"))]
     let input_tokens = estimate_tokens_from_bytes(&body);
 
     Ok(Json(AnthropicCountTokensResponse { input_tokens }))
 }
-

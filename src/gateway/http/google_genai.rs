@@ -88,7 +88,6 @@ async fn handle_google_genai(
     if content_type.starts_with("text/event-stream") {
         #[cfg(feature = "streaming")]
         {
-            use tokio::io::AsyncBufReadExt;
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
@@ -101,8 +100,8 @@ async fn handle_google_genai(
                 .into_data_stream()
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
-            let lines = tokio::io::BufReader::new(reader).lines();
-            let data_stream = crate::utils::sse::sse_data_stream_from_lines(lines);
+            let reader = tokio::io::BufReader::new(reader);
+            let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -320,7 +319,6 @@ async fn handle_cloudcode_generate_content_inner(
     if content_type.starts_with("text/event-stream") {
         #[cfg(feature = "streaming")]
         {
-            use tokio::io::AsyncBufReadExt;
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
@@ -333,8 +331,8 @@ async fn handle_cloudcode_generate_content_inner(
                 .into_data_stream()
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
-            let lines = tokio::io::BufReader::new(reader).lines();
-            let data_stream = crate::utils::sse::sse_data_stream_from_lines(lines);
+            let reader = tokio::io::BufReader::new(reader);
+            let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -431,4 +429,3 @@ async fn handle_cloudcode_generate_content_inner(
         .insert("content-type", "application/json".parse().unwrap());
     Ok(response)
 }
-

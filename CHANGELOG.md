@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
+- Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 
