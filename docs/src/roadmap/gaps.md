@@ -90,6 +90,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 - **入口请求体上限可配置**：`/v1/*` 默认上限 64MiB，并提供 `--proxy-max-body-bytes` 便于企业按 JSON/multipart/上传策略做分级与收敛。
 - **usage 缓冲上限与缓存上限解耦**：通过 `--proxy-usage-max-body-bytes` 单独限制“为解析 `usage` 而缓冲的非 streaming JSON 响应”，避免把 proxy cache 上限调大后导致 usage 缓冲也被动变大（默认 1MiB）。
 - **错误响应体截断**：对 provider/backend 的非 2xx 错误体只读取有限字节（默认 64KiB），避免异常/恶意错误体导致 OOM，同时提升错误日志可读性。
+- **Bedrock eventstream 有界解码**：对 eventstream 的 `total_len` 与内部缓冲区设置最大 bytes 上限，避免协议错位/恶意长度导致无界累积。
 - **“默认依赖安全”口径**：YAML 配置支持作为 opt-in（`gateway-config-yaml` feature），避免把不必要的解析依赖变成默认前置。
 - **SSE parsing 增加行/事件大小上限**：异常/恶意 SSE 事件不会无限增长。
 - **stream fan-out 可更安全使用**：提供 `StreamTextHandle`/`StreamObjectHandle` 与 `into_*_stream`，避免“只消费一条 stream 却保留另一条 receiver”的隐式积压。

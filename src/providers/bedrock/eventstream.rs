@@ -9,9 +9,24 @@ struct EventStreamDecoder {
     buffer: Vec<u8>,
 }
 
+const MAX_EVENTSTREAM_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_EVENTSTREAM_BUFFER_BYTES: usize = 8 * 1024 * 1024;
+
 impl EventStreamDecoder {
-    fn push(&mut self, chunk: &[u8]) {
+    fn push(&mut self, chunk: &[u8]) -> Result<()> {
+        if self
+            .buffer
+            .len()
+            .saturating_add(chunk.len())
+            .gt(&MAX_EVENTSTREAM_BUFFER_BYTES)
+        {
+            self.buffer.clear();
+            return Err(DittoError::InvalidResponse(format!(
+                "eventstream buffer exceeded max bytes ({MAX_EVENTSTREAM_BUFFER_BYTES})"
+            )));
+        }
         self.buffer.extend_from_slice(chunk);
+        Ok(())
     }
 
     fn next_message(&mut self) -> Option<Result<EventStreamMessage>> {
@@ -23,6 +38,12 @@ impl EventStreamDecoder {
             return Some(Err(DittoError::InvalidResponse(
                 "eventstream total_len too small".to_string(),
             )));
+        }
+        if total_len > MAX_EVENTSTREAM_MESSAGE_BYTES {
+            self.buffer.clear();
+            return Some(Err(DittoError::InvalidResponse(format!(
+                "eventstream total_len too large ({total_len}; max {MAX_EVENTSTREAM_MESSAGE_BYTES})"
+            ))));
         }
         if self.buffer.len() < total_len {
             return None;
@@ -150,7 +171,10 @@ fn bedrock_event_stream_from_response(
                 let next = bytes_stream.next().await;
                 match next {
                     Some(Ok(chunk)) => {
-                        decoder.push(&chunk);
+                        if let Err(err) = decoder.push(&chunk) {
+                            buffer.push_back(Err(err));
+                            continue;
+                        }
                         while let Some(message) = decoder.next_message() {
                             match message {
                                 Ok(message) => match parse_bedrock_event(&message) {
@@ -197,4 +221,3 @@ fn parse_bedrock_event(message: &EventStreamMessage) -> Result<Option<String>> {
     })?;
     Ok(Some(json))
 }
-

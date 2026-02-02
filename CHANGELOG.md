@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: proxy non-stream pre-buffering no longer trusts `content-length` and falls back to streaming when the actual body exceeds the cap.
 - Gateway: bounded proxy pre-buffering now accumulates into a single buffer (avoids per-chunk allocations on chunked responses; reduces memory/CPU overhead).
 - Gateway: Redis proxy-cache purge-all now deletes keys in SCAN batches (avoids building a huge in-memory key list).
+- Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 
