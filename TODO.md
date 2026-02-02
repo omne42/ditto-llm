@@ -146,23 +146,24 @@
 - [x] 内存安全：`stream_object` fan-out 改为有界缓冲（替换 `mpsc::unbounded_channel`）
 - [x] 内存安全：`StreamCollector` / `stream_object` 内部缓冲区增加 max-bytes 上限（超限发出 warning）
 - [x] 企业：分布式限流（Redis 全局 rpm/tpm；按 virtual key id；窗口=分钟；计数 key 带 TTL；并支持可选的 tenant/project/user shared limits）
-- [ ] 企业：分布式限流（按 route 分组；滑动窗口/令牌桶；与外层 API gateway 协同）
-- [ ] 企业：RBAC-lite + tenant 隔离模型（keys/budgets/audit 的隔离边界：tenant 独立管理/跨 tenant 默认拒绝）
+- [x] 企业：分布式限流（按 route 分组；Redis 加权滑动窗口（60s）算法；与外层 API gateway 可叠加）
+- [x] 企业：RBAC-lite + tenant 隔离模型（keys/budgets/audit 的隔离边界：tenant 独立管理/跨 tenant 默认拒绝）
   - [x] RBAC-lite：admin token 支持 read-only（`--admin-read-token*`）与 write（`--admin-token*`）分离
   - [x] 审计 taxonomy：admin 写操作在启用 sqlite/redis store 时写入 audit log（用于合规与追踪）
-  - [ ] tenant 隔离：tenant 独立 keys 管理、跨 tenant 查询默认拒绝、审计/导出隔离、审批流
+  - [x] tenant 隔离：tenant 独立 keys 管理、跨 tenant 查询默认拒绝、审计/导出隔离（tenant-scoped admin token）
 - [x] 企业：审计保留期（sqlite/redis；`--audit-retention-secs`）
-- [ ] 企业：审计导出（S3/GCS）+ 防篡改（hash-chain / WORM）
-- [ ] 运维资产：Docker/Helm/K8s manifests + Grafana dashboard + SLO/告警规则
-- [ ] 安全：Secret Manager 适配（Vault/AWS/GCP/Azure；替代纯 env/command）
-- [ ] 管理面：Admin UI（或对接外部控制台的规范与示例）
+- [x] 企业：审计导出（`GET /admin/audit/export` JSONL/CSV）+ 防篡改（SHA-256 hash-chain）+ verifier CLI（`ditto-audit-verify`）
+- [ ] 企业：审计导出到对象存储（S3/GCS）+ WORM/签名
+- [x] 运维资产：Docker Compose / Helm / K8s manifests + Grafana dashboard + PrometheusRule 告警规则
+- [x] 安全：Secret Manager 适配（`secret://...`：Vault/AWS SM/GCP SM/Azure KV；替代纯 env 明文）
+- [x] 管理面：Admin UI（`apps/admin-ui`）
 
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
 
 - [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/responses/compact` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex/Cohere；feature `gateway-translation`）
 - [x] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（`sdk::http` 的 SSE/NDJSON 输出）
-- [ ] SDK：缓存 middleware + 流式回放（对齐 AI SDK caching 范式）
-- [ ] SDK：最小 JS/TS client + React hooks（基于 stream protocol v1；非 1:1 复刻 AI SDK UI）
+- [x] SDK：缓存 middleware + 流式回放（对齐 AI SDK caching 范式）
+- [x] SDK：最小 JS/TS client + React hooks（基于 stream protocol v1；非 1:1 复刻 AI SDK UI）
 
 ### P2（扩面端点）
 

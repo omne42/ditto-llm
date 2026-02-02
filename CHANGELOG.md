@@ -75,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 
+### Fixed
+
+- Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
+- Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
+
 ## [0.1.2] - 2026-02-01
 
 ### Added

@@ -28,12 +28,12 @@
 - AI SDK 的优势在于 JS/TS 生态 + UI hooks（React 等）；Ditto 的定位是 Rust 侧“可测试/可审计/可控依赖”的 SDK，并不复刻前端 hooks。
 - Ditto 将 provider 差异通过 `Warning` 暴露，而不是静默降级。
 
-### 仍缺（但属于“超集可选项”）
+### 可选超集项（部分已实现）
 
-- 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `shell_exec` + `safe-fs-tools` 驱动的 `fs_read_file`/`fs_find`/`fs_grep`/`fs_write_file`/`fs_delete_file`/`fs_list_dir`/`fs_stat`/`fs_mkdir`/`fs_move`/`fs_copy_file`）
-- “模板/脚手架”生态：AI SDK 的强项是大量可复制模板；Ditto 需要补齐 Rust 示例与多语言调用网关的最小模板（属于 docs/工程化层面的超集项）。目前已新增 `deploy/docker-compose.yml` 与 `deploy/k8s/*` 作为 gateway 的落地模板；后续仍建议补齐 Helm chart 与 Node/Python/Go 调用模板。
-- AI SDK UI/RSC 生态：Ditto 不复刻 hooks/RSC，但可以提供基于 stream protocol v1 的 JS/TS client + 最小 React hooks（可选附加）
-- 应用侧缓存范式：基于 `LanguageModelLayer` 的缓存 middleware + 流式回放（可选附加）
+- 常用工具 wrappers（shell/fs/http 等）作为可选模块（✅ 已提供 `http_fetch` + `shell_exec` + `safe-fs-tools` 驱动的 `fs_read_file`/`fs_find`/`fs_grep`/`fs_write_file`/`fs_delete_file`/`fs_list_dir`/`fs_stat`/`fs_mkdir`/`fs_move`/`fs_copy_file`）
+- “模板/脚手架”生态：AI SDK 的强项是大量可复制模板；Ditto 以 docs/工程化补齐（✅ `deploy/docker-compose.yml`、`deploy/k8s/*`、`deploy/helm/*` + Node/Python/Go 调用示例；仍可继续扩展更多模板）。
+- AI SDK UI/RSC 生态：Ditto 不复刻 hooks/RSC，但提供基于 stream protocol v1 的最小 JS/TS client + React hooks（✅ `packages/ditto-client`、`packages/ditto-react`）。
+- 应用侧缓存范式：基于 `LanguageModelLayer` 的缓存 middleware + 流式回放（✅ `CacheLayer`）。
 - 生态适配器：LangChain/LlamaIndex 等协议级桥接（可选附加）
 
 ---
@@ -62,8 +62,8 @@
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
-- 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更完整的多租户隔离（✅ 已支持 RBAC-lite：read-only admin token；✅ 已支持 tenant 维度归因与 shared budgets/limits，但 tenant 级别权限/隔离边界仍需补齐）、更细粒度的分布式限流（IP/tenant/route 维度、滑窗/令牌桶；已支持 virtual key + 可选 tenant/project/user shared limits）、防篡改审计/导出（S3/GCS/WORM/签名）、配置版本化/灰度/回滚与运维资产（告警/dashboard）
-- 平台化生态：缺 Secret Manager 集成、admin UI、guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
+- 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule）。仍缺：IP-based/令牌桶限流、对象存储审计导出（S3/GCS/WORM/签名）、配置版本化/灰度/回滚等更完整平台能力。
+- 平台化生态：✅ Secret Manager 集成（`secret://...`）+ ✅ 最小 Admin UI；仍缺：更多 guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
 - 平台扩展项：LiteLLM 侧还有 A2A agent gateway、MCP gateway 等方向；Ditto 当前偏 SDK 工具/协议适配，后续可以按真实企业需求扩到网关侧
 
 ---

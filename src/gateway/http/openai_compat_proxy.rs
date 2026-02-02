@@ -38,12 +38,28 @@ async fn handle_openai_compat_proxy(
     #[cfg(feature = "gateway-otel")]
     let _proxy_span_guard = proxy_span.enter();
 
-    let parsed_json: Option<serde_json::Value> = parts
+    let content_type_is_json = parts
         .headers
         .get("content-type")
         .and_then(|value| value.to_str().ok())
-        .filter(|ct| ct.to_ascii_lowercase().starts_with("application/json"))
-        .and_then(|_| serde_json::from_slice(&body).ok());
+        .is_some_and(|ct| ct.to_ascii_lowercase().starts_with("application/json"));
+
+    let parsed_json: Option<serde_json::Value> = if content_type_is_json {
+        if body.is_empty() {
+            None
+        } else {
+            Some(serde_json::from_slice(&body).map_err(|err| {
+                openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_json"),
+                    err,
+                )
+            })?)
+        }
+    } else {
+        None
+    };
 
     let model = parsed_json
         .as_ref()

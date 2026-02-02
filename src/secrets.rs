@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use crate::profile::Env;
 use crate::{DittoError, Result};
@@ -317,28 +318,7 @@ impl SecretSpec {
                 let cmd = other.build_command().ok_or_else(|| {
                     DittoError::InvalidResponse("secret is not resolvable".into())
                 })?;
-                let mut command = tokio::process::Command::new(cmd.program.as_str());
-                command.args(&cmd.args);
-                for (key, value) in &cmd.env {
-                    command.env(key, value);
-                }
-                let output = command.output().await.map_err(|err| {
-                    DittoError::AuthCommand(format!("spawn {}: {err}", cmd.program))
-                })?;
-                if !output.status.success() {
-                    return Err(DittoError::AuthCommand(format!(
-                        "command {} failed with status {}",
-                        cmd.program, output.status
-                    )));
-                }
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let value = stdout.trim().to_string();
-                if value.is_empty() {
-                    return Err(DittoError::AuthCommand(format!(
-                        "command {} returned empty stdout",
-                        cmd.program
-                    )));
-                }
+                let value = run_secret_command(&cmd, env).await?;
                 if let Some(json_key) = cmd.json_key.as_deref() {
                     let extracted = extract_json_key(&value, json_key)?;
                     return Ok(extracted);
@@ -347,6 +327,133 @@ impl SecretSpec {
             }
         }
     }
+}
+
+const DEFAULT_SECRET_COMMAND_TIMEOUT_SECS: u64 = 15;
+const MAX_SECRET_COMMAND_TIMEOUT_SECS: u64 = 300;
+
+fn secret_command_timeout(env: &Env) -> Duration {
+    let ms = env
+        .get("DITTO_SECRET_COMMAND_TIMEOUT_MS")
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0);
+    if let Some(ms) = ms {
+        return Duration::from_millis(ms);
+    }
+
+    let secs = env
+        .get("DITTO_SECRET_COMMAND_TIMEOUT_SECS")
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_SECRET_COMMAND_TIMEOUT_SECS)
+        .min(MAX_SECRET_COMMAND_TIMEOUT_SECS);
+    Duration::from_secs(secs)
+}
+
+async fn run_secret_command(cmd: &SecretCommand, env: &Env) -> Result<String> {
+    let timeout = secret_command_timeout(env);
+
+    let mut command = tokio::process::Command::new(cmd.program.as_str());
+    command.args(&cmd.args);
+    for (key, value) in &cmd.env {
+        command.env(key, value);
+    }
+
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+
+    let mut child = command
+        .spawn()
+        .map_err(|err| DittoError::AuthCommand(format!("spawn {}: {err}", cmd.program)))?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        DittoError::AuthCommand(format!("command {} did not capture stdout", cmd.program))
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        DittoError::AuthCommand(format!("command {} did not capture stderr", cmd.program))
+    })?;
+
+    const MAX_SECRET_COMMAND_OUTPUT_BYTES: usize = 64 * 1024;
+
+    let stdout_task = tokio::spawn(read_limited(stdout, MAX_SECRET_COMMAND_OUTPUT_BYTES));
+    let stderr_task = tokio::spawn(read_limited(stderr, MAX_SECRET_COMMAND_OUTPUT_BYTES));
+
+    let status = match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(status) => {
+            status.map_err(|err| DittoError::AuthCommand(format!("wait {}: {err}", cmd.program)))?
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            return Err(DittoError::AuthCommand(format!(
+                "command {} timed out after {}ms",
+                cmd.program,
+                timeout.as_millis()
+            )));
+        }
+    };
+
+    let stdout = stdout_task
+        .await
+        .map_err(|err| DittoError::AuthCommand(format!("join stdout reader: {err}")))??;
+    let stderr = stderr_task
+        .await
+        .map_err(|err| DittoError::AuthCommand(format!("join stderr reader: {err}")))??;
+
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr);
+        let stderr = stderr.trim();
+        if stderr.is_empty() {
+            return Err(DittoError::AuthCommand(format!(
+                "command {} failed with status {}",
+                cmd.program, status
+            )));
+        }
+
+        let preview = stderr
+            .chars()
+            .take(200)
+            .collect::<String>()
+            .trim()
+            .to_string();
+        return Err(DittoError::AuthCommand(format!(
+            "command {} failed with status {}: {}",
+            cmd.program, status, preview
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&stdout);
+    let value = stdout.trim().to_string();
+    if value.is_empty() {
+        return Err(DittoError::AuthCommand(format!(
+            "command {} returned empty stdout",
+            cmd.program
+        )));
+    }
+    Ok(value)
+}
+
+async fn read_limited<R>(mut reader: R, max_bytes: usize) -> Result<Vec<u8>>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncReadExt as _;
+
+    let mut out = Vec::<u8>::new();
+    let mut buf = [0u8; 4096];
+    loop {
+        let n = reader.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        if out.len().saturating_add(n) > max_bytes {
+            return Err(DittoError::AuthCommand(format!(
+                "command output exceeds {} bytes",
+                max_bytes
+            )));
+        }
+        out.extend_from_slice(&buf[..n]);
+    }
+    Ok(out)
 }
 
 pub async fn resolve_secret_string(spec: &str, env: &Env) -> Result<String> {
@@ -439,6 +546,44 @@ mod tests {
             cmd.env.get("VAULT_NAMESPACE").map(String::as_str),
             Some("team")
         );
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn secret_command_runner_returns_stdout() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+        let cmd = SecretCommand {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo ok".to_string()],
+            env: BTreeMap::new(),
+            json_key: None,
+        };
+        let value = run_secret_command(&cmd, &env).await?;
+        assert_eq!(value, "ok");
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn secret_command_runner_times_out() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([(
+                "DITTO_SECRET_COMMAND_TIMEOUT_MS".to_string(),
+                "10".to_string(),
+            )]),
+        };
+        let cmd = SecretCommand {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), "sleep 1; echo ok".to_string()],
+            env: BTreeMap::new(),
+            json_key: None,
+        };
+        let err = run_secret_command(&cmd, &env).await.unwrap_err();
+        assert!(matches!(err, DittoError::AuthCommand(_)));
+        assert!(err.to_string().contains("timed out"));
         Ok(())
     }
 }
