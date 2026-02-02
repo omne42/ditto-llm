@@ -153,7 +153,7 @@
   - [x] tenant 隔离：tenant 独立 keys 管理、跨 tenant 查询默认拒绝、审计/导出隔离（tenant-scoped admin token）
 - [x] 企业：审计保留期（sqlite/redis；`--audit-retention-secs`）
 - [x] 企业：审计导出（`GET /admin/audit/export` JSONL/CSV）+ 防篡改（SHA-256 hash-chain）+ verifier CLI（`ditto-audit-verify`）
-- [ ] 企业：审计导出到对象存储（S3/GCS）+ WORM/签名
+- [x] 企业：审计导出到对象存储（S3/GCS）+ WORM/签名
 - [x] 运维资产：Docker Compose / Helm / K8s manifests + Grafana dashboard + PrometheusRule 告警规则
 - [x] 安全：Secret Manager 适配（`secret://...`：Vault/AWS SM/GCP SM/Azure KV；替代纯 env 明文）
 - [x] 管理面：Admin UI（`apps/admin-ui`）

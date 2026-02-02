@@ -175,6 +175,57 @@ Query 参数：
 }
 ```
 
+### 4.2 `GET /admin/audit/export`
+
+返回带防篡改 hash-chain 的审计导出流（JSONL/CSV）。
+
+权限：read-only admin token 或 write admin token。
+
+Query 参数：
+
+- `format=jsonl|csv`（默认 `jsonl`；`ndjson` 视为 `jsonl`）
+- `limit`（默认 1000；最大 10000）
+- `since_ts_ms`（可选）
+- `before_ts_ms`（可选）
+
+JSONL 输出每行是一个 `AuditExportRecord`（包含 `prev_hash`/`hash`，用 SHA-256 串起来；用于离线校验与合规留存）。
+
+### 4.3 离线校验与对象存储导出
+
+仓库内提供两个 CLI：
+
+- `ditto-audit-verify`：校验 JSONL 导出的 hash-chain。
+- `ditto-audit-export`：从 gateway 拉取 `/admin/audit/export`，写到本地文件，并可选上传到对象存储（S3/GCS）+ 生成 manifest（含文件 sha256、最后一个 hash-chain 值等）。
+
+示例：
+
+```bash
+# 1) 导出到本地文件 + 生成 manifest
+cargo run --bin ditto-audit-export --features gateway -- \
+  --base-url http://127.0.0.1:8080 \
+  --admin-token-env DITTO_ADMIN_TOKEN \
+  --output audit.jsonl
+
+# 2) 校验 hash-chain
+cargo run --bin ditto-audit-verify --features gateway -- --input audit.jsonl
+
+# 3) 上传到 S3（需要本机 aws cli + 凭证）
+cargo run --bin ditto-audit-export --features gateway -- \
+  --base-url http://127.0.0.1:8080 \
+  --admin-token-env DITTO_ADMIN_TOKEN \
+  --output audit.jsonl \
+  --upload s3://my-bucket/ditto/audit.jsonl
+
+# 4) 上传到 GCS（需要本机 gsutil + 凭证）
+cargo run --bin ditto-audit-export --features gateway -- \
+  --base-url http://127.0.0.1:8080 \
+  --admin-token-env DITTO_ADMIN_TOKEN \
+  --output audit.jsonl \
+  --upload gs://my-bucket/ditto/audit.jsonl
+```
+
+WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object Lock）。如需在上传时设置 S3 Object Lock 参数，可使用 `ditto-audit-export` 的 `--s3-object-lock-*` 选项（详见 `--help`）。
+
 ---
 
 ## 5) Budgets：查看 token 预算 ledger（可选，需要 store）

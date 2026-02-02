@@ -58,30 +58,30 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 ### 2.3 分布式限流（P0）
 
 - 已支持：启用 redis store（`gateway-store-redis` + `--redis`）时，rpm/tpm 通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL），并支持可选的 tenant/project/user shared limits。
-- 仍缺：按 route 分组的限流、滑窗/令牌桶等更强策略。
+- ✅ 已支持：按 route 分组的分布式限流（Redis 加权滑动窗口 60s；适合多副本一致）。
+- 仍缺：更丰富的策略（令牌桶、分级限流、IP/地理维度等）与更完整的可观测性/告警配套。
 
 ### 2.4 审计合规（P1→P2）
 
-- 当前审计可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs`，默认 30 天），但仍缺：
-  - ✅ 已补齐：admin 写操作（例如 key upsert/delete、backend reset、cache purge）在启用 sqlite/redis store 时也会写入 audit log（作为 taxonomy 的一部分）。
-  - 防篡改（hash-chain / WORM）
-  - 保留期与导出（S3/GCS）
-  - 全链路脱敏策略（logs/audit/devtools/metrics）
+- 当前审计可写入 sqlite/redis，并支持基础保留期（`--audit-retention-secs`，默认 30 天）：
+  - ✅ admin 写操作（例如 key upsert/delete、backend reset、cache purge）在启用 sqlite/redis store 时也会写入 audit log（作为 taxonomy 的一部分）。
+  - ✅ 防篡改导出：`GET /admin/audit/export` 提供 hash-chain（含 `ditto-audit-verify` 校验工具）。
+  - ✅ 对象存储导出：`ditto-audit-export` 可将导出文件上传到 S3/GCS，并生成 manifest（含文件 sha256、最后一个 hash-chain 值等）；WORM 建议在对象存储侧开启（例如 S3 Object Lock）。
+  - 仍缺：全链路脱敏策略（logs/audit/devtools/metrics）与更完整的合规导出流程（审批/分批/追踪）。
 
 ### 2.5 运维资产（P1）
 
 - LiteLLM 有成熟的部署资产与运维说明；Ditto 需要补齐：
-  - ✅ 已提供：`deploy/docker-compose.yml`（本地模板）与 `deploy/k8s/*`（多副本模板）
-  - 仍缺：Helm chart / Kustomize overlays、以及“带监控栈”的组合模板（redis、OTel collector、prometheus + dashboards）
-  - SLO/告警规则与 Grafana dashboard 模板
+  - ✅ 已提供：`deploy/docker-compose.yml`（本地模板）、`deploy/k8s/*`（多副本模板）、Helm chart（`deploy/helm/ditto-gateway`）、Grafana dashboard 模板与 PrometheusRule 模板。
+  - 仍缺：Kustomize overlays、以及“带监控栈”的组合模板（redis、OTel collector、prometheus + dashboards）与更完整的 SLO/告警体系。
 
 ### 2.6 “平台扩展项”（P2）
 
 - A2A agent gateway / MCP gateway（LiteLLM 已提供相关方向）。Ditto 当前更偏 SDK 工具适配（MCP schema）与本地 tool loop；要成为“企业超集”，后续可以把这些能力扩展到网关侧（但建议按真实客户需求推进）。
 - Provider 覆盖面：LiteLLM 的优势是“海量 providers”；Ditto 需要平衡“可维护的 native adapters”与“更强的 OpenAI-compatible 兼容层”。
 - Guardrails/告警/日志目的地生态：LiteLLM 提供大量集成；Ditto 需要优先补齐“通用扩展点 + 官方 adapter（Langfuse/Datadog/S3 等）”。
-- Secret 管理：企业落地常见要求是 Secret Manager（Vault/AWS/GCP/Azure）；Ditto 目前以 env/command 为主，后续可按需求补齐集成。
-- 管理 UI：LiteLLM 有 admin UI；Ditto 当前以 CLI + Admin API 为主，可提供参考 UI 或与外部控制台对接规范。
+- ✅ Secret 管理：已支持 `secret://...` 解析（env/file/Vault/AWS SM/GCP SM/Azure KV），并已接入 gateway/SDK 配置与 CLI flags。
+- ✅ 管理 UI：已提供最小 Admin UI（`apps/admin-ui`），用于演示 keys/budgets/costs/audit 等控制面能力。
 
 ---
 

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
 - Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
+- Gateway: add `ditto-audit-export` CLI to fetch `/admin/audit/export`, write a local export + manifest, and optionally upload to S3/GCS (supports S3 Object Lock flags).
 - Gateway: add per-route Redis rate limiting (route-scoped keys) and upgrade the algorithm to a weighted sliding window across the current and previous minute (60s window).
 - Security: add `secret://...` secret resolution (env/file/Vault/AWS SM/GCP SM/Azure KV) and wire it into SDK `ProviderAuth`, Gateway config values, and gateway CLI flags (admin tokens / redis url).
 - SDK: add `CacheLayer` middleware (implements `LanguageModelLayer`) with deterministic request hashing and streaming replay.
