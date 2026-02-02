@@ -137,10 +137,10 @@ async fn handle_openai_compat_proxy(
     Path(_path): Path<String>,
     req: axum::http::Request<Body>,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
-    const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+    let max_body_bytes = state.proxy_max_body_bytes;
 
     let (parts, body) = req.into_parts();
-    let body = to_bytes(body, MAX_BODY_BYTES)
+    let body = to_bytes(body, max_body_bytes)
         .await
         .map_err(|err| openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err))?;
 

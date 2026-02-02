@@ -53,5 +53,5 @@ curl -sS http://127.0.0.1:8080/v1/models
 
 下一步建议阅读：
 
-- 「Gateway → 配置文件（gateway.json）」了解如何配置 upstream backends / virtual keys / router。
+- 「Gateway → 配置文件（gateway.json / gateway.yaml）」了解如何配置 upstream backends / virtual keys / router。
 - 「Gateway → 运行网关」了解常用 CLI 选项与部署建议。

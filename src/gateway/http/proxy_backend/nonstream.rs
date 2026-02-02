@@ -4,14 +4,12 @@
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<usize>().ok());
 
-        let should_buffer_for_cache = {
+        let should_attempt_buffer_for_cache = {
             #[cfg(feature = "gateway-proxy-cache")]
             {
                 status.is_success()
                     && proxy_cache_key.is_some()
-                    && state.proxy_cache_config.as_ref().is_some_and(|config| {
-                        content_length.is_some_and(|len| len <= config.max_body_bytes)
-                    })
+                    && state.proxy_cache_config.is_some()
             }
             #[cfg(not(feature = "gateway-proxy-cache"))]
             {
@@ -34,24 +32,93 @@
             }
         };
 
-        let should_buffer_for_usage = spend_tokens
-            && content_type.starts_with("application/json")
-            && content_length.is_some_and(|len| len <= max_buffer_bytes);
+        let should_attempt_buffer_for_usage = spend_tokens && content_type.starts_with("application/json");
 
-        let should_buffer = should_buffer_for_cache || should_buffer_for_usage;
-        let mut upstream_response = Some(upstream_response);
-        let bytes = if should_buffer {
-            upstream_response
-                .take()
-                .expect("upstream response")
-                .bytes()
-                .await
-                .unwrap_or_default()
+        let should_attempt_buffer =
+            max_buffer_bytes > 0 && (should_attempt_buffer_for_cache || should_attempt_buffer_for_usage);
+        let should_try_buffer = should_attempt_buffer
+            && content_length.is_none_or(|len| len <= max_buffer_bytes);
+
+        let (body_bytes, body_stream): (Option<Bytes>, Option<ProxyBodyStream>) = if should_try_buffer {
+            match content_length {
+                Some(_) => {
+                    let bytes = upstream_response.bytes().await.unwrap_or_default();
+                    (Some(bytes), None)
+                }
+                None => {
+                    let mut upstream_stream = upstream_response.bytes_stream();
+                    let mut buffered: Vec<Bytes> = Vec::new();
+                    let mut buffered_len: usize = 0;
+                    let mut first_unbuffered: Option<Bytes> = None;
+                    let mut stream_error: Option<std::io::Error> = None;
+
+                    while let Some(next) = upstream_stream.next().await {
+                        match next {
+                            Ok(chunk) => {
+                                if buffered_len.saturating_add(chunk.len()) <= max_buffer_bytes {
+                                    buffered_len = buffered_len.saturating_add(chunk.len());
+                                    buffered.push(chunk);
+                                } else {
+                                    first_unbuffered = Some(chunk);
+                                    break;
+                                }
+                            }
+                            Err(err) => {
+                                stream_error = Some(std::io::Error::other(err));
+                                break;
+                            }
+                        }
+                    }
+
+                    if first_unbuffered.is_none() && stream_error.is_none() {
+                        if buffered.len() == 1 {
+                            (Some(buffered.pop().expect("buffered chunk")), None)
+                        } else {
+                            let mut combined = bytes::BytesMut::with_capacity(buffered_len);
+                            for chunk in buffered {
+                                combined.extend_from_slice(chunk.as_ref());
+                            }
+                            (Some(combined.freeze()), None)
+                        }
+                    } else if let Some(chunk) = first_unbuffered {
+                        let prefix = futures_util::stream::iter(
+                            buffered
+                                .into_iter()
+                                .map(|chunk| Ok::<Bytes, std::io::Error>(chunk)),
+                        );
+                        let first = futures_util::stream::once(async move {
+                            Ok::<Bytes, std::io::Error>(chunk)
+                        });
+                        let rest = upstream_stream.map(|chunk| chunk.map_err(std::io::Error::other));
+                        let stream = prefix.chain(first).chain(rest).boxed();
+                        (None, Some(stream))
+                    } else {
+                        let prefix = futures_util::stream::iter(
+                            buffered
+                                .into_iter()
+                                .map(|chunk| Ok::<Bytes, std::io::Error>(chunk)),
+                        );
+                        let err = stream_error.expect("upstream stream error");
+                        let err_stream = futures_util::stream::once(async move {
+                            Err::<Bytes, std::io::Error>(err)
+                        });
+                        let stream = prefix.chain(err_stream).boxed();
+                        (None, Some(stream))
+                    }
+                }
+            }
         } else {
-            Bytes::new()
+            let stream = upstream_response
+                .bytes_stream()
+                .map(|chunk| chunk.map_err(std::io::Error::other))
+                .boxed();
+            (None, Some(stream))
         };
-        let observed_usage = if should_buffer_for_usage {
-            extract_openai_usage_from_bytes(&bytes)
+
+        let observed_usage = if should_attempt_buffer_for_usage {
+            body_bytes
+                .as_ref()
+                .and_then(|bytes| extract_openai_usage_from_bytes(bytes))
         } else {
             None
         };
@@ -275,15 +342,17 @@
         }
 
         #[cfg(feature = "gateway-proxy-cache")]
-        if should_buffer_for_cache && status.is_success() {
+        if should_attempt_buffer_for_cache && status.is_success() {
             if let Some(cache_key) = proxy_cache_key.as_deref() {
-                let cached = CachedProxyResponse {
-                    status: status.as_u16(),
-                    headers: upstream_headers.clone(),
-                    body: bytes.clone(),
-                    backend: backend_name.clone(),
-                };
-                store_proxy_cache_response(state, cache_key, cached, now_epoch_seconds()).await;
+                if let Some(bytes) = body_bytes.as_ref() {
+                    let cached = CachedProxyResponse {
+                        status: status.as_u16(),
+                        headers: upstream_headers.clone(),
+                        body: bytes.clone(),
+                        backend: backend_name.clone(),
+                    };
+                    store_proxy_cache_response(state, cache_key, cached, now_epoch_seconds()).await;
+                }
             }
         }
 
@@ -295,7 +364,7 @@
                 headers.insert("x-ditto-cache-key", value);
             }
         }
-        if should_buffer {
+        if let Some(bytes) = body_bytes {
             let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
             let mut response = axum::response::Response::new(body);
             *response.status_mut() = status;
@@ -303,12 +372,7 @@
             Ok(BackendAttemptOutcome::Response(response))
         } else {
             headers.remove("content-length");
-            let stream = upstream_response
-                .take()
-                .expect("upstream response")
-                .bytes_stream()
-                .map(|chunk| chunk.map_err(std::io::Error::other))
-                .boxed();
+            let stream = body_stream.expect("proxy body stream");
             let stream = ProxyBodyStreamWithPermit {
                 inner: stream,
                 _permits: proxy_permits.take(),

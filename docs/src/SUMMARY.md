@@ -35,7 +35,7 @@
 - [Gateway（LiteLLM-like）](./gateway/index.md)
   - [运行网关](./gateway/quickstart.md)
   - [Gateway Recipes（可复制落地）](./gateway/recipes.md)
-  - [配置文件（gateway.json）](./gateway/config.md)
+  - [配置文件（gateway.json / gateway.yaml）](./gateway/config.md)
   - [HTTP Endpoints](./gateway/endpoints.md)
   - [鉴权：Virtual Keys 与 Admin Token](./gateway/auth.md)
   - [路由：Weighted / Fallback / Retry](./gateway/routing.md)

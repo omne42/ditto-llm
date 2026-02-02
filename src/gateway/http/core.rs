@@ -88,6 +88,7 @@ pub struct GatewayHttpState {
     proxy_cache: Option<Arc<Mutex<ProxyResponseCache>>>,
     #[cfg(feature = "gateway-proxy-cache")]
     proxy_cache_config: Option<ProxyCacheConfig>,
+    proxy_max_body_bytes: usize,
     proxy_backpressure: Option<Arc<Semaphore>>,
     proxy_backend_backpressure: Arc<HashMap<String, Arc<Semaphore>>>,
     #[cfg(feature = "gateway-metrics-prometheus")]
@@ -131,6 +132,7 @@ impl GatewayHttpState {
             proxy_cache: None,
             #[cfg(feature = "gateway-proxy-cache")]
             proxy_cache_config: None,
+            proxy_max_body_bytes: 64 * 1024 * 1024,
             proxy_backpressure: None,
             proxy_backend_backpressure: Arc::new(proxy_backend_backpressure),
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -152,6 +154,11 @@ impl GatewayHttpState {
 
     pub fn with_proxy_backends(mut self, backends: HashMap<String, ProxyBackend>) -> Self {
         self.proxy_backends = Arc::new(backends);
+        self
+    }
+
+    pub fn with_proxy_max_body_bytes(mut self, max_body_bytes: usize) -> Self {
+        self.proxy_max_body_bytes = max_body_bytes.max(1);
         self
     }
 

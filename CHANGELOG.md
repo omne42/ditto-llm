@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
+- Gateway: `ditto-gateway` now accepts YAML config files (`gateway.yaml` / `gateway.yml`) in addition to JSON.
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
+- Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).
 - Utils: add bounded SSE parsing with `SseLimits` (max line/event bytes) to reduce OOM risk.
 
 ### Changed
@@ -38,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).
 - Gateway: passthrough proxy now avoids buffering large non-SSE responses (streams them) and only buffers when a response is small enough for usage accounting or proxy caching (reduces OOM risk on large downloads).
+- Gateway: proxy non-stream handler now uses bounded pre-buffering to enable usage parsing and proxy caching even when the upstream response omits `content-length` (falls back to streaming when the cap is exceeded).
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 

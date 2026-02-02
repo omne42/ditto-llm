@@ -11,7 +11,7 @@
 `ditto-gateway` 的第一个参数必须是配置文件路径：
 
 ```bash
-ditto-gateway <gateway.json> [flags...]
+ditto-gateway <gateway.(json|yaml)> [flags...]
 ```
 
 开发期常见用法：
@@ -81,6 +81,7 @@ redis 相关：
 ## 6) Proxy backpressure（强烈建议）
 
 - `--proxy-max-in-flight N`：限制同时代理的请求数（超限 429；N 必须 > 0）
+- `--proxy-max-body-bytes N`：限制 `/v1/*` 入口请求体最大 bytes（默认 64MiB；N 必须 > 0）
 
 此外，`gateway.json.backends[].max_in_flight` 也会对单 backend 限并发（更细粒度）。
 

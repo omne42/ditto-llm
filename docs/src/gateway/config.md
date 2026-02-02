@@ -1,6 +1,8 @@
-# 配置文件（gateway.json）
+# 配置文件（gateway.json / gateway.yaml）
 
 Gateway 配置的核心类型是 `GatewayConfig`（见 `src/gateway/config.rs`）：
+
+Ditto 支持用 **JSON 或 YAML** 表达同一份配置（字段完全一致）；下文以 JSON 为例。
 
 ```json
 {

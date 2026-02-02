@@ -79,7 +79,7 @@ Ditto 当前覆盖度：
 
 ### 3.1 配置格式与 env 展开
 
-- Ditto 配置是 JSON（`gateway.json`）
+- Ditto 配置支持 JSON 或 YAML（`gateway.json` / `gateway.yaml`）
 - 支持 `${ENV_VAR}` 占位符展开，并且 env 缺失会启动失败（避免 silent misconfig）
 
 ### 3.2 Virtual keys 的行为差异
@@ -93,8 +93,8 @@ Ditto 当前覆盖度：
 
 ### 3.3 分布式一致性
 
-- Ditto 的 budgets 在启用 redis store 后可做到多副本一致（预留/结算）
-- 但 rpm/tpm limits 当前仍是进程内计数（多副本不一致）
+- 启用 redis store（`gateway-store-redis` + `--redis`）后：virtual keys / budgets（预留/结算）/ audit logs / rpm/tpm limits 都可做到多副本一致（按 virtual key 维度）
+- 不启用 redis store：以上能力大多是进程内/本地存储（多副本不一致）
 
 ### 3.4 Costing（pricing）
 
