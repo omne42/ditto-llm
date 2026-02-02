@@ -144,11 +144,20 @@
 - [x] 内存安全：SSE parsing 增加单行/单事件上限（防止异常上游导致 OOM）
 - [x] 内存安全：`stream_text` fan-out 改为有界缓冲（避免未消费 stream 的无界增长）
 - [x] 内存安全：`stream_object` fan-out 改为有界缓冲（替换 `mpsc::unbounded_channel`）
+- [x] 内存安全：`StreamCollector` / `stream_object` 内部缓冲区增加 max-bytes 上限（超限发出 warning）
+- [ ] 企业：分布式限流（Redis 全局 rpm/tpm；按 key/project/user/route）
+- [ ] 企业：RBAC-lite + tenant 模型（keys/budgets/audit 的隔离边界）
+- [ ] 企业：审计保留期/导出（S3/GCS）+ 防篡改（hash-chain / WORM）
+- [ ] 运维资产：Docker/Helm/K8s manifests + Grafana dashboard + SLO/告警规则
+- [ ] 安全：Secret Manager 适配（Vault/AWS/GCP/Azure；替代纯 env/command）
+- [ ] 管理面：Admin UI（或对接外部控制台的规范与示例）
 
 ### P1（让 Ditto 成为“超集”，而不是“替代品”）
 
 - [x] Translation proxy：把 `POST /v1/responses` / `POST /v1/responses/compact` / `POST /v1/chat/completions` 翻译到 native providers（Anthropic/Google/Bedrock/Vertex/Cohere；feature `gateway-translation`）
 - [x] UI/HTTP 适配层：Rust 侧提供 AI SDK UI 类似的 streaming primitives（`sdk::http` 的 SSE/NDJSON 输出）
+- [ ] SDK：缓存 middleware + 流式回放（对齐 AI SDK caching 范式）
+- [ ] SDK：最小 JS/TS client + React hooks（基于 stream protocol v1；非 1:1 复刻 AI SDK UI）
 
 ### P2（扩面端点）
 

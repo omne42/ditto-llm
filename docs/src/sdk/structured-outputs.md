@@ -118,3 +118,4 @@ let _final = handle.final_summary()?;
 - **Schema 越明确越好**：尤其是 `required` 与 `type`，可以显著降低解析失败率。
 - **对错误要敏感**：`final_json()` / `final_object()` 只有在 stream 完成后才会返回结果；若解析失败会返回 `DittoError::InvalidResponse(...)`。
 - **把 warnings 当成信号**：比如 “fallback to text json parsing” 的 Warning，通常意味着 provider 不支持你期望的能力或模型没遵守约束。
+- **超大输出要做容量预期**：Ditto 在部分内部缓冲区设置了体积上限（防止 OOM）；一旦触发会发出 `Warning`，并可能导致最终解析失败或结果被截断。

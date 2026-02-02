@@ -68,6 +68,8 @@ pub struct StreamObjectFinal {
 struct StreamObjectState {
     text_buffer: String,
     tool_buffer: String,
+    text_truncated: bool,
+    tool_truncated: bool,
     last_emitted: Option<Value>,
     last_emitted_element: usize,
     final_object: Option<Value>,
@@ -301,9 +303,32 @@ struct StreamObjectConfig {
     tool_name: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct StreamObjectBufferLimits {
+    max_text_bytes: usize,
+    max_tool_bytes: usize,
+}
+
+impl Default for StreamObjectBufferLimits {
+    fn default() -> Self {
+        Self {
+            max_text_bytes: 64 * 1024 * 1024,
+            max_tool_bytes: 64 * 1024 * 1024,
+        }
+    }
+}
+
 fn stream_object_from_stream_with_config(
     stream: StreamResult,
     config: StreamObjectConfig,
+) -> StreamObjectResult {
+    stream_object_from_stream_with_config_and_limits(stream, config, StreamObjectBufferLimits::default())
+}
+
+fn stream_object_from_stream_with_config_and_limits(
+    stream: StreamResult,
+    config: StreamObjectConfig,
+    buffer_limits: StreamObjectBufferLimits,
 ) -> StreamObjectResult {
     const FANOUT_BUFFER: usize = 64;
 
@@ -374,7 +399,27 @@ fn stream_object_from_stream_with_config(
                             }
                             StreamChunk::TextDelta { text } => {
                                 if !text.is_empty() {
-                                    state.text_buffer.push_str(text);
+                                    if state.text_truncated
+                                        || state
+                                            .text_buffer
+                                            .len()
+                                            .saturating_add(text.len())
+                                            > buffer_limits.max_text_bytes
+                                    {
+                                        if !state.text_truncated {
+                                            state.text_truncated = true;
+                                            state.warnings.push(Warning::Compatibility {
+                                                feature: "stream_object.max_text_bytes"
+                                                    .to_string(),
+                                                details: format!(
+                                                    "stream object text buffer exceeded max_text_bytes={}; further text will be ignored",
+                                                    buffer_limits.max_text_bytes
+                                                ),
+                                            });
+                                        }
+                                    } else {
+                                        state.text_buffer.push_str(text);
+                                    }
                                 }
                             }
                             StreamChunk::ToolCallStart { id, name } => {
@@ -406,7 +451,27 @@ fn stream_object_from_stream_with_config(
                                         state.tool_call_id = Some(id.to_string());
                                     }
                                     if !arguments_delta.is_empty() {
-                                        state.tool_buffer.push_str(arguments_delta);
+                                        if state.tool_truncated
+                                            || state
+                                                .tool_buffer
+                                                .len()
+                                                .saturating_add(arguments_delta.len())
+                                                > buffer_limits.max_tool_bytes
+                                        {
+                                            if !state.tool_truncated {
+                                                state.tool_truncated = true;
+                                                state.warnings.push(Warning::Compatibility {
+                                                    feature: "stream_object.max_tool_bytes"
+                                                        .to_string(),
+                                                    details: format!(
+                                                        "stream object tool buffer exceeded max_tool_bytes={}; further tool deltas will be ignored",
+                                                        buffer_limits.max_tool_bytes
+                                                    ),
+                                                });
+                                            }
+                                        } else {
+                                            state.tool_buffer.push_str(arguments_delta);
+                                        }
                                     }
                                 }
                             }
@@ -486,8 +551,8 @@ fn stream_object_from_stream_with_config(
             };
             state.done = true;
             (
-                state.text_buffer.clone(),
-                state.tool_buffer.clone(),
+                std::mem::take(&mut state.text_buffer),
+                std::mem::take(&mut state.tool_buffer),
                 state.output,
             )
         };

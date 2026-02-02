@@ -81,3 +81,4 @@ let _final = handle.final_summary()?;
 - 建议使用 `into_text_stream()` / `into_full_stream()` / `into_streams()` 明确你要消费哪条/哪些 stream（只启用被消费的 fan-out）。
 - 如果你启用了两条 stream（`into_streams()`），请确保两者都被持续消费（例如分别 `tokio::spawn`），否则慢的一侧会通过有界缓冲对上游施加 backpressure（表现为吞吐降低/等待），而不是内存持续增长。
 - 只想拿最终 `GenerateResponse` 时，优先用 `collect_stream()` / `generate_text()`。
+- `final_text()` / `final_summary()` 依赖内部 `StreamCollector` 聚合；当输出异常巨大时，聚合器可能触发体积上限并发出 `Warning`，最终聚合结果会被截断（但流式输出仍按实际返回继续产出）。

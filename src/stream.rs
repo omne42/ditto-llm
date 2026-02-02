@@ -31,6 +31,26 @@ enum CollectedPart {
 struct ToolCallBuffer {
     name: Option<String>,
     arguments: String,
+    truncated: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StreamCollectorLimits {
+    max_total_bytes: usize,
+    max_tool_arguments_bytes: usize,
+    max_parts: usize,
+    max_tool_calls: usize,
+}
+
+impl Default for StreamCollectorLimits {
+    fn default() -> Self {
+        Self {
+            max_total_bytes: 64 * 1024 * 1024,
+            max_tool_arguments_bytes: 4 * 1024 * 1024,
+            max_parts: 4096,
+            max_tool_calls: 256,
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -42,9 +62,54 @@ pub(crate) struct StreamCollector {
     parts: Vec<CollectedPart>,
     tool_calls: HashMap<String, ToolCallBuffer>,
     seen_tool_call_ids: HashSet<String>,
+    limits: StreamCollectorLimits,
+    total_bytes: usize,
+    bytes_truncated: bool,
+    warned_max_total_bytes: bool,
+    warned_max_parts: bool,
+    warned_max_tool_calls: bool,
 }
 
 impl StreamCollector {
+    fn try_add_bytes(&mut self, bytes: usize) -> bool {
+        if self.bytes_truncated {
+            return false;
+        }
+        if self.total_bytes.saturating_add(bytes) > self.limits.max_total_bytes {
+            self.bytes_truncated = true;
+            if !self.warned_max_total_bytes {
+                self.warned_max_total_bytes = true;
+                self.warnings.push(Warning::Compatibility {
+                    feature: "stream.collector.max_total_bytes".to_string(),
+                    details: format!(
+                        "stream collector reached max_total_bytes={}; final response will be truncated",
+                        self.limits.max_total_bytes
+                    ),
+                });
+            }
+            return false;
+        }
+        self.total_bytes = self.total_bytes.saturating_add(bytes);
+        true
+    }
+
+    fn can_push_part(&mut self) -> bool {
+        if self.parts.len() >= self.limits.max_parts {
+            if !self.warned_max_parts {
+                self.warned_max_parts = true;
+                self.warnings.push(Warning::Compatibility {
+                    feature: "stream.collector.max_parts".to_string(),
+                    details: format!(
+                        "stream collector reached max_parts={}; final response will be truncated",
+                        self.limits.max_parts
+                    ),
+                });
+            }
+            return false;
+        }
+        true
+    }
+
     pub(crate) fn observe(&mut self, chunk: &StreamChunk) {
         match chunk {
             StreamChunk::Warnings { warnings } => self.warnings.extend(warnings.clone()),
@@ -57,18 +122,42 @@ impl StreamCollector {
                 if text.is_empty() {
                     return;
                 }
-                match self.parts.last_mut() {
-                    Some(CollectedPart::Text(existing)) => existing.push_str(text),
-                    _ => self.parts.push(CollectedPart::Text(text.to_string())),
+                let can_merge = matches!(self.parts.last(), Some(CollectedPart::Text(_)));
+                if can_merge {
+                    if self.try_add_bytes(text.len()) {
+                        if let Some(CollectedPart::Text(existing)) = self.parts.last_mut() {
+                            existing.push_str(text);
+                        }
+                    }
+                    return;
+                }
+
+                if !self.can_push_part() {
+                    return;
+                }
+                if self.try_add_bytes(text.len()) {
+                    self.parts.push(CollectedPart::Text(text.to_string()));
                 }
             }
             StreamChunk::ReasoningDelta { text } => {
                 if text.is_empty() {
                     return;
                 }
-                match self.parts.last_mut() {
-                    Some(CollectedPart::Reasoning(existing)) => existing.push_str(text),
-                    _ => self.parts.push(CollectedPart::Reasoning(text.to_string())),
+                let can_merge = matches!(self.parts.last(), Some(CollectedPart::Reasoning(_)));
+                if can_merge {
+                    if self.try_add_bytes(text.len()) {
+                        if let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut() {
+                            existing.push_str(text);
+                        }
+                    }
+                    return;
+                }
+
+                if !self.can_push_part() {
+                    return;
+                }
+                if self.try_add_bytes(text.len()) {
+                    self.parts.push(CollectedPart::Reasoning(text.to_string()));
                 }
             }
             StreamChunk::ToolCallStart { id, name } => {
@@ -81,13 +170,31 @@ impl StreamCollector {
                     return;
                 }
 
+                if !self.tool_calls.contains_key(id)
+                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                {
+                    if !self.warned_max_tool_calls {
+                        self.warned_max_tool_calls = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_calls".to_string(),
+                            details: format!(
+                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
+                                self.limits.max_tool_calls
+                            ),
+                        });
+                    }
+                    return;
+                }
+
                 let slot = self.tool_calls.entry(id.to_string()).or_default();
                 if slot.name.is_none() && !name.trim().is_empty() {
                     slot.name = Some(name.to_string());
                 }
                 if self.seen_tool_call_ids.insert(id.to_string()) {
-                    self.parts
-                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                    if self.can_push_part() {
+                        self.parts
+                            .push(CollectedPart::ToolCall { id: id.to_string() });
+                    }
                 }
             }
             StreamChunk::ToolCallDelta {
@@ -102,11 +209,51 @@ impl StreamCollector {
                     return;
                 }
 
-                let slot = self.tool_calls.entry(id.to_string()).or_default();
-                slot.arguments.push_str(arguments_delta);
+                if !self.tool_calls.contains_key(id)
+                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                {
+                    if !self.warned_max_tool_calls {
+                        self.warned_max_tool_calls = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_calls".to_string(),
+                            details: format!(
+                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
+                                self.limits.max_tool_calls
+                            ),
+                        });
+                    }
+                    return;
+                }
+
+                {
+                    let slot = self.tool_calls.entry(id.to_string()).or_default();
+                    if slot.truncated {
+                        return;
+                    }
+                    if slot.arguments.len().saturating_add(arguments_delta.len())
+                        > self.limits.max_tool_arguments_bytes
+                    {
+                        slot.truncated = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_arguments_bytes".to_string(),
+                            details: format!(
+                                "tool call arguments exceeded max_tool_arguments_bytes={} for id={id}; arguments will be truncated",
+                                self.limits.max_tool_arguments_bytes
+                            ),
+                        });
+                        return;
+                    }
+                }
+                if self.try_add_bytes(arguments_delta.len()) {
+                    if let Some(slot) = self.tool_calls.get_mut(id) {
+                        slot.arguments.push_str(arguments_delta);
+                    }
+                }
                 if self.seen_tool_call_ids.insert(id.to_string()) {
-                    self.parts
-                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                    if self.can_push_part() {
+                        self.parts
+                            .push(CollectedPart::ToolCall { id: id.to_string() });
+                    }
                 }
             }
             StreamChunk::FinishReason(reason) => self.finish_reason = *reason,
@@ -126,18 +273,42 @@ impl StreamCollector {
                 if text.is_empty() {
                     return;
                 }
-                match self.parts.last_mut() {
-                    Some(CollectedPart::Text(existing)) => existing.push_str(&text),
-                    _ => self.parts.push(CollectedPart::Text(text)),
+                let can_merge = matches!(self.parts.last(), Some(CollectedPart::Text(_)));
+                if can_merge {
+                    if self.try_add_bytes(text.len()) {
+                        if let Some(CollectedPart::Text(existing)) = self.parts.last_mut() {
+                            existing.push_str(&text);
+                        }
+                    }
+                    return;
+                }
+
+                if !self.can_push_part() {
+                    return;
+                }
+                if self.try_add_bytes(text.len()) {
+                    self.parts.push(CollectedPart::Text(text));
                 }
             }
             StreamChunk::ReasoningDelta { text } => {
                 if text.is_empty() {
                     return;
                 }
-                match self.parts.last_mut() {
-                    Some(CollectedPart::Reasoning(existing)) => existing.push_str(&text),
-                    _ => self.parts.push(CollectedPart::Reasoning(text)),
+                let can_merge = matches!(self.parts.last(), Some(CollectedPart::Reasoning(_)));
+                if can_merge {
+                    if self.try_add_bytes(text.len()) {
+                        if let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut() {
+                            existing.push_str(&text);
+                        }
+                    }
+                    return;
+                }
+
+                if !self.can_push_part() {
+                    return;
+                }
+                if self.try_add_bytes(text.len()) {
+                    self.parts.push(CollectedPart::Reasoning(text));
                 }
             }
             StreamChunk::ToolCallStart { id, name } => {
@@ -150,12 +321,30 @@ impl StreamCollector {
                     return;
                 }
 
+                if !self.tool_calls.contains_key(&id)
+                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                {
+                    if !self.warned_max_tool_calls {
+                        self.warned_max_tool_calls = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_calls".to_string(),
+                            details: format!(
+                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
+                                self.limits.max_tool_calls
+                            ),
+                        });
+                    }
+                    return;
+                }
+
                 let slot = self.tool_calls.entry(id.clone()).or_default();
                 if slot.name.is_none() && !name.trim().is_empty() {
                     slot.name = Some(name);
                 }
                 if self.seen_tool_call_ids.insert(id.clone()) {
-                    self.parts.push(CollectedPart::ToolCall { id });
+                    if self.can_push_part() {
+                        self.parts.push(CollectedPart::ToolCall { id });
+                    }
                 }
             }
             StreamChunk::ToolCallDelta {
@@ -171,10 +360,50 @@ impl StreamCollector {
                     return;
                 }
 
-                let slot = self.tool_calls.entry(id.clone()).or_default();
-                slot.arguments.push_str(&arguments_delta);
+                if !self.tool_calls.contains_key(&id)
+                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                {
+                    if !self.warned_max_tool_calls {
+                        self.warned_max_tool_calls = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_calls".to_string(),
+                            details: format!(
+                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
+                                self.limits.max_tool_calls
+                            ),
+                        });
+                    }
+                    return;
+                }
+
+                {
+                    let slot = self.tool_calls.entry(id.clone()).or_default();
+                    if slot.truncated {
+                        return;
+                    }
+                    if slot.arguments.len().saturating_add(arguments_delta.len())
+                        > self.limits.max_tool_arguments_bytes
+                    {
+                        slot.truncated = true;
+                        self.warnings.push(Warning::Compatibility {
+                            feature: "stream.collector.max_tool_arguments_bytes".to_string(),
+                            details: format!(
+                                "tool call arguments exceeded max_tool_arguments_bytes={} for id={id}; arguments will be truncated",
+                                self.limits.max_tool_arguments_bytes
+                            ),
+                        });
+                        return;
+                    }
+                }
+                if self.try_add_bytes(arguments_delta.len()) {
+                    if let Some(slot) = self.tool_calls.get_mut(&id) {
+                        slot.arguments.push_str(&arguments_delta);
+                    }
+                }
                 if self.seen_tool_call_ids.insert(id.clone()) {
-                    self.parts.push(CollectedPart::ToolCall { id });
+                    if self.can_push_part() {
+                        self.parts.push(CollectedPart::ToolCall { id });
+                    }
                 }
             }
             StreamChunk::FinishReason(reason) => self.finish_reason = reason,
@@ -368,6 +597,26 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn stream_collector_truncates_when_over_max_bytes() {
+        let mut collector = StreamCollector::default();
+        collector.limits.max_total_bytes = 8;
+
+        collector.observe_owned(StreamChunk::TextDelta {
+            text: "12345678".to_string(),
+        });
+        collector.observe_owned(StreamChunk::TextDelta {
+            text: "9".to_string(),
+        });
+
+        let response = collector.finish();
+        assert_eq!(response.text(), "12345678".to_string());
+        assert!(response.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, .. } if feature == "stream.collector.max_total_bytes"
+        )));
     }
 
     #[tokio::test]

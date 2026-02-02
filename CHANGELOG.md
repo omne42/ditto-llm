@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).
 - SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
+- SDK: add max-bytes caps for `StreamCollector` and `stream_object` internal buffers (emit warnings + truncate to reduce OOM risk on extremely large streams).
 - Dev: pre-commit blocks `partNN.*` filenames in staged changes.
 - Refactor: rename remaining `partNN.rs` files to descriptive module names.
 - Dev: update the commit hook example scope to avoid legacy naming.
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
 - Docs: remove legacy external repo references.
+- Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 
 ## [0.1.2] - 2026-02-01
 

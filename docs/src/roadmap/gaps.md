@@ -23,6 +23,13 @@ AI SDK 的优势不在“接口形式”，而在“生态 + 工程化体验”�
 - **模板与样例不足**：AI SDK 有大量 cookbook/模板；Ditto 需要：
   - Rust examples（SDK、agent loop、middleware、stream protocol v1）
   - 多语言客户端调用 `ditto-gateway` 的最小工程模板（Node/Python/Go）
+- **UI/前端生态（可选超集）**：AI SDK 的强项是 UI hooks（React/Vue/Svelte）与 RSC/Generative UI；Ditto 不追求 1:1 复刻，但可以通过：
+  - 官方“stream protocol v1”客户端（JS/TS）+ 最小 hooks（React）降低接入成本
+  - 端到端模板（Next.js/Node 调 `ditto-gateway`）把“工程化路径”补齐
+- **缓存与回放（应用侧）**：AI SDK 有成熟的 caching/backpressure 示例；Ditto 可以补齐：
+  - 基于 `LanguageModelLayer` 的缓存 middleware（含流式回放）
+  - 可复制的性能/稳定性 recipe（超时、并发、重试、背压）
+- **生态适配器**：AI SDK 有 LangChain/LlamaIndex 等 adapters；Ditto 需要明确“协议级桥接”与最小适配层（否则迁移成本高）。
 - **调试/重放链路需要更“开箱即用”**：
   - devtools JSONL 的字段稳定化（版本/事件类型 taxonomy）
   - 更容易把一次失败请求最小化复现出来（request_id → 事件切片）
@@ -66,6 +73,10 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 ### 2.6 “平台扩展项”（P2）
 
 - A2A agent gateway / MCP gateway（LiteLLM 已提供相关方向）。Ditto 当前更偏 SDK 工具适配（MCP schema）与本地 tool loop；要成为“企业超集”，后续可以把这些能力扩展到网关侧（但建议按真实客户需求推进）。
+- Provider 覆盖面：LiteLLM 的优势是“海量 providers”；Ditto 需要平衡“可维护的 native adapters”与“更强的 OpenAI-compatible 兼容层”。
+- Guardrails/告警/日志目的地生态：LiteLLM 提供大量集成；Ditto 需要优先补齐“通用扩展点 + 官方 adapter（Langfuse/Datadog/S3 等）”。
+- Secret 管理：企业落地常见要求是 Secret Manager（Vault/AWS/GCP/Azure）；Ditto 目前以 env/command 为主，后续可按需求补齐集成。
+- 管理 UI：LiteLLM 有 admin UI；Ditto 当前以 CLI + Admin API 为主，可提供参考 UI 或与外部控制台对接规范。
 
 ---
 
@@ -76,6 +87,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 - **Proxy cache 增加体积上限**：支持限制单条缓存 body 与总缓存体积，避免缓存把内存/Redis 打爆。
 - **SSE parsing 增加行/事件大小上限**：异常/恶意 SSE 事件不会无限增长。
 - **stream fan-out 可更安全使用**：提供 `StreamTextHandle`/`StreamObjectHandle` 与 `into_*_stream`，避免“只消费一条 stream 却保留另一条 receiver”的隐式积压。
+- **聚合与缓冲区增加体积上限**：`StreamCollector` 与 `stream_object` 内部缓冲区设定 max bytes，避免“超大输出/异常输出”把进程内存打爆（超限发出 `Warning` 并截断）。
 
 ### 3.2 仍建议做（P0）
 

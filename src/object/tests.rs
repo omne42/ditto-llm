@@ -174,6 +174,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn stream_object_truncates_text_buffer_without_oom() -> Result<()> {
+        let chunks = vec![
+            Ok(StreamChunk::TextDelta {
+                text: "{\"a\":1}".to_string(),
+            }),
+            Ok(StreamChunk::TextDelta {
+                text: " trailing".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+        ];
+
+        let inner: StreamResult = stream::iter(chunks).boxed();
+
+        let (handle, mut partial_object_stream) = stream_object_from_stream_with_config_and_limits(
+            inner,
+            StreamObjectConfig {
+                output: ObjectOutput::Object,
+                strategy: ObjectStrategy::TextJson,
+                tool_name: "__ditto_object__".to_string(),
+            },
+            StreamObjectBufferLimits {
+                max_text_bytes: 7,
+                max_tool_bytes: 64 * 1024,
+            },
+        )
+        .into_partial_stream();
+
+        while let Some(next) = partial_object_stream.next().await {
+            let _ = next?;
+        }
+
+        let summary = handle.final_summary()?.unwrap();
+        assert_eq!(summary.object, json!({"a": 1}));
+        assert!(summary.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, .. } if feature == "stream_object.max_text_bytes"
+        )));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dropping_streams_aborts_background_task() -> Result<()> {
         let dropped = Arc::new(AtomicBool::new(false));
         let inner: StreamResult = Box::pin(DropFlagStream {
