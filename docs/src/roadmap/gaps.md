@@ -86,6 +86,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 ### 3.1 已改进（降低 OOM 风险）
 
 - **Proxy cache 增加体积上限**：支持限制单条缓存 body 与总缓存体积，避免缓存把内存/Redis 打爆。
+- **Proxy 大响应默认不再整段缓冲**：passthrough proxy 对非 SSE 响应会尽量流式转发；仅在“体积可确定且较小”时才会缓冲读取（用于 usage 结算或写入 proxy cache），降低大文件下载的 OOM 风险。
 - **SSE parsing 增加行/事件大小上限**：异常/恶意 SSE 事件不会无限增长。
 - **stream fan-out 可更安全使用**：提供 `StreamTextHandle`/`StreamObjectHandle` 与 `into_*_stream`，避免“只消费一条 stream 却保留另一条 receiver”的隐式积压。
 - **聚合与缓冲区增加体积上限**：`StreamCollector` 与 `stream_object` 内部缓冲区设定 max bytes，避免“超大输出/异常输出”把进程内存打爆（超限发出 `Warning` 并截断）。

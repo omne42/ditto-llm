@@ -298,6 +298,19 @@ fn clamp_u64_to_u32(value: u64) -> u32 {
     }
 }
 
+fn estimate_tokens_from_bytes(body: &Bytes) -> u32 {
+    let len = body.len();
+    if len == 0 {
+        return 0;
+    }
+    let estimate = (len.saturating_add(3) / 4) as u64;
+    if estimate > u64::from(u32::MAX) {
+        u32::MAX
+    } else {
+        estimate as u32
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct ObservedUsage {
     input_tokens: Option<u64>,
@@ -343,28 +356,6 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
         output_tokens,
         total_tokens,
     })
-}
-
-fn estimate_tokens_from_bytes(body: &Bytes) -> u32 {
-    let len = body.len();
-    if len == 0 {
-        return 0;
-    }
-    let estimate = (len.saturating_add(3) / 4) as u64;
-    if estimate > u64::from(u32::MAX) {
-        u32::MAX
-    } else {
-        estimate as u32
-    }
-}
-
-fn max_option_u64(a: Option<u64>, b: Option<u64>) -> Option<u64> {
-    match (a, b) {
-        (Some(a), Some(b)) => Some(a.max(b)),
-        (Some(a), None) => Some(a),
-        (None, Some(b)) => Some(b),
-        (None, None) => None,
-    }
 }
 
 fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
@@ -497,7 +488,6 @@ async fn proxy_response(
                 headers.insert("x-ditto-cache-key", value);
             }
         }
-        headers.remove("content-length");
         let stream = upstream
             .bytes_stream()
             .map(|chunk| chunk.map_err(std::io::Error::other))
@@ -511,19 +501,24 @@ async fn proxy_response(
         *response.headers_mut() = headers;
         response
     } else {
-        let bytes = upstream.bytes().await.unwrap_or_default();
-        #[cfg(feature = "gateway-proxy-cache")]
-        if status.is_success() {
-            if let Some(cache_key) = _cache_key {
-                let cached = CachedProxyResponse {
-                    status: status.as_u16(),
-                    headers: upstream_headers.clone(),
-                    body: bytes.clone(),
-                    backend: backend.clone(),
-                };
-                store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
-            }
-        }
+        let cacheable = status.is_success() && _cache_key.is_some();
+        let content_length = upstream_headers
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<usize>().ok());
+        let should_buffer = cacheable
+            && {
+                #[cfg(feature = "gateway-proxy-cache")]
+                {
+                    _state.proxy_cache_config.as_ref().is_some_and(|config| {
+                        content_length.is_some_and(|len| len <= config.max_body_bytes)
+                    })
+                }
+                #[cfg(not(feature = "gateway-proxy-cache"))]
+                {
+                    false
+                }
+            };
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
@@ -532,8 +527,40 @@ async fn proxy_response(
                 headers.insert("x-ditto-cache-key", value);
             }
         }
-        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits);
-        let mut response = axum::response::Response::new(body);
+
+        if should_buffer {
+            let bytes = upstream.bytes().await.unwrap_or_default();
+
+            #[cfg(feature = "gateway-proxy-cache")]
+            if status.is_success() {
+                if let Some(cache_key) = _cache_key {
+                    let cached = CachedProxyResponse {
+                        status: status.as_u16(),
+                        headers: headers.clone(),
+                        body: bytes.clone(),
+                        backend: backend.clone(),
+                    };
+                    store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
+                }
+            }
+
+            let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits);
+            let mut response = axum::response::Response::new(body);
+            *response.status_mut() = status;
+            *response.headers_mut() = headers;
+            return response;
+        }
+
+        headers.remove("content-length");
+        let stream = upstream
+            .bytes_stream()
+            .map(|chunk| chunk.map_err(std::io::Error::other))
+            .boxed();
+        let stream = ProxyBodyStreamWithPermit {
+            inner: stream,
+            _permits: proxy_permits,
+        };
+        let mut response = axum::response::Response::new(Body::from_stream(stream));
         *response.status_mut() = status;
         *response.headers_mut() = headers;
         response

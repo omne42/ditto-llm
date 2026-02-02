@@ -1,6 +1,56 @@
 {
-        let bytes = upstream_response.bytes().await.unwrap_or_default();
-        let observed_usage = if spend_tokens && content_type.starts_with("application/json") {
+        let content_length = upstream_headers
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse::<usize>().ok());
+
+        let should_buffer_for_cache = {
+            #[cfg(feature = "gateway-proxy-cache")]
+            {
+                status.is_success()
+                    && proxy_cache_key.is_some()
+                    && state.proxy_cache_config.as_ref().is_some_and(|config| {
+                        content_length.is_some_and(|len| len <= config.max_body_bytes)
+                    })
+            }
+            #[cfg(not(feature = "gateway-proxy-cache"))]
+            {
+                false
+            }
+        };
+
+        let max_buffer_bytes = {
+            #[cfg(feature = "gateway-proxy-cache")]
+            {
+                state
+                    .proxy_cache_config
+                    .as_ref()
+                    .map(|config| config.max_body_bytes)
+                    .unwrap_or(1024 * 1024)
+            }
+            #[cfg(not(feature = "gateway-proxy-cache"))]
+            {
+                1024 * 1024
+            }
+        };
+
+        let should_buffer_for_usage = spend_tokens
+            && content_type.starts_with("application/json")
+            && content_length.is_some_and(|len| len <= max_buffer_bytes);
+
+        let should_buffer = should_buffer_for_cache || should_buffer_for_usage;
+        let mut upstream_response = Some(upstream_response);
+        let bytes = if should_buffer {
+            upstream_response
+                .take()
+                .expect("upstream response")
+                .bytes()
+                .await
+                .unwrap_or_default()
+        } else {
+            Bytes::new()
+        };
+        let observed_usage = if should_buffer_for_usage {
             extract_openai_usage_from_bytes(&bytes)
         } else {
             None
@@ -225,7 +275,7 @@
         }
 
         #[cfg(feature = "gateway-proxy-cache")]
-        if status.is_success() {
+        if should_buffer_for_cache && status.is_success() {
             if let Some(cache_key) = proxy_cache_key.as_deref() {
                 let cached = CachedProxyResponse {
                     status: status.as_u16(),
@@ -245,9 +295,27 @@
                 headers.insert("x-ditto-cache-key", value);
             }
         }
-        let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
-        let mut response = axum::response::Response::new(body);
-        *response.status_mut() = status;
-        *response.headers_mut() = headers;
-        Ok(BackendAttemptOutcome::Response(response))
+        if should_buffer {
+            let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+            let mut response = axum::response::Response::new(body);
+            *response.status_mut() = status;
+            *response.headers_mut() = headers;
+            Ok(BackendAttemptOutcome::Response(response))
+        } else {
+            headers.remove("content-length");
+            let stream = upstream_response
+                .take()
+                .expect("upstream response")
+                .bytes_stream()
+                .map(|chunk| chunk.map_err(std::io::Error::other))
+                .boxed();
+            let stream = ProxyBodyStreamWithPermit {
+                inner: stream,
+                _permits: proxy_permits.take(),
+            };
+            let mut response = axum::response::Response::new(Body::from_stream(stream));
+            *response.status_mut() = status;
+            *response.headers_mut() = headers;
+            Ok(BackendAttemptOutcome::Response(response))
+        }
 }

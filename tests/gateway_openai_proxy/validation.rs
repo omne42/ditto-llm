@@ -664,6 +664,7 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
         .with_proxy_cache(ditto_llm::gateway::ProxyCacheConfig {
             ttl_seconds: 60,
             max_entries: 16,
+            ..Default::default()
         });
     let app = ditto_llm::gateway::http::router(state);
 
@@ -746,6 +747,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
         .with_proxy_cache(ditto_llm::gateway::ProxyCacheConfig {
             ttl_seconds: 60,
             max_entries: 16,
+            ..Default::default()
         });
     let app = ditto_llm::gateway::http::router(state);
 
@@ -859,6 +861,7 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
         .with_proxy_cache(ditto_llm::gateway::ProxyCacheConfig {
             ttl_seconds: 60,
             max_entries: 16,
+            ..Default::default()
         });
     let app = ditto_llm::gateway::http::router(state);
 

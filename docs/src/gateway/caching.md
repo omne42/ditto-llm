@@ -69,6 +69,8 @@ cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gate
 
 > `--proxy-cache-max-body-bytes` 会跳过缓存“过大的响应”（包含 memory 与 redis L2）；`--proxy-cache-max-total-body-bytes` 用于限制内存总缓存体积，避免内存被打爆。
 
+另外，为避免把大响应整段读入内存，Ditto 只会在“可确定大小且不超过上限”的情况下缓冲并写入 proxy cache；否则会直接流式转发并跳过缓存。
+
 ### 2.2 缓存范围（What gets cached）
 
 Ditto 只会缓存：
