@@ -8,11 +8,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usage = {
         #[cfg(feature = "gateway-config-yaml")]
         {
-            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
         #[cfg(not(feature = "gateway-config-yaml"))]
         {
-            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
     };
     let path = args.next().ok_or(usage)?;
@@ -22,6 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut admin_token_env: Option<String> = None;
     let mut admin_read_token: Option<String> = None;
     let mut admin_read_token_env: Option<String> = None;
+    let mut admin_tenant_tokens: Vec<(String, String)> = Vec::new();
+    let mut admin_tenant_token_env: Vec<(String, String)> = Vec::new();
+    let mut admin_tenant_read_tokens: Vec<(String, String)> = Vec::new();
+    let mut admin_tenant_read_token_env: Vec<(String, String)> = Vec::new();
     let mut dotenv_path: Option<std::path::PathBuf> = None;
     let mut state_path: Option<std::path::PathBuf> = None;
     let mut _sqlite_path: Option<std::path::PathBuf> = None;
@@ -84,6 +88,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.next()
                         .ok_or("missing value for --admin-read-token-env")?,
                 );
+            }
+            "--admin-tenant-token" => {
+                let spec = args
+                    .next()
+                    .ok_or("missing value for --admin-tenant-token")?;
+                let (tenant_id, token) = spec
+                    .split_once('=')
+                    .ok_or("--admin-tenant-token must be TENANT_ID=TOKEN")?;
+                admin_tenant_tokens.push((tenant_id.to_string(), token.to_string()));
+            }
+            "--admin-tenant-token-env" => {
+                let spec = args
+                    .next()
+                    .ok_or("missing value for --admin-tenant-token-env")?;
+                let (tenant_id, env_key) = spec
+                    .split_once('=')
+                    .ok_or("--admin-tenant-token-env must be TENANT_ID=ENV")?;
+                admin_tenant_token_env.push((tenant_id.to_string(), env_key.to_string()));
+            }
+            "--admin-tenant-read-token" => {
+                let spec = args
+                    .next()
+                    .ok_or("missing value for --admin-tenant-read-token")?;
+                let (tenant_id, token) = spec
+                    .split_once('=')
+                    .ok_or("--admin-tenant-read-token must be TENANT_ID=TOKEN")?;
+                admin_tenant_read_tokens.push((tenant_id.to_string(), token.to_string()));
+            }
+            "--admin-tenant-read-token-env" => {
+                let spec = args
+                    .next()
+                    .ok_or("missing value for --admin-tenant-read-token-env")?;
+                let (tenant_id, env_key) = spec
+                    .split_once('=')
+                    .ok_or("--admin-tenant-read-token-env must be TENANT_ID=ENV")?;
+                admin_tenant_read_token_env.push((tenant_id.to_string(), env_key.to_string()));
             }
             "--state" => {
                 state_path = Some(args.next().ok_or("missing value for --state")?.into());
@@ -378,6 +418,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         admin_read_token = Some(token);
     }
 
+    let mut seen_tenants = std::collections::HashSet::<String>::new();
+    for (tenant_id, env_key) in &admin_tenant_token_env {
+        let tenant_id = tenant_id.trim();
+        if tenant_id.is_empty() {
+            return Err("admin tenant token env spec has empty tenant id".into());
+        }
+        if !seen_tenants.insert(tenant_id.to_string()) {
+            return Err(
+                format!("duplicate --admin-tenant-token-env tenant id: {tenant_id}").into(),
+            );
+        }
+        let token = env
+            .get(env_key)
+            .ok_or_else(|| format!("missing env var for --admin-tenant-token-env: {env_key}"))?;
+        if token.trim().is_empty() {
+            return Err(format!("admin tenant token env var is empty: {env_key}").into());
+        }
+        admin_tenant_tokens.push((tenant_id.to_string(), token));
+    }
+
+    let mut seen_tenants = std::collections::HashSet::<String>::new();
+    for (tenant_id, env_key) in &admin_tenant_read_token_env {
+        let tenant_id = tenant_id.trim();
+        if tenant_id.is_empty() {
+            return Err("admin tenant read token env spec has empty tenant id".into());
+        }
+        if !seen_tenants.insert(tenant_id.to_string()) {
+            return Err(
+                format!("duplicate --admin-tenant-read-token-env tenant id: {tenant_id}").into(),
+            );
+        }
+        let token = env.get(env_key).ok_or_else(|| {
+            format!("missing env var for --admin-tenant-read-token-env: {env_key}")
+        })?;
+        if token.trim().is_empty() {
+            return Err(format!("admin tenant read token env var is empty: {env_key}").into());
+        }
+        admin_tenant_read_tokens.push((tenant_id.to_string(), token));
+    }
+
+    let mut seen_tenants = std::collections::HashSet::<String>::new();
+    for (tenant_id, _token) in &admin_tenant_tokens {
+        let tenant_id = tenant_id.trim();
+        if tenant_id.is_empty() {
+            return Err("admin tenant token has empty tenant id".into());
+        }
+        if !seen_tenants.insert(tenant_id.to_string()) {
+            return Err(format!("duplicate --admin-tenant-token tenant id: {tenant_id}").into());
+        }
+    }
+
+    let mut seen_tenants = std::collections::HashSet::<String>::new();
+    for (tenant_id, _token) in &admin_tenant_read_tokens {
+        let tenant_id = tenant_id.trim();
+        if tenant_id.is_empty() {
+            return Err("admin tenant read token has empty tenant id".into());
+        }
+        if !seen_tenants.insert(tenant_id.to_string()) {
+            return Err(
+                format!("duplicate --admin-tenant-read-token tenant id: {tenant_id}").into(),
+            );
+        }
+    }
+
     if let Some(key) = redis_url_env.as_deref() {
         let url = env
             .get(key)
@@ -386,6 +490,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(format!("redis url env var is empty: {key}").into());
         }
         redis_url = Some(url);
+    }
+
+    if let Some(token) = admin_token.take() {
+        admin_token = Some(resolve_cli_secret(token, &env, "admin token").await?);
+    }
+    if let Some(token) = admin_read_token.take() {
+        admin_read_token = Some(resolve_cli_secret(token, &env, "admin read token").await?);
+    }
+    for (_tenant_id, token) in &mut admin_tenant_tokens {
+        let raw = std::mem::take(token);
+        *token = resolve_cli_secret(raw, &env, "admin tenant token").await?;
+    }
+    for (_tenant_id, token) in &mut admin_tenant_read_tokens {
+        let raw = std::mem::take(token);
+        *token = resolve_cli_secret(raw, &env, "admin tenant read token").await?;
+    }
+    if let Some(url) = redis_url.take() {
+        redis_url = Some(resolve_cli_secret(url, &env, "redis url").await?);
     }
 
     let storage_count =
@@ -419,10 +541,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(json_err) => {
                 #[cfg(feature = "gateway-config-yaml")]
                 {
-                    let yaml = serde_yaml::from_str(&raw).map_err(|yaml_err| {
+                    serde_yaml::from_str(&raw).map_err(|yaml_err| {
                         format!("failed to parse config as json ({json_err}) or yaml ({yaml_err})")
-                    })?;
-                    yaml
+                    })?
                 }
                 #[cfg(not(feature = "gateway-config-yaml"))]
                 {
@@ -487,6 +608,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     config.resolve_env(&env)?;
+    config.resolve_secrets(&env).await?;
 
     for key in &config.virtual_keys {
         if let Err(err) = key.guardrails.validate() {
@@ -600,6 +722,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(token) = admin_read_token {
         state = state.with_admin_read_token(token);
     }
+    for (tenant_id, token) in admin_tenant_tokens {
+        state = state.with_admin_tenant_token(tenant_id, token);
+    }
+    for (tenant_id, token) in admin_tenant_read_tokens {
+        state = state.with_admin_tenant_read_token(tenant_id, token);
+    }
     if json_logs {
         state = state.with_json_logs();
     }
@@ -675,322 +803,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(all(feature = "gateway", feature = "sdk"))]
-fn attach_devtools(
-    state: ditto_llm::gateway::GatewayHttpState,
-    devtools_path: Option<String>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(path) = devtools_path else {
-        return Ok(state);
-    };
-    Ok(state.with_devtools_logger(ditto_llm::sdk::devtools::DevtoolsLogger::new(path)))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "sdk")))]
-fn attach_devtools(
-    state: ditto_llm::gateway::GatewayHttpState,
-    devtools_path: Option<String>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if devtools_path.is_some() {
-        return Err(
-            "devtools requires `--features gateway-devtools` (or `sdk` alongside `gateway`)".into(),
-        );
-    }
-    Ok(state)
-}
-
-#[cfg(feature = "gateway")]
-fn attach_proxy_backpressure(
-    state: ditto_llm::gateway::GatewayHttpState,
-    max_in_flight: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(max) = max_in_flight else {
-        return Ok(state);
-    };
-    if max == 0 {
-        return Err("--proxy-max-in-flight must be > 0".into());
-    }
-    Ok(state.with_proxy_max_in_flight(max))
-}
-
-#[cfg(feature = "gateway")]
-fn attach_proxy_max_body_bytes(
-    state: ditto_llm::gateway::GatewayHttpState,
-    max_body_bytes: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(max) = max_body_bytes else {
-        return Ok(state);
-    };
-    if max == 0 {
-        return Err("--proxy-max-body-bytes must be > 0".into());
-    }
-    Ok(state.with_proxy_max_body_bytes(max))
-}
-
-#[cfg(feature = "gateway")]
-fn attach_proxy_usage_max_body_bytes(
-    state: ditto_llm::gateway::GatewayHttpState,
-    max_body_bytes: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(max) = max_body_bytes else {
-        return Ok(state);
-    };
-    Ok(state.with_proxy_usage_max_body_bytes(max))
-}
-
-#[cfg(all(feature = "gateway", feature = "gateway-proxy-cache"))]
-fn attach_proxy_cache(
-    state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    ttl_seconds: Option<u64>,
-    max_entries: Option<usize>,
-    max_body_bytes: Option<usize>,
-    max_total_body_bytes: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if !enabled {
-        return Ok(state);
-    }
-
-    let mut config = ditto_llm::gateway::ProxyCacheConfig::default();
-    config.ttl_seconds = ttl_seconds.unwrap_or(config.ttl_seconds).max(1);
-    config.max_entries = max_entries.unwrap_or(config.max_entries).max(1);
-    if let Some(max_body_bytes) = max_body_bytes {
-        config.max_body_bytes = max_body_bytes.max(1);
-    }
-    if let Some(max_total_body_bytes) = max_total_body_bytes {
-        config.max_total_body_bytes = max_total_body_bytes.max(1);
-    }
-    Ok(state.with_proxy_cache(config))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "gateway-proxy-cache")))]
-fn attach_proxy_cache(
-    state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    _ttl_seconds: Option<u64>,
-    _max_entries: Option<usize>,
-    _max_body_bytes: Option<usize>,
-    _max_total_body_bytes: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if enabled {
-        return Err("proxy cache requires `--features gateway-proxy-cache`".into());
-    }
-    Ok(state)
-}
-
-#[cfg(feature = "gateway")]
-#[derive(Default)]
-struct ProxyRoutingCliOptions {
-    retry_enabled: bool,
-    retry_status_codes: Option<Vec<u16>>,
-    retry_max_attempts: Option<usize>,
-    circuit_breaker_enabled: bool,
-    cb_failure_threshold: Option<u32>,
-    cb_cooldown_secs: Option<u64>,
-    health_checks_enabled: bool,
-    health_check_path: Option<String>,
-    health_check_interval_secs: Option<u64>,
-    health_check_timeout_secs: Option<u64>,
-}
-
-#[cfg(feature = "gateway")]
-impl ProxyRoutingCliOptions {
-    fn any_set(&self) -> bool {
-        self.retry_enabled
-            || self.retry_status_codes.is_some()
-            || self.retry_max_attempts.is_some()
-            || self.circuit_breaker_enabled
-            || self.cb_failure_threshold.is_some()
-            || self.cb_cooldown_secs.is_some()
-            || self.health_checks_enabled
-            || self.health_check_path.is_some()
-            || self.health_check_interval_secs.is_some()
-            || self.health_check_timeout_secs.is_some()
-    }
-}
-
-#[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
-fn attach_proxy_routing(
-    state: ditto_llm::gateway::GatewayHttpState,
-    opts: ProxyRoutingCliOptions,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if !opts.any_set() {
-        return Ok(state);
-    }
-
-    let mut config = ditto_llm::gateway::ProxyRoutingConfig::default();
-    if opts.retry_enabled {
-        config.retry.enabled = true;
-    }
-    if let Some(codes) = opts.retry_status_codes {
-        config.retry.retry_status_codes = codes;
-    }
-    config.retry.max_attempts = opts.retry_max_attempts.filter(|v| *v > 0);
-
-    if opts.circuit_breaker_enabled {
-        config.circuit_breaker.enabled = true;
-    }
-    if let Some(threshold) = opts.cb_failure_threshold {
-        config.circuit_breaker.failure_threshold = threshold.max(1);
-    }
-    if let Some(cooldown) = opts.cb_cooldown_secs {
-        config.circuit_breaker.cooldown_seconds = cooldown;
-    }
-
-    if opts.health_checks_enabled {
-        config.health_check.enabled = true;
-    }
-    if let Some(path) = opts.health_check_path {
-        if path.trim().is_empty() {
-            return Err("health check path must be non-empty".into());
-        }
-        config.health_check.path = path;
-    }
-    if let Some(interval) = opts.health_check_interval_secs {
-        config.health_check.interval_seconds = interval.max(1);
-    }
-    if let Some(timeout) = opts.health_check_timeout_secs {
-        config.health_check.timeout_seconds = timeout.max(1);
-    }
-
-    Ok(state.with_proxy_routing(config))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "gateway-routing-advanced")))]
-fn attach_proxy_routing(
-    state: ditto_llm::gateway::GatewayHttpState,
-    opts: ProxyRoutingCliOptions,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if opts.any_set() {
-        return Err("proxy routing requires `--features gateway-routing-advanced`".into());
-    }
-    Ok(state)
-}
-
-#[cfg(feature = "gateway")]
-fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Err("empty status code list".into());
-    }
-
-    let mut out = Vec::new();
-    for part in raw.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        out.push(part.parse::<u16>().map_err(|_| "invalid status code")?);
-    }
-    if out.is_empty() {
-        return Err("empty status code list".into());
-    }
-    out.sort_unstable();
-    out.dedup();
-    Ok(out)
-}
-
-#[cfg(all(feature = "gateway", feature = "gateway-costing"))]
-fn attach_pricing_table(
-    state: ditto_llm::gateway::GatewayHttpState,
-    litellm_pricing_path: Option<String>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(path) = litellm_pricing_path else {
-        return Ok(state);
-    };
-    let raw = std::fs::read_to_string(path)?;
-    let pricing = ditto_llm::gateway::PricingTable::from_litellm_json_str(&raw)?;
-    Ok(state.with_pricing_table(pricing))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "gateway-costing")))]
-fn attach_pricing_table(
-    state: ditto_llm::gateway::GatewayHttpState,
-    litellm_pricing_path: Option<String>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if litellm_pricing_path.is_some() {
-        return Err("pricing requires `--features gateway-costing`".into());
-    }
-    Ok(state)
-}
-
-#[cfg(all(feature = "gateway", feature = "gateway-metrics-prometheus"))]
-fn attach_prometheus_metrics(
-    state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    max_key_series: Option<usize>,
-    max_model_series: Option<usize>,
-    max_backend_series: Option<usize>,
-    max_path_series: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if !enabled {
-        return Ok(state);
-    }
-
-    let mut config = ditto_llm::gateway::metrics_prometheus::PrometheusMetricsConfig::default();
-    if let Some(value) = max_key_series {
-        config.max_key_series = value.max(1);
-    }
-    if let Some(value) = max_model_series {
-        config.max_model_series = value.max(1);
-    }
-    if let Some(value) = max_backend_series {
-        config.max_backend_series = value.max(1);
-    }
-    if let Some(value) = max_path_series {
-        config.max_path_series = value.max(1);
-    }
-    Ok(state.with_prometheus_metrics(config))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "gateway-metrics-prometheus")))]
-fn attach_prometheus_metrics(
-    state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    max_key_series: Option<usize>,
-    max_model_series: Option<usize>,
-    max_backend_series: Option<usize>,
-    max_path_series: Option<usize>,
-) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if enabled
-        || max_key_series.is_some()
-        || max_model_series.is_some()
-        || max_backend_series.is_some()
-        || max_path_series.is_some()
-    {
-        return Err("prometheus metrics requires `--features gateway-metrics-prometheus`".into());
-    }
-    Ok(state)
-}
-
-#[cfg(all(feature = "gateway", feature = "gateway-otel"))]
-fn attach_otel(
-    enabled: bool,
-    endpoint: Option<&str>,
-    json_logs: bool,
-) -> Result<Option<ditto_llm::gateway::otel::OtelGuard>, Box<dyn std::error::Error>> {
-    if !enabled {
-        return Ok(None);
-    }
-
-    Ok(Some(ditto_llm::gateway::otel::init_tracing(
-        "ditto-gateway",
-        endpoint,
-        json_logs,
-    )?))
-}
-
-#[cfg(all(feature = "gateway", not(feature = "gateway-otel")))]
-fn attach_otel(
-    enabled: bool,
-    _endpoint: Option<&str>,
-    _json_logs: bool,
-) -> Result<Option<()>, Box<dyn std::error::Error>> {
-    if enabled {
-        return Err("otel requires `--features gateway-otel`".into());
-    }
-    Ok(None)
-}
+include!("ditto_gateway/attach.rs");
 
 #[cfg(not(feature = "gateway"))]
 fn main() {

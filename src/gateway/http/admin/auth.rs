@@ -4,17 +4,22 @@ enum AdminPermission {
     Write,
 }
 
+#[derive(Clone, Debug)]
+struct AdminContext {
+    tenant_id: Option<String>,
+}
+
 fn ensure_admin_read(
     state: &GatewayHttpState,
     headers: &HeaderMap,
-) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<AdminContext, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(state, headers, AdminPermission::Read)
 }
 
 fn ensure_admin_write(
     state: &GatewayHttpState,
     headers: &HeaderMap,
-) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<AdminContext, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(state, headers, AdminPermission::Write)
 }
 
@@ -22,28 +27,50 @@ fn ensure_admin(
     state: &GatewayHttpState,
     headers: &HeaderMap,
     permission: AdminPermission,
-) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<AdminContext, (StatusCode, Json<ErrorResponse>)> {
     let write_token = state.admin_token.as_deref();
     let read_token = state.admin_read_token.as_deref();
+    let has_tenant_tokens = !state.admin_tenant_tokens.is_empty();
 
-    if write_token.is_none() && read_token.is_none() {
-        return Ok(());
+    if write_token.is_none() && read_token.is_none() && !has_tenant_tokens {
+        return Ok(AdminContext { tenant_id: None });
     }
 
     let provided = extract_bearer(headers)
         .or_else(|| extract_header(headers, "x-admin-token"))
         .unwrap_or_default();
 
-    let ok = match permission {
-        AdminPermission::Read => {
-            write_token.is_some_and(|expected| provided == expected)
-                || read_token.is_some_and(|expected| provided == expected)
-        }
-        AdminPermission::Write => write_token.is_some_and(|expected| provided == expected),
-    };
+    if write_token.is_some_and(|expected| provided == expected) {
+        return Ok(AdminContext { tenant_id: None });
+    }
 
-    ok.then_some(())
-        .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "unauthorized", "invalid admin token"))
+    if let AdminPermission::Read = permission {
+        if read_token.is_some_and(|expected| provided == expected) {
+            return Ok(AdminContext { tenant_id: None });
+        }
+    }
+
+    if has_tenant_tokens {
+        for binding in &state.admin_tenant_tokens {
+            if provided != binding.token {
+                continue;
+            }
+            if let AdminPermission::Write = permission {
+                if binding.read_only {
+                    break;
+                }
+            }
+            return Ok(AdminContext {
+                tenant_id: Some(binding.tenant_id.clone()),
+            });
+        }
+    }
+
+    Err(error_response(
+        StatusCode::UNAUTHORIZED,
+        "unauthorized",
+        "invalid admin token",
+    ))
 }
 
 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]

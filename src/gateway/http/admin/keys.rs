@@ -3,7 +3,7 @@ async fn list_keys(
     headers: HeaderMap,
     Query(query): Query<ListKeysQuery>,
 ) -> Result<Json<Vec<VirtualKeyConfig>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_read(&state, &headers)?;
+    let admin = ensure_admin_read(&state, &headers)?;
     let gateway = state.gateway.lock().await;
     let mut keys = gateway.list_virtual_keys();
 
@@ -15,12 +15,31 @@ async fn list_keys(
         keys.retain(|key| key.id.starts_with(prefix));
     }
 
-    if let Some(tenant_id) = query
-        .tenant_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-    {
+    let tenant_filter = if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+        if let Some(query_tenant) = query
+            .tenant_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+        {
+            if query_tenant != admin_tenant {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cross-tenant admin access is not allowed",
+                ));
+            }
+        }
+        Some(admin_tenant)
+    } else {
+        query
+            .tenant_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+    };
+
+    if let Some(tenant_id) = tenant_filter {
         keys.retain(|key| key.tenant_id.as_deref() == Some(tenant_id));
     }
 
@@ -71,7 +90,21 @@ async fn upsert_key(
     headers: HeaderMap,
     Json(key): Json<VirtualKeyConfig>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_write(&state, &headers)?;
+    let admin = ensure_admin_write(&state, &headers)?;
+    let mut key = key;
+    if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+        if let Some(tenant_id) = key.tenant_id.as_deref() {
+            if tenant_id != admin_tenant {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot upsert keys for a different tenant",
+                ));
+            }
+        } else {
+            key.tenant_id = Some(admin_tenant.to_string());
+        }
+    }
     if let Err(err) = key.guardrails.validate() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
@@ -127,8 +160,21 @@ async fn upsert_key_with_id(
     Path(id): Path<String>,
     Json(mut key): Json<VirtualKeyConfig>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_write(&state, &headers)?;
+    let admin = ensure_admin_write(&state, &headers)?;
     key.id = id;
+    if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+        if let Some(tenant_id) = key.tenant_id.as_deref() {
+            if tenant_id != admin_tenant {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot upsert keys for a different tenant",
+                ));
+            }
+        } else {
+            key.tenant_id = Some(admin_tenant.to_string());
+        }
+    }
     if let Err(err) = key.guardrails.validate() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
@@ -183,9 +229,26 @@ async fn delete_key(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_write(&state, &headers)?;
+    let admin = ensure_admin_write(&state, &headers)?;
     let (removed, persisted_keys) = {
         let mut gateway = state.gateway.lock().await;
+        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+            let existing = gateway.list_virtual_keys();
+            let Some(existing_key) = existing.iter().find(|key| key.id == id) else {
+                return Err(error_response(
+                    StatusCode::NOT_FOUND,
+                    "not_found",
+                    "virtual key not found",
+                ));
+            };
+            if existing_key.tenant_id.as_deref() != Some(admin_tenant) {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot delete keys for a different tenant",
+                ));
+            }
+        }
         let removed = gateway.remove_virtual_key(&id).is_some();
         (removed, gateway.list_virtual_keys())
     };
@@ -208,6 +271,7 @@ async fn delete_key(
             "admin.key.delete",
             serde_json::json!({
                 "key_id": &id,
+                "tenant_id": admin.tenant_id.as_deref(),
             }),
         )
         .await;

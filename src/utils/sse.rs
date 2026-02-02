@@ -94,7 +94,7 @@ where
         let line = std::str::from_utf8(line_bytes).map_err(|err| {
             crate::DittoError::InvalidResponse(format!("invalid SSE UTF-8: {err}"))
         })?;
-        let line = line.trim_end_matches(&['\r', '\n']);
+        let line = line.trim_end_matches(['\r', '\n']);
 
         if line.is_empty() {
             if buffer.is_empty() {

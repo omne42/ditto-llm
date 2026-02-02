@@ -1,0 +1,68 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ditto-gateway
+  labels:
+    app.kubernetes.io/name: ditto-gateway
+spec:
+  groups:
+    - name: ditto-gateway.rules
+      rules:
+        - alert: DittoGatewayHigh5xxRate
+          expr: |
+            sum(rate(ditto_gateway_proxy_responses_total{status=~"5.."}[5m]))
+              / clamp_min(sum(rate(ditto_gateway_proxy_responses_total[5m])), 1) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ditto Gateway 5xx error rate is high"
+            description: "5xx responses exceed 5% over the last 10 minutes."
+
+        - alert: DittoGatewayHighLatencyP95
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum(rate(ditto_gateway_proxy_request_duration_seconds_bucket[5m])) by (le)
+            ) > 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ditto Gateway p95 latency is high"
+            description: "p95 proxy request latency exceeds 2s over the last 10 minutes."
+
+        - alert: DittoGatewayBackendFailureRatioHigh
+          expr: |
+            sum(rate(ditto_gateway_proxy_backend_failures_total[5m]))
+              / clamp_min(sum(rate(ditto_gateway_proxy_backend_attempts_total[5m])), 1) > 0.20
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ditto Gateway backend failure ratio is high"
+            description: "Backend failures exceed 20% of attempts over the last 10 minutes."
+
+        - alert: DittoGatewayBackendInflightHigh
+          expr: sum(ditto_gateway_proxy_backend_in_flight) > 1024
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ditto Gateway backend in-flight is high"
+            description: "Backend in-flight requests exceed 1024 for 5 minutes."
+
+        - alert: DittoGatewayProxyCacheHitRatioLow
+          expr: |
+            sum(rate(ditto_gateway_proxy_cache_lookups_total[5m])) > 0
+            and
+            (
+              sum(rate(ditto_gateway_proxy_cache_hits_total[5m]))
+                / clamp_min(sum(rate(ditto_gateway_proxy_cache_lookups_total[5m])), 1)
+            ) < 0.10
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: "Ditto Gateway proxy cache hit ratio is low"
+            description: "Cache hit ratio is below 10% for 15 minutes (only meaningful when proxy cache is enabled)."

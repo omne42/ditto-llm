@@ -194,3 +194,213 @@ async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_l
 
     Ok(())
 }
+
+#[tokio::test]
+async fn gateway_http_tenant_scoped_admin_tokens_are_isolated() -> ditto_llm::Result<()> {
+    let mut config = base_config();
+    config.virtual_keys = vec![
+        {
+            let mut key = base_key();
+            key.tenant_id = Some("t1".to_string());
+            key
+        },
+        {
+            let mut key = VirtualKeyConfig::new("key-2", "vk-2");
+            key.tenant_id = Some("t2".to_string());
+            key
+        },
+    ];
+
+    let mut gateway = Gateway::new(config);
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway).with_admin_tenant_token("t1", "tenant-admin");
+    let app = ditto_llm::gateway::http::router(state);
+
+    let list = Request::builder()
+        .method("GET")
+        .uri("/admin/keys")
+        .header("x-admin-token", "tenant-admin")
+        .body(Body::empty())
+        .unwrap();
+    let list_response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = to_bytes(list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let keys: Vec<VirtualKeyConfig> = serde_json::from_slice(&list_body)?;
+    assert!(
+        keys.iter()
+            .all(|key| key.tenant_id.as_deref() == Some("t1"))
+    );
+
+    let cross_tenant = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?tenant_id=t2")
+        .header("x-admin-token", "tenant-admin")
+        .body(Body::empty())
+        .unwrap();
+    let cross_tenant_response = app.clone().oneshot(cross_tenant).await.unwrap();
+    assert_eq!(cross_tenant_response.status(), StatusCode::FORBIDDEN);
+
+    let new_key = VirtualKeyConfig::new("key-3", "vk-3");
+    let upsert = Request::builder()
+        .method("POST")
+        .uri("/admin/keys")
+        .header("x-admin-token", "tenant-admin")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&new_key)?))
+        .unwrap();
+    let upsert_response = app.clone().oneshot(upsert).await.unwrap();
+    assert_eq!(upsert_response.status(), StatusCode::CREATED);
+    let upsert_body = to_bytes(upsert_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created: VirtualKeyConfig = serde_json::from_slice(&upsert_body)?;
+    assert_eq!(created.tenant_id.as_deref(), Some("t1"));
+
+    let mut wrong_tenant_key = VirtualKeyConfig::new("key-4", "vk-4");
+    wrong_tenant_key.tenant_id = Some("t2".to_string());
+    let wrong_tenant_upsert = Request::builder()
+        .method("POST")
+        .uri("/admin/keys")
+        .header("x-admin-token", "tenant-admin")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&wrong_tenant_key)?))
+        .unwrap();
+    let wrong_tenant_upsert_response = app.clone().oneshot(wrong_tenant_upsert).await.unwrap();
+    assert_eq!(wrong_tenant_upsert_response.status(), StatusCode::FORBIDDEN);
+
+    let delete_other_tenant = Request::builder()
+        .method("DELETE")
+        .uri("/admin/keys/key-2")
+        .header("x-admin-token", "tenant-admin")
+        .body(Body::empty())
+        .unwrap();
+    let delete_other_tenant_response = app.clone().oneshot(delete_other_tenant).await.unwrap();
+    assert_eq!(delete_other_tenant_response.status(), StatusCode::FORBIDDEN);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_tenant_read_token_is_read_only() -> ditto_llm::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway).with_admin_tenant_read_token("t1", "tenant-read");
+    let app = ditto_llm::gateway::http::router(state);
+
+    let list = Request::builder()
+        .method("GET")
+        .uri("/admin/keys")
+        .header("x-admin-token", "tenant-read")
+        .body(Body::empty())
+        .unwrap();
+    let list_response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+
+    let upsert = Request::builder()
+        .method("POST")
+        .uri("/admin/keys")
+        .header("x-admin-token", "tenant-read")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&VirtualKeyConfig::new(
+            "k", "v",
+        ))?))
+        .unwrap();
+    let upsert_response = app.clone().oneshot(upsert).await.unwrap();
+    assert_eq!(upsert_response.status(), StatusCode::METHOD_NOT_ALLOWED);
+
+    Ok(())
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn gateway_http_audit_export_jsonl_has_hash_chain() -> ditto_llm::Result<()> {
+    use ditto_llm::gateway::SqliteStore;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    store
+        .append_audit_log("k1", json!({"tenant_id": "t1", "n": 1}))
+        .await
+        .expect("append");
+    store
+        .append_audit_log("k2", json!({"tenant_id": "t2", "n": 2}))
+        .await
+        .expect("append");
+    store
+        .append_audit_log("k3", json!({"tenant_id": "t1", "n": 3}))
+        .await
+        .expect("append");
+
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway)
+        .with_admin_token("admin-token")
+        .with_sqlite_store(store.clone());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let export = Request::builder()
+        .method("GET")
+        .uri("/admin/audit/export?format=jsonl&limit=10")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let export_response = app.clone().oneshot(export).await.unwrap();
+    assert_eq!(export_response.status(), StatusCode::OK);
+    let export_body = to_bytes(export_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8(export_body.to_vec()).expect("utf8");
+    let mut prev_hash: Option<String> = None;
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        let record_prev_hash = value
+            .get("prev_hash")
+            .and_then(serde_json::Value::as_str)
+            .map(|s| s.to_string());
+        assert_eq!(record_prev_hash, prev_hash);
+        let hash = value
+            .get("hash")
+            .and_then(serde_json::Value::as_str)
+            .expect("hash")
+            .to_string();
+        prev_hash = Some(hash);
+    }
+
+    let tenant_export = Request::builder()
+        .method("GET")
+        .uri("/admin/audit/export?format=jsonl&limit=10")
+        .header("x-admin-token", "tenant-admin")
+        .body(Body::empty())
+        .unwrap();
+    let tenant_state = GatewayHttpState::new(Gateway::new(base_config()))
+        .with_admin_tenant_read_token("t1", "tenant-admin")
+        .with_sqlite_store(store);
+    let tenant_app = ditto_llm::gateway::http::router(tenant_state);
+
+    let tenant_export_response = tenant_app.clone().oneshot(tenant_export).await.unwrap();
+    assert_eq!(tenant_export_response.status(), StatusCode::OK);
+    let tenant_export_body = to_bytes(tenant_export_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let tenant_text = String::from_utf8(tenant_export_body.to_vec()).expect("utf8");
+    for line in tenant_text.lines().filter(|line| !line.trim().is_empty()) {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        assert_eq!(
+            value
+                .get("payload")
+                .and_then(|p| p.get("tenant_id"))
+                .and_then(serde_json::Value::as_str),
+            Some("t1")
+        );
+    }
+
+    Ok(())
+}

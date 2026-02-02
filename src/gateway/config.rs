@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::secrets::resolve_secret_string;
 use crate::{Env, ProviderConfig};
 
 use super::{
@@ -23,6 +24,16 @@ impl GatewayConfig {
         }
         for key in &mut self.virtual_keys {
             key.resolve_env(env)?;
+        }
+        Ok(())
+    }
+
+    pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        for backend in &mut self.backends {
+            backend.resolve_secrets(env).await?;
+        }
+        for key in &mut self.virtual_keys {
+            key.resolve_secrets(env).await?;
         }
         Ok(())
     }
@@ -73,6 +84,48 @@ impl BackendConfig {
             }
             for value in provider_config.http_query_params.values_mut() {
                 *value = expand_env_placeholders(value, env)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        resolve_secret_in_string(&mut self.base_url, env, "backends[].base_url").await?;
+        for value in self.headers.values_mut() {
+            resolve_secret_in_string(value, env, "backends[].headers").await?;
+        }
+        for value in self.query_params.values_mut() {
+            resolve_secret_in_string(value, env, "backends[].query_params").await?;
+        }
+
+        if let Some(provider_config) = self.provider_config.as_mut() {
+            if let Some(base_url) = provider_config.base_url.as_mut() {
+                resolve_secret_in_string(base_url, env, "backends[].provider_config.base_url")
+                    .await?;
+            }
+            if let Some(default_model) = provider_config.default_model.as_mut() {
+                resolve_secret_in_string(
+                    default_model,
+                    env,
+                    "backends[].provider_config.default_model",
+                )
+                .await?;
+            }
+            for value in provider_config.model_whitelist.iter_mut() {
+                resolve_secret_in_string(value, env, "backends[].provider_config.model_whitelist")
+                    .await?;
+            }
+            for value in provider_config.http_headers.values_mut() {
+                resolve_secret_in_string(value, env, "backends[].provider_config.http_headers")
+                    .await?;
+            }
+            for value in provider_config.http_query_params.values_mut() {
+                resolve_secret_in_string(
+                    value,
+                    env,
+                    "backends[].provider_config.http_query_params",
+                )
+                .await?;
             }
         }
         Ok(())
@@ -238,6 +291,30 @@ impl VirtualKeyConfig {
         self.token = expand_env_placeholders(&self.token, env)?;
         Ok(())
     }
+
+    pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        resolve_secret_in_string(&mut self.token, env, "virtual_keys[].token").await?;
+        Ok(())
+    }
+}
+
+async fn resolve_secret_in_string(
+    value: &mut String,
+    env: &Env,
+    label: &str,
+) -> Result<(), super::GatewayError> {
+    let trimmed = value.trim();
+    if !trimmed.starts_with("secret://") {
+        return Ok(());
+    }
+
+    let resolved = resolve_secret_string(trimmed, env).await.map_err(|err| {
+        super::GatewayError::InvalidRequest {
+            reason: format!("failed to resolve secret for {label}: {err}"),
+        }
+    })?;
+    *value = resolved;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -387,5 +464,25 @@ mod tests {
         let mut key = VirtualKeyConfig::new("key-1", "${DITTO_TEST_VK_TOKEN}");
         key.resolve_env(&env).expect("resolve");
         assert_eq!(key.token, "vk-1");
+    }
+
+    #[tokio::test]
+    async fn gateway_config_resolves_secret_specs() {
+        let env = Env {
+            dotenv: BTreeMap::from([("REAL_TOKEN".to_string(), "vk-1".to_string())]),
+        };
+
+        let mut config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![VirtualKeyConfig::new("key-1", "secret://env/REAL_TOKEN")],
+            router: RouterConfig {
+                default_backend: String::new(),
+                default_backends: Vec::new(),
+                rules: Vec::new(),
+            },
+        };
+
+        config.resolve_secrets(&env).await.expect("resolve secrets");
+        assert_eq!(config.virtual_keys[0].token, "vk-1");
     }
 }

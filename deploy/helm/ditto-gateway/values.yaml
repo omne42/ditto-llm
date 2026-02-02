@@ -1,0 +1,110 @@
+replicaCount: 2
+
+image:
+  repository: ditto-gateway
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+gateway:
+  listen: "0.0.0.0:8080"
+  configFileName: gateway.json
+  configMountPath: /config
+  configJson: |-
+    {
+      "backends": [
+        {
+          "name": "openai",
+          "base_url": "https://api.openai.com/v1",
+          "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
+          "query_params": {},
+          "timeout_seconds": 60,
+          "max_in_flight": 64
+        }
+      ],
+      "virtual_keys": [
+        {
+          "id": "vk-bootstrap",
+          "token": "${DITTO_VK_BOOTSTRAP}",
+          "enabled": true,
+          "tenant_id": null,
+          "project_id": null,
+          "user_id": null,
+          "tenant_budget": null,
+          "project_budget": null,
+          "user_budget": null,
+          "tenant_limits": null,
+          "project_limits": null,
+          "user_limits": null,
+          "limits": { "rpm": 60, "tpm": 20000 },
+          "budget": { "total_tokens": 5000000, "total_usd_micros": null },
+          "cache": {
+            "enabled": false,
+            "ttl_seconds": null,
+            "max_entries": 1024,
+            "max_body_bytes": 1048576,
+            "max_total_body_bytes": 67108864
+          },
+          "guardrails": { "block_pii": true, "validate_schema": true },
+          "passthrough": { "allow": true, "bypass_cache": true },
+          "route": null
+        }
+      ],
+      "router": { "default_backend": "openai", "default_backends": [], "rules": [] }
+    }
+
+  jsonLogs: true
+
+  store:
+    redis:
+      enabled: true
+      urlEnv: REDIS_URL
+      prefix: ditto
+
+  admin:
+    enabled: true
+    writeTokenEnv: DITTO_ADMIN_TOKEN
+    readTokenEnv: ""
+
+  auditRetentionSecs: 2592000
+
+  proxy:
+    maxInFlight: 256
+    maxBodyBytes: 67108864
+    usageMaxBodyBytes: 1048576
+    cache:
+      enabled: true
+      ttlSeconds: 60
+      maxEntries: 2048
+      maxBodyBytes: 1048576
+      maxTotalBodyBytes: 67108864
+
+  prometheus:
+    enabled: false
+    maxKeySeries: 1024
+    maxModelSeries: 1024
+    maxBackendSeries: 128
+    maxPathSeries: 128
+
+secret:
+  create: false
+  name: ""
+  stringData: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+podAnnotations: {}
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s

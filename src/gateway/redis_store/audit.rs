@@ -88,6 +88,45 @@ impl RedisStore {
         Ok(out)
     }
 
+    pub async fn list_audit_logs_window(
+        &self,
+        limit: usize,
+        since_ts_ms: Option<u64>,
+        before_ts_ms: Option<u64>,
+    ) -> Result<Vec<AuditLogRecord>, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let idx_key = self.key_audit_by_ts();
+        let limit = limit.clamp(1, 10_000);
+
+        let max = before_ts_ms
+            .map(|value| format!("({value}"))
+            .unwrap_or_else(|| "+inf".to_string());
+        let min = since_ts_ms
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-inf".to_string());
+
+        let members: Vec<String> = redis::cmd("ZREVRANGEBYSCORE")
+            .arg(&idx_key)
+            .arg(max)
+            .arg(min)
+            .arg("LIMIT")
+            .arg(0)
+            .arg(limit)
+            .query_async(&mut conn)
+            .await?;
+
+        let mut out = Vec::with_capacity(members.len());
+        for member in members {
+            let record_key = self.key_audit_record(&member);
+            let raw: Option<String> = conn.get(record_key).await?;
+            let Some(raw) = raw else {
+                continue;
+            };
+            out.push(serde_json::from_str(&raw)?);
+        }
+        Ok(out)
+    }
+
     pub async fn list_cost_ledgers(&self) -> Result<Vec<CostLedgerRecord>, RedisStoreError> {
         let mut conn = self.connection().await?;
         let mut key_ids: Vec<String> = conn.smembers(self.key_cost_keys()).await?;

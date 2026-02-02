@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ditto-gateway.fullname" . }}
+  labels:
+    {{- include "ditto-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ditto-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ditto-gateway.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+    spec:
+      containers:
+        - name: ditto-gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: {{ include "ditto-gateway.secretName" . }}
+          args:
+            - {{ printf "%s/%s" .Values.gateway.configMountPath .Values.gateway.configFileName | quote }}
+            - --listen
+            - {{ .Values.gateway.listen | quote }}
+            {{- if .Values.gateway.store.redis.enabled }}
+            - --redis-env
+            - {{ .Values.gateway.store.redis.urlEnv | quote }}
+            - --redis-prefix
+            - {{ .Values.gateway.store.redis.prefix | quote }}
+            {{- end }}
+            {{- if and .Values.gateway.admin.enabled .Values.gateway.admin.writeTokenEnv }}
+            - --admin-token-env
+            - {{ .Values.gateway.admin.writeTokenEnv | quote }}
+            {{- end }}
+            {{- if and .Values.gateway.admin.enabled .Values.gateway.admin.readTokenEnv }}
+            - --admin-read-token-env
+            - {{ .Values.gateway.admin.readTokenEnv | quote }}
+            {{- end }}
+            {{- if .Values.gateway.auditRetentionSecs }}
+            - --audit-retention-secs
+            - {{ .Values.gateway.auditRetentionSecs | quote }}
+            {{- end }}
+            {{- if .Values.gateway.proxy.maxInFlight }}
+            - --proxy-max-in-flight
+            - {{ .Values.gateway.proxy.maxInFlight | quote }}
+            {{- end }}
+            {{- if .Values.gateway.proxy.maxBodyBytes }}
+            - --proxy-max-body-bytes
+            - {{ .Values.gateway.proxy.maxBodyBytes | quote }}
+            {{- end }}
+            {{- if .Values.gateway.proxy.usageMaxBodyBytes }}
+            - --proxy-usage-max-body-bytes
+            - {{ .Values.gateway.proxy.usageMaxBodyBytes | quote }}
+            {{- end }}
+            {{- if .Values.gateway.proxy.cache.enabled }}
+            - --proxy-cache
+            - --proxy-cache-ttl
+            - {{ .Values.gateway.proxy.cache.ttlSeconds | quote }}
+            - --proxy-cache-max-entries
+            - {{ .Values.gateway.proxy.cache.maxEntries | quote }}
+            - --proxy-cache-max-body-bytes
+            - {{ .Values.gateway.proxy.cache.maxBodyBytes | quote }}
+            - --proxy-cache-max-total-body-bytes
+            - {{ .Values.gateway.proxy.cache.maxTotalBodyBytes | quote }}
+            {{- end }}
+            {{- if .Values.gateway.prometheus.enabled }}
+            - --prometheus-metrics
+            - --prometheus-max-key-series
+            - {{ .Values.gateway.prometheus.maxKeySeries | quote }}
+            - --prometheus-max-model-series
+            - {{ .Values.gateway.prometheus.maxModelSeries | quote }}
+            - --prometheus-max-backend-series
+            - {{ .Values.gateway.prometheus.maxBackendSeries | quote }}
+            - --prometheus-max-path-series
+            - {{ .Values.gateway.prometheus.maxPathSeries | quote }}
+            {{- end }}
+            {{- if .Values.gateway.jsonLogs }}
+            - --json-logs
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.gateway.configMountPath }}
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "ditto-gateway.fullname" . }}-config

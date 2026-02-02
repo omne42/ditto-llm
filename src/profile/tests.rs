@@ -16,6 +16,25 @@ async fn resolves_auth_token_with_custom_default_keys() -> Result<()> {
 }
 
 #[tokio::test]
+async fn resolves_auth_token_from_secret_spec_in_env_value() -> Result<()> {
+    let env = Env {
+        dotenv: BTreeMap::from([
+            (
+                "DITTO_TEST_KEY".to_string(),
+                "secret://env/REAL_TEST_KEY".to_string(),
+            ),
+            ("REAL_TEST_KEY".to_string(), "sk-test".to_string()),
+        ]),
+    };
+    let auth = ProviderAuth::ApiKeyEnv {
+        keys: vec!["DITTO_TEST_KEY".to_string()],
+    };
+    let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
+    assert_eq!(token, "sk-test");
+    Ok(())
+}
+
+#[tokio::test]
 async fn resolves_http_header_env_auth() -> Result<()> {
     let env = Env {
         dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),

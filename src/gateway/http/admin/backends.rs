@@ -3,7 +3,14 @@ async fn list_backends(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<BackendHealthSnapshot>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_read(&state, &headers)?;
+    let admin = ensure_admin_read(&state, &headers)?;
+    if admin.tenant_id.is_some() {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "tenant-scoped admin tokens cannot access backend health",
+        ));
+    }
 
     let Some(health) = state.proxy_backend_health.as_ref() else {
         return Err(error_response(
@@ -35,7 +42,14 @@ async fn reset_backend(
     headers: HeaderMap,
     Path(name): Path<String>,
 ) -> Result<Json<BackendHealthSnapshot>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_write(&state, &headers)?;
+    let admin = ensure_admin_write(&state, &headers)?;
+    if admin.tenant_id.is_some() {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "tenant-scoped admin tokens cannot reset backends",
+        ));
+    }
 
     let Some(health) = state.proxy_backend_health.as_ref() else {
         return Err(error_response(

@@ -110,7 +110,7 @@
         let observed_usage = if should_attempt_buffer_for_usage {
             body_bytes
                 .as_ref()
-                .and_then(|bytes| extract_openai_usage_from_bytes(bytes))
+                .and_then(extract_openai_usage_from_bytes)
         } else {
             None
         };

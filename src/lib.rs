@@ -7,6 +7,7 @@ pub mod moderation;
 pub mod object;
 mod profile;
 pub mod rerank;
+pub mod secrets;
 mod stream;
 pub mod text;
 
@@ -54,6 +55,9 @@ pub use stream::{
 pub use text::{
     GenerateTextResponse, LanguageModelTextExt, StreamTextFinal, StreamTextHandle, StreamTextResult,
 };
+
+#[cfg(feature = "sdk")]
+pub use sdk::cache::CacheLayer;
 pub use types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchRequestCounts, BatchResponse, BatchStatus, ContentPart, FileSource,

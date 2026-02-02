@@ -9,6 +9,10 @@
 - `deployment.yaml`：2 副本 Deployment（含 /health 探针）
 - `service.yaml`：ClusterIP Service
 
+如果你更偏好用 Helm 管理参数化部署，也可以直接使用：
+
+- `deploy/helm/ditto-gateway`
+
 ---
 
 ## 1) 构建与推送镜像

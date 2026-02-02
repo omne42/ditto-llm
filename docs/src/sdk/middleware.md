@@ -81,3 +81,25 @@ let llm = base.layer(L1).with_layer(L2).with_layer(L3);
 - 最外层：观测/日志（确保覆盖所有后续行为）
 - 中间层：参数规范化/策略
 - 最内层：provider client（OpenAI/Anthropic/...）
+
+---
+
+## 4) 内置：缓存 Layer（含流式回放）
+
+Ditto 提供一个轻量的 `CacheLayer`（feature `sdk`）：用于缓存 `generate()` 的响应，以及缓存 `stream()` 的 chunk 序列并在命中时回放（replay）。
+
+```rust
+use std::time::Duration;
+
+use ditto_llm::{CacheLayer, LanguageModelLayerExt, OpenAI};
+
+let llm = OpenAI::new(std::env::var("OPENAI_API_KEY")?)
+    .with_model("gpt-4o-mini")
+    .layer(CacheLayer::new().with_ttl(Duration::from_secs(60)));
+```
+
+默认策略：
+
+- 只做进程内缓存（不会落盘/跨进程共享）
+- 命中时不会再次调用 provider
+- 对单条缓存设置体积上限与 streaming chunk 上限（超过上限会跳过缓存，避免无界内存增长）

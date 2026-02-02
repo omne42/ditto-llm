@@ -86,6 +86,15 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 - 先用较小的上限跑在生产影子环境，观察 cardinality 再逐步放宽。
 
+### Dashboard / 告警模板
+
+仓库内提供一套“开箱即用但不强绑定”的模板资产：
+
+- Grafana dashboard：`deploy/grafana/ditto-gateway.dashboard.json`
+- PrometheusRule（Prometheus Operator）：`deploy/prometheus/ditto-gateway-prometheusrule.yaml`
+
+它们默认基于 Ditto 的 `ditto_gateway_proxy_*` 指标族（见 `GET /metrics/prometheus` 输出），你可以按自己平台的 label/job 约定做小幅调整。
+
 ---
 
 ## 4) 结构化 JSON 日志（轻量）

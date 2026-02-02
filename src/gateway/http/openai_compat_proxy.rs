@@ -1,4 +1,7 @@
 include!("openai_compat_proxy/preamble.rs");
+include!("openai_compat_proxy/costing.rs");
+include!("openai_compat_proxy/rate_limit.rs");
+
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
@@ -98,6 +101,7 @@ async fn handle_openai_compat_proxy(
 
     let _now_epoch_seconds = now_epoch_seconds();
     let minute = _now_epoch_seconds / 60;
+    let rate_limit_route = normalize_rate_limit_route(path_and_query);
 
     let (
         virtual_key_id,
@@ -381,40 +385,15 @@ async fn handle_openai_compat_proxy(
                 .map_err(map_openai_gateway_error)?;
 
             #[cfg(feature = "gateway-costing")]
-            let charge_cost_usd_micros = model.as_deref().and_then(|request_model| {
-                state.pricing.as_ref().and_then(|pricing| {
-                    let mut cost = pricing.estimate_cost_usd_micros_for_service_tier(
-                        request_model,
-                        input_tokens_estimate,
-                        max_output_tokens,
-                        service_tier.as_deref(),
-                    );
-                    for backend_name in &backends {
-                        if !state.proxy_backends.contains_key(backend_name) {
-                            continue;
-                        }
-                        let mapped_model = gateway
-                            .config
-                            .backends
-                            .iter()
-                            .find(|backend| backend.name == backend_name.as_str())
-                            .and_then(|backend| backend.model_map.get(request_model))
-                            .map(|model| model.as_str());
-                        if let Some(mapped_model) = mapped_model {
-                            cost = max_option_u64(
-                                cost,
-                                pricing.estimate_cost_usd_micros_for_service_tier(
-                                    mapped_model,
-                                    input_tokens_estimate,
-                                    max_output_tokens,
-                                    service_tier.as_deref(),
-                                ),
-                            );
-                        }
-                    }
-                    cost
-                })
-            });
+            let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
+                &state,
+                &gateway,
+                model.as_deref(),
+                input_tokens_estimate,
+                max_output_tokens,
+                service_tier.as_deref(),
+                &backends,
+            );
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
@@ -526,40 +505,15 @@ async fn handle_openai_compat_proxy(
                 .map_err(map_openai_gateway_error)?;
 
             #[cfg(feature = "gateway-costing")]
-            let charge_cost_usd_micros = model.as_deref().and_then(|request_model| {
-                state.pricing.as_ref().and_then(|pricing| {
-                    let mut cost = pricing.estimate_cost_usd_micros_for_service_tier(
-                        request_model,
-                        input_tokens_estimate,
-                        max_output_tokens,
-                        service_tier.as_deref(),
-                    );
-                    for backend_name in &backends {
-                        if !state.proxy_backends.contains_key(backend_name) {
-                            continue;
-                        }
-                        let mapped_model = gateway
-                            .config
-                            .backends
-                            .iter()
-                            .find(|backend| backend.name == backend_name.as_str())
-                            .and_then(|backend| backend.model_map.get(request_model))
-                            .map(|model| model.as_str());
-                        if let Some(mapped_model) = mapped_model {
-                            cost = max_option_u64(
-                                cost,
-                                pricing.estimate_cost_usd_micros_for_service_tier(
-                                    mapped_model,
-                                    input_tokens_estimate,
-                                    max_output_tokens,
-                                    service_tier.as_deref(),
-                                ),
-                            );
-                        }
-                    }
-                    cost
-                })
-            });
+            let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
+                &state,
+                &gateway,
+                model.as_deref(),
+                input_tokens_estimate,
+                max_output_tokens,
+                service_tier.as_deref(),
+                &backends,
+            );
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
@@ -593,7 +547,13 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), virtual_key_id.as_deref(), limits.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(virtual_key_id, limits, charge_tokens, minute)
+            .check_and_consume_rate_limits(
+                virtual_key_id,
+                &rate_limit_route,
+                limits,
+                charge_tokens,
+                _now_epoch_seconds,
+            )
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {
@@ -609,7 +569,7 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), tenant_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
+            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {
@@ -625,7 +585,7 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), project_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
+            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {
@@ -641,7 +601,7 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), user_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
+            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {

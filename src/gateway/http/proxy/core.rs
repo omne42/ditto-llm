@@ -863,15 +863,11 @@ async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
 
 #[cfg(feature = "gateway-routing-advanced")]
 fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop>> {
-    let Some(config) = state.proxy_routing.as_ref() else {
-        return None;
-    };
+    let config = state.proxy_routing.as_ref()?;
     if !config.health_check.enabled {
         return None;
     }
-    let Some(health) = state.proxy_backend_health.as_ref() else {
-        return None;
-    };
+    let health = state.proxy_backend_health.as_ref()?;
 
     let backends = state.proxy_backends.clone();
     let health = health.clone();

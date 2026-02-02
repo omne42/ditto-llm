@@ -78,6 +78,13 @@ use super::{
 static REQUEST_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
+struct AdminTenantToken {
+    tenant_id: String,
+    token: String,
+    read_only: bool,
+}
+
+#[derive(Clone)]
 pub struct GatewayHttpState {
     gateway: Arc<Mutex<Gateway>>,
     proxy_backends: Arc<HashMap<String, ProxyBackend>>,
@@ -85,6 +92,7 @@ pub struct GatewayHttpState {
     translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
     admin_token: Option<String>,
     admin_read_token: Option<String>,
+    admin_tenant_tokens: Vec<AdminTenantToken>,
     state_file: Option<PathBuf>,
     #[cfg(feature = "gateway-store-sqlite")]
     sqlite_store: Option<SqliteStore>,
@@ -133,6 +141,7 @@ impl GatewayHttpState {
             translation_backends: Arc::new(HashMap::new()),
             admin_token: None,
             admin_read_token: None,
+            admin_tenant_tokens: Vec::new(),
             state_file: None,
             #[cfg(feature = "gateway-store-sqlite")]
             sqlite_store: None,
@@ -162,6 +171,20 @@ impl GatewayHttpState {
         }
     }
 
+    fn has_any_admin_tokens(&self) -> bool {
+        self.admin_token.is_some()
+            || self.admin_read_token.is_some()
+            || !self.admin_tenant_tokens.is_empty()
+    }
+
+    fn has_admin_write_tokens(&self) -> bool {
+        self.admin_token.is_some()
+            || self
+                .admin_tenant_tokens
+                .iter()
+                .any(|binding| !binding.read_only)
+    }
+
     pub fn with_admin_token(mut self, token: impl Into<String>) -> Self {
         self.admin_token = Some(token.into());
         self
@@ -169,6 +192,32 @@ impl GatewayHttpState {
 
     pub fn with_admin_read_token(mut self, token: impl Into<String>) -> Self {
         self.admin_read_token = Some(token.into());
+        self
+    }
+
+    pub fn with_admin_tenant_token(
+        mut self,
+        tenant_id: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.admin_tenant_tokens.push(AdminTenantToken {
+            tenant_id: tenant_id.into(),
+            token: token.into(),
+            read_only: false,
+        });
+        self
+    }
+
+    pub fn with_admin_tenant_read_token(
+        mut self,
+        tenant_id: impl Into<String>,
+        token: impl Into<String>,
+    ) -> Self {
+        self.admin_tenant_tokens.push(AdminTenantToken {
+            tenant_id: tenant_id.into(),
+            token: token.into(),
+            read_only: true,
+        });
         self
     }
 
@@ -309,14 +358,14 @@ pub fn router(state: GatewayHttpState) -> Router {
         router = router.route("/metrics/prometheus", get(metrics_prometheus));
     }
 
-    if state.admin_token.is_some() || state.admin_read_token.is_some() {
+    if state.has_any_admin_tokens() {
         let mut keys_router = get(list_keys);
-        if state.admin_token.is_some() {
+        if state.has_admin_write_tokens() {
             keys_router = keys_router.post(upsert_key);
         }
         router = router.route("/admin/keys", keys_router);
 
-        if state.admin_token.is_some() {
+        if state.has_admin_write_tokens() {
             router = router.route(
                 "/admin/keys/:id",
                 put(upsert_key_with_id).delete(delete_key),
@@ -340,6 +389,7 @@ pub fn router(state: GatewayHttpState) -> Router {
         {
             router = router
                 .route("/admin/audit", get(list_audit_logs))
+                .route("/admin/audit/export", get(export_audit_logs))
                 .route("/admin/budgets", get(list_budget_ledgers))
                 .route("/admin/budgets/tenants", get(list_tenant_budget_ledgers))
                 .route("/admin/budgets/projects", get(list_project_budget_ledgers))
@@ -368,30 +418,7 @@ pub fn router(state: GatewayHttpState) -> Router {
     router.with_state(state)
 }
 
-async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
-}
-
-async fn metrics(State(state): State<GatewayHttpState>) -> Json<ObservabilitySnapshot> {
-    let gateway = state.gateway.lock().await;
-    Json(gateway.observability())
-}
-
-#[cfg(feature = "gateway-proxy-cache")]
-#[derive(Debug, Deserialize)]
-struct PurgeProxyCacheRequest {
-    #[serde(default)]
-    all: bool,
-    #[serde(default)]
-    cache_key: Option<String>,
-}
-
-#[cfg(feature = "gateway-proxy-cache")]
-#[derive(Debug, Serialize)]
-struct PurgeProxyCacheResponse {
-    cleared_memory: bool,
-    deleted_redis: Option<u64>,
-}
+include!("core/diagnostics.rs");
 
 #[cfg(feature = "gateway-metrics-prometheus")]
 async fn metrics_prometheus(

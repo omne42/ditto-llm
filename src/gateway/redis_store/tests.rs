@@ -245,23 +245,23 @@ mod tests {
             .with_prefix(test_prefix());
         store.ping().await.expect("ping");
 
-        let minute = now_millis_u64() / 60_000;
+        let now_epoch_seconds = now_millis_u64() / 1000;
         let limits = super::super::LimitsConfig {
             rpm: Some(2),
             tpm: Some(1000),
         };
 
         store
-            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .check_and_consume_rate_limits("key-rpm", "/v1/chat/completions", &limits, 1, now_epoch_seconds)
             .await
             .expect("first allowed");
         store
-            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .check_and_consume_rate_limits("key-rpm", "/v1/chat/completions", &limits, 1, now_epoch_seconds)
             .await
             .expect("second allowed");
 
         let err = store
-            .check_and_consume_rate_limits("key-rpm", &limits, 1, minute)
+            .check_and_consume_rate_limits("key-rpm", "/v1/chat/completions", &limits, 1, now_epoch_seconds)
             .await
             .expect_err("third blocked");
         assert!(matches!(err, super::super::GatewayError::RateLimited { .. }));
@@ -281,19 +281,19 @@ mod tests {
             .with_prefix(test_prefix());
         store.ping().await.expect("ping");
 
-        let minute = now_millis_u64() / 60_000;
+        let now_epoch_seconds = now_millis_u64() / 1000;
         let limits = super::super::LimitsConfig {
             rpm: Some(1000),
             tpm: Some(3),
         };
 
         store
-            .check_and_consume_rate_limits("key-tpm", &limits, 2, minute)
+            .check_and_consume_rate_limits("key-tpm", "/v1/embeddings", &limits, 2, now_epoch_seconds)
             .await
             .expect("first allowed");
 
         let err = store
-            .check_and_consume_rate_limits("key-tpm", &limits, 2, minute)
+            .check_and_consume_rate_limits("key-tpm", "/v1/embeddings", &limits, 2, now_epoch_seconds)
             .await
             .expect_err("second blocked");
         assert!(matches!(err, super::super::GatewayError::RateLimited { .. }));

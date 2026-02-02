@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
+- Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
+- Gateway: add per-route Redis rate limiting (route-scoped keys) and upgrade the algorithm to a weighted sliding window across the current and previous minute (60s window).
+- Security: add `secret://...` secret resolution (env/file/Vault/AWS SM/GCP SM/Azure KV) and wire it into SDK `ProviderAuth`, Gateway config values, and gateway CLI flags (admin tokens / redis url).
+- SDK: add `CacheLayer` middleware (implements `LanguageModelLayer`) with deterministic request hashing and streaming replay.
+- Deploy/Observability: add a Helm chart (`deploy/helm/ditto-gateway`), a Grafana dashboard template (`deploy/grafana/ditto-gateway.dashboard.json`), and a PrometheusRule template (`deploy/prometheus/ditto-gateway-prometheusrule.yaml`).
+- JS/TS: add a minimal stream protocol v1 client (`packages/ditto-client`) and React hook (`packages/ditto-react`).
+- Admin UI: add a minimal React admin console for `ditto-gateway` (`apps/admin-ui`) plus minimal multi-language gateway client examples (Node/Python/Go).
 - Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
 - Docs: expand SDK/Gateway guides with recipes and advanced topics (agents, middleware, stream protocol v1, devtools/telemetry/MCP).
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.

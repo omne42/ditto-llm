@@ -190,11 +190,9 @@ impl StreamCollector {
                 if slot.name.is_none() && !name.trim().is_empty() {
                     slot.name = Some(name.to_string());
                 }
-                if self.seen_tool_call_ids.insert(id.to_string()) {
-                    if self.can_push_part() {
-                        self.parts
-                            .push(CollectedPart::ToolCall { id: id.to_string() });
-                    }
+                if self.seen_tool_call_ids.insert(id.to_string()) && self.can_push_part() {
+                    self.parts
+                        .push(CollectedPart::ToolCall { id: id.to_string() });
                 }
             }
             StreamChunk::ToolCallDelta {
@@ -249,11 +247,9 @@ impl StreamCollector {
                         slot.arguments.push_str(arguments_delta);
                     }
                 }
-                if self.seen_tool_call_ids.insert(id.to_string()) {
-                    if self.can_push_part() {
-                        self.parts
-                            .push(CollectedPart::ToolCall { id: id.to_string() });
-                    }
+                if self.seen_tool_call_ids.insert(id.to_string()) && self.can_push_part() {
+                    self.parts
+                        .push(CollectedPart::ToolCall { id: id.to_string() });
                 }
             }
             StreamChunk::FinishReason(reason) => self.finish_reason = *reason,
@@ -341,10 +337,8 @@ impl StreamCollector {
                 if slot.name.is_none() && !name.trim().is_empty() {
                     slot.name = Some(name);
                 }
-                if self.seen_tool_call_ids.insert(id.clone()) {
-                    if self.can_push_part() {
-                        self.parts.push(CollectedPart::ToolCall { id });
-                    }
+                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    self.parts.push(CollectedPart::ToolCall { id });
                 }
             }
             StreamChunk::ToolCallDelta {
@@ -400,10 +394,8 @@ impl StreamCollector {
                         slot.arguments.push_str(&arguments_delta);
                     }
                 }
-                if self.seen_tool_call_ids.insert(id.clone()) {
-                    if self.can_push_part() {
-                        self.parts.push(CollectedPart::ToolCall { id });
-                    }
+                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    self.parts.push(CollectedPart::ToolCall { id });
                 }
             }
             StreamChunk::FinishReason(reason) => self.finish_reason = reason,

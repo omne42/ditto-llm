@@ -54,6 +54,12 @@ Ditto 支持多种鉴权方式，覆盖企业网关的常见形态。
 }
 ```
 
+你可以把 env 的值设置为 `secret://...`，让 Ditto 在运行时解析（Vault/AWS/GCP/Azure/file/env）：
+
+- `OPENAI_API_KEY=secret://env/REAL_OPENAI_API_KEY`
+- `OPENAI_API_KEY=secret://file?path=/run/secrets/openai_api_key`
+- `OPENAI_API_KEY=secret://vault/secret/openai?field=api_key`
+
 ### 2) 自定义 header（例如 `api-key`）
 
 ```json

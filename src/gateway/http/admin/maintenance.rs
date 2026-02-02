@@ -51,7 +51,14 @@ async fn reap_reservations(
     headers: HeaderMap,
     Json(payload): Json<ReapReservationsRequest>,
 ) -> Result<Json<ReapReservationsResponse>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin_write(&state, &headers)?;
+    let admin = ensure_admin_write(&state, &headers)?;
+    if admin.tenant_id.is_some() {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "tenant-scoped admin tokens cannot reap reservations",
+        ));
+    }
 
     let now_ts_ms = now_millis_u64();
     let cutoff_ts_ms = now_ts_ms.saturating_sub(payload.older_than_secs.saturating_mul(1000));
@@ -113,4 +120,3 @@ async fn reap_reservations(
         "store not configured",
     ))
 }
-

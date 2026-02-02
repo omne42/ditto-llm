@@ -201,10 +201,8 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
             match next {
                 Ok(chunk) => {
                     if let StreamChunk::TextDelta { text } = &chunk {
-                        if !text.is_empty() {
-                            if text_enabled_task.load(Ordering::Relaxed) {
-                                let _ = text_tx.send(Ok(text.to_string())).await;
-                            }
+                        if !text.is_empty() && text_enabled_task.load(Ordering::Relaxed) {
+                            let _ = text_tx.send(Ok(text.to_string())).await;
                         }
                     }
 

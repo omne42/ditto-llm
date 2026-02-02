@@ -584,10 +584,8 @@ fn stream_object_from_stream_with_config_and_limits(
                     }
                 }
 
-                if should_emit_final {
-                    if partial_enabled_task.load(Ordering::Relaxed) {
-                        let _ = partial_tx.send(Ok(value)).await;
-                    }
+                if should_emit_final && partial_enabled_task.load(Ordering::Relaxed) {
+                    let _ = partial_tx.send(Ok(value)).await;
                 }
                 if element_enabled_task.load(Ordering::Relaxed) {
                     for element in remaining_elements {

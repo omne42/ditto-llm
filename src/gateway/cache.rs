@@ -81,6 +81,7 @@ impl ResponseCache {
         Some(response)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &mut self,
         scope: &str,

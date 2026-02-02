@@ -69,3 +69,14 @@ Ditto 提供两种等价但适配不同生态的输出：
 - 你需要在网关之外把 `StreamChunk` 安全地传到另一个服务/进程
 
 如果你只需要 OpenAI-compatible `/v1/*`，优先用 Gateway（它直接 passthrough upstream 的 SSE）。
+
+---
+
+## 5) JS/TS client（最小实现）
+
+仓库内提供一个最小 JS/TS client（以及 React hook），用于在浏览器/Node 侧消费 stream protocol v1：
+
+- `packages/ditto-client`：`streamV1FromSseResponse` / `streamV1FromNdjsonResponse`
+- `packages/ditto-react`：`useStreamV1`（把 stream protocol v1 映射成 React state）
+
+它们不追求 1:1 复刻 AI SDK UI，只提供“能用、易嵌入、易排障”的最小 DX。

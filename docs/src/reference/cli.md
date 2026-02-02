@@ -38,6 +38,14 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 - `--admin-token-env ENV`：从环境变量读取 write admin token（可配合 `--dotenv`）
 - `--admin-read-token TOKEN`：启用 `/admin/*` 并设置 **read-only admin token**（只读）
 - `--admin-read-token-env ENV`：从环境变量读取 read-only admin token（可配合 `--dotenv`）
+- `--admin-tenant-token TENANT_ID=TOKEN`：启用 `/admin/*` 并设置 **tenant-scoped write token**（只能管理该 tenant 的 keys/budgets/costs/audit）
+- `--admin-tenant-token-env TENANT_ID=ENV`：从环境变量读取 tenant-scoped write token（可配合 `--dotenv`）
+- `--admin-tenant-read-token TENANT_ID=TOKEN`：启用 `/admin/*` 并设置 **tenant-scoped read-only token**
+- `--admin-tenant-read-token-env TENANT_ID=ENV`：从环境变量读取 tenant-scoped read-only token（可配合 `--dotenv`）
+
+说明：
+
+- `TOKEN` 也可以是 `secret://...`（见「Gateway 安全与加固」的 secret 管理章节）。
 
 约束：
 

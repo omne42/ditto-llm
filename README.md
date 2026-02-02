@@ -23,7 +23,7 @@ Optional feature-gated modules:
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor` (feature `agent`).
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
 - Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
-- SDK utilities: stream protocol v1, HTTP adapters (SSE/NDJSON), telemetry sink, devtools JSONL logger, MCP tool adapter (feature `sdk`).
+- SDK utilities: stream protocol v1, HTTP adapters (SSE/NDJSON), telemetry sink, devtools JSONL logger, MCP tool adapter, cache middleware with streaming replay (feature `sdk`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
 - Gateway token counting: tiktoken-based input token estimation for proxy budgets/guardrails/costing (feature `gateway-tokenizer`).
 - Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`, and `/v1/models` backed by Ditto providers (feature `gateway-translation`).
@@ -99,6 +99,19 @@ Run the HTTP gateway (feature `gateway`):
 ```bash
 cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
+
+Minimal admin UI (React):
+
+```bash
+npm install
+npm run --workspace apps/admin-ui dev
+```
+
+Minimal multi-language gateway clients:
+
+- Node (SSE streaming): `examples/clients/node/stream_chat_completions.mjs`
+- Python: `examples/clients/python/chat_completions.py`
+- Go: `examples/clients/go/chat_completions.go`
 
 Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injected headers/query params, e.g. `Authorization` and Azure-style `api-version`):
 

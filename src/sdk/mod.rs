@@ -1,5 +1,6 @@
 //! SDK module (feature-gated).
 
+pub mod cache;
 pub mod devtools;
 pub mod http;
 pub mod mcp;

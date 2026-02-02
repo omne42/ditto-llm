@@ -13,6 +13,10 @@ Admin API 用于“管理与观测控制面状态”：
 - 鉴权：`src/gateway/http/admin/auth.rs`
 - handlers：`src/gateway/http/admin/handlers.rs`
 
+仓库内也提供一个最小 Admin UI（React）用于快速试用与演示：
+
+- `apps/admin-ui`
+
 ---
 
 ## 0) 启用条件与鉴权方式

@@ -125,10 +125,8 @@ pub(crate) fn parse_multipart_form(
                         filename = Some(value.to_string());
                     }
                 }
-            } else if key.eq_ignore_ascii_case("content-type") {
-                if !value.is_empty() {
-                    content_type = Some(value.to_string());
-                }
+            } else if key.eq_ignore_ascii_case("content-type") && !value.is_empty() {
+                content_type = Some(value.to_string());
             }
         }
 

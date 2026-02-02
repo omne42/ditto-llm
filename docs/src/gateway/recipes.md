@@ -81,6 +81,12 @@ curl -sS http://127.0.0.1:8080/health
 curl -sS http://127.0.0.1:8080/v1/models -H "Authorization: Bearer ${DITTO_VK_BOOTSTRAP}" | head
 ```
 
+多语言最小模板（包含 request id 传递）：
+
+- Node：`examples/clients/node/stream_chat_completions.mjs`
+- Python：`examples/clients/python/chat_completions.py`
+- Go：`examples/clients/go/chat_completions.go`
+
 ### 5) 验证（Admin API）
 
 ```bash

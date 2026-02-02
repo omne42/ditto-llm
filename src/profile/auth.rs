@@ -1,6 +1,7 @@
 use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
+use crate::secrets::resolve_secret_string;
 use crate::{DittoError, Result};
 
 use super::config::ProviderAuth;
@@ -158,7 +159,7 @@ pub async fn resolve_auth_token_with_default_keys(
             if keys.is_empty() {
                 for key in default_keys {
                     if let Some(value) = env.get(key) {
-                        return Ok(value);
+                        return resolve_secret_if_needed(value, env).await;
                     }
                 }
                 return Err(DittoError::AuthCommand(format!(
@@ -168,7 +169,7 @@ pub async fn resolve_auth_token_with_default_keys(
             }
             for key in keys {
                 if let Some(value) = env.get(key.as_str()) {
-                    return Ok(value);
+                    return resolve_secret_if_needed(value, env).await;
                 }
             }
             Err(DittoError::AuthCommand(format!(
@@ -204,11 +205,13 @@ pub async fn resolve_auth_token_with_default_keys(
 
             let stdout = String::from_utf8_lossy(&output.stdout);
             let parsed = serde_json::from_str::<AuthCommandOutput>(stdout.trim())?;
-            parsed
+            let token = parsed
                 .api_key
                 .or(parsed.token)
                 .filter(|s| !s.trim().is_empty())
-                .ok_or_else(|| DittoError::AuthCommand("json missing api_key/token".to_string()))
+                .ok_or_else(|| DittoError::AuthCommand("json missing api_key/token".to_string()))?;
+
+            resolve_secret_if_needed(token, env).await
         }
         ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
             Err(DittoError::InvalidResponse(
@@ -216,4 +219,12 @@ pub async fn resolve_auth_token_with_default_keys(
             ))
         }
     }
+}
+
+async fn resolve_secret_if_needed(raw: String, env: &Env) -> Result<String> {
+    let raw = raw.trim().to_string();
+    if raw.starts_with("secret://") {
+        return resolve_secret_string(raw.as_str(), env).await;
+    }
+    Ok(raw)
 }

@@ -22,7 +22,7 @@ Ditto-LLM 通过 Cargo features 控制体积与依赖：默认构建偏 SDK，Ga
 
 ## Agent/SDK 工具
 
-- `sdk`：stream protocol v1（NDJSON/SSE）与 devtools/telemetry/MCP 等工具适配
+- `sdk`：stream protocol v1（NDJSON/SSE）与 devtools/telemetry/MCP 等工具适配；以及 SDK cache middleware（含 streaming replay）
 - `agent`：ToolLoopAgent + tool executors（含 `safe-fs-tools`）
 
 > 小提示：生产环境建议按需开启 features，避免把不必要依赖带进最终镜像。

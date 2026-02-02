@@ -16,6 +16,32 @@
 
 缺失/为空的 env 会导致启动失败（避免 silent misconfig）。
 
+### 可选：`secret://...`（Vault / AWS SM / GCP SM / Azure KV / file）
+
+在不方便用纯 env 的企业环境里，你也可以把敏感值写成 `secret://...` 形式，并让 `ditto-gateway` 在启动时解析：
+
+- `virtual_keys[].token`
+- `backends[].headers` / `query_params`
+- `backends[].provider_config.http_headers` / `http_query_params`
+- CLI：`--admin-token*` / `--admin-read-token*` / `--redis*`
+
+示例（从 env / 文件）：
+
+- `secret://env/OPENAI_API_KEY`
+- `secret://file?path=/run/secrets/openai_api_key`
+
+示例（通过外部 CLI 拉取）：
+
+- `secret://vault/secret/openai?field=api_key&namespace=team`
+- `secret://aws-sm/mysecret?region=us-east-1&json_key=api_key`
+- `secret://gcp-sm/mysecret?project=myproj&version=latest&json_key=api_key`
+- `secret://azure-kv/myvault/mysecret`
+
+注意：
+
+- 这些 provider 会调用本机 CLI（`vault` / `aws` / `gcloud` / `az`），需要你在运行环境里预装并配置好权限。
+- Ditto 不会把解析后的值打印到日志（但错误信息会包含 provider/参数，用于排障）。
+
 ---
 
 ## 2) Virtual Keys：把“对外 API key”当作一等公民
