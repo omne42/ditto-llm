@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
 - Gateway: add Admin API filters for large deployments (`GET /admin/keys` filters and `key_prefix` for `/admin/budgets` and `/admin/costs`).
 - Gateway: add Admin API pagination (`limit`/`offset`) for `GET /admin/keys`, `GET /admin/budgets`, and `GET /admin/costs` (caps `limit` at 10000).
+- Gateway: add a maintenance endpoint to reap stale persistent budget reservations (`POST /admin/reservations/reap`) to recover from crashed/aborted requests.
 - Gateway: add RBAC-lite admin auth split: read-only admin token (`--admin-read-token` / `--admin-read-token-env`) for read endpoints, plus write admin token (`--admin-token` / `--admin-token-env`) for mutations.
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI: parse raw Responses SSE via bounded SSE data parsing and truncate invalid event payloads in errors.
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
+- Gateway: Redis budget/cost reservation hashes no longer expire; stale reservations can be recovered via `POST /admin/reservations/reap` instead of silently wedging ledgers.
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).
 - Gateway: passthrough proxy now avoids buffering large non-SSE responses (streams them) and only buffers when a response is small enough for usage accounting or proxy caching (reduces OOM risk on large downloads).

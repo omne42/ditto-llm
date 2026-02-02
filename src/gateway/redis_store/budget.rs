@@ -1,3 +1,89 @@
+#[cfg(feature = "gateway-store-redis")]
+const REAP_BUDGET_RESERVATION_SCRIPT: &str = r#"
+local keys_key = KEYS[1]
+local reservation_key = KEYS[2]
+
+local prefix = ARGV[1]
+local cutoff_ts_ms = tonumber(ARGV[2]) or 0
+local ts_ms = ARGV[3]
+local dry_run = tonumber(ARGV[4]) or 0
+
+if redis.call("EXISTS", reservation_key) == 0 then
+  return { "MISS" }
+end
+
+local reservation_ts = tonumber(redis.call("HGET", reservation_key, "ts_ms") or "0") or 0
+if reservation_ts > cutoff_ts_ms then
+  return { "KEEP" }
+end
+
+local key_id = redis.call("HGET", reservation_key, "key_id")
+local tokens = tonumber(redis.call("HGET", reservation_key, "tokens") or "0") or 0
+
+if (not key_id) then
+  return { "INVALID" }
+end
+
+if dry_run == 1 then
+  return { "DRY", tostring(tokens) }
+end
+
+redis.call("DEL", reservation_key)
+
+local ledger_key = prefix .. ":budget_ledger:" .. key_id
+local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_tokens", -tokens) or "0") or 0
+if reserved_after < 0 then
+  redis.call("HSET", ledger_key, "reserved_tokens", 0)
+end
+
+redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
+redis.call("SADD", keys_key, key_id)
+return { "REAP", tostring(tokens) }
+"#;
+
+#[cfg(feature = "gateway-store-redis")]
+const REAP_COST_RESERVATION_SCRIPT: &str = r#"
+local keys_key = KEYS[1]
+local reservation_key = KEYS[2]
+
+local prefix = ARGV[1]
+local cutoff_ts_ms = tonumber(ARGV[2]) or 0
+local ts_ms = ARGV[3]
+local dry_run = tonumber(ARGV[4]) or 0
+
+if redis.call("EXISTS", reservation_key) == 0 then
+  return { "MISS" }
+end
+
+local reservation_ts = tonumber(redis.call("HGET", reservation_key, "ts_ms") or "0") or 0
+if reservation_ts > cutoff_ts_ms then
+  return { "KEEP" }
+end
+
+local key_id = redis.call("HGET", reservation_key, "key_id")
+local usd_micros = tonumber(redis.call("HGET", reservation_key, "usd_micros") or "0") or 0
+
+if (not key_id) then
+  return { "INVALID" }
+end
+
+if dry_run == 1 then
+  return { "DRY", tostring(usd_micros) }
+end
+
+redis.call("DEL", reservation_key)
+
+local ledger_key = prefix .. ":cost_ledger:" .. key_id
+local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_usd_micros", -usd_micros) or "0") or 0
+if reserved_after < 0 then
+  redis.call("HSET", ledger_key, "reserved_usd_micros", 0)
+end
+
+redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
+redis.call("SADD", keys_key, key_id)
+return { "REAP", tostring(usd_micros) }
+"#;
+
 impl RedisStore {
     pub async fn reserve_budget_tokens(
         &self,
@@ -444,5 +530,139 @@ return { "OK", key_id }
             });
         }
         Ok(out)
+    }
+
+    pub async fn reap_stale_budget_reservations(
+        &self,
+        cutoff_ts_ms: u64,
+        max_reaped: usize,
+        dry_run: bool,
+    ) -> Result<(u64, u64, u64), RedisStoreError> {
+        let max_reaped = max_reaped.clamp(1, 100_000);
+        let mut conn = self.connection().await?;
+        let pattern = format!("{}:budget_reservation:*", self.prefix);
+        let ts_ms = now_millis();
+        let dry_run = if dry_run { 1 } else { 0 };
+        let script = redis::Script::new(REAP_BUDGET_RESERVATION_SCRIPT);
+
+        let mut scanned = 0u64;
+        let mut reaped = 0u64;
+        let mut released_tokens = 0u64;
+
+        let mut cursor = "0".to_string();
+        loop {
+            let (next_cursor, keys): (String, Vec<String>) = redis::cmd("SCAN")
+                .arg(&cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut conn)
+                .await?;
+
+            for reservation_key in keys {
+                scanned = scanned.saturating_add(1);
+                let result: Vec<String> = script
+                    .key(self.key_budget_keys())
+                    .key(reservation_key)
+                    .arg(self.prefix.clone())
+                    .arg(cutoff_ts_ms)
+                    .arg(ts_ms)
+                    .arg(dry_run)
+                    .invoke_async(&mut conn)
+                    .await?;
+
+                match result.first().map(|s| s.as_str()) {
+                    Some("REAP") | Some("DRY") => {
+                        reaped = reaped.saturating_add(1);
+                        released_tokens = released_tokens.saturating_add(
+                            result
+                                .get(1)
+                                .and_then(|value| value.parse::<u64>().ok())
+                                .unwrap_or(0),
+                        );
+                    }
+                    _ => {}
+                }
+
+                if reaped as usize >= max_reaped {
+                    return Ok((scanned, reaped, released_tokens));
+                }
+            }
+
+            if next_cursor == "0" {
+                break;
+            }
+            cursor = next_cursor;
+        }
+
+        Ok((scanned, reaped, released_tokens))
+    }
+
+    pub async fn reap_stale_cost_reservations(
+        &self,
+        cutoff_ts_ms: u64,
+        max_reaped: usize,
+        dry_run: bool,
+    ) -> Result<(u64, u64, u64), RedisStoreError> {
+        let max_reaped = max_reaped.clamp(1, 100_000);
+        let mut conn = self.connection().await?;
+        let pattern = format!("{}:cost_reservation:*", self.prefix);
+        let ts_ms = now_millis();
+        let dry_run = if dry_run { 1 } else { 0 };
+        let script = redis::Script::new(REAP_COST_RESERVATION_SCRIPT);
+
+        let mut scanned = 0u64;
+        let mut reaped = 0u64;
+        let mut released_usd_micros = 0u64;
+
+        let mut cursor = "0".to_string();
+        loop {
+            let (next_cursor, keys): (String, Vec<String>) = redis::cmd("SCAN")
+                .arg(&cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut conn)
+                .await?;
+
+            for reservation_key in keys {
+                scanned = scanned.saturating_add(1);
+                let result: Vec<String> = script
+                    .key(self.key_cost_keys())
+                    .key(reservation_key)
+                    .arg(self.prefix.clone())
+                    .arg(cutoff_ts_ms)
+                    .arg(ts_ms)
+                    .arg(dry_run)
+                    .invoke_async(&mut conn)
+                    .await?;
+
+                match result.first().map(|s| s.as_str()) {
+                    Some("REAP") | Some("DRY") => {
+                        reaped = reaped.saturating_add(1);
+                        released_usd_micros = released_usd_micros.saturating_add(
+                            result
+                                .get(1)
+                                .and_then(|value| value.parse::<u64>().ok())
+                                .unwrap_or(0),
+                        );
+                    }
+                    _ => {}
+                }
+
+                if reaped as usize >= max_reaped {
+                    return Ok((scanned, reaped, released_usd_micros));
+                }
+            }
+
+            if next_cursor == "0" {
+                break;
+            }
+            cursor = next_cursor;
+        }
+
+        Ok((scanned, reaped, released_usd_micros))
     }
 }

@@ -61,4 +61,5 @@
 
 - [Roadmap](./roadmap/index.md)
   - [Gap Analysis（对标 LiteLLM + AI SDK）](./roadmap/gaps.md)
+  - [Superset Roadmap（可执行切片）](./roadmap/superset.md)
   - [企业与合规能力清单](./roadmap/enterprise.md)

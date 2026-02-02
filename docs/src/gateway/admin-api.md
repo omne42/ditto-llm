@@ -217,7 +217,49 @@ Query 参数：
 
 ---
 
-## 7) 常见错误与排障
+## 7) Maintenance：回收陈旧预算预留（可选，需要 store）
+
+> 用途：当进程崩溃/异常中断导致“预留未结算”时，ledger 的 `reserved_*` 可能长期不归零。该端点用于运维回收陈旧预留。
+
+权限：需要 write admin token。
+
+### 7.1 `POST /admin/reservations/reap`
+
+请求体：
+
+```json
+{
+  "older_than_secs": 86400,
+  "limit": 1000,
+  "dry_run": true
+}
+```
+
+- `older_than_secs`：只回收“创建时间早于 now-older_than_secs”的 reservations（默认 24h）。
+- `limit`：最多回收多少条（默认 1000；最大 100000）。
+- `dry_run=true`：只统计，不实际修改。
+
+响应体：
+
+```json
+{
+  "store": "redis",
+  "dry_run": true,
+  "cutoff_ts_ms": 1738368000000,
+  "budget": { "scanned": 0, "reaped": 0, "released": 0 },
+  "cost": { "scanned": 0, "reaped": 0, "released": 0 }
+}
+```
+
+实现与注意事项：
+
+- 当前仅支持 redis store（`--redis` + feature `gateway-store-redis`）；sqlite store 会返回 501（后续会补齐）。
+- 该操作会扫描 `redis-prefix` 下的 reservation keys（O(N)）；建议在离峰时以较小 `limit` 分批执行。
+- 建议把 `older_than_secs` 设得足够保守，避免误伤超长 streaming 请求。
+
+---
+
+## 8) 常见错误与排障
 
 - 401 `unauthorized`：admin token 未配置或不匹配
 - 404：

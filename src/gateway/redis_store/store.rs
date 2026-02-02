@@ -14,7 +14,13 @@ use bytes::Bytes;
 #[cfg(feature = "gateway-proxy-cache")]
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_RESERVATION_TTL_SECS: u64 = 60 * 60;
+// NOTE: We intentionally do not let reservation keys silently expire in Redis.
+//
+// Expiring the reservation hash would drop the only source of truth needed to
+// reconcile `reserved_*` in the ledger, which can permanently lock budgets.
+// Stale reservations should be reaped explicitly (e.g. via an admin
+// maintenance endpoint) based on their stored `ts_ms`.
+const DEFAULT_RESERVATION_TTL_SECS: u64 = 0;
 
 #[derive(Clone, Debug)]
 pub struct RedisStore {

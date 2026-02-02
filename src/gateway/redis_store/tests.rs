@@ -165,6 +165,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn redis_store_reaps_stale_budget_reservations() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        store
+            .reserve_budget_tokens("req-1", "key-1", 10, 7)
+            .await
+            .expect("reserve");
+
+        let ledgers = store.list_budget_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].reserved_tokens, 7);
+
+        let cutoff_ts_ms = now_millis_u64().saturating_add(1);
+        let (_scanned, reaped, released) = store
+            .reap_stale_budget_reservations(cutoff_ts_ms, 1000, false)
+            .await
+            .expect("reap");
+        assert_eq!(reaped, 1);
+        assert_eq!(released, 7);
+
+        let ledgers = store.list_budget_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].reserved_tokens, 0);
+        assert_eq!(ledgers[0].spent_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn redis_store_reaps_stale_cost_reservations() {
+        let Some(url) = redis_url() else {
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        store
+            .reserve_cost_usd_micros("req-1", "key-1", 10, 7)
+            .await
+            .expect("reserve");
+
+        let ledgers = store.list_cost_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].key_id, "key-1");
+        assert_eq!(ledgers[0].reserved_usd_micros, 7);
+
+        let cutoff_ts_ms = now_millis_u64().saturating_add(1);
+        let (_scanned, reaped, released) = store
+            .reap_stale_cost_reservations(cutoff_ts_ms, 1000, false)
+            .await
+            .expect("reap");
+        assert_eq!(reaped, 1);
+        assert_eq!(released, 7);
+
+        let ledgers = store.list_cost_ledgers().await.expect("ledgers");
+        assert_eq!(ledgers.len(), 1);
+        assert_eq!(ledgers[0].reserved_usd_micros, 0);
+        assert_eq!(ledgers[0].spent_usd_micros, 0);
+    }
+
+    #[tokio::test]
     async fn redis_store_rate_limits_enforce_rpm() {
         let Some(url) = redis_url() else {
             return;

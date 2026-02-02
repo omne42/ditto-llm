@@ -141,7 +141,9 @@
 - reservation id 基于 `request_id`：
   - key 预算：`<request_id>`
   - tenant/project/user 预算：`<request_id>::budget::<scope>`
-- redis 预留记录带 TTL，避免异常中断导致永久占用（见 `DEFAULT_RESERVATION_TTL_SECS`）。
+- redis 预留记录**不会静默过期**：过期会丢失“回收 reserved 的唯一信息源”，从而让 ledger 永久卡死（预算被永久占用）。
+  - 如需运维回收陈旧预留，请使用 Admin API：`POST /admin/reservations/reap`（支持 `dry_run`/`limit`/`older_than_secs`）。
+  - 建议把 `older_than_secs` 设得足够保守（例如 24h），避免误伤超长 streaming 请求。
 
 ### 3.1 sqlite vs redis 的选择
 

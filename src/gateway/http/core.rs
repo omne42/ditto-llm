@@ -353,6 +353,10 @@ pub fn router(state: GatewayHttpState) -> Router {
                     .route("/admin/costs/projects", get(list_project_cost_ledgers))
                     .route("/admin/costs/users", get(list_user_cost_ledgers));
             }
+
+            if state.admin_token.is_some() {
+                router = router.route("/admin/reservations/reap", post(reap_reservations));
+            }
         }
     }
 
