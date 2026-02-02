@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -74,5 +74,9 @@ impl RateLimiter {
         usage.requests = next_requests;
         usage.tokens = next_tokens;
         Ok(())
+    }
+
+    pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
+        self.usage.retain(|scope, _| scopes.contains(scope));
     }
 }

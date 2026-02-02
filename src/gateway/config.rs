@@ -160,13 +160,19 @@ pub struct VirtualKeyConfig {
     pub token: String,
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_budget: Option<BudgetConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_budget: Option<BudgetConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_budget: Option<BudgetConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant_limits: Option<LimitsConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project_limits: Option<LimitsConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -185,10 +191,13 @@ impl std::fmt::Debug for VirtualKeyConfig {
             .field("id", &self.id)
             .field("token", &"<redacted>")
             .field("enabled", &self.enabled)
+            .field("tenant_id", &self.tenant_id)
             .field("project_id", &self.project_id)
             .field("user_id", &self.user_id)
+            .field("tenant_budget", &self.tenant_budget)
             .field("project_budget", &self.project_budget)
             .field("user_budget", &self.user_budget)
+            .field("tenant_limits", &self.tenant_limits)
             .field("project_limits", &self.project_limits)
             .field("user_limits", &self.user_limits)
             .field("limits", &self.limits)
@@ -207,10 +216,13 @@ impl VirtualKeyConfig {
             id: id.into(),
             token: token.into(),
             enabled: true,
+            tenant_id: None,
             project_id: None,
             user_id: None,
+            tenant_budget: None,
             project_budget: None,
             user_budget: None,
+            tenant_limits: None,
             project_limits: None,
             user_limits: None,
             limits: LimitsConfig::default(),

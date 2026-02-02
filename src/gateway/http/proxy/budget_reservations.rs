@@ -5,6 +5,7 @@ struct ProxyBudgetReservationParams<'a> {
     use_persistent_budget: bool,
     virtual_key_id: Option<&'a str>,
     budget: Option<&'a super::BudgetConfig>,
+    tenant_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     request_id: &'a str,
@@ -22,6 +23,7 @@ async fn reserve_proxy_token_budgets_for_request(
         use_persistent_budget,
         virtual_key_id,
         budget,
+        tenant_budget_scope,
         project_budget_scope,
         user_budget_scope,
         request_id,
@@ -271,6 +273,30 @@ async fn reserve_proxy_token_budgets_for_request(
 
     if use_persistent_budget {
         if let Some(virtual_key_id) = virtual_key_id {
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                if let Some(limit) = budget.total_tokens {
+                    let reservation_id = format!("{request_id}::budget::{scope}");
+                    let ctx = ProxyBudgetReservationContext {
+                        state,
+                        reservation_id: &reservation_id,
+                        budget_scope: scope,
+                        request_id,
+                        virtual_key_id,
+                        path_and_query,
+                        model,
+                    };
+                    if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
+                        rollback_proxy_token_budget_reservations(
+                            state,
+                            &token_budget_reservation_ids,
+                        )
+                        .await;
+                        return Err(err);
+                    }
+                    token_budget_reservation_ids.push(reservation_id);
+                }
+            }
+
             if let Some((scope, budget)) = project_budget_scope.as_ref() {
                 if let Some(limit) = budget.total_tokens {
                     let reservation_id = format!("{request_id}::budget::{scope}");
@@ -338,6 +364,7 @@ async fn reserve_proxy_cost_budgets_for_request(
         use_persistent_budget,
         virtual_key_id,
         budget,
+        tenant_budget_scope,
         project_budget_scope,
         user_budget_scope,
         request_id,
@@ -646,6 +673,11 @@ async fn reserve_proxy_cost_budgets_for_request(
     if use_persistent_budget {
         if let Some(virtual_key_id) = virtual_key_id {
             let mut cost_scopes: Vec<(String, u64)> = Vec::new();
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                if let Some(limit) = budget.total_usd_micros {
+                    cost_scopes.push((scope.clone(), limit));
+                }
+            }
             if let Some((scope, budget)) = project_budget_scope.as_ref() {
                 if let Some(limit) = budget.total_usd_micros {
                     cost_scopes.push((scope.clone(), limit));

@@ -35,10 +35,11 @@
 
 > 如果你需要更复杂的策略（滑动窗口、按 IP、按 route 分组等），仍建议外层 API gateway 承接；Ditto 也会在后续里程碑继续扩面（见 Roadmap）。
 
-### 1.1 Project/User shared limits（可选）
+### 1.1 Tenant/Project/User shared limits（可选）
 
 除了 key 自身的 `limits` 外，你还可以配置“聚合限流”（多个 key 共享一个限流桶）：
 
+- `tenant_id` + `tenant_limits`
 - `project_id` + `project_limits`
 - `user_id` + `user_limits`
 
@@ -51,6 +52,8 @@
   "id": "vk-1",
   "token": "${VK_1}",
   "enabled": true,
+  "tenant_id": "tenant-a",
+  "tenant_limits": { "rpm": 600, "tpm": 200000 },
   "project_id": "proj-a",
   "project_limits": { "rpm": 120, "tpm": 40000 },
   "user_id": "user-42",
@@ -80,10 +83,11 @@
 
 其中 `max_output_tokens` 会从请求 JSON 中抽取（若缺失则按内部默认值处理）。
 
-### 2.1 Project/User 预算（可选）
+### 2.1 Tenant/Project/User 预算（可选）
 
 除了 key 自身预算外，Ditto 支持额外的“聚合预算”：
 
+- `tenant_id` + `tenant_budget`
 - `project_id` + `project_budget`
 - `user_id` + `user_budget`
 
@@ -94,8 +98,10 @@
   "id": "vk-1",
   "token": "${VK_1}",
   "enabled": true,
+  "tenant_id": "tenant-a",
   "project_id": "proj-a",
   "user_id": "user-42",
+  "tenant_budget": { "total_tokens": 5000000 },
   "project_budget": { "total_tokens": 1000000 },
   "user_budget": { "total_tokens": 200000 },
   "budget": { "total_tokens": 5000000 },
@@ -110,6 +116,7 @@
 一条请求会同时消耗：
 
 - key 预算（scope：`<key.id>`）
+- tenant 预算（scope：`tenant:<tenant_id>`）
 - project 预算（scope：`project:<project_id>`）
 - user 预算（scope：`user:<user_id>`）
 
@@ -133,7 +140,7 @@
 
 - reservation id 基于 `request_id`：
   - key 预算：`<request_id>`
-  - project/user 预算：`<request_id>::budget::<scope>`
+  - tenant/project/user 预算：`<request_id>::budget::<scope>`
 - redis 预留记录带 TTL，避免异常中断导致永久占用（见 `DEFAULT_RESERVATION_TTL_SECS`）。
 
 ### 3.1 sqlite vs redis 的选择
@@ -151,7 +158,7 @@
 
 - 编译启用 feature `gateway-costing`
 - 运行时通过 `--pricing-litellm <path>` 加载 LiteLLM 风格的 pricing JSON
-- 你的 key/project/user budget 中至少一个设置了 `total_usd_micros`
+- 你的 key/tenant/project/user budget 中至少一个设置了 `total_usd_micros`
 
 示例（1 美元 = 1_000_000 micros）：
 

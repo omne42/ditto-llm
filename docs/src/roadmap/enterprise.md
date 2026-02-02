@@ -66,8 +66,9 @@
 
 当前状态：
 
-- `VirtualKeyConfig` 支持 `project_id` / `user_id` 字段用于归因与分组预算
-- 但没有“租户”这一层的权限与隔离模型
+- `VirtualKeyConfig` 支持 `tenant_id` / `project_id` / `user_id` 字段用于归因与聚合视图（Admin API）
+- 支持 tenant/project/user shared budgets & limits（`tenant_budget/tenant_limits` 等）
+- 但 tenant 级别的权限与隔离模型仍不完整（tenant 独立 keys 管理、跨 tenant 查询默认拒绝、审计/导出隔离、RBAC/审批流）
 
 ### 2.3 分布式限流（全局 rpm/tpm）
 
@@ -77,7 +78,7 @@
 
 当前状态：
 
-- 使用 redis store（`gateway-store-redis` + `--redis`）时：`/v1/*` proxy 的 rpm/tpm 已通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL），并支持可选的 project/user shared limits。
+- 使用 redis store（`gateway-store-redis` + `--redis`）时：`/v1/*` proxy 的 rpm/tpm 已通过 Redis 原子计数实现 **全局一致**（按 virtual key id；窗口=分钟；计数 key 带 TTL），并支持可选的 tenant/project/user shared limits。
 - 不使用 redis store 时：仍是进程内计数（单实例可用；多副本不一致）。
 
 建议承接方式：

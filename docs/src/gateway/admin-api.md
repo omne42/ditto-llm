@@ -154,14 +154,14 @@ Query 参数：
 返回 `BudgetLedgerRecord[]`，其中 `key_id` 既可能是：
 
 - virtual key id（例如 `vk-dev`）
-- 也可能是 scope（例如 `project:proj-a`、`user:user-42`）
+- 也可能是 scope（例如 `tenant:tenant-a`、`project:proj-a`、`user:user-42`）
 
-### 5.2 `GET /admin/budgets/projects` / `GET /admin/budgets/users`
+### 5.2 `GET /admin/budgets/tenants` / `GET /admin/budgets/projects` / `GET /admin/budgets/users`
 
-这是“按 virtual key 的 `project_id` / `user_id` 字段做聚合”的视图：
+这是“按 virtual key 的 `tenant_id` / `project_id` / `user_id` 字段做聚合”的视图：
 
 - 它主要用于“按 key 归因汇总”
-- 如果你想直接查看 `project:*` / `user:*` scope 的 ledger，请用 `GET /admin/budgets` 自行筛选
+- 如果你想直接查看 `tenant:*` / `project:*` / `user:*` scope 的 ledger，请用 `GET /admin/budgets` 自行筛选
 
 ---
 
@@ -175,6 +175,7 @@ Query 参数：
 端点与 budgets 类似：
 
 - `GET /admin/costs`
+- `GET /admin/costs/tenants`
 - `GET /admin/costs/projects`
 - `GET /admin/costs/users`
 

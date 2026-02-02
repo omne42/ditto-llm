@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
+- Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).
 - Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).
@@ -53,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: Redis proxy-cache purge-all now deletes keys in SCAN batches (avoids building a huge in-memory key list).
 - Gateway: cap non-streaming `/v1/responses` shim buffering (chat/completions → responses) to avoid OOM on large upstream bodies.
 - Gateway: prune in-memory cache/budget scopes when virtual keys are updated/removed (avoids unbounded growth when keys churn).
+- Gateway: prune in-memory rate limiter scopes when virtual keys are updated/removed (avoids unbounded growth when keys churn).
 - Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.

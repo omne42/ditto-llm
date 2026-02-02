@@ -240,6 +240,15 @@ impl Gateway {
         for key in &self.config.virtual_keys {
             scopes.insert(key.id.clone());
 
+            if let Some(tenant_id) = key
+                .tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                scopes.insert(format!("tenant:{tenant_id}"));
+            }
+
             if let Some(project_id) = key
                 .project_id
                 .as_deref()
@@ -259,6 +268,7 @@ impl Gateway {
             }
         }
 
+        self.limits.retain_scopes(&scopes);
         self.budget.retain_scopes(&scopes);
         self.cache.retain_scopes(&scopes);
     }
@@ -288,6 +298,23 @@ impl Gateway {
         {
             self.observability.record_rate_limited();
             return Err(err);
+        }
+
+        if let (Some(tenant_id), Some(tenant_limits)) = (
+            key.tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.tenant_limits.as_ref(),
+        ) {
+            let scope = format!("tenant:{tenant_id}");
+            if let Err(err) = self
+                .limits
+                .check_and_consume(&scope, tenant_limits, tokens, minute)
+            {
+                self.observability.record_rate_limited();
+                return Err(err);
+            }
         }
 
         if let (Some(project_id), Some(project_limits)) = (
@@ -360,6 +387,24 @@ impl Gateway {
             self.observability.record_budget_exceeded();
             return Err(err);
         }
+
+        if let (Some(tenant_id), Some(tenant_budget)) = (
+            key.tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.tenant_budget.as_ref(),
+        ) {
+            let scope = format!("tenant:{tenant_id}");
+            if let Err(err) = self
+                .budget
+                .can_spend(&scope, tenant_budget, u64::from(tokens))
+            {
+                self.observability.record_budget_exceeded();
+                return Err(err);
+            }
+        }
+
         if let (Some(project_id), Some(project_budget)) = (
             key.project_id
                 .as_deref()
@@ -407,6 +452,16 @@ impl Gateway {
         response.cached = false;
 
         self.budget.spend(&key.id, &key.budget, u64::from(tokens));
+        if let (Some(tenant_id), Some(tenant_budget)) = (
+            key.tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty()),
+            key.tenant_budget.as_ref(),
+        ) {
+            let scope = format!("tenant:{tenant_id}");
+            self.budget.spend(&scope, tenant_budget, u64::from(tokens));
+        }
         if let (Some(project_id), Some(project_budget)) = (
             key.project_id
                 .as_deref()

@@ -1,50 +1,4 @@
-#[derive(Clone, Copy)]
-struct ProxyAttemptParams<'a> {
-    state: &'a GatewayHttpState,
-    parts: &'a axum::http::request::Parts,
-    body: &'a Bytes,
-    parsed_json: &'a Option<serde_json::Value>,
-    model: &'a Option<String>,
-    service_tier: &'a Option<String>,
-    request_id: &'a str,
-    path_and_query: &'a str,
-    now_epoch_seconds: u64,
-    charge_tokens: u32,
-    max_output_tokens: u32,
-    stream_requested: bool,
-    strip_authorization: bool,
-    use_persistent_budget: bool,
-    virtual_key_id: &'a Option<String>,
-    budget: &'a Option<super::BudgetConfig>,
-    project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
-    user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
-    charge_cost_usd_micros: Option<u64>,
-    token_budget_reserved: bool,
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-    token_budget_reservation_ids: &'a [String],
-    cost_budget_reserved: bool,
-    #[cfg(all(
-        feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
-    ))]
-    cost_budget_reservation_ids: &'a [String],
-    max_attempts: usize,
-    #[cfg(feature = "gateway-routing-advanced")]
-    retry_config: &'a super::ProxyRetryConfig,
-    #[cfg(feature = "gateway-proxy-cache")]
-    proxy_cache_key: &'a Option<String>,
-    #[cfg(feature = "gateway-metrics-prometheus")]
-    metrics_path: &'a str,
-    #[cfg(feature = "gateway-metrics-prometheus")]
-    metrics_timer_start: Instant,
-}
-
-enum BackendAttemptOutcome {
-    Response(axum::response::Response),
-    Continue(Option<(StatusCode, Json<OpenAiErrorResponse>)>),
-}
-
-include!("openai_compat_proxy/multipart_schema.rs");
+include!("openai_compat_proxy/preamble.rs");
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
@@ -149,8 +103,10 @@ async fn handle_openai_compat_proxy(
         virtual_key_id,
         limits,
         budget,
+        tenant_budget_scope,
         project_budget_scope,
         user_budget_scope,
+        tenant_limits_scope,
         project_limits_scope,
         user_limits_scope,
         backend_candidates,
@@ -203,6 +159,24 @@ async fn handle_openai_compat_proxy(
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
             let limits = Some(key.limits.clone());
+
+            let tenant_scope = key
+                .tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(|id| format!("tenant:{id}"));
+            let tenant_budget_scope = tenant_scope.as_ref().and_then(|scope| {
+                key.tenant_budget
+                    .as_ref()
+                    .map(|budget| (scope.clone(), budget.clone()))
+            });
+            let tenant_limits_scope = tenant_scope.as_ref().and_then(|scope| {
+                key.tenant_limits
+                    .as_ref()
+                    .map(|limits| (scope.clone(), limits.clone()))
+            });
+
             let project_scope = key
                 .project_id
                 .as_deref()
@@ -244,6 +218,16 @@ async fn handle_openai_compat_proxy(
                 {
                     gateway.observability.record_rate_limited();
                     return Err(map_openai_gateway_error(err));
+                }
+                if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
+                    if let Err(err) =
+                        gateway
+                            .limits
+                            .check_and_consume(scope, limits, charge_tokens, minute)
+                    {
+                        gateway.observability.record_rate_limited();
+                        return Err(map_openai_gateway_error(err));
+                    }
                 }
                 if let Some((scope, limits)) = project_limits_scope.as_ref() {
                     if let Err(err) =
@@ -351,6 +335,17 @@ async fn handle_openai_compat_proxy(
                     return Err(map_openai_gateway_error(err));
                 }
 
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    if let Err(err) =
+                        gateway
+                            .budget
+                            .can_spend(scope, budget, u64::from(charge_tokens))
+                    {
+                        gateway.observability.record_budget_exceeded();
+                        return Err(map_openai_gateway_error(err));
+                    }
+                }
+
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     if let Err(err) =
                         gateway
@@ -446,7 +441,10 @@ async fn handle_openai_compat_proxy(
                 }
 
                 #[cfg(feature = "gateway-costing")]
-                if project_budget_scope
+                if tenant_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                    || project_budget_scope
                     .as_ref()
                     .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
                     || user_budget_scope
@@ -461,6 +459,19 @@ async fn handle_openai_compat_proxy(
                             "pricing not configured for cost budgets",
                         ));
                     };
+
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        if let Some(_limit) = budget.total_usd_micros {
+                            if let Err(err) = gateway.budget.can_spend_cost_usd_micros(
+                                scope,
+                                budget,
+                                charge_cost_usd_micros,
+                            ) {
+                                gateway.observability.record_budget_exceeded();
+                                return Err(map_openai_gateway_error(err));
+                            }
+                        }
+                    }
 
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
@@ -494,8 +505,10 @@ async fn handle_openai_compat_proxy(
                 virtual_key_id,
                 limits,
                 budget,
+                tenant_budget_scope,
                 project_budget_scope,
                 user_budget_scope,
+                tenant_limits_scope,
                 project_limits_scope,
                 user_limits_scope,
                 backends,
@@ -558,6 +571,8 @@ async fn handle_openai_compat_proxy(
                 None,
                 None,
                 None,
+                None,
+                None,
                 backends,
                 strip_authorization,
                 charge_cost_usd_micros,
@@ -566,7 +581,12 @@ async fn handle_openai_compat_proxy(
     };
 
     #[cfg(not(feature = "gateway-store-redis"))]
-    let _ = (&limits, &project_limits_scope, &user_limits_scope);
+    let _ = (
+        &limits,
+        &tenant_limits_scope,
+        &project_limits_scope,
+        &user_limits_scope,
+    );
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some(virtual_key_id), Some(limits)) =
@@ -574,6 +594,22 @@ async fn handle_openai_compat_proxy(
     {
         if let Err(err) = store
             .check_and_consume_rate_limits(virtual_key_id, limits, charge_tokens, minute)
+            .await
+        {
+            if matches!(err, GatewayError::RateLimited { .. }) {
+                let mut gateway = state.gateway.lock().await;
+                gateway.observability.record_rate_limited();
+            }
+            return Err(map_openai_gateway_error(err));
+        }
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let (Some(store), Some((scope, limits))) =
+        (state.redis_store.as_ref(), tenant_limits_scope.as_ref())
+    {
+        if let Err(err) = store
+            .check_and_consume_rate_limits(scope, limits, charge_tokens, minute)
             .await
         {
             if matches!(err, GatewayError::RateLimited { .. }) {
@@ -737,16 +773,17 @@ async fn handle_openai_compat_proxy(
 
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-    let budget_reservation_params = ProxyBudgetReservationParams {
-        state: &state,
-        use_persistent_budget,
-        virtual_key_id: virtual_key_id.as_deref(),
-        budget: budget.as_ref(),
-        project_budget_scope: &project_budget_scope,
-        user_budget_scope: &user_budget_scope,
-        request_id: &request_id,
-        path_and_query,
-        model: &model,
+	    let budget_reservation_params = ProxyBudgetReservationParams {
+	        state: &state,
+	        use_persistent_budget,
+	        virtual_key_id: virtual_key_id.as_deref(),
+	        budget: budget.as_ref(),
+	        tenant_budget_scope: &tenant_budget_scope,
+	        project_budget_scope: &project_budget_scope,
+	        user_budget_scope: &user_budget_scope,
+	        request_id: &request_id,
+	        path_and_query,
+	        model: &model,
         charge_tokens,
     };
 
@@ -820,12 +857,13 @@ async fn handle_openai_compat_proxy(
         max_output_tokens,
         stream_requested: _stream_requested,
         strip_authorization,
-        use_persistent_budget,
-        virtual_key_id: &virtual_key_id,
-        budget: &budget,
-        project_budget_scope: &project_budget_scope,
-        user_budget_scope: &user_budget_scope,
-        charge_cost_usd_micros,
+	        use_persistent_budget,
+	        virtual_key_id: &virtual_key_id,
+	        budget: &budget,
+	        tenant_budget_scope: &tenant_budget_scope,
+	        project_budget_scope: &project_budget_scope,
+	        user_budget_scope: &user_budget_scope,
+	        charge_cost_usd_micros,
         token_budget_reserved: _token_budget_reserved,
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         token_budget_reservation_ids: &token_budget_reservation_ids,

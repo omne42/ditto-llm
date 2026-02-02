@@ -75,7 +75,7 @@ Ditto Gateway 的鉴权分两层：
 
 `VirtualKeyConfig` 还支持：
 
-- `project_id` / `user_id`：为审计与预算分组提供归因信息（见「预算与成本」与「Admin API」）。
+- `tenant_id` / `project_id` / `user_id`：为审计与预算分组提供归因信息（见「预算与成本」与「Admin API」）。
 - `route`：把该 key 的请求 **固定路由**到某个 backend（绕过 router rules，见「路由」）。
 
 ---

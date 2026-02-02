@@ -333,6 +333,7 @@ pub fn router(state: GatewayHttpState) -> Router {
             router = router
                 .route("/admin/audit", get(list_audit_logs))
                 .route("/admin/budgets", get(list_budget_ledgers))
+                .route("/admin/budgets/tenants", get(list_tenant_budget_ledgers))
                 .route("/admin/budgets/projects", get(list_project_budget_ledgers))
                 .route("/admin/budgets/users", get(list_user_budget_ledgers));
 
@@ -340,6 +341,7 @@ pub fn router(state: GatewayHttpState) -> Router {
             {
                 router = router
                     .route("/admin/costs", get(list_cost_ledgers))
+                    .route("/admin/costs/tenants", get(list_tenant_cost_ledgers))
                     .route("/admin/costs/projects", get(list_project_cost_ledgers))
                     .route("/admin/costs/users", get(list_user_cost_ledgers));
             }

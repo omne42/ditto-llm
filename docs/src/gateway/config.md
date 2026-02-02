@@ -75,10 +75,13 @@ virtual key 的字段很多，建议先从最小配置开始：
   "id": "vk-dev",
   "token": "${DITTO_VK_DEV}",
   "enabled": true,
+  "tenant_id": null,
   "project_id": null,
   "user_id": null,
+  "tenant_budget": null,
   "project_budget": null,
   "user_budget": null,
+  "tenant_limits": null,
   "project_limits": null,
   "user_limits": null,
   "limits": {},
@@ -92,16 +95,17 @@ virtual key 的字段很多，建议先从最小配置开始：
 
 详细解释见「鉴权」「预算与成本」「缓存」「安全与加固」。
 
-### Enterprise：Project/User shared budgets & limits（可选）
+### Enterprise：Tenant/Project/User shared budgets & limits（可选）
 
-如果你希望把多个 virtual keys 归并到同一个“配额桶”（企业常见：按 project 或 user 做聚合），可以启用：
+如果你希望把多个 virtual keys 归并到同一个“配额桶”（企业常见：按 tenant/project/user 做聚合），可以启用：
 
+- `tenant_id` + `tenant_budget` / `tenant_limits`
 - `project_id` + `project_budget` / `project_limits`
 - `user_id` + `user_budget` / `user_limits`
 
 聚合语义：
 
-- `project:*` / `user:*` scope 会被多个 key 共享
+- `tenant:*` / `project:*` / `user:*` scope 会被多个 key 共享
 - 任意一个 scope 超额都会被拒绝（见「预算与成本」）
 - 当启用 Redis store 时，shared limits/budgets 在多副本下也会保持全局一致（见「部署：多副本与分布式」与「预算与成本」）
 
