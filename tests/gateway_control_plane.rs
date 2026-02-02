@@ -154,7 +154,7 @@ async fn cache_hit_skips_backend() {
     key.cache = CacheConfig {
         enabled: true,
         ttl_seconds: Some(60),
-        max_entries: 1024,
+        ..CacheConfig::default()
     };
     let config = base_config(key);
     let clock = Box::new(FixedClock { now: 300 });

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ditto-gateway
+spec:
+  selector:
+    app: ditto-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

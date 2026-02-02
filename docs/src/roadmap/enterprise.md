@@ -15,6 +15,9 @@
   - budgets/cost 预留与 ledger 共享
   - audit logs 共享
   - proxy cache 可选 L2 共享
+- 可复制部署模板
+  - Docker Compose：`deploy/docker-compose.yml`
+  - Kubernetes：`deploy/k8s/*`
 
 ### 1.2 API key 体系（简化版）
 

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ditto-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ditto-gateway
+  template:
+    metadata:
+      labels:
+        app: ditto-gateway
+    spec:
+      containers:
+        - name: ditto-gateway
+          image: ditto-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: ditto-gateway-secrets
+          args:
+            - /config/gateway.json
+            - --listen
+            - 0.0.0.0:8080
+            - --redis-env
+            - REDIS_URL
+            - --redis-prefix
+            - ditto
+            - --admin-token-env
+            - DITTO_ADMIN_TOKEN
+            - --proxy-max-in-flight
+            - "256"
+            - --proxy-cache
+            - --proxy-cache-ttl
+            - "60"
+            - --proxy-cache-max-entries
+            - "2048"
+            - --proxy-cache-max-body-bytes
+            - "1048576"
+            - --proxy-cache-max-total-body-bytes
+            - "67108864"
+            - --json-logs
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: ditto-gateway-config

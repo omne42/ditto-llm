@@ -1,0 +1,7 @@
+target
+docs/book
+.git
+.gitignore
+**/*.rs.bk
+**/*.swp
+**/.DS_Store

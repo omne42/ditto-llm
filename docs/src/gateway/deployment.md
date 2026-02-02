@@ -6,6 +6,13 @@ Ditto Gateway 的部署目标是“尽量无状态”，把状态放到外部 st
 
 ---
 
+## 0) 可复制模板（推荐从这里开始）
+
+- 本地：`docs/Gateway → Docker Compose（本地模板）` 对应 `deploy/docker-compose.yml`
+- K8s：`docs/Gateway → Kubernetes（多副本模板）` 对应 `deploy/k8s/*`
+
+这些模板的目标是“跑起来 + 默认节制（不会轻易把内存/Redis 打爆）”，然后你再按需打开 routing/otel/metrics 等能力。
+
 ## 1) 最小部署拓扑（单实例）
 
 - 1 个 `ditto-gateway` 实例

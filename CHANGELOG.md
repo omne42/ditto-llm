@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).
 - Gateway: add `--proxy-usage-max-body-bytes` to cap response buffering for `usage` parsing (decoupled from proxy cache caps).
+- Gateway: add control-plane cache size caps (`cache.max_body_bytes` and `cache.max_total_body_bytes`) for `/v1/gateway`.
+- Deploy: add `Dockerfile`, `deploy/docker-compose.yml`, and `deploy/k8s/*` templates for `ditto-gateway`.
+- Docs: add runnable Docker Compose + Kubernetes deployment template pages.
 - Utils: add bounded SSE parsing with `SseLimits` (max line/event bytes) to reduce OOM risk.
 
 ### Changed

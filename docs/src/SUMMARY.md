@@ -34,6 +34,8 @@
 
 - [Gateway（LiteLLM-like）](./gateway/index.md)
   - [运行网关](./gateway/quickstart.md)
+  - [Docker Compose（本地模板）](./gateway/docker-compose.md)
+  - [Kubernetes（多副本模板）](./gateway/kubernetes.md)
   - [Gateway Recipes（可复制落地）](./gateway/recipes.md)
   - [配置文件（gateway.json / gateway.yaml）](./gateway/config.md)
   - [HTTP Endpoints](./gateway/endpoints.md)

@@ -368,6 +368,8 @@ impl Gateway {
                 response.clone(),
                 key.cache.ttl_seconds,
                 key.cache.max_entries,
+                key.cache.max_body_bytes,
+                key.cache.max_total_body_bytes,
                 now,
             );
         }

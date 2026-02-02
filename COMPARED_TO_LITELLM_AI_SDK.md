@@ -31,7 +31,7 @@
 ### 仍缺（但属于“超集可选项”）
 
 - 常用工具 wrappers（shell/fs/http 等）作为可选模块（已提供 `http_fetch` + `shell_exec` + `safe-fs-tools` 驱动的 `fs_read_file`/`fs_find`/`fs_grep`/`fs_write_file`/`fs_delete_file`/`fs_list_dir`/`fs_stat`/`fs_mkdir`/`fs_move`/`fs_copy_file`）
-- “模板/脚手架”生态：AI SDK 的强项是大量可复制模板；Ditto 需要补齐 Rust 示例与多语言调用网关的最小模板（属于 docs/工程化层面的超集项）
+- “模板/脚手架”生态：AI SDK 的强项是大量可复制模板；Ditto 需要补齐 Rust 示例与多语言调用网关的最小模板（属于 docs/工程化层面的超集项）。目前已新增 `deploy/docker-compose.yml` 与 `deploy/k8s/*` 作为 gateway 的落地模板；后续仍建议补齐 Helm chart 与 Node/Python/Go 调用模板。
 - AI SDK UI/RSC 生态：Ditto 不复刻 hooks/RSC，但可以提供基于 stream protocol v1 的 JS/TS client + 最小 React hooks（可选附加）
 - 应用侧缓存范式：基于 `LanguageModelLayer` 的缓存 middleware + 流式回放（可选附加）
 - 生态适配器：LangChain/LlamaIndex 等协议级桥接（可选附加）

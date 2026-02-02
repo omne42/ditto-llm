@@ -136,4 +136,5 @@ curl -sS http://127.0.0.1:8080/v1/chat/completions \
 - 想加鉴权与配额：看「鉴权：Virtual Keys 与 Admin Token」与「预算与成本」。
 - 想做多 backend 路由与故障切换：看「路由：Weighted / Fallback / Retry」。
 - 想多副本部署：看「部署：多副本与分布式」。
+- 想用容器/模板快速跑起来：看「Docker Compose（本地模板）」与「Kubernetes（多副本模板）」。
 - 想直接复制一套可跑配置：看「Gateway Recipes（可复制落地）」。

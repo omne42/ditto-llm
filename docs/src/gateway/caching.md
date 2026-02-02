@@ -23,7 +23,9 @@ Ditto Gateway 有两类缓存，面向不同使用场景：
   "cache": {
     "enabled": true,
     "ttl_seconds": 60,
-    "max_entries": 1024
+    "max_entries": 1024,
+    "max_body_bytes": 1048576,
+    "max_total_body_bytes": 67108864
   }
 }
 ```
@@ -44,6 +46,13 @@ Ditto Gateway 有两类缓存，面向不同使用场景：
 当请求 `passthrough=true` 且 key 允许 passthrough 且 `bypass_cache=true` 时，会绕过 control-plane cache。
 
 > 这套语义主要用于 demo 端点，生产建议更多使用 `/v1/*` passthrough 或 translation。
+
+### 内存安全（体积上限）
+
+Control-plane cache 是 **进程内存缓存**。为了避免把进程内存打爆，Ditto 会对缓存写入施加硬上限：
+
+- `max_body_bytes`：单条响应（`GatewayResponse.content`）最大可缓存字节数，超过则跳过缓存
+- `max_total_body_bytes`：单个 scope（virtual key）下的总缓存字节预算，超过则按 LRU 驱逐
 
 ---
 

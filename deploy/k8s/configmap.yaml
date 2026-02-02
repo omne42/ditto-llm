@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ditto-gateway-config
+data:
+  gateway.json: |
+    {
+      "backends": [
+        {
+          "name": "openai",
+          "base_url": "https://api.openai.com/v1",
+          "headers": { "authorization": "Bearer ${OPENAI_API_KEY}" },
+          "query_params": {},
+          "timeout_seconds": 60,
+          "max_in_flight": 64
+        }
+      ],
+      "virtual_keys": [
+        {
+          "id": "vk-bootstrap",
+          "token": "${DITTO_VK_BOOTSTRAP}",
+          "enabled": true,
+          "project_id": null,
+          "user_id": null,
+          "project_budget": null,
+          "user_budget": null,
+          "limits": { "rpm": 60, "tpm": 20000 },
+          "budget": { "total_tokens": 5000000, "total_usd_micros": null },
+          "cache": {
+            "enabled": false,
+            "ttl_seconds": null,
+            "max_entries": 1024,
+            "max_body_bytes": 1048576,
+            "max_total_body_bytes": 67108864
+          },
+          "guardrails": { "block_pii": true, "validate_schema": true },
+          "passthrough": { "allow": true, "bypass_cache": true },
+          "route": null
+        }
+      ],
+      "router": { "default_backend": "openai", "default_backends": [], "rules": [] }
+    }

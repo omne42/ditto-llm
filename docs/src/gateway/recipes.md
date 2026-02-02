@@ -46,7 +46,7 @@ REDIS_URL=redis://127.0.0.1:6379
       "user_budget": null,
       "limits": { "rpm": 60, "tpm": 20000 },
       "budget": { "total_tokens": 5000000, "total_usd_micros": null },
-      "cache": { "enabled": false, "ttl_seconds": null, "max_entries": 1024 },
+      "cache": { "enabled": false, "ttl_seconds": null, "max_entries": 1024, "max_body_bytes": 1048576, "max_total_body_bytes": 67108864 },
       "guardrails": { "block_pii": true, "validate_schema": true },
       "passthrough": { "allow": true, "bypass_cache": true },
       "route": null
