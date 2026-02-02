@@ -270,22 +270,6 @@ struct GatewayHttpRequest {
     passthrough: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct ListKeysQuery {
-    #[serde(default)]
-    include_tokens: bool,
-    #[serde(default)]
-    tenant_id: Option<String>,
-    #[serde(default)]
-    project_id: Option<String>,
-    #[serde(default)]
-    user_id: Option<String>,
-    #[serde(default)]
-    enabled: Option<bool>,
-    #[serde(default)]
-    id_prefix: Option<String>,
-}
-
 #[derive(Debug, Serialize)]
 struct ErrorDetail {
     code: &'static str,

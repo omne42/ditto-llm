@@ -42,6 +42,22 @@ async fn list_keys(
         keys.retain(|key| key.user_id.as_deref() == Some(user_id));
     }
 
+    keys.sort_by(|a, b| a.id.cmp(&b.id));
+
+    if query.offset > 0 {
+        if query.offset >= keys.len() {
+            keys.clear();
+        } else {
+            keys.drain(0..query.offset);
+        }
+    }
+
+    if let Some(limit) = query.limit.map(|limit| limit.min(MAX_ADMIN_LIST_LIMIT)) {
+        if keys.len() > limit {
+            keys.truncate(limit);
+        }
+    }
+
     if !query.include_tokens {
         for key in &mut keys {
             key.token = "redacted".to_string();
@@ -204,4 +220,26 @@ async fn delete_key(
             "virtual key not found",
         ))
     }
+}
+
+const MAX_ADMIN_LIST_LIMIT: usize = 10_000;
+
+#[derive(Debug, Deserialize)]
+struct ListKeysQuery {
+    #[serde(default)]
+    include_tokens: bool,
+    #[serde(default)]
+    tenant_id: Option<String>,
+    #[serde(default)]
+    project_id: Option<String>,
+    #[serde(default)]
+    user_id: Option<String>,
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    id_prefix: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    #[serde(default)]
+    offset: usize,
 }

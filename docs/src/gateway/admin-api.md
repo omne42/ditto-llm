@@ -53,6 +53,7 @@ Admin API 用于“管理与观测控制面状态”：
 - `tenant_id` / `project_id` / `user_id`：按归因字段过滤。
 - `enabled=true|false`：按启用状态过滤。
 - `id_prefix=...`：按 key id 前缀过滤。
+- `limit` / `offset`：分页（默认不限制；`limit` 最大 10000）。为了稳定分页，返回结果会按 `id` 排序。
 
 ### 1.2 `POST /admin/keys`：upsert
 
@@ -184,6 +185,7 @@ Query 参数：
 常用 query 参数：
 
 - `key_prefix=tenant:` / `key_prefix=project:` / `key_prefix=user:`：按 ledger `key_id` 前缀过滤（便于大规模部署按 scope 查看）。
+- `limit` / `offset`：分页（默认不限制；`limit` 最大 10000）。
 
 ### 5.2 `GET /admin/budgets/tenants` / `GET /admin/budgets/projects` / `GET /admin/budgets/users`
 
@@ -211,6 +213,7 @@ Query 参数：
 常用 query 参数：
 
 - `key_prefix=tenant:` / `key_prefix=project:` / `key_prefix=user:`：按 ledger `key_id` 前缀过滤。
+- `limit` / `offset`：分页（默认不限制；`limit` 最大 10000）。
 
 ---
 

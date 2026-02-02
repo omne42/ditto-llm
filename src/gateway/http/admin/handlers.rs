@@ -142,11 +142,35 @@ struct AuditQuery {
 struct LedgerQuery {
     #[serde(default)]
     key_prefix: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    #[serde(default)]
+    offset: usize,
 }
 
 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
 fn default_audit_limit() -> usize {
     100
+}
+
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+const MAX_ADMIN_LEDGER_LIMIT: usize = 10_000;
+
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+fn apply_admin_list_window<T>(items: &mut Vec<T>, offset: usize, limit: Option<usize>, max: usize) {
+    if offset > 0 {
+        if offset >= items.len() {
+            items.clear();
+        } else {
+            items.drain(0..offset);
+        }
+    }
+
+    if let Some(limit) = limit.map(|limit| limit.min(max)) {
+        if items.len() > limit {
+            items.truncate(limit);
+        }
+    }
 }
 
 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -220,6 +244,12 @@ async fn list_budget_ledgers(
         if let Some(key_prefix) = key_prefix {
             ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
         }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
         return Ok(Json(ledgers));
     }
 
@@ -235,6 +265,12 @@ async fn list_budget_ledgers(
         if let Some(key_prefix) = key_prefix {
             ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
         }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
         return Ok(Json(ledgers));
     }
 
@@ -568,6 +604,12 @@ async fn list_cost_ledgers(
         if let Some(key_prefix) = key_prefix {
             ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
         }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
         return Ok(Json(ledgers));
     }
 
@@ -583,6 +625,12 @@ async fn list_cost_ledgers(
         if let Some(key_prefix) = key_prefix {
             ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
         }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
         return Ok(Json(ledgers));
     }
 

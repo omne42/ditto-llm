@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
 - Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
 - Gateway: add Admin API filters for large deployments (`GET /admin/keys` filters and `key_prefix` for `/admin/budgets` and `/admin/costs`).
+- Gateway: add Admin API pagination (`limit`/`offset`) for `GET /admin/keys`, `GET /admin/budgets`, and `GET /admin/costs` (caps `limit` at 10000).
 - Gateway: add RBAC-lite admin auth split: read-only admin token (`--admin-read-token` / `--admin-read-token-env`) for read endpoints, plus write admin token (`--admin-token` / `--admin-token-env`) for mutations.
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).

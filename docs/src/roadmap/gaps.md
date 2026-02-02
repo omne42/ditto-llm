@@ -91,6 +91,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 
 - **Proxy cache 增加体积上限**：支持限制单条缓存 body 与总缓存体积，避免缓存把内存/Redis 打爆。
 - **避免 key churn 导致无界增长**：对 rate limit / budget / control-plane cache 的 scope map 增加 `retain_scopes` 清理（当 virtual keys 变更时同步 prune），避免频繁 key 轮换时内存随 scope 数增长。
+- **Admin 列表端点支持分页**：`/admin/keys`、`/admin/budgets`、`/admin/costs` 支持 `limit/offset`（最大 10000），避免大租户场景一次性返回超大 payload。
 - **Control-plane cache 增加体积上限**：`/v1/gateway` 的进程内缓存支持 `max_body_bytes` / `max_total_body_bytes`，避免 demo/control-plane 缓存导致内存增长。
 - **Proxy 大响应默认不再整段缓冲**：passthrough proxy 对非 SSE 响应会尽量流式转发；仅在“体积较小”时才会缓冲读取（用于 usage 结算或写入 proxy cache）；即使 upstream 未提供 `content-length`，也只会最多预读到上限，超过上限会切换为流式转发并跳过缓存，降低大文件下载的 OOM 风险。
 - **入口请求体上限可配置**：`/v1/*` 默认上限 64MiB，并提供 `--proxy-max-body-bytes` 便于企业按 JSON/multipart/上传策略做分级与收敛。
