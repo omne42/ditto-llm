@@ -148,6 +148,9 @@
 - [x] 企业：分布式限流（Redis 全局 rpm/tpm；按 virtual key id；窗口=分钟；计数 key 带 TTL；并支持可选的 tenant/project/user shared limits）
 - [ ] 企业：分布式限流（按 route 分组；滑动窗口/令牌桶；与外层 API gateway 协同）
 - [ ] 企业：RBAC-lite + tenant 隔离模型（keys/budgets/audit 的隔离边界：tenant 独立管理/跨 tenant 默认拒绝）
+  - [x] RBAC-lite：admin token 支持 read-only（`--admin-read-token*`）与 write（`--admin-token*`）分离
+  - [x] 审计 taxonomy：admin 写操作在启用 sqlite/redis store 时写入 audit log（用于合规与追踪）
+  - [ ] tenant 隔离：tenant 独立 keys 管理、跨 tenant 查询默认拒绝、审计/导出隔离、审批流
 - [x] 企业：审计保留期（sqlite/redis；`--audit-retention-secs`）
 - [ ] 企业：审计导出（S3/GCS）+ 防篡改（hash-chain / WORM）
 - [ ] 运维资产：Docker/Helm/K8s manifests + Grafana dashboard + SLO/告警规则

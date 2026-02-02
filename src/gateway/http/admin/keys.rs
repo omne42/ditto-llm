@@ -3,7 +3,7 @@ async fn list_keys(
     headers: HeaderMap,
     Query(query): Query<ListKeysQuery>,
 ) -> Result<Json<Vec<VirtualKeyConfig>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
     let gateway = state.gateway.lock().await;
     let mut keys = gateway.list_virtual_keys();
 
@@ -55,7 +55,7 @@ async fn upsert_key(
     headers: HeaderMap,
     Json(key): Json<VirtualKeyConfig>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_write(&state, &headers)?;
     if let Err(err) = key.guardrails.validate() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
@@ -82,6 +82,21 @@ async fn upsert_key(
         );
     }
 
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    append_admin_audit_log(
+        &state,
+        "admin.key.upsert",
+        serde_json::json!({
+            "key_id": &key.id,
+            "enabled": key.enabled,
+            "inserted": inserted,
+            "tenant_id": key.tenant_id.as_deref(),
+            "project_id": key.project_id.as_deref(),
+            "user_id": key.user_id.as_deref(),
+        }),
+    )
+    .await;
+
     let status = if inserted {
         StatusCode::CREATED
     } else {
@@ -96,7 +111,7 @@ async fn upsert_key_with_id(
     Path(id): Path<String>,
     Json(mut key): Json<VirtualKeyConfig>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_write(&state, &headers)?;
     key.id = id;
     if let Err(err) = key.guardrails.validate() {
         return Err(error_response(
@@ -124,6 +139,21 @@ async fn upsert_key_with_id(
         );
     }
 
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    append_admin_audit_log(
+        &state,
+        "admin.key.upsert",
+        serde_json::json!({
+            "key_id": &key.id,
+            "enabled": key.enabled,
+            "inserted": inserted,
+            "tenant_id": key.tenant_id.as_deref(),
+            "project_id": key.project_id.as_deref(),
+            "user_id": key.user_id.as_deref(),
+        }),
+    )
+    .await;
+
     let status = if inserted {
         StatusCode::CREATED
     } else {
@@ -137,7 +167,7 @@ async fn delete_key(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_write(&state, &headers)?;
     let (removed, persisted_keys) = {
         let mut gateway = state.gateway.lock().await;
         let removed = gateway.remove_virtual_key(&id).is_some();
@@ -156,6 +186,16 @@ async fn delete_key(
             );
         }
 
+        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        append_admin_audit_log(
+            &state,
+            "admin.key.delete",
+            serde_json::json!({
+                "key_id": &id,
+            }),
+        )
+        .await;
+
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(error_response(
@@ -165,4 +205,3 @@ async fn delete_key(
         ))
     }
 }
-

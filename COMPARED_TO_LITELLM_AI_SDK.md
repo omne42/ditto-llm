@@ -62,7 +62,7 @@
 - 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
 - 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
-- 企业平台能力：仍缺 RBAC/SSO、更完整的多租户隔离（已支持 tenant 维度归因与 shared budgets/limits，但 tenant 级别权限/隔离边界仍需补齐）、更细粒度的分布式限流（IP/tenant/route 维度、滑窗/令牌桶；已支持 virtual key + 可选 tenant/project/user shared limits）、防篡改审计/导出（S3/GCS/WORM/签名）、配置版本化/灰度/回滚与运维资产（告警/dashboard）
+- 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更完整的多租户隔离（✅ 已支持 RBAC-lite：read-only admin token；✅ 已支持 tenant 维度归因与 shared budgets/limits，但 tenant 级别权限/隔离边界仍需补齐）、更细粒度的分布式限流（IP/tenant/route 维度、滑窗/令牌桶；已支持 virtual key + 可选 tenant/project/user shared limits）、防篡改审计/导出（S3/GCS/WORM/签名）、配置版本化/灰度/回滚与运维资产（告警/dashboard）
 - 平台化生态：缺 Secret Manager 集成、admin UI、guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
 - 平台扩展项：LiteLLM 侧还有 A2A agent gateway、MCP gateway 等方向；Ditto 当前偏 SDK 工具/协议适配，后续可以按真实企业需求扩到网关侧
 

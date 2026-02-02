@@ -3,7 +3,7 @@ async fn list_backends(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<BackendHealthSnapshot>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let Some(health) = state.proxy_backend_health.as_ref() else {
         return Err(error_response(
@@ -35,7 +35,7 @@ async fn reset_backend(
     headers: HeaderMap,
     Path(name): Path<String>,
 ) -> Result<Json<BackendHealthSnapshot>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_write(&state, &headers)?;
 
     let Some(health) = state.proxy_backend_health.as_ref() else {
         return Err(error_response(
@@ -47,6 +47,16 @@ async fn reset_backend(
 
     let mut health = health.lock().await;
     health.remove(name.as_str());
+
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    append_admin_audit_log(
+        &state,
+        "admin.backend.reset",
+        serde_json::json!({
+            "backend": &name,
+        }),
+    )
+    .await;
+
     Ok(Json(BackendHealth::default().snapshot(&name)))
 }
-

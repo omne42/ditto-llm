@@ -17,14 +17,18 @@ Admin API 用于“管理与观测控制面状态”：
 
 ## 0) 启用条件与鉴权方式
 
-### 0.1 必须启用 admin token
+### 0.1 必须启用 admin token（read 或 write）
 
 只有在启动时设置了：
 
 - `--admin-token <TOKEN>` 或
-- `--admin-token-env <ENV>`
+- `--admin-token-env <ENV>`（write admin token）
+- `--admin-read-token <TOKEN>` 或
+- `--admin-read-token-env <ENV>`（read-only admin token）
 
 才会挂载 `/admin/*` 路由。
+
+写端点（例如 upsert/delete keys、purge cache、reset backend）需要 **write admin token**；当你只配置 read-only token 时，这些写端点不会挂载（404）。
 
 ### 0.2 如何携带 admin token
 
@@ -41,6 +45,8 @@ Admin API 用于“管理与观测控制面状态”：
 
 默认会把 `token` 字段替换为 `"redacted"`。
 
+权限：read-only admin token 或 write admin token。
+
 常用 query 参数：
 
 - `include_tokens=true`：返回真实 token（谨慎使用）。
@@ -55,14 +61,20 @@ Admin API 用于“管理与观测控制面状态”：
 - 若 id 不存在：创建（201）
 - 若 id 已存在：更新（200）
 
+权限：需要 write admin token。
+
 ### 1.3 `PUT /admin/keys/:id`：upsert（id 在 path）
 
 与 `POST /admin/keys` 类似，但以 path 的 `:id` 覆盖 body 的 `id`。
+
+权限：需要 write admin token。
 
 ### 1.4 `DELETE /admin/keys/:id`
 
 - 成功：204
 - 不存在：404
+
+权限：需要 write admin token。
 
 ### 1.5 keys 的持久化（重要）
 
@@ -79,10 +91,12 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 启用条件：
 
-- admin token 已启用
+- admin token 已启用（read 或 write）
 - proxy cache 已启用（`--proxy-cache` 且编译启用 `gateway-proxy-cache`）
 
 ### 2.1 `POST /admin/proxy_cache/purge`
+
+权限：需要 write admin token。
 
 请求体二选一：
 
@@ -108,9 +122,11 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 启用条件：
 
 - 编译启用 `gateway-routing-advanced`
-- admin token 已启用
+- admin token 已启用（read 或 write）
 
 ### 3.1 `GET /admin/backends`
+
+权限：read-only admin token 或 write admin token。
 
 返回每个 backend 的 `BackendHealthSnapshot`，字段包括：
 
@@ -122,6 +138,8 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 清除某个 backend 的健康状态（把它恢复为默认健康）。
 
+权限：需要 write admin token。
+
 ---
 
 ## 4) Audit：查询审计日志（可选，需要 store）
@@ -130,9 +148,11 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 - 编译启用 `gateway-store-sqlite` 或 `gateway-store-redis`
 - 运行时启用 `--sqlite` 或 `--redis`
-- admin token 已启用
+- admin token 已启用（read 或 write）
 
 ### 4.1 `GET /admin/audit`
+
+权限：read-only admin token 或 write admin token。
 
 Query 参数：
 

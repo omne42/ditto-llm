@@ -84,6 +84,7 @@ pub struct GatewayHttpState {
     #[cfg(feature = "gateway-translation")]
     translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
     admin_token: Option<String>,
+    admin_read_token: Option<String>,
     state_file: Option<PathBuf>,
     #[cfg(feature = "gateway-store-sqlite")]
     sqlite_store: Option<SqliteStore>,
@@ -131,6 +132,7 @@ impl GatewayHttpState {
             #[cfg(feature = "gateway-translation")]
             translation_backends: Arc::new(HashMap::new()),
             admin_token: None,
+            admin_read_token: None,
             state_file: None,
             #[cfg(feature = "gateway-store-sqlite")]
             sqlite_store: None,
@@ -162,6 +164,11 @@ impl GatewayHttpState {
 
     pub fn with_admin_token(mut self, token: impl Into<String>) -> Self {
         self.admin_token = Some(token.into());
+        self
+    }
+
+    pub fn with_admin_read_token(mut self, token: impl Into<String>) -> Self {
+        self.admin_read_token = Some(token.into());
         self
     }
 
@@ -318,24 +325,31 @@ pub fn router(state: GatewayHttpState) -> Router {
         router = router.route("/metrics/prometheus", get(metrics_prometheus));
     }
 
-    if state.admin_token.is_some() {
-        router = router
-            .route("/admin/keys", get(list_keys).post(upsert_key))
-            .route(
+    if state.admin_token.is_some() || state.admin_read_token.is_some() {
+        let mut keys_router = get(list_keys);
+        if state.admin_token.is_some() {
+            keys_router = keys_router.post(upsert_key);
+        }
+        router = router.route("/admin/keys", keys_router);
+
+        if state.admin_token.is_some() {
+            router = router.route(
                 "/admin/keys/:id",
                 put(upsert_key_with_id).delete(delete_key),
             );
+        }
 
         #[cfg(feature = "gateway-proxy-cache")]
-        if state.proxy_cache.is_some() {
+        if state.proxy_cache.is_some() && state.admin_token.is_some() {
             router = router.route("/admin/proxy_cache/purge", post(purge_proxy_cache));
         }
 
         #[cfg(feature = "gateway-routing-advanced")]
         {
-            router = router
-                .route("/admin/backends", get(list_backends))
-                .route("/admin/backends/:name/reset", post(reset_backend));
+            router = router.route("/admin/backends", get(list_backends));
+            if state.admin_token.is_some() {
+                router = router.route("/admin/backends/:name/reset", post(reset_backend));
+            }
         }
 
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -542,6 +556,32 @@ struct OpenAiErrorDetail {
 #[derive(Debug, Serialize)]
 struct OpenAiErrorResponse {
     error: OpenAiErrorDetail,
+}
+
+fn openai_error(
+    status: StatusCode,
+    kind: &'static str,
+    code: Option<&'static str>,
+    message: impl std::fmt::Display,
+) -> (StatusCode, Json<OpenAiErrorResponse>) {
+    (
+        status,
+        Json(OpenAiErrorResponse {
+            error: OpenAiErrorDetail {
+                message: message.to_string(),
+                kind,
+                code,
+            },
+        }),
+    )
+}
+
+fn max_option_u64(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    }
 }
 
 #[derive(Debug, Serialize)]

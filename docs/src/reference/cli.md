@@ -34,12 +34,19 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 
 ## 3) Admin（管理面）
 
-- `--admin-token TOKEN`：启用 `/admin/*` 并设置 admin token
-- `--admin-token-env ENV`：从环境变量读取 admin token（可配合 `--dotenv`）
+- `--admin-token TOKEN`：启用 `/admin/*` 并设置 **write admin token**（可执行写操作）
+- `--admin-token-env ENV`：从环境变量读取 write admin token（可配合 `--dotenv`）
+- `--admin-read-token TOKEN`：启用 `/admin/*` 并设置 **read-only admin token**（只读）
+- `--admin-read-token-env ENV`：从环境变量读取 read-only admin token（可配合 `--dotenv`）
 
 约束：
 
 - `--admin-token` 与 `--admin-token-env` 互斥
+- `--admin-read-token` 与 `--admin-read-token-env` 互斥
+
+说明：
+
+- 如果只配置 `--admin-read-token*`（不配置 `--admin-token*`），则写端点不会挂载（404）。
 
 ---
 

@@ -88,10 +88,24 @@ Ditto Gateway 的鉴权分两层：
 
 - `--admin-token <TOKEN>` 或
 - `--admin-token-env <ENV_NAME>`（可配合 `--dotenv`）
+- `--admin-read-token <TOKEN>` 或
+- `--admin-read-token-env <ENV_NAME>`（可配合 `--dotenv`）
 
 才会挂载 `/admin/*` 路由（见 `src/gateway/http/core.rs`）。
 
 > 未配置 admin token 时，`/admin/*` 直接 404，这比“暴露出来但永远 401”更不容易被误用。
+
+### 读写权限（RBAC-lite）
+
+Ditto 目前不实现完整 RBAC/SSO，但提供一个“足够企业落地”的最小切片：
+
+- **Write token（运维写）**：`--admin-token` / `--admin-token-env`
+  - 允许所有 `/admin/*`（包含写操作）。
+- **Read token（只读）**：`--admin-read-token` / `--admin-read-token-env`
+  - 仅允许只读的 `/admin/*`（例如 `GET /admin/keys`、`GET /admin/audit`、`GET /admin/budgets*`、`GET /admin/costs*`、`GET /admin/backends`）。
+  - 当你只配置 read token（不配置 write token）时，写端点不会挂载（404）。
+
+实践建议：把 read token 用于 dashboard/报表/审计查看，把 write token 只给少数运维人员或自动化发布系统。
 
 ### 管理请求如何携带 Admin Token？
 

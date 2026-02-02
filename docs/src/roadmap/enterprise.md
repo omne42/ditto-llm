@@ -22,7 +22,7 @@
 ### 1.2 API key 体系（简化版）
 
 - Virtual Keys：每个 key 带 limits/budgets/guardrails/routing/cache 配置
-- Admin API：动态 upsert/delete keys（需 admin token）
+- Admin API：动态 upsert/delete keys（写操作需 write admin token；只读查询可用 read-only token）
 
 ### 1.3 预算与审计（可观测）
 
@@ -50,7 +50,8 @@
 
 当前状态：
 
-- 只有单一 admin token（等价于“root key”）
+- ✅ 已支持（RBAC-lite 切片）：admin token 分为 read-only 与 write 两类（便于把 dashboard/审计查看与写操作分离）
+- 仍缺：组织/角色/权限模型（RBAC）、SSO、SCIM、审批流与租户隔离边界
 
 建议承接方式：
 

@@ -162,16 +162,19 @@ Endpoints:
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`
-- `GET|POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (admin token via `Authorization` or `x-admin-token` if configured). `GET /admin/keys` redacts tokens unless `?include_tokens=true`.
-- `POST /admin/proxy_cache/purge` (requires an admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
-- `GET /admin/backends` and `POST /admin/backends/:name/reset` (requires an admin token and `--features gateway-routing-advanced`).
+- `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
+- `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
+- `POST /admin/proxy_cache/purge` (requires the write admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
+- `GET /admin/backends` and `POST /admin/backends/:name/reset` (reset requires the write admin token and `--features gateway-routing-advanced`).
 
 CLI options:
 
 - `--listen HOST:PORT` (or `--addr HOST:PORT`) sets the bind address (default: `127.0.0.1:8080`).
 - `--dotenv PATH` loads a dotenv file (KEY=VALUE) for `${ENV_VAR}` interpolation and provider auth env lookups.
-- `--admin-token TOKEN` enables `/admin/*` endpoints.
-- `--admin-token-env ENV` loads the admin token from env (works with `--dotenv`).
+- `--admin-token TOKEN` enables `/admin/*` endpoints (write admin token).
+- `--admin-token-env ENV` loads the write admin token from env (works with `--dotenv`).
+- `--admin-read-token TOKEN` enables `/admin/*` read-only endpoints.
+- `--admin-read-token-env ENV` loads the read-only admin token from env (works with `--dotenv`).
 - `--backend name=url` adds/overrides a backend for `POST /v1/gateway` (the backend is a URL that accepts `GatewayRequest` JSON and returns `GatewayResponse` JSON).
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
 - `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).

@@ -34,7 +34,9 @@
 
 ## 3) Admin API：只在启用 admin token 时开放
 
-只有当你显式设置 `--admin-token`/`--admin-token-env` 时，Ditto 才会挂载 `/admin/*`。
+只有当你显式设置 `--admin-token*`（write）或 `--admin-read-token*`（read-only）时，Ditto 才会挂载 `/admin/*`。
+
+建议把 read-only token 用于只读观测与审计查询；写操作只给 write token。
 
 部署建议：
 

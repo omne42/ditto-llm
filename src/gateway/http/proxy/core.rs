@@ -1,3 +1,6 @@
+#[cfg(feature = "gateway-routing-advanced")]
+use std::time::Duration;
+
 fn extract_max_output_tokens(path: &str, value: &serde_json::Value) -> Option<u32> {
     let key = if path.starts_with("/v1/responses") {
         "max_output_tokens"

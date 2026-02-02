@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
 - Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
 - Gateway: add Admin API filters for large deployments (`GET /admin/keys` filters and `key_prefix` for `/admin/budgets` and `/admin/costs`).
+- Gateway: add RBAC-lite admin auth split: read-only admin token (`--admin-read-token` / `--admin-read-token-env`) for read endpoints, plus write admin token (`--admin-token` / `--admin-token-env`) for mutations.
 - Gateway: add `--audit-retention-secs` to prune audit logs for sqlite/redis stores.
 - Gateway: default audit retention to 30 days when sqlite/redis store is enabled (set `--audit-retention-secs 0` to disable pruning).
 - Gateway: add `--proxy-max-body-bytes` to cap `/v1/*` request body size (memory safety / DoS hardening).
@@ -56,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: cap non-streaming `/v1/responses` shim buffering (chat/completions → responses) to avoid OOM on large upstream bodies.
 - Gateway: prune in-memory cache/budget scopes when virtual keys are updated/removed (avoids unbounded growth when keys churn).
 - Gateway: prune in-memory rate limiter scopes when virtual keys are updated/removed (avoids unbounded growth when keys churn).
+- Gateway: append admin write actions (key upsert/delete, backend reset, proxy cache purge) into sqlite/redis audit logs when a store is enabled.
+- Gateway: multipart parser now records per-part `content-type` (used by translation endpoints for file/audio uploads).
 - Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.

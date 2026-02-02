@@ -72,13 +72,15 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 ## Admin endpoints（可选）
 
-当你通过 `--admin-token`（或 `--admin-token-env`）启用 admin token 后，会开放 `/admin/*`。
+当你通过 `--admin-token*`（write）或 `--admin-read-token*`（read-only）启用 admin token 后，会开放 `/admin/*`（只读或读写）。
 
 常见端点：
 
-- `GET|POST /admin/keys`、`PUT|DELETE /admin/keys/:id`
-- `POST /admin/proxy_cache/purge`（需要启用 proxy cache）
-- `GET /admin/backends`、`POST /admin/backends/:name/reset`（需要启用 `gateway-routing-advanced`）
+- `GET /admin/keys`（read-only 或 write token）
+- `POST /admin/keys`、`PUT|DELETE /admin/keys/:id`（需要 write token）
+- `POST /admin/proxy_cache/purge`（需要 write token + proxy cache）
+- `GET /admin/backends`（read-only 或 write token）
+- `POST /admin/backends/:name/reset`（需要 write token + `gateway-routing-advanced`）
 - `GET /admin/audit`、`GET /admin/budgets*`（需要启用 sqlite/redis store）
 - `GET /admin/costs*`（需要启用 sqlite/redis store + `gateway-costing`）
 

@@ -1,21 +1,62 @@
-fn ensure_admin(
+#[derive(Clone, Copy, Debug)]
+enum AdminPermission {
+    Read,
+    Write,
+}
+
+fn ensure_admin_read(
     state: &GatewayHttpState,
     headers: &HeaderMap,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    let Some(expected) = state.admin_token.as_deref() else {
+    ensure_admin(state, headers, AdminPermission::Read)
+}
+
+fn ensure_admin_write(
+    state: &GatewayHttpState,
+    headers: &HeaderMap,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    ensure_admin(state, headers, AdminPermission::Write)
+}
+
+fn ensure_admin(
+    state: &GatewayHttpState,
+    headers: &HeaderMap,
+    permission: AdminPermission,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let write_token = state.admin_token.as_deref();
+    let read_token = state.admin_read_token.as_deref();
+
+    if write_token.is_none() && read_token.is_none() {
         return Ok(());
-    };
+    }
+
     let provided = extract_bearer(headers)
         .or_else(|| extract_header(headers, "x-admin-token"))
         .unwrap_or_default();
-    if provided == expected {
-        Ok(())
-    } else {
-        Err(error_response(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "invalid admin token",
-        ))
+
+    let ok = match permission {
+        AdminPermission::Read => {
+            write_token.is_some_and(|expected| provided == expected)
+                || read_token.is_some_and(|expected| provided == expected)
+        }
+        AdminPermission::Write => write_token.is_some_and(|expected| provided == expected),
+    };
+
+    ok.then_some(())
+        .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "unauthorized", "invalid admin token"))
+}
+
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+async fn append_admin_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
+    #[cfg(feature = "gateway-store-sqlite")]
+    if let Some(store) = state.sqlite_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload.clone()).await;
+        return;
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let Some(store) = state.redis_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload).await;
     }
 }
 

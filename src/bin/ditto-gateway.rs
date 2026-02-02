@@ -8,11 +8,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usage = {
         #[cfg(feature = "gateway-config-yaml")]
         {
-            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
         #[cfg(not(feature = "gateway-config-yaml"))]
         {
-            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
     };
     let path = args.next().ok_or(usage)?;
@@ -20,6 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut listen = "127.0.0.1:8080".to_string();
     let mut admin_token: Option<String> = None;
     let mut admin_token_env: Option<String> = None;
+    let mut admin_read_token: Option<String> = None;
+    let mut admin_read_token_env: Option<String> = None;
     let mut dotenv_path: Option<std::path::PathBuf> = None;
     let mut state_path: Option<std::path::PathBuf> = None;
     let mut _sqlite_path: Option<std::path::PathBuf> = None;
@@ -73,6 +75,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--admin-token-env" => {
                 admin_token_env = Some(args.next().ok_or("missing value for --admin-token-env")?);
+            }
+            "--admin-read-token" => {
+                admin_read_token = Some(args.next().ok_or("missing value for --admin-read-token")?);
+            }
+            "--admin-read-token-env" => {
+                admin_read_token_env = Some(
+                    args.next()
+                        .ok_or("missing value for --admin-read-token-env")?,
+                );
             }
             "--state" => {
                 state_path = Some(args.next().ok_or("missing value for --state")?.into());
@@ -340,6 +351,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if admin_token.is_some() && admin_token_env.is_some() {
         return Err("--admin-token cannot be combined with --admin-token-env".into());
     }
+    if admin_read_token.is_some() && admin_read_token_env.is_some() {
+        return Err("--admin-read-token cannot be combined with --admin-read-token-env".into());
+    }
     if redis_url.is_some() && redis_url_env.is_some() {
         return Err("--redis cannot be combined with --redis-env".into());
     }
@@ -352,6 +366,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(format!("admin token env var is empty: {key}").into());
         }
         admin_token = Some(token);
+    }
+
+    if let Some(key) = admin_read_token_env.as_deref() {
+        let token = env
+            .get(key)
+            .ok_or_else(|| format!("missing env var for --admin-read-token-env: {key}"))?;
+        if token.trim().is_empty() {
+            return Err(format!("admin read token env var is empty: {key}").into());
+        }
+        admin_read_token = Some(token);
     }
 
     if let Some(key) = redis_url_env.as_deref() {
@@ -572,6 +596,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(token) = admin_token {
         state = state.with_admin_token(token);
+    }
+    if let Some(token) = admin_read_token {
+        state = state.with_admin_read_token(token);
     }
     if json_logs {
         state = state.with_json_logs();

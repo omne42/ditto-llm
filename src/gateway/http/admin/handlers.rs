@@ -4,7 +4,7 @@ async fn purge_proxy_cache(
     headers: HeaderMap,
     Json(payload): Json<PurgeProxyCacheRequest>,
 ) -> Result<Json<PurgeProxyCacheResponse>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_write(&state, &headers)?;
 
     let Some(cache) = state.proxy_cache.as_ref() else {
         return Err(error_response(
@@ -20,32 +20,45 @@ async fn purge_proxy_cache(
             cache.clear();
         }
 
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.redis_store.as_ref() {
-            let deleted_redis = store.clear_proxy_cache().await.map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                metrics.lock().await.record_proxy_cache_purge("all");
+        let deleted_redis = {
+            #[cfg(feature = "gateway-store-redis")]
+            if let Some(store) = state.redis_store.as_ref() {
+                Some(store.clear_proxy_cache().await.map_err(|err| {
+                    error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "storage_error",
+                        err.to_string(),
+                    )
+                })?)
+            } else {
+                None
             }
-            return Ok(Json(PurgeProxyCacheResponse {
-                cleared_memory: true,
-                deleted_redis: Some(deleted_redis),
-            }));
-        }
+            #[cfg(not(feature = "gateway-store-redis"))]
+            {
+                None
+            }
+        };
 
         #[cfg(feature = "gateway-metrics-prometheus")]
         if let Some(metrics) = state.prometheus_metrics.as_ref() {
             metrics.lock().await.record_proxy_cache_purge("all");
         }
+
+        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        append_admin_audit_log(
+            &state,
+            "admin.proxy_cache.purge",
+            serde_json::json!({
+                "all": true,
+                "cache_key": payload.cache_key.as_deref(),
+                "deleted_redis": deleted_redis,
+            }),
+        )
+        .await;
+
         return Ok(Json(PurgeProxyCacheResponse {
             cleared_memory: true,
-            deleted_redis: None,
+            deleted_redis,
         }));
     }
 
@@ -67,35 +80,51 @@ async fn purge_proxy_cache(
         cache.remove(cache_key)
     };
 
-    #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
-        let deleted_redis = store
-            .delete_proxy_cache_response(cache_key)
-            .await
-            .map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            metrics.lock().await.record_proxy_cache_purge("key");
+    let deleted_redis = {
+        #[cfg(feature = "gateway-store-redis")]
+        if let Some(store) = state.redis_store.as_ref() {
+            Some(
+                store
+                    .delete_proxy_cache_response(cache_key)
+                    .await
+                    .map_err(|err| {
+                        error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "storage_error",
+                            err.to_string(),
+                        )
+                    })?,
+            )
+        } else {
+            None
         }
-        return Ok(Json(PurgeProxyCacheResponse {
-            cleared_memory: removed_memory,
-            deleted_redis: Some(deleted_redis),
-        }));
-    }
+        #[cfg(not(feature = "gateway-store-redis"))]
+        {
+            None
+        }
+    };
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     if let Some(metrics) = state.prometheus_metrics.as_ref() {
         metrics.lock().await.record_proxy_cache_purge("key");
     }
+
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    append_admin_audit_log(
+        &state,
+        "admin.proxy_cache.purge",
+        serde_json::json!({
+            "all": false,
+            "cache_key": cache_key,
+            "cleared_memory": removed_memory,
+            "deleted_redis": deleted_redis,
+        }),
+    )
+    .await;
+
     Ok(Json(PurgeProxyCacheResponse {
         cleared_memory: removed_memory,
-        deleted_redis: None,
+        deleted_redis,
     }))
 }
 
@@ -126,7 +155,7 @@ async fn list_audit_logs(
     headers: HeaderMap,
     Query(query): Query<AuditQuery>,
 ) -> Result<Json<Vec<AuditLogRecord>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
@@ -171,7 +200,7 @@ async fn list_budget_ledgers(
     headers: HeaderMap,
     Query(query): Query<LedgerQuery>,
 ) -> Result<Json<Vec<BudgetLedgerRecord>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let key_prefix = query
         .key_prefix
@@ -395,7 +424,7 @@ async fn list_project_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ProjectBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
@@ -435,7 +464,7 @@ async fn list_user_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<UserBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
@@ -475,7 +504,7 @@ async fn list_tenant_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<TenantBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
@@ -519,7 +548,7 @@ async fn list_cost_ledgers(
     headers: HeaderMap,
     Query(query): Query<LedgerQuery>,
 ) -> Result<Json<Vec<CostLedgerRecord>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let key_prefix = query
         .key_prefix
@@ -764,7 +793,7 @@ async fn list_project_cost_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ProjectCostLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
@@ -807,7 +836,7 @@ async fn list_user_cost_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<UserCostLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
@@ -850,7 +879,7 @@ async fn list_tenant_cost_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<TenantCostLedger>>, (StatusCode, Json<ErrorResponse>)> {
-    ensure_admin(&state, &headers)?;
+    ensure_admin_read(&state, &headers)?;
 
     let keys = { state.gateway.lock().await.list_virtual_keys() };
 
