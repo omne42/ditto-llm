@@ -74,6 +74,10 @@ proxy cache 只缓存：
 
 - `x-ditto-shim: responses_via_chat_completions`
 
+如果你遇到 502：
+
+- 对非 streaming shim，Ditto 需要缓冲并转换 upstream 的 JSON 响应；为避免 OOM，存在最大缓冲上限（当前 8MiB）。超限时建议改用 streaming（SSE）或直接调用 `POST /v1/chat/completions`。
+
 ---
 
 ## Q7：我在 SDK 里如何发现模型列表？

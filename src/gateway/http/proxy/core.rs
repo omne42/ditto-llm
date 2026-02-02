@@ -609,7 +609,23 @@ async fn responses_shim_response(
         *response.headers_mut() = headers;
         Ok(response)
     } else {
-        let bytes = upstream.bytes().await.unwrap_or_default();
+        let max_body_bytes = 8 * 1024 * 1024;
+        let bytes = read_reqwest_body_bytes_bounded_with_content_length(
+            upstream,
+            &upstream_headers,
+            max_body_bytes,
+        )
+            .await
+            .map_err(|err| {
+                openai_error(
+                    StatusCode::BAD_GATEWAY,
+                    "api_error",
+                    Some("invalid_backend_response"),
+                    format!(
+                        "chat/completions response too large to shim (max={max_body_bytes}): {err}; use streaming or call /v1/chat/completions directly"
+                    ),
+                )
+            })?;
         let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|err| {
             openai_error(
                 StatusCode::BAD_GATEWAY,
@@ -935,62 +951,4 @@ fn hash64_fnv1a(bytes: &[u8]) -> u64 {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
-}
-
-fn map_openai_gateway_error(err: GatewayError) -> (StatusCode, Json<OpenAiErrorResponse>) {
-    match err {
-        GatewayError::Unauthorized => openai_error(
-            StatusCode::UNAUTHORIZED,
-            "authentication_error",
-            Some("invalid_api_key"),
-            "unauthorized virtual key",
-        ),
-        GatewayError::RateLimited { limit } => openai_error(
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate_limit_error",
-            Some("rate_limited"),
-            format!("rate limit exceeded: {limit}"),
-        ),
-        GatewayError::GuardrailRejected { reason } => openai_error(
-            StatusCode::FORBIDDEN,
-            "policy_error",
-            Some("guardrail_rejected"),
-            format!("guardrail rejected: {reason}"),
-        ),
-        GatewayError::BudgetExceeded { limit, attempted } => openai_error(
-            StatusCode::PAYMENT_REQUIRED,
-            "insufficient_quota",
-            Some("budget_exceeded"),
-            format!("budget exceeded: limit={limit} attempted={attempted}"),
-        ),
-        GatewayError::CostBudgetExceeded {
-            limit_usd_micros,
-            attempted_usd_micros,
-        } => openai_error(
-            StatusCode::PAYMENT_REQUIRED,
-            "insufficient_quota",
-            Some("cost_budget_exceeded"),
-            format!(
-                "cost budget exceeded: limit_usd_micros={limit_usd_micros} attempted_usd_micros={attempted_usd_micros}"
-            ),
-        ),
-        GatewayError::BackendNotFound { name } => openai_error(
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            Some("backend_not_found"),
-            format!("backend not found: {name}"),
-        ),
-        GatewayError::Backend { message } => openai_error(
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            Some("backend_error"),
-            message,
-        ),
-        GatewayError::InvalidRequest { reason } => openai_error(
-            StatusCode::BAD_REQUEST,
-            "invalid_request_error",
-            Some("invalid_request"),
-            reason,
-        ),
-    }
 }

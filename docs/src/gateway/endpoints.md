@@ -38,6 +38,10 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 - 返回头会包含 `x-ditto-shim: responses_via_chat_completions`
 
+注意：
+
+- 非 streaming 的 shim 需要把 upstream 的 chat/completions JSON 响应完整读入内存后再转换；为避免 OOM，Ditto 对该缓冲设置了上限（当前 8MiB）。如果响应超过上限，Ditto 会返回 502，并建议改用 streaming 或直接调用 `POST /v1/chat/completions`。
+
 这使得你可以在同一个 gateway 下兼容“只支持 chat/completions 的 OpenAI-compatible 服务”。
 
 ## OpenAI-compatible translation（可选）
