@@ -69,7 +69,9 @@ cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gate
 
 > `--proxy-cache-max-body-bytes` 会跳过缓存“过大的响应”（包含 memory 与 redis L2）；`--proxy-cache-max-total-body-bytes` 用于限制内存总缓存体积，避免内存被打爆。
 
-另外，为避免把大响应整段读入内存，Ditto 对 proxy cache 采用**有界缓冲**：若 upstream 提供 `content-length` 且不超过上限，则缓冲并写入；若 upstream 未提供 `content-length`，Ditto 会最多预读到上限（逐步累积，不会因为 chunk 切分过细造成额外内存放大），只有当响应在上限内结束时才写入 cache；超过上限会切换为流式转发并跳过缓存。
+> 注意：`--proxy-cache-max-body-bytes` 只影响“缓存写入”的上限；Ditto 为了从 JSON 响应解析 `usage` 做更准的 token/cost 结算，另外提供 `--proxy-usage-max-body-bytes`（默认 1MiB）作为独立上限，避免把 cache 上限调大后导致 usage 缓冲也被动变大。
+
+另外，为避免把大响应整段读入内存，Ditto 对 proxy 的“缓冲读取”采用**有界策略**：若 upstream 提供 `content-length` 且不超过上限，则缓冲并用于（a）写入 proxy cache 或（b）从 JSON 解析 `usage`；若 upstream 未提供 `content-length`，Ditto 会最多预读到上限（逐步累积，不会因为 chunk 切分过细造成额外内存放大），只有当响应在上限内结束时才会写入 cache/解析 usage；超过上限会切换为流式转发并跳过缓存/usage 解析。
 
 ### 2.2 缓存范围（What gets cached）
 

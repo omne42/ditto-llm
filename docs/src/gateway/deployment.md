@@ -63,7 +63,7 @@ cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gate
 Ditto 的 proxy 会在一些位置“把内容读入内存”：
 
 - `/v1/*` 请求体会先读入内存（默认上限 64MiB；可用 `--proxy-max-body-bytes` 调整）
-- 非 streaming 响应会**尽量流式转发**；当响应体积可确定且较小（用于从 JSON 提取 `usage` 做更准的结算，或写入 proxy cache）时才会缓冲读取；无 `content-length` 或超过上限时会跳过缓冲/缓存并直接流式转发
+- 非 streaming 响应会**尽量流式转发**；当响应体积可确定且较小（用于从 JSON 提取 `usage` 做更准的结算，或写入 proxy cache）时才会缓冲读取；其中 `usage` 缓冲上限由 `--proxy-usage-max-body-bytes`（默认 1MiB）控制，与 `--proxy-cache-max-body-bytes` 解耦；无 `content-length` 或超过上限时会跳过缓冲/缓存并直接流式转发
 
 生产建议至少打开两类“背压”：
 

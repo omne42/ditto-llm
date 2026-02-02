@@ -5,11 +5,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let usage = {
         #[cfg(feature = "gateway-config-yaml")]
         {
-            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
         #[cfg(not(feature = "gateway-config-yaml"))]
         {
-            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+            "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
         }
     };
     let path = args.next().ok_or(usage)?;
@@ -33,6 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut proxy_cache_max_body_bytes: Option<usize> = None;
     let mut proxy_cache_max_total_body_bytes: Option<usize> = None;
     let mut proxy_max_body_bytes: Option<usize> = None;
+    let mut proxy_usage_max_body_bytes: Option<usize> = None;
     let mut proxy_max_in_flight: Option<usize> = None;
     let mut pricing_litellm_path: Option<String> = None;
     let mut prometheus_metrics_enabled = false;
@@ -159,6 +160,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 proxy_max_body_bytes = Some(
                     raw.parse::<usize>()
                         .map_err(|_| "invalid --proxy-max-body-bytes")?,
+                );
+            }
+            "--proxy-usage-max-body-bytes" => {
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-usage-max-body-bytes")?;
+                proxy_usage_max_body_bytes = Some(
+                    raw.parse::<usize>()
+                        .map_err(|_| "invalid --proxy-usage-max-body-bytes")?,
                 );
             }
             "--pricing-litellm" => {
@@ -557,6 +567,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_cache_max_total_body_bytes,
     )?;
     state = attach_proxy_max_body_bytes(state, proxy_max_body_bytes)?;
+    state = attach_proxy_usage_max_body_bytes(state, proxy_usage_max_body_bytes)?;
     state = attach_proxy_backpressure(state, proxy_max_in_flight)?;
     state = attach_pricing_table(state, pricing_litellm_path)?;
     state = attach_prometheus_metrics(
@@ -662,6 +673,17 @@ fn attach_proxy_max_body_bytes(
         return Err("--proxy-max-body-bytes must be > 0".into());
     }
     Ok(state.with_proxy_max_body_bytes(max))
+}
+
+#[cfg(feature = "gateway")]
+fn attach_proxy_usage_max_body_bytes(
+    state: ditto_llm::gateway::GatewayHttpState,
+    max_body_bytes: Option<usize>,
+) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
+    let Some(max) = max_body_bytes else {
+        return Ok(state);
+    };
+    Ok(state.with_proxy_usage_max_body_bytes(max))
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-proxy-cache"))]

@@ -49,6 +49,7 @@
 - admin key 管理端点（可选启用）+ state/sqlite/redis 持久化 virtual keys + budgets/audit logs
 - 可选 devtools JSONL 事件日志（`--features gateway-devtools`）+ 可选 JSON logs（`--json-logs`）
 - 可选 proxy cache（`--features gateway-proxy-cache`）+ 可选 Prometheus metrics（`--features gateway-metrics-prometheus`）
+- 默认内存安全：proxy 对非 SSE 响应默认流式转发；仅在体积可控时才有界缓冲用于 proxy cache 或 `usage` 结算；`usage` 缓冲上限由 `--proxy-usage-max-body-bytes` 控制并与 cache 上限解耦
 - 可选 proxy retry/circuit breaker（`--features gateway-routing-advanced`）
 - 可选 pricing table + USD budgets（`--features gateway-costing`）
 - 可选 OpenTelemetry（`--features gateway-otel`）

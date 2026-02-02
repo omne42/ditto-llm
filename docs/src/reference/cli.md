@@ -84,6 +84,7 @@ redis 相关：
 
 - `--proxy-max-in-flight N`：限制同时代理的请求数（超限 429；N 必须 > 0）
 - `--proxy-max-body-bytes N`：限制 `/v1/*` 入口请求体最大 bytes（默认 64MiB；N 必须 > 0）
+- `--proxy-usage-max-body-bytes N`：限制为了解析 `usage` 而缓冲的 **非 streaming JSON 响应**最大 bytes（默认 1MiB；`0` 表示禁用 usage 缓冲并回退到估算）
 
 此外，`gateway.json.backends[].max_in_flight` 也会对单 backend 限并发（更细粒度）。
 
