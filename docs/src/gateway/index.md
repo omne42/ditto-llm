@@ -9,6 +9,8 @@ Ditto-LLM 的 Gateway 是一个可选启用的 HTTP 服务（feature `gateway`�
 - 缓存（control-plane cache + optional proxy cache）
 - 审计（可选持久化）
 - 观测（request id / logs / Prometheus / OTel）
+- MCP gateway（`/mcp*` + MCP tools 集成）
+- A2A agents（`/a2a/*` JSON-RPC 代理）
 
 ## Passthrough vs Translation
 

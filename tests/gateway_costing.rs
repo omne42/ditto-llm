@@ -78,6 +78,8 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -152,6 +154,8 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -253,6 +257,8 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -345,6 +351,8 @@ async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<(
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -425,6 +433,8 @@ async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -514,6 +524,8 @@ async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::Result<()>
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");

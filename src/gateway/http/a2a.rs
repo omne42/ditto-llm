@@ -1,7 +1,7 @@
-use serde_json::{Map, Value};
+use serde_json::Map;
 
 #[derive(Clone)]
-pub(crate) struct A2aAgentState {
+pub struct A2aAgentState {
     agent_id: String,
     agent_name: Option<String>,
     agent_card_params: Value,
@@ -9,7 +9,7 @@ pub(crate) struct A2aAgentState {
 }
 
 impl A2aAgentState {
-    pub(crate) fn new(agent_id: String, agent_card_params: Value, backend: ProxyBackend) -> Self {
+    pub fn new(agent_id: String, agent_card_params: Value, backend: ProxyBackend) -> Self {
         let agent_name = agent_card_params
             .as_object()
             .and_then(|obj| obj.get("name"))
@@ -308,4 +308,3 @@ async fn handle_a2a_invoke(
     *response.headers_mut() = headers;
     response
 }
-

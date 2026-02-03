@@ -22,6 +22,8 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
     let gateway = Gateway::new(config);
     let state = GatewayHttpState::new(gateway)

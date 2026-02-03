@@ -3,7 +3,7 @@
 Ditto-LLM 的目标是成为 **LiteLLM Proxy + Vercel AI SDK 的能力超集**，但以 Rust-first 的方式交付：
 
 - **Rust SDK（AI SDK Core-like）**：在 Rust 中以统一类型调用多个大模型提供方（providers），并显式暴露兼容性差异（Warnings）。
-- **Gateway（LiteLLM-like）**：可选启用的 OpenAI-compatible HTTP gateway，支持路由/限流/预算/缓存/审计/观测等控制面能力。
+- **Gateway（LiteLLM-like）**：可选启用的 OpenAI-compatible HTTP gateway，支持路由/限流/预算/缓存/审计/观测等控制面能力，并可选启用 MCP（`/mcp*`）/ A2A（`/a2a/*`）等协议端点。
 - **JS/React Clients（AI SDK UI-like）**：面向前端/JS 侧的最小 stream 协议解析与 hook（不试图复刻完整 AI SDK UI 生态）。
 - **Passthrough vs Translation**：既支持 OpenAI `/v1/*` passthrough（不变形），也支持将 OpenAI 输入/输出翻译到 native providers（translation）。
 

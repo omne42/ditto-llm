@@ -9,7 +9,8 @@ Ditto 支持用 **JSON** 表达配置；如果你希望用 YAML，也可以启�
   "backends": [ ... ],
   "virtual_keys": [ ... ],
   "router": { ... },
-  "a2a_agents": [ ... ]
+  "a2a_agents": [ ... ],
+  "mcp_servers": [ ... ]
 }
 ```
 
@@ -143,6 +144,8 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `backends[].base_url` / `headers` / `query_params`
 - `backends[].provider_config.*`（base_url/default_model/http_headers/http_query_params/model_whitelist）
 - `virtual_keys[].token`
+- `a2a_agents[].agent_card_params.url` / `headers` / `query_params`
+- `mcp_servers[].url` / `headers` / `query_params`
 
 ## a2a_agents：A2A agent registry（LiteLLM-like，beta）
 
@@ -181,3 +184,34 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 兼容性补充（迁移 LiteLLM 配置时常见）：
 
 - 如果某个字段的值是 `os.environ/ENV_KEY`（整段字符串），Ditto 会把它解析为环境变量引用并替换为对应的 env 值。
+
+## mcp_servers：MCP server registry（LiteLLM-like）
+
+如果你希望通过 Ditto Gateway 暴露 `/mcp*` 端点，并在 `/v1/chat/completions` 中使用 `tools: [{"type":"mcp", ...}]`，可以在配置里注册 MCP servers：
+
+```json
+{
+  "mcp_servers": [
+    {
+      "server_id": "local",
+      "url": "http://127.0.0.1:3000/mcp",
+      "headers": { "authorization": "Bearer ${MCP_TOKEN}" },
+      "query_params": {},
+      "timeout_seconds": 30
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `server_id`：Ditto 内部标识（用于选择 servers，以及多 server 时给工具名加 `<server_id>-` 前缀）
+- `url`：MCP server 的 HTTP endpoint（只支持 `http://` / `https://`）
+- `headers` / `query_params`：转发时注入（可用于鉴权）
+- `timeout_seconds`：覆盖默认超时（默认 300s）
+
+兼容性补充：
+
+- `url` 同时接受别名字段 `http_url`
+
+使用方式与端点说明见「Gateway → MCP Gateway（/mcp + tools）」。

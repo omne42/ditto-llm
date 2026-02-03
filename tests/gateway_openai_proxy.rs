@@ -49,3 +49,5 @@ include!("gateway_openai_proxy/basic_proxying_litellm_aliases.rs");
 include!("gateway_openai_proxy/routing.rs");
 include!("gateway_openai_proxy/validation.rs");
 include!("gateway_openai_proxy/validation_litellm_aliases.rs");
+include!("gateway_openai_proxy/mcp.rs");
+include!("gateway_openai_proxy/proxy_cache.rs");

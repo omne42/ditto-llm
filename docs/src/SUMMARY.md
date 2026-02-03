@@ -44,6 +44,7 @@
   - [Gateway Recipes（可复制落地）](./gateway/recipes.md)
   - [配置文件（gateway.json / gateway.yaml）](./gateway/config.md)
   - [HTTP Endpoints](./gateway/endpoints.md)
+  - [MCP Gateway（/mcp + tools）](./gateway/mcp.md)
   - [鉴权：Virtual Keys 与 Admin Token](./gateway/auth.md)
   - [路由：Weighted / Fallback / Retry](./gateway/routing.md)
   - [预算与成本（Tokens / USD）](./gateway/budgets-and-costing.md)

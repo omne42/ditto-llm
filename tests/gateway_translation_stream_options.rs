@@ -65,6 +65,8 @@ fn base_gateway() -> Gateway {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     })
 }
 

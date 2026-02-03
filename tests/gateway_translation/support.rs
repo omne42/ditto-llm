@@ -385,6 +385,8 @@ fn base_gateway() -> Gateway {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     })
 }
 
@@ -769,4 +771,3 @@ async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> 
 
     Ok(())
 }
-

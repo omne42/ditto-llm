@@ -104,6 +104,8 @@ impl LitellmProxyConfig {
                 default_backends,
                 rules,
             },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
         })
     }
 }

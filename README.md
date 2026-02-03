@@ -25,7 +25,7 @@ Optional feature-gated modules:
 - Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, HTTP adapters (SSE/NDJSON), telemetry sink, devtools JSONL logger, MCP tool adapter, cache middleware with streaming replay (feature `sdk`).
 - SDK HTTP helpers: optional `axum` response builders for stream adapters (feature `sdk-axum`).
-- Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
+- Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`). Includes LiteLLM-like conveniences such as `/key/*` endpoints, `/a2a/*` agent proxy, and `/mcp*` MCP tool gateway.
 - Gateway token counting: tiktoken-based input token estimation for proxy budgets/guardrails/costing (feature `gateway-tokenizer`).
 - Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`, and `/v1/models` backed by Ditto providers (feature `gateway-translation`).
 - Gateway proxy caching: in-memory cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
@@ -136,7 +136,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
 `backends[].max_in_flight` optionally caps concurrent in-flight proxy requests per backend (rejects with HTTP 429 + OpenAI-style error code `inflight_limit_backend`).
 `backends[].timeout_seconds` optionally overrides the backend request timeout in seconds (default: 300s).
 
-Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` fields (e.g. `base_url`/`http_headers`/`http_query_params`), and `virtual_keys[].token` (expanded at startup via the process env or `--dotenv`).
+Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` fields (e.g. `base_url`/`http_headers`/`http_query_params`), `virtual_keys[].token`, `a2a_agents[]` (agent url/headers/query), and `mcp_servers[]` (server url/headers/query) (expanded at startup via the process env or `--dotenv`).
 
 Translation backends (feature `gateway-translation`) can be configured with `provider` + `provider_config` (same shape as `ProviderConfig`):
 
@@ -178,6 +178,8 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
+- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` via `tools: [{"type":"mcp", ...}]`.
+- A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured).
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
   - `/key/info` accepts `?key=...` (admin query) or defaults to the `Authorization: Bearer <virtual_key>` token when `?key` is omitted (self lookup).

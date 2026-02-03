@@ -89,6 +89,7 @@ pub struct GatewayHttpState {
     gateway: Arc<Mutex<Gateway>>,
     proxy_backends: Arc<HashMap<String, ProxyBackend>>,
     a2a_agents: Arc<HashMap<String, A2aAgentState>>,
+    mcp_servers: Arc<HashMap<String, McpServerState>>,
     #[cfg(feature = "gateway-translation")]
     translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
     admin_token: Option<String>,
@@ -139,6 +140,7 @@ impl GatewayHttpState {
             gateway: Arc::new(Mutex::new(gateway)),
             proxy_backends: Arc::new(HashMap::new()),
             a2a_agents: Arc::new(HashMap::new()),
+            mcp_servers: Arc::new(HashMap::new()),
             #[cfg(feature = "gateway-translation")]
             translation_backends: Arc::new(HashMap::new()),
             admin_token: None,
@@ -230,6 +232,11 @@ impl GatewayHttpState {
 
     pub fn with_a2a_agents(mut self, agents: HashMap<String, A2aAgentState>) -> Self {
         self.a2a_agents = Arc::new(agents);
+        self
+    }
+
+    pub fn with_mcp_servers(mut self, servers: HashMap<String, McpServerState>) -> Self {
+        self.mcp_servers = Arc::new(servers);
         self
     }
 
@@ -360,6 +367,13 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
         .route("/v1/a2a/:agent_id/message/send", post(handle_a2a_invoke))
         .route("/v1/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
+        .route("/mcp/tools/list", any(handle_mcp_tools_list))
+        .route("/mcp/tools/call", any(handle_mcp_tools_call))
+        .route("/mcp", any(handle_mcp_root))
+        .route("/mcp/", any(handle_mcp_root))
+        .route("/mcp/*subpath", any(handle_mcp_subpath))
+        .route("/:mcp_servers/mcp", any(handle_mcp_namespaced_root))
+        .route("/:mcp_servers/mcp/*path", any(handle_mcp_namespaced_subpath))
         .route("/chat/completions", any(handle_openai_compat_proxy_root))
         .route("/completions", any(handle_openai_compat_proxy_root))
         .route("/embeddings", any(handle_openai_compat_proxy_root))

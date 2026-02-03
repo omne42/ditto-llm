@@ -764,6 +764,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    let mut mcp_servers = std::collections::HashMap::new();
+    for server in &config.mcp_servers {
+        let server_id = server.server_id.trim();
+        if server_id.is_empty() {
+            return Err("mcp server_id is empty".into());
+        }
+
+        let url = server.url.trim();
+        if url.is_empty() {
+            return Err(format!("mcp server {server_id} missing url").into());
+        }
+
+        let mut client =
+            ditto_llm::gateway::http::McpServerState::new(server_id.to_string(), url.to_string())?;
+        client = client.with_headers(server.headers.clone())?;
+        client = client.with_query_params(server.query_params.clone());
+        client = client.with_request_timeout_seconds(server.timeout_seconds);
+
+        if mcp_servers.insert(server_id.to_string(), client).is_some() {
+            return Err(format!("duplicate mcp server_id: {server_id}").into());
+        }
+    }
+
     let mut gateway = ditto_llm::gateway::Gateway::new(config);
 
     for spec in backend_specs {
@@ -776,7 +799,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = ditto_llm::gateway::GatewayHttpState::new(gateway)
         .with_proxy_backends(proxy_backends)
-        .with_a2a_agents(a2a_agents);
+        .with_a2a_agents(a2a_agents)
+        .with_mcp_servers(mcp_servers);
     #[cfg(feature = "gateway-translation")]
     {
         state = state.with_translation_backends(translation_backends);

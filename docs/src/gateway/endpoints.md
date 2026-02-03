@@ -82,6 +82,23 @@ Ditto Gateway 支持 LiteLLM 风格的 A2A 协议端点（JSON-RPC 2.0），用�
 - `agent-card.json` 会将 `url` 重写为 Ditto 的 `/a2a/:agent_id`（让 A2A SDK 后续请求继续走 Ditto）。
 - 当 `virtual_keys` 非空时，A2A 端点同样需要 virtual key（与 `/v1/*` 一致）。
 
+## MCP Gateway（LiteLLM-like）
+
+Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 的 MCP tools 集成：
+
+- MCP JSON-RPC：
+  - `POST /mcp`
+  - `POST /mcp/<servers>` 或 `POST /<servers>/mcp`（选择 server，例如 `local,github`）
+- 便捷端点：
+  - `ANY /mcp/tools/list`
+  - `ANY /mcp/tools/call`
+- server 选择（任选其一）：
+  - header：`x-mcp-servers: local,github`
+  - path：`/mcp/local,github` 或 `/local,github/mcp`
+- 当 `virtual_keys` 非空时，`/mcp*` 端点同样需要 virtual key。
+
+完整说明与示例见「Gateway → MCP Gateway（/mcp + tools）」。
+
 ## Control-plane demo endpoint
 
 - `POST /v1/gateway`

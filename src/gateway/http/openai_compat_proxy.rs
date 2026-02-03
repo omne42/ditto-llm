@@ -3,19 +3,16 @@ include!("openai_compat_proxy/costing.rs");
 include!("openai_compat_proxy/rate_limit.rs");
 include!("openai_compat_proxy/streaming_multipart.rs");
 include!("openai_compat_proxy/path_normalize.rs");
-
+include!("openai_compat_proxy/mcp.rs");
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
     req: axum::http::Request<Body>,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     let max_body_bytes = state.proxy_max_body_bytes;
-
     let (parts, incoming_body) = req.into_parts();
-
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
-
     let path_and_query = parts
         .uri
         .path_and_query()
@@ -23,7 +20,6 @@ async fn handle_openai_compat_proxy(
         .unwrap_or_else(|| parts.uri.path());
     let normalized_path_and_query = normalize_openai_compat_path_and_query(path_and_query);
     let path_and_query = normalized_path_and_query.as_ref();
-
     #[cfg(feature = "gateway-otel")]
     let proxy_span = tracing::info_span!(
         "ditto.gateway.proxy",
@@ -38,7 +34,6 @@ async fn handle_openai_compat_proxy(
     );
     #[cfg(feature = "gateway-otel")]
     let _proxy_span_guard = proxy_span.enter();
-
     if should_stream_large_multipart_request(&parts, path_and_query, max_body_bytes) {
         let path_and_query = path_and_query.to_string();
         return handle_openai_compat_proxy_streaming_multipart(
@@ -50,7 +45,6 @@ async fn handle_openai_compat_proxy(
         )
         .await;
     }
-
     let body = to_bytes(incoming_body, max_body_bytes)
         .await
         .map_err(|err| openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err))?;
@@ -77,6 +71,18 @@ async fn handle_openai_compat_proxy(
     } else {
         None
     };
+
+    if let Some(response) = maybe_handle_mcp_tools_chat_completions(
+        &state,
+        &parts,
+        &parsed_json,
+        &request_id,
+        path_and_query,
+    )
+    .await?
+    {
+        return Ok(response);
+    }
 
     let model = parsed_json
         .as_ref()

@@ -18,6 +18,8 @@ pub struct GatewayConfig {
     pub router: RouterConfig,
     #[serde(default)]
     pub a2a_agents: Vec<A2aAgentConfig>,
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
 }
 
 impl GatewayConfig {
@@ -31,6 +33,9 @@ impl GatewayConfig {
         for agent in &mut self.a2a_agents {
             agent.resolve_env(env)?;
         }
+        for server in &mut self.mcp_servers {
+            server.resolve_env(env)?;
+        }
         Ok(())
     }
 
@@ -43,6 +48,9 @@ impl GatewayConfig {
         }
         for agent in &mut self.a2a_agents {
             agent.resolve_secrets(env).await?;
+        }
+        for server in &mut self.mcp_servers {
+            server.resolve_secrets(env).await?;
         }
         Ok(())
     }
@@ -98,6 +106,55 @@ impl std::fmt::Debug for A2aAgentConfig {
         f.debug_struct("A2aAgentConfig")
             .field("agent_id", &self.agent_id)
             .field("agent_card_params", &self.agent_card_params)
+            .field("headers", &"<redacted>")
+            .field("query_params", &"<redacted>")
+            .field("timeout_seconds", &self.timeout_seconds)
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct McpServerConfig {
+    pub server_id: String,
+    #[serde(default, alias = "http_url")]
+    pub url: String,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub query_params: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
+}
+
+impl McpServerConfig {
+    pub fn resolve_env(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        self.url = expand_env_placeholders(&self.url, env)?;
+        for value in self.headers.values_mut() {
+            *value = expand_env_placeholders(value, env)?;
+        }
+        for value in self.query_params.values_mut() {
+            *value = expand_env_placeholders(value, env)?;
+        }
+        Ok(())
+    }
+
+    pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        resolve_secret_in_string(&mut self.url, env, "mcp_servers[].url").await?;
+        for value in self.headers.values_mut() {
+            resolve_secret_in_string(value, env, "mcp_servers[].headers").await?;
+        }
+        for value in self.query_params.values_mut() {
+            resolve_secret_in_string(value, env, "mcp_servers[].query_params").await?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for McpServerConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServerConfig")
+            .field("server_id", &self.server_id)
+            .field("url", &self.url)
             .field("headers", &"<redacted>")
             .field("query_params", &"<redacted>")
             .field("timeout_seconds", &self.timeout_seconds)
@@ -603,6 +660,8 @@ mod tests {
                 default_backends: Vec::new(),
                 rules: Vec::new(),
             },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
         };
 
         config.resolve_secrets(&env).await.expect("resolve secrets");

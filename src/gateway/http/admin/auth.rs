@@ -239,6 +239,8 @@ mod admin_auth_tests {
                 default_backends: Vec::new(),
                 rules: Vec::new(),
             },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
         };
         GatewayHttpState::new(crate::gateway::Gateway::new(config))
     }

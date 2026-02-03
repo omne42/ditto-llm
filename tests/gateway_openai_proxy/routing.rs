@@ -40,6 +40,8 @@ async fn openai_compat_proxy_routes_by_model_prefix() {
                 guardrails: None,
             }],
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -116,6 +118,8 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
             ],
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -209,6 +213,8 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
             ],
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -326,6 +332,8 @@ async fn openai_compat_proxy_health_check_skips_unhealthy_backends() {
             ],
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -393,6 +401,8 @@ async fn openai_compat_proxy_rejects_missing_virtual_key() {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -444,6 +454,8 @@ async fn openai_compat_proxy_rejects_denied_model() {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -511,6 +523,8 @@ async fn openai_compat_proxy_rejects_banned_regex() {
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -581,6 +595,8 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -649,6 +665,8 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_images_generation
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -713,6 +731,8 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_speech_requ
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
