@@ -728,6 +728,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_backends.insert(name.to_string(), client);
     }
 
+    let mut a2a_agents = std::collections::HashMap::new();
+    for agent in &config.a2a_agents {
+        let agent_id = agent.agent_id.trim();
+        if agent_id.is_empty() {
+            return Err("a2a agent_id is empty".into());
+        }
+
+        let url = agent
+            .agent_card_params
+            .get("url")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if url.is_empty() {
+            return Err(format!("a2a agent {agent_id} missing agent_card_params.url").into());
+        }
+
+        let mut client = ditto_llm::gateway::ProxyBackend::new(&url)?;
+        client = client.with_headers(agent.headers.clone())?;
+        client = client.with_query_params(agent.query_params.clone());
+        client = client.with_request_timeout_seconds(agent.timeout_seconds);
+
+        let agent_state = ditto_llm::gateway::http::A2aAgentState::new(
+            agent_id.to_string(),
+            agent.agent_card_params.clone(),
+            client,
+        );
+        if a2a_agents
+            .insert(agent_id.to_string(), agent_state)
+            .is_some()
+        {
+            return Err(format!("duplicate a2a agent_id: {agent_id}").into());
+        }
+    }
+
     let mut gateway = ditto_llm::gateway::Gateway::new(config);
 
     for spec in backend_specs {
@@ -738,8 +774,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         gateway.register_backend(name.to_string(), backend);
     }
 
-    let mut state =
-        ditto_llm::gateway::GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let mut state = ditto_llm::gateway::GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_a2a_agents(a2a_agents);
     #[cfg(feature = "gateway-translation")]
     {
         state = state.with_translation_backends(translation_backends);

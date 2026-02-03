@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::secrets::resolve_secret_string;
 use crate::{Env, ProviderConfig};
@@ -15,6 +16,8 @@ pub struct GatewayConfig {
     pub backends: Vec<BackendConfig>,
     pub virtual_keys: Vec<VirtualKeyConfig>,
     pub router: RouterConfig,
+    #[serde(default)]
+    pub a2a_agents: Vec<A2aAgentConfig>,
 }
 
 impl GatewayConfig {
@@ -24,6 +27,9 @@ impl GatewayConfig {
         }
         for key in &mut self.virtual_keys {
             key.resolve_env(env)?;
+        }
+        for agent in &mut self.a2a_agents {
+            agent.resolve_env(env)?;
         }
         Ok(())
     }
@@ -35,7 +41,67 @@ impl GatewayConfig {
         for key in &mut self.virtual_keys {
             key.resolve_secrets(env).await?;
         }
+        for agent in &mut self.a2a_agents {
+            agent.resolve_secrets(env).await?;
+        }
         Ok(())
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct A2aAgentConfig {
+    pub agent_id: String,
+    #[serde(default)]
+    pub agent_card_params: Value,
+    #[serde(default)]
+    pub headers: BTreeMap<String, String>,
+    #[serde(default)]
+    pub query_params: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
+}
+
+impl A2aAgentConfig {
+    pub fn resolve_env(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        if let Value::Object(obj) = &mut self.agent_card_params {
+            if let Some(Value::String(url)) = obj.get_mut("url") {
+                *url = expand_env_placeholders(url, env)?;
+            }
+        }
+        for value in self.headers.values_mut() {
+            *value = expand_env_placeholders(value, env)?;
+        }
+        for value in self.query_params.values_mut() {
+            *value = expand_env_placeholders(value, env)?;
+        }
+        Ok(())
+    }
+
+    pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
+        if let Value::Object(obj) = &mut self.agent_card_params {
+            if let Some(Value::String(url)) = obj.get_mut("url") {
+                resolve_secret_in_string(url, env, "a2a_agents[].agent_card_params.url").await?;
+            }
+        }
+        for value in self.headers.values_mut() {
+            resolve_secret_in_string(value, env, "a2a_agents[].headers").await?;
+        }
+        for value in self.query_params.values_mut() {
+            resolve_secret_in_string(value, env, "a2a_agents[].query_params").await?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for A2aAgentConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("A2aAgentConfig")
+            .field("agent_id", &self.agent_id)
+            .field("agent_card_params", &self.agent_card_params)
+            .field("headers", &"<redacted>")
+            .field("query_params", &"<redacted>")
+            .field("timeout_seconds", &self.timeout_seconds)
+            .finish()
     }
 }
 

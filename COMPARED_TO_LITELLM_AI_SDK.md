@@ -65,7 +65,7 @@
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
 - 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ 审计导出到对象存储（S3/GCS）+ manifest（sha256/chain hash；可配 S3 Object Lock 参数）；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule）。仍缺：IP-based/令牌桶限流、配置版本化/灰度/回滚等更完整平台能力。
 - 平台化生态：✅ Secret Manager 集成（`secret://...`）+ ✅ 最小 Admin UI；仍缺：更多 guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
-- 平台扩展项：LiteLLM 侧还有 A2A agent gateway、MCP gateway 等方向；Ditto 当前偏 SDK 工具/协议适配，后续可以按真实企业需求扩到网关侧
+- 平台扩展项：✅ A2A agent gateway（LiteLLM-like `/a2a/*` JSON-RPC 代理）已支持；仍缺 MCP gateway（LiteLLM 的 `/mcp` + `tools: [{type:\"mcp\"...}]` 生态），Ditto 当前偏 SDK 工具/协议适配，后续可以按真实企业需求扩到网关侧
 
 ---
 

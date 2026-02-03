@@ -62,6 +62,26 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 - `x-ditto-translation: <provider>`
 
+## A2A Agents（LiteLLM-like，beta）
+
+Ditto Gateway 支持 LiteLLM 风格的 A2A 协议端点（JSON-RPC 2.0），用于“通过网关调用已注册的 agent 服务”：
+
+- `GET /a2a/:agent_id/.well-known/agent-card.json`
+- `POST /a2a/:agent_id`
+- `POST /a2a/:agent_id/message/send`
+- `POST /a2a/:agent_id/message/stream`
+- `POST /v1/a2a/:agent_id/message/send`
+- `POST /v1/a2a/:agent_id/message/stream`
+
+语义：
+
+- 请求体是 JSON-RPC 2.0（`jsonrpc: "2.0"`），`method` 支持：
+  - `message/send`（非流式）
+  - `message/stream`（流式；NDJSON，一行一个 JSON）
+- Ditto 会把请求代理到该 agent 的真实 `url`（来自配置 `a2a_agents[].agent_card_params.url`），并原样转发响应。
+- `agent-card.json` 会将 `url` 重写为 Ditto 的 `/a2a/:agent_id`（让 A2A SDK 后续请求继续走 Ditto）。
+- 当 `virtual_keys` 非空时，A2A 端点同样需要 virtual key（与 `/v1/*` 一致）。
+
 ## Control-plane demo endpoint
 
 - `POST /v1/gateway`

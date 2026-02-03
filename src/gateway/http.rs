@@ -8,3 +8,4 @@ include!("http/admin.rs");
 include!("http/translation_backend.rs");
 include!("http/proxy_backend.rs");
 include!("http/litellm_keys.rs");
+include!("http/a2a.rs");

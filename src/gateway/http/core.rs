@@ -88,6 +88,7 @@ struct AdminTenantToken {
 pub struct GatewayHttpState {
     gateway: Arc<Mutex<Gateway>>,
     proxy_backends: Arc<HashMap<String, ProxyBackend>>,
+    a2a_agents: Arc<HashMap<String, A2aAgentState>>,
     #[cfg(feature = "gateway-translation")]
     translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
     admin_token: Option<String>,
@@ -137,6 +138,7 @@ impl GatewayHttpState {
         Self {
             gateway: Arc::new(Mutex::new(gateway)),
             proxy_backends: Arc::new(HashMap::new()),
+            a2a_agents: Arc::new(HashMap::new()),
             #[cfg(feature = "gateway-translation")]
             translation_backends: Arc::new(HashMap::new()),
             admin_token: None,
@@ -223,6 +225,11 @@ impl GatewayHttpState {
 
     pub fn with_proxy_backends(mut self, backends: HashMap<String, ProxyBackend>) -> Self {
         self.proxy_backends = Arc::new(backends);
+        self
+    }
+
+    pub fn with_a2a_agents(mut self, agents: HashMap<String, A2aAgentState>) -> Self {
+        self.a2a_agents = Arc::new(agents);
         self
     }
 
@@ -344,6 +351,15 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .route("/v1/gateway", post(handle_gateway))
+        .route(
+            "/a2a/:agent_id/.well-known/agent-card.json",
+            get(handle_a2a_agent_card),
+        )
+        .route("/a2a/:agent_id", post(handle_a2a_invoke))
+        .route("/a2a/:agent_id/message/send", post(handle_a2a_invoke))
+        .route("/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
+        .route("/v1/a2a/:agent_id/message/send", post(handle_a2a_invoke))
+        .route("/v1/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
         .route("/chat/completions", any(handle_openai_compat_proxy_root))
         .route("/completions", any(handle_openai_compat_proxy_root))
         .route("/embeddings", any(handle_openai_compat_proxy_root))

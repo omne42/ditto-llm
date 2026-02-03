@@ -77,7 +77,8 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 
 ### 2.6 “平台扩展项”（P2）
 
-- A2A agent gateway / MCP gateway（LiteLLM 已提供相关方向）。Ditto 当前更偏 SDK 工具适配（MCP schema）与本地 tool loop；要成为“企业超集”，后续可以把这些能力扩展到网关侧（但建议按真实客户需求推进）。
+- ✅ A2A agent gateway（LiteLLM-like）：已支持 `/a2a/*` 的 JSON-RPC 代理端点（beta；需要配置 `a2a_agents`）。
+- 仍缺：MCP gateway（LiteLLM 已提供相关方向）。Ditto 当前更偏 SDK 工具适配（MCP schema）与本地 tool loop；要成为“企业超集”，后续可以把这些能力扩展到网关侧（但建议按真实客户需求推进）。
 - Provider 覆盖面：LiteLLM 的优势是“海量 providers”；Ditto 需要平衡“可维护的 native adapters”与“更强的 OpenAI-compatible 兼容层”。
 - Guardrails/告警/日志目的地生态：LiteLLM 提供大量集成；Ditto 需要优先补齐“通用扩展点 + 官方 adapter（Langfuse/Datadog/S3 等）”。
 - ✅ Secret 管理：已支持 `secret://...` 解析（env/file/Vault/AWS SM/GCP SM/Azure KV），并已接入 gateway/SDK 配置与 CLI flags。

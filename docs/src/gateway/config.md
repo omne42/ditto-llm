@@ -8,7 +8,8 @@ Ditto 支持用 **JSON** 表达配置；如果你希望用 YAML，也可以启�
 {
   "backends": [ ... ],
   "virtual_keys": [ ... ],
-  "router": { ... }
+  "router": { ... },
+  "a2a_agents": [ ... ]
 }
 ```
 
@@ -142,6 +143,38 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `backends[].base_url` / `headers` / `query_params`
 - `backends[].provider_config.*`（base_url/default_model/http_headers/http_query_params/model_whitelist）
 - `virtual_keys[].token`
+
+## a2a_agents：A2A agent registry（LiteLLM-like，beta）
+
+如果你希望“通过 Ditto Gateway 调用 A2A agents”（对齐 LiteLLM 的 `/a2a/*` 端点），可以在配置里注册 agents：
+
+```json
+{
+  "a2a_agents": [
+    {
+      "agent_id": "hello-world",
+      "agent_card_params": {
+        "name": "Hello World Agent",
+        "url": "http://127.0.0.1:9999/"
+      }
+    }
+  ]
+}
+```
+
+说明：
+
+- `agent_id`：Ditto 的路由 id（对应 `/a2a/:agent_id`）。
+- `agent_card_params`：Ditto 会在 `GET /a2a/:agent_id/.well-known/agent-card.json` 返回它，并把其中的 `url` 字段重写为 Ditto 自己的 `/a2a/:agent_id`（让 A2A SDK 后续请求继续走 Ditto）。
+- `agent_card_params.url`：同时也是 Ditto 代理请求时实际要打到的 **agent 后端 URL**（Ditto 会将 JSON-RPC 请求转发到该 URL；如果后端只实现了 `/message/send` 或 `/message/stream`，Ditto 会自动 fallback 一次）。
+- `headers` / `query_params` / `timeout_seconds`：可选，用于给 agent 后端注入鉴权与超时（与 `backends[]` 同语义）。
+
+同样支持 env/secret 占位符：
+
+- `${ENV_KEY}`
+- `os.environ/ENV_KEY`
+- `secret://...`
+
 
 若 env 缺失或为空，启动会失败（避免 silent misconfig）。
 
