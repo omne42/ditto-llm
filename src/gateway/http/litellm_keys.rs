@@ -62,7 +62,8 @@ struct LitellmKeyDeleteResponse {
 
 #[derive(Debug, Deserialize)]
 struct LitellmKeyInfoQuery {
-    key: String,
+    #[serde(default)]
+    key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,9 +127,12 @@ fn litellm_key_full_value(key: &VirtualKeyConfig) -> serde_json::Value {
 fn litellm_key_router() -> Router<GatewayHttpState> {
     Router::new()
         .route("/key/generate", post(litellm_key_generate))
+        .route("/key/update", post(litellm_key_update))
         .route("/key/delete", post(litellm_key_delete))
         .route("/key/info", get(litellm_key_info))
         .route("/key/list", get(litellm_key_list))
+        .route("/key/regenerate", post(litellm_key_regenerate))
+        .route("/key/:key/regenerate", post(litellm_key_regenerate_path))
 }
 
 async fn litellm_key_generate(
@@ -263,6 +267,206 @@ async fn litellm_key_generate(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+struct LitellmKeyUpdateRequest {
+    key: String,
+    #[serde(default)]
+    key_alias: Option<String>,
+    #[serde(default)]
+    user_id: Option<String>,
+    #[serde(default)]
+    team_id: Option<String>,
+    #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
+    models: Option<Vec<String>>,
+    #[serde(default)]
+    max_budget: Option<f64>,
+    #[serde(default)]
+    rpm_limit: Option<u32>,
+    #[serde(default)]
+    tpm_limit: Option<u32>,
+    #[serde(default)]
+    blocked: Option<bool>,
+}
+
+fn litellm_generate_response_from_virtual_key(key: &VirtualKeyConfig) -> LitellmKeyGenerateResponse {
+    LitellmKeyGenerateResponse {
+        key: key.token.clone(),
+        token: Some(key.token.clone()),
+        key_alias: Some(key.id.clone()),
+        key_name: Some(key.id.clone()),
+        user_id: key.user_id.clone(),
+        team_id: key.tenant_id.clone(),
+        organization_id: key.tenant_id.clone(),
+        max_budget: key
+            .budget
+            .total_usd_micros
+            .map(|v| (v as f64) / 1_000_000.0),
+        rpm_limit: key.limits.rpm,
+        tpm_limit: key.limits.tpm,
+        models: key.guardrails.allow_models.clone(),
+    }
+}
+
+async fn litellm_key_update(
+    State(state): State<GatewayHttpState>,
+    headers: HeaderMap,
+    Json(payload): Json<LitellmKeyUpdateRequest>,
+) -> Result<Json<LitellmKeyGenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let admin = ensure_admin_write(&state, &headers)?;
+
+    let key_token = payload.key.trim();
+    if key_token.is_empty() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "key is required",
+        ));
+    }
+
+    let new_alias = payload
+        .key_alias
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string());
+
+    let tenant_id = payload
+        .organization_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(|v| v.to_string())
+        .or_else(|| {
+            payload
+                .team_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(|v| v.to_string())
+        });
+
+    let (key, persisted_keys) = {
+        let mut gateway = state.gateway.lock().await;
+        let keys = gateway.list_virtual_keys();
+
+        let Some(existing) = keys.iter().find(|key| key.token == key_token).cloned() else {
+            return Err(error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "virtual key not found",
+            ));
+        };
+
+        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+            if existing.tenant_id.as_deref() != Some(admin_tenant) {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot update keys for a different tenant",
+                ));
+            }
+        }
+
+        let mut key = existing.clone();
+
+        if let Some(user_id) = payload.user_id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+            key.user_id = Some(user_id.to_string());
+        }
+
+        if let Some(tenant_id) = tenant_id.as_deref() {
+            if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+                if tenant_id != admin_tenant {
+                    return Err(error_response(
+                        StatusCode::FORBIDDEN,
+                        "forbidden",
+                        "cannot update keys for a different tenant",
+                    ));
+                }
+            }
+            key.tenant_id = Some(tenant_id.to_string());
+        }
+
+        if let Some(models) = payload.models.as_ref() {
+            key.guardrails.allow_models = models.clone();
+        }
+
+        if let Some(max_budget) = payload.max_budget {
+            if !max_budget.is_finite() || max_budget < 0.0 {
+                return Err(error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "max_budget must be a non-negative finite number",
+                ));
+            }
+            let micros = (max_budget * 1_000_000.0).round();
+            if micros <= 0.0 {
+                key.budget.total_usd_micros = None;
+            } else {
+                key.budget.total_usd_micros = Some(micros as u64);
+            }
+        }
+
+        if let Some(rpm) = payload.rpm_limit {
+            key.limits.rpm = Some(rpm);
+        }
+        if let Some(tpm) = payload.tpm_limit {
+            key.limits.tpm = Some(tpm);
+        }
+
+        if let Some(blocked) = payload.blocked {
+            key.enabled = !blocked;
+        }
+
+        let old_id = existing.id.clone();
+        if let Some(new_id) = new_alias.as_deref() {
+            if new_id != old_id {
+                if keys.iter().any(|candidate| candidate.id == new_id) {
+                    return Err(error_response(
+                        StatusCode::CONFLICT,
+                        "conflict",
+                        "key_alias already exists",
+                    ));
+                }
+                gateway.remove_virtual_key(&old_id);
+                key.id = new_id.to_string();
+            }
+        }
+
+        gateway.upsert_virtual_key(key.clone());
+        let persisted_keys = gateway.list_virtual_keys();
+        (key, persisted_keys)
+    };
+
+    persist_virtual_keys(&state, &persisted_keys).await?;
+
+    #[cfg(feature = "sdk")]
+    if let Some(logger) = state.devtools.as_ref() {
+        let _ = logger.log_event(
+            "litellm.key.update",
+            serde_json::json!({
+                "key_id": &key.id,
+                "tenant_id": key.tenant_id.as_deref(),
+            }),
+        );
+    }
+
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    append_admin_audit_log(
+        &state,
+        "litellm.key.update",
+        serde_json::json!({
+            "key_id": &key.id,
+            "tenant_id": key.tenant_id.as_deref(),
+            "user_id": key.user_id.as_deref(),
+        }),
+    )
+    .await;
+
+    Ok(Json(litellm_generate_response_from_virtual_key(&key)))
+}
+
 async fn litellm_key_delete(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -394,16 +598,31 @@ async fn litellm_key_info(
     headers: HeaderMap,
     Query(query): Query<LitellmKeyInfoQuery>,
 ) -> Result<Json<LitellmKeyInfoResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let admin = ensure_admin_read(&state, &headers)?;
+    let requested_token = query
+        .key
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty());
 
-    let token = query.key.trim();
-    if token.is_empty() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            "key is required",
-        ));
-    }
+    let bearer_token = extract_bearer(&headers);
+
+    let (admin, token) = if let Some(token) = requested_token {
+        if bearer_token.as_deref() == Some(token) {
+            (None, token.to_string())
+        } else {
+            let admin = ensure_admin_read(&state, &headers)?;
+            (Some(admin), token.to_string())
+        }
+    } else {
+        let token = bearer_token.ok_or_else(|| {
+            error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "key is required",
+            )
+        })?;
+        (None, token)
+    };
 
     let gateway = state.gateway.lock().await;
     let key = gateway
@@ -418,18 +637,20 @@ async fn litellm_key_info(
             )
         })?;
 
-    if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-        if key.tenant_id.as_deref() != Some(admin_tenant) {
-            return Err(error_response(
-                StatusCode::FORBIDDEN,
-                "forbidden",
-                "cannot access keys for a different tenant",
-            ));
+    if let Some(admin) = admin {
+        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+            if key.tenant_id.as_deref() != Some(admin_tenant) {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot access keys for a different tenant",
+                ));
+            }
         }
     }
 
     Ok(Json(LitellmKeyInfoResponse {
-        key: token.to_string(),
+        key: token,
         info: litellm_key_info_value(&key),
     }))
 }
@@ -522,6 +743,8 @@ async fn litellm_key_list(
         total_pages,
     }))
 }
+
+include!("litellm_keys/regenerate.rs");
 
 fn generate_key_id() -> String {
     let ts_ms = SystemTime::now()

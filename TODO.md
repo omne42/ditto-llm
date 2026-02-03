@@ -51,6 +51,7 @@
 - [x] Routing (basic)：weighted backends（`default_backends` / `rules[].backends`）+ proxy network-error fallback
 - [x] HTTP server：`/health`、`/metrics`、`/admin/keys`、`POST /v1/gateway`
 - [x] OpenAI-compatible passthrough proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header/query-param injection
+- [x] LiteLLM 兼容：`/key/*` key management endpoints + 常用 OpenAI 路由无 `/v1` 前缀别名（例如 `/chat/completions`）
 - [x] OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”输出（含 streaming + tool_calls）
 - [x] State file persistence：`--state <path>` 持久化 admin virtual-key mutations（`GatewayStateFile`）
 - [x] Optional sqlite persistence：`--sqlite <path>`（feature `gateway-store-sqlite`）

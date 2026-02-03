@@ -24,6 +24,7 @@ Optional feature-gated modules:
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
 - Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
 - SDK utilities: stream protocol v1, HTTP adapters (SSE/NDJSON), telemetry sink, devtools JSONL logger, MCP tool adapter, cache middleware with streaming replay (feature `sdk`).
+- SDK HTTP helpers: optional `axum` response builders for stream adapters (feature `sdk-axum`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`).
 - Gateway token counting: tiktoken-based input token estimation for proxy budgets/guardrails/costing (feature `gateway-tokenizer`).
 - Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`, and `/v1/models` backed by Ditto providers (feature `gateway-translation`).
@@ -168,6 +169,7 @@ Routing (optional):
 Endpoints:
 
 - OpenAI-compatible proxy (passthrough): `ANY /v1/*` (e.g. `POST /v1/responses`, `POST /v1/chat/completions`, `GET /v1/models`).
+  - LiteLLM-style aliases without a `/v1` prefix are accepted (e.g. `/chat/completions`, `/embeddings`, `/moderations`, `/files/*`, `/batches/*`, `/models/*`, `/responses/*`).
   - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key` / `x-api-key`).
   - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
@@ -177,6 +179,8 @@ Endpoints:
 - `GET /metrics`
 - `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
+- LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
+  - `/key/info` accepts `?key=...` (admin query) or defaults to the `Authorization: Bearer <virtual_key>` token when `?key` is omitted (self lookup).
 - `POST /admin/proxy_cache/purge` (requires the write admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
 - `GET /admin/backends` and `POST /admin/backends/:name/reset` (reset requires the write admin token and `--features gateway-routing-advanced`).
 

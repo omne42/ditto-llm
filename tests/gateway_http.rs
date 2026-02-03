@@ -343,8 +343,99 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm
         .expect("info");
     assert!(!info_value.contains_key("token"));
 
+    let self_info = Request::builder()
+        .method("GET")
+        .uri("/key/info")
+        .header("authorization", format!("Bearer {key}"))
+        .body(Body::empty())
+        .unwrap();
+    let self_info_response = app.clone().oneshot(self_info).await.unwrap();
+    assert_eq!(self_info_response.status(), StatusCode::OK);
+
+    let update_payload = json!({
+        "key": key.clone(),
+        "key_alias": "alias-updated",
+        "models": ["gpt-4o-mini", "gpt-4o"],
+        "rpm_limit": 50
+    });
+    let update = Request::builder()
+        .method("POST")
+        .uri("/key/update")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(update_payload.to_string()))
+        .unwrap();
+    let update_response = app.clone().oneshot(update).await.unwrap();
+    assert_eq!(update_response.status(), StatusCode::OK);
+    let update_body = to_bytes(update_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let update_json: serde_json::Value = serde_json::from_slice(&update_body)?;
+    assert_eq!(
+        update_json.get("key").and_then(|value| value.as_str()),
+        Some(key.as_str())
+    );
+    assert_eq!(
+        update_json
+            .get("key_alias")
+            .and_then(|value| value.as_str()),
+        Some("alias-updated")
+    );
+
+    let regenerate_payload = json!({
+        "key": key.clone()
+    });
+    let regenerate = Request::builder()
+        .method("POST")
+        .uri("/key/regenerate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(regenerate_payload.to_string()))
+        .unwrap();
+    let regenerate_response = app.clone().oneshot(regenerate).await.unwrap();
+    assert_eq!(regenerate_response.status(), StatusCode::OK);
+    let regenerate_body = to_bytes(regenerate_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let regenerate_json: serde_json::Value = serde_json::from_slice(&regenerate_body)?;
+    let regenerated_key = regenerate_json
+        .get("key")
+        .and_then(|value| value.as_str())
+        .expect("regenerated key")
+        .to_string();
+    assert_ne!(regenerated_key, key);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/gateway")
+        .header("authorization", format!("Bearer {key}"))
+        .header("content-type", "application/json")
+        .body(Body::from(gateway_payload.to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/gateway")
+        .header("authorization", format!("Bearer {regenerated_key}"))
+        .header("content-type", "application/json")
+        .body(Body::from(gateway_payload.to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let self_info = Request::builder()
+        .method("GET")
+        .uri("/key/info")
+        .header("authorization", format!("Bearer {regenerated_key}"))
+        .body(Body::empty())
+        .unwrap();
+    let self_info_response = app.clone().oneshot(self_info).await.unwrap();
+    assert_eq!(self_info_response.status(), StatusCode::OK);
+
     let delete_payload = json!({
-        "keys": [key.clone()],
+        "keys": [regenerated_key.clone()],
     });
     let delete = Request::builder()
         .method("POST")
@@ -365,12 +456,12 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm
         .and_then(|value| value.as_array())
         .expect("deleted_keys");
     assert_eq!(deleted_keys.len(), 1);
-    assert_eq!(deleted_keys[0].as_str(), Some(key.as_str()));
+    assert_eq!(deleted_keys[0].as_str(), Some(regenerated_key.as_str()));
 
     let request = Request::builder()
         .method("POST")
         .uri("/v1/gateway")
-        .header("authorization", format!("Bearer {key}"))
+        .header("authorization", format!("Bearer {regenerated_key}"))
         .header("content-type", "application/json")
         .body(Body::from(gateway_payload.to_string()))
         .unwrap();

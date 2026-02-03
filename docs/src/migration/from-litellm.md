@@ -105,6 +105,11 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 
 - 这只用于“预算/估算”，不是“完整 billing 系统”
 
+### 3.5 HTTP surface（兼容性补充）
+
+- Ditto 的 passthrough proxy 主入口是 `ANY /v1/*`，但也接受 LiteLLM 常用的无 `/v1` 前缀别名（例如 `/chat/completions`、`/models/*`、`/files/*`、`/responses/*`）。
+- Ditto 提供 LiteLLM 风格的 `/key/*` endpoints（`/key/generate|update|regenerate|delete|info|list`），用于迁移过程中减少改动；它们由 Ditto admin auth 控制（未配置 admin token 时不可用）。
+
 ---
 
 ## 4) 推荐的“最小可用替换”清单

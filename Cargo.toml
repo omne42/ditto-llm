@@ -11,6 +11,7 @@ default = ["openai", "anthropic", "openai-compatible", "streaming", "tools", "em
 agent = ["dep:regex", "dep:safe-fs-tools"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
+sdk-axum = ["sdk", "dep:axum"]
 gateway = ["dep:axum", "dep:getrandom", "dep:regex", "dep:sha2"]
 gateway-config-yaml = ["gateway", "dep:serde_yaml"]
 gateway-devtools = ["gateway", "sdk"]

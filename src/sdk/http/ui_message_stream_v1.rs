@@ -430,3 +430,29 @@ pub fn ui_message_stream_v1_sse_with_options(
     )
     .boxed()
 }
+
+/// Build an `axum` streaming response for UI Message Stream v1 (SSE + headers).
+///
+/// Enabled when either:
+/// - `ditto-llm` is built with `--features gateway` (brings in `axum`), or
+/// - `ditto-llm` is built with `--features sdk-axum` (SDK-only axum helper).
+#[cfg(any(feature = "gateway", feature = "sdk-axum"))]
+pub fn ui_message_stream_v1_sse_response(stream: StreamResult) -> axum::response::Response {
+    ui_message_stream_v1_sse_response_with_options(stream, UiMessageStreamV1Options::default())
+}
+
+#[cfg(any(feature = "gateway", feature = "sdk-axum"))]
+pub fn ui_message_stream_v1_sse_response_with_options(
+    stream: StreamResult,
+    options: UiMessageStreamV1Options,
+) -> axum::response::Response {
+    let stream = ui_message_stream_v1_sse_with_options(stream, options);
+    let mut response = axum::response::Response::new(axum::body::Body::from_stream(stream));
+    for (name, value) in UI_MESSAGE_STREAM_V1_HEADERS {
+        response.headers_mut().insert(
+            axum::http::HeaderName::from_static(name),
+            axum::http::HeaderValue::from_static(value),
+        );
+    }
+    response
+}

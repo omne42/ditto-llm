@@ -43,6 +43,7 @@
 ### 已对齐（MVP）
 
 - OpenAI-compatible proxy：`ANY /v1/*`（含 SSE streaming）+ per-backend header/query-param injection
+- LiteLLM-style conveniences：`/key/*` key management endpoints（可选启用）+ 常用 OpenAI 路由无 `/v1` 前缀别名（例如 `/chat/completions`）
 - virtual keys（可选启用）+ rpm/tpm limits + token/USD budget + guardrails
 - OpenAI `/v1/responses` shim：当 upstream 不支持 `/v1/responses` 时，自动 fallback 到 `/v1/chat/completions` 并返回“Responses-like”（含 streaming + tool_calls）
 - Translation proxy：OpenAI in/out 的 `GET /v1/models` + `GET /v1/models/*` + `POST /v1/chat/completions` + `POST /v1/completions` + `POST /v1/responses` + `POST /v1/responses/compact` + `POST /v1/embeddings` + `POST /v1/moderations` + `POST /v1/images/generations` + `POST /v1/audio/transcriptions` + `POST /v1/audio/translations` + `POST /v1/audio/speech` + `/v1/files*` + `POST /v1/rerank` + `/v1/batches`（backend 配置 `provider`；feature `gateway-translation`）
