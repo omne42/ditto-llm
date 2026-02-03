@@ -196,6 +196,178 @@ async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_l
 }
 
 #[tokio::test]
+async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token() -> ditto_llm::Result<()>
+{
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/key/list")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
+    let app = ditto_llm::gateway::http::router(state);
+
+    let generate_payload = json!({
+        "models": ["gpt-4o-mini"],
+        "team_id": "t1",
+        "user_id": "u1",
+        "rpm_limit": 10,
+        "tpm_limit": 100,
+        "max_budget": 0.01
+    });
+    let generate = Request::builder()
+        .method("POST")
+        .uri("/key/generate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(generate_payload.to_string()))
+        .unwrap();
+    let generate_response = app.clone().oneshot(generate).await.unwrap();
+    assert_eq!(generate_response.status(), StatusCode::OK);
+    let generate_body = to_bytes(generate_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let generate_json: serde_json::Value = serde_json::from_slice(&generate_body)?;
+    let key = generate_json
+        .get("key")
+        .and_then(|value| value.as_str())
+        .expect("key")
+        .to_string();
+    let key_alias = generate_json
+        .get("key_alias")
+        .and_then(|value| value.as_str())
+        .expect("key_alias")
+        .to_string();
+
+    let list = Request::builder()
+        .method("GET")
+        .uri("/key/list")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = to_bytes(list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_json: serde_json::Value = serde_json::from_slice(&list_body)?;
+    let keys = list_json
+        .get("keys")
+        .and_then(|value| value.as_array())
+        .expect("keys");
+    assert!(keys.iter().all(|value| value.is_string()));
+    assert!(
+        keys.iter()
+            .filter_map(|value| value.as_str())
+            .any(|value| value == key)
+    );
+
+    let list_full = Request::builder()
+        .method("GET")
+        .uri("/key/list?return_full_object=true")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_full_response = app.clone().oneshot(list_full).await.unwrap();
+    assert_eq!(list_full_response.status(), StatusCode::OK);
+    let list_full_body = to_bytes(list_full_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_full_json: serde_json::Value = serde_json::from_slice(&list_full_body)?;
+    let keys_full = list_full_json
+        .get("keys")
+        .and_then(|value| value.as_array())
+        .expect("keys");
+    assert!(keys_full.iter().any(|value| {
+        value
+            .get("token")
+            .and_then(|token| token.as_str())
+            .is_some_and(|token| token == key)
+            && value
+                .get("key_alias")
+                .and_then(|alias| alias.as_str())
+                .is_some_and(|alias| alias == key_alias)
+    }));
+
+    let gateway_payload = json!({
+        "model": "gpt-4o-mini",
+        "prompt": "hi",
+        "input_tokens": 1,
+        "max_output_tokens": 2
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/gateway")
+        .header("authorization", format!("Bearer {key}"))
+        .header("content-type", "application/json")
+        .body(Body::from(gateway_payload.to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let info = Request::builder()
+        .method("GET")
+        .uri(format!("/key/info?key={key}"))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let info_response = app.clone().oneshot(info).await.unwrap();
+    assert_eq!(info_response.status(), StatusCode::OK);
+
+    let delete_payload = json!({
+        "keys": [key.clone()],
+    });
+    let delete = Request::builder()
+        .method("POST")
+        .uri("/key/delete")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(delete_payload.to_string()))
+        .unwrap();
+    let delete_response = app.clone().oneshot(delete).await.unwrap();
+    assert_eq!(delete_response.status(), StatusCode::OK);
+
+    let deleted_body = to_bytes(delete_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let deleted_json: serde_json::Value = serde_json::from_slice(&deleted_body)?;
+    let deleted_keys = deleted_json
+        .get("deleted_keys")
+        .and_then(|value| value.as_array())
+        .expect("deleted_keys");
+    assert_eq!(deleted_keys.len(), 1);
+    assert_eq!(deleted_keys[0].as_str(), Some(key.as_str()));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/gateway")
+        .header("authorization", format!("Bearer {key}"))
+        .header("content-type", "application/json")
+        .body(Body::from(gateway_payload.to_string()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_http_tenant_scoped_admin_tokens_are_isolated() -> ditto_llm::Result<()> {
     let mut config = base_config();
     config.virtual_keys = vec![

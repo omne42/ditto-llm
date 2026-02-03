@@ -96,3 +96,4 @@ Ditto 提供一个最小适配器（feature `sdk`）：
 HTTP 响应侧需要额外设置：
 
 - `x-vercel-ai-ui-message-stream: v1`
+- 推荐同时设置其它常用 SSE headers（`content-type` / `cache-control` / `connection` / `x-accel-buffering`），Ditto 提供了一个常量便于复用：`ditto_llm::sdk::http::UI_MESSAGE_STREAM_V1_HEADERS`

@@ -408,6 +408,8 @@ pub fn router(state: GatewayHttpState) -> Router {
                 router = router.route("/admin/reservations/reap", post(reap_reservations));
             }
         }
+
+        router = router.merge(litellm_key_router());
     }
 
     #[cfg(feature = "gateway-routing-advanced")]

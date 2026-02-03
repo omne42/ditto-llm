@@ -11,7 +11,7 @@ default = ["openai", "anthropic", "openai-compatible", "streaming", "tools", "em
 agent = ["dep:regex", "dep:safe-fs-tools"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
-gateway = ["dep:axum", "dep:regex", "dep:sha2"]
+gateway = ["dep:axum", "dep:getrandom", "dep:regex", "dep:sha2"]
 gateway-config-yaml = ["gateway", "dep:serde_yaml"]
 gateway-devtools = ["gateway", "sdk"]
 gateway-translation = ["gateway"]
@@ -65,6 +65,7 @@ axum = { version = "0.7", optional = true, features = ["json"] }
 base64 = { version = "0.22", optional = true }
 bytes = "1"
 futures-util = "0.3"
+getrandom = { version = "0.4", optional = true }
 hmac = { version = "0.12", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 safe-fs-tools = { path = "../safe-fs-tools", optional = true }

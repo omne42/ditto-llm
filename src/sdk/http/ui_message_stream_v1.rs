@@ -6,6 +6,17 @@ use crate::types::{FinishReason, StreamChunk};
 
 type UiStreamItem = std::result::Result<bytes::Bytes, std::io::Error>;
 
+/// Recommended HTTP headers for Vercel AI SDK UI message stream (v1).
+///
+/// This mirrors `UI_MESSAGE_STREAM_HEADERS` in the upstream AI SDK.
+pub const UI_MESSAGE_STREAM_V1_HEADERS: [(&str, &str); 5] = [
+    ("content-type", "text/event-stream"),
+    ("cache-control", "no-cache"),
+    ("connection", "keep-alive"),
+    ("x-vercel-ai-ui-message-stream", "v1"),
+    ("x-accel-buffering", "no"),
+];
+
 static UI_MESSAGE_STREAM_SEQ: AtomicU64 = AtomicU64::new(0);
 
 fn now_ts_ms() -> u128 {

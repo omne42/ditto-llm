@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gateway: add LiteLLM-compatible key management endpoints (`/key/generate`, `/key/delete`, `/key/info`, `/key/list`) gated by Ditto admin auth.
 - Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
 - Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
 - Gateway: add `ditto-audit-export` CLI to fetch `/admin/audit/export`, write a local export + manifest, and optionally upload to S3/GCS (supports S3 Object Lock flags).
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security: add `secret://...` secret resolution (env/file/Vault/AWS SM/GCP SM/Azure KV) and wire it into SDK `ProviderAuth`, Gateway config values, and gateway CLI flags (admin tokens / redis url).
 - SDK: add `CacheLayer` middleware (implements `LanguageModelLayer`) with deterministic request hashing and streaming replay.
 - SDK: add Vercel AI SDK UI message stream SSE adapter (`ui_message_stream_v1_sse`).
+- SDK: add `UI_MESSAGE_STREAM_V1_HEADERS` constant for Vercel AI SDK UI message stream (v1) responses.
 - Deploy/Observability: add a Helm chart (`deploy/helm/ditto-gateway`), a Grafana dashboard template (`deploy/grafana/ditto-gateway.dashboard.json`), and a PrometheusRule template (`deploy/prometheus/ditto-gateway-prometheusrule.yaml`).
 - JS/TS: add a minimal stream protocol v1 client (`packages/ditto-client`) and React hook (`packages/ditto-react`).
 - Admin UI: add a minimal React admin console for `ditto-gateway` (`apps/admin-ui`) plus minimal multi-language gateway client examples (Node/Python/Go).
