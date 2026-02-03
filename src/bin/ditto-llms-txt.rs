@@ -6,7 +6,11 @@ const BEGIN_MARKER: &str = "----- BEGIN AUTO-GENERATED DOCS (ditto-llms-txt) ---
 const END_MARKER: &str = "----- END AUTO-GENERATED DOCS (ditto-llms-txt) -----";
 
 fn main() -> Result<(), String> {
-    let mut out_path = PathBuf::from("llms.txt");
+    let mut out_paths = vec![
+        PathBuf::from("llms.txt"),
+        PathBuf::from("docs/src/llms.txt"),
+    ];
+    let mut has_custom_out = false;
     let mut check = false;
 
     let mut args = std::env::args().skip(1);
@@ -16,15 +20,17 @@ fn main() -> Result<(), String> {
                 let value = args
                     .next()
                     .ok_or_else(|| "--out requires a value".to_string())?;
-                out_path = PathBuf::from(value);
+                let path = PathBuf::from(value);
+                if !has_custom_out {
+                    out_paths.clear();
+                    has_custom_out = true;
+                }
+                out_paths.push(path);
             }
             "--check" => check = true,
             other => return Err(format!("unknown argument: {other}")),
         }
     }
-
-    let existing = fs::read_to_string(&out_path).unwrap_or_default();
-    let prelude = split_prelude(&existing);
 
     let mut paths = Vec::<PathBuf>::new();
     for file in ["README.md", "PROVIDERS.md", "COMPARED_TO_LITELLM_AI_SDK.md"] {
@@ -38,24 +44,32 @@ fn main() -> Result<(), String> {
 
     let generated = format!("{BEGIN_MARKER}\n{}\n{END_MARKER}\n", render_files(&paths)?);
 
-    let next = format!("{prelude}{generated}");
+    let regen_hint = regen_hint(&out_paths);
 
-    if check {
-        if normalize_newlines(&existing) != normalize_newlines(&next) {
-            return Err(format!(
-                "{} is out of date (run `cargo run --bin ditto-llms-txt -- --out {}`)",
-                out_path.display(),
-                out_path.display()
-            ));
+    for out_path in out_paths {
+        let existing = fs::read_to_string(&out_path).unwrap_or_default();
+        let prelude = split_prelude(&existing);
+        let next = format!("{prelude}{generated}");
+
+        if check {
+            if normalize_newlines(&existing) != normalize_newlines(&next) {
+                return Err(format!(
+                    "{} is out of date (run `{regen_hint}`)",
+                    out_path.display()
+                ));
+            }
+            continue;
         }
-        return Ok(());
+
+        if normalize_newlines(&existing) == normalize_newlines(&next) {
+            continue;
+        }
+
+        fs::write(&out_path, next)
+            .map_err(|err| format!("write {} failed: {err}", out_path.display()))?;
     }
 
-    if normalize_newlines(&existing) == normalize_newlines(&next) {
-        return Ok(());
-    }
-
-    fs::write(&out_path, next).map_err(|err| format!("write {} failed: {err}", out_path.display()))
+    Ok(())
 }
 
 fn split_prelude(existing: &str) -> String {
@@ -166,4 +180,22 @@ fn normalize_relative_path(path: &Path) -> PathBuf {
 
 fn normalize_newlines(input: &str) -> String {
     input.replace("\r\n", "\n")
+}
+
+fn regen_hint(out_paths: &[PathBuf]) -> String {
+    if out_paths
+        == [
+            PathBuf::from("llms.txt"),
+            PathBuf::from("docs/src/llms.txt"),
+        ]
+    {
+        "cargo run --bin ditto-llms-txt".to_string()
+    } else {
+        let mut cmd = "cargo run --bin ditto-llms-txt --".to_string();
+        for path in out_paths {
+            cmd.push_str(" --out ");
+            cmd.push_str(&path.display().to_string());
+        }
+        cmd
+    }
 }

@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Docs: make repo-root `llms.txt` include an auto-generated docs bundle (based on `docs/src/SUMMARY.md`) and add a generator CLI (`ditto-llms-txt`) to refresh it.
+- Docs: mirror `llms.txt` into `docs/src/llms.txt` so `mdbook build docs` publishes it at `/llms.txt`, and update `ditto-llms-txt` to refresh both outputs by default.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
 - Gateway: when built with `--features gateway-config-yaml`, allow `ditto-gateway` to read LiteLLM `proxy_config.yaml` / `proxy_server_config.yaml` and import them into a Ditto gateway config (via `model_list` + `general_settings.master_key`).
