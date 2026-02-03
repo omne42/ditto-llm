@@ -24,6 +24,8 @@ fn default_weight() -> u32 {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RouteRule {
     pub model_prefix: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub exact: bool,
     #[serde(default)]
     pub backend: String,
     #[serde(default)]
@@ -32,9 +34,17 @@ pub struct RouteRule {
     pub guardrails: Option<GuardrailsConfig>,
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 impl RouteRule {
     pub fn matches(&self, model: &str) -> bool {
-        model.starts_with(&self.model_prefix)
+        if self.exact {
+            model == self.model_prefix
+        } else {
+            model.starts_with(&self.model_prefix)
+        }
     }
 }
 
@@ -58,7 +68,18 @@ impl Router {
                 return None;
             }
         }
-        self.config.rules.iter().find(|rule| rule.matches(model))
+        let exact = self
+            .config
+            .rules
+            .iter()
+            .find(|rule| rule.exact && rule.matches(model));
+        if exact.is_some() {
+            return exact;
+        }
+        self.config
+            .rules
+            .iter()
+            .find(|rule| !rule.exact && rule.matches(model))
     }
 
     pub fn select_backend(
@@ -106,7 +127,25 @@ impl Router {
             }
         }
 
-        for rule in &self.config.rules {
+        for rule in self.config.rules.iter().filter(|rule| rule.exact) {
+            if !rule.matches(model) {
+                continue;
+            }
+
+            let seed = seed.unwrap_or(model);
+            if !rule.backends.is_empty() {
+                let out = select_weighted(rule.backends.iter(), seed);
+                if !out.is_empty() {
+                    return Ok(out);
+                }
+            }
+
+            if !rule.backend.trim().is_empty() {
+                return Ok(vec![rule.backend.clone()]);
+            }
+        }
+
+        for rule in self.config.rules.iter().filter(|rule| !rule.exact) {
             if !rule.matches(model) {
                 continue;
             }
@@ -228,6 +267,7 @@ mod tests {
     fn weighted_selection_is_deterministic_and_dedups() {
         let rule = RouteRule {
             model_prefix: "gpt-".to_string(),
+            exact: false,
             backend: String::new(),
             backends: vec![
                 RouteBackend {
@@ -269,6 +309,7 @@ mod tests {
             default_backends: Vec::new(),
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
+                exact: false,
                 backend: String::new(),
                 backends: vec![
                     RouteBackend {
@@ -292,5 +333,34 @@ mod tests {
             .select_backends_for_model_seeded("gpt-4o-mini", None, Some("seed"))
             .expect("route");
         assert_eq!(out, vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn exact_rules_take_precedence_over_prefix_rules() {
+        let router = Router::new(RouterConfig {
+            default_backend: "default".to_string(),
+            default_backends: Vec::new(),
+            rules: vec![
+                RouteRule {
+                    model_prefix: "gpt-".to_string(),
+                    exact: false,
+                    backend: "prefix".to_string(),
+                    backends: Vec::new(),
+                    guardrails: None,
+                },
+                RouteRule {
+                    model_prefix: "gpt-4o-mini".to_string(),
+                    exact: true,
+                    backend: "exact".to_string(),
+                    backends: Vec::new(),
+                    guardrails: None,
+                },
+            ],
+        });
+
+        let out = router
+            .select_backend_for_model("gpt-4o-mini", None)
+            .expect("route");
+        assert_eq!(out, "exact".to_string());
     }
 }

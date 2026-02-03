@@ -34,6 +34,7 @@ async fn openai_compat_proxy_routes_by_model_prefix() {
             default_backends: Vec::new(),
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
+                exact: false,
                 backend: "primary".to_string(),
                 backends: Vec::new(),
                 guardrails: None,
@@ -745,4 +746,3 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_speech_requ
     mock.assert_calls(0);
     Ok(())
 }
-

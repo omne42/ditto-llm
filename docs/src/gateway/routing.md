@@ -29,8 +29,9 @@
 
 ### Rule 匹配规则
 
-- `model_prefix` 是前缀匹配：`model.starts_with(model_prefix)`。
-- 第一条匹配的 rule 生效（按 `rules` 数组顺序）。
+- 默认：`model_prefix` 是前缀匹配：`model.starts_with(model_prefix)`。
+- 可选：如果 rule 设置了 `"exact": true`，则变为精确匹配：`model == model_prefix`。
+- 优先级：**exact rules 优先于 prefix rules**；同一类里仍是“第一条匹配生效”（按 `rules` 数组顺序）。
 
 ### Weighted 选择与 deterministic fallback 顺序
 

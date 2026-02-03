@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add per-route Redis rate limiting (route-scoped keys) and upgrade the algorithm to a weighted sliding window across the current and previous minute (60s window).
 - Security: add `secret://...` secret resolution (env/file/Vault/AWS SM/GCP SM/Azure KV) and wire it into SDK `ProviderAuth`, Gateway config values, and gateway CLI flags (admin tokens / redis url).
 - SDK: add `CacheLayer` middleware (implements `LanguageModelLayer`) with deterministic request hashing and streaming replay.
+- SDK: add Vercel AI SDK UI message stream SSE adapter (`ui_message_stream_v1_sse`).
 - Deploy/Observability: add a Helm chart (`deploy/helm/ditto-gateway`), a Grafana dashboard template (`deploy/grafana/ditto-gateway.dashboard.json`), and a PrometheusRule template (`deploy/prometheus/ditto-gateway-prometheusrule.yaml`).
 - JS/TS: add a minimal stream protocol v1 client (`packages/ditto-client`) and React hook (`packages/ditto-react`).
 - Admin UI: add a minimal React admin console for `ditto-gateway` (`apps/admin-ui`) plus minimal multi-language gateway client examples (Node/Python/Go).
@@ -73,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: append admin write actions (key upsert/delete, backend reset, proxy cache purge) into sqlite/redis audit logs when a store is enabled.
 - Gateway: multipart parser now records per-part `content-type` (used by translation endpoints for file/audio uploads).
 - Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
+- Gateway: routing rules now support optional exact matching (`rules[].exact=true`) which takes precedence over prefix rules.
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.

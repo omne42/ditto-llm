@@ -115,7 +115,7 @@ virtual key 的字段很多，建议先从最小配置开始：
 
 - `default_backend`：默认 backend
 - `default_backends`：按 weight 选择主 backend（并返回 fallback 顺序）
-- `rules[]`：按 `model_prefix` 覆盖路由（也可写 weighted backends）
+- `rules[]`：按 `model_prefix` 覆盖路由（默认前缀匹配；可选 `exact=true` 精确匹配；也可写 weighted backends）
 
 示例：
 

@@ -329,6 +329,7 @@ async fn router_switches_backend_by_model_prefix() {
         default_backends: Vec::new(),
         rules: vec![RouteRule {
             model_prefix: "gpt-4".to_string(),
+            exact: false,
             backend: "secondary".to_string(),
             backends: Vec::new(),
             guardrails: None,
@@ -366,6 +367,7 @@ async fn guardrail_override_applies_for_route_rule() {
         default_backends: Vec::new(),
         rules: vec![RouteRule {
             model_prefix: "gpt-".to_string(),
+            exact: false,
             backend: "primary".to_string(),
             backends: Vec::new(),
             guardrails: Some(GuardrailsConfig::default()),

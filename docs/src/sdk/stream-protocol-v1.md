@@ -80,3 +80,17 @@ Ditto 提供两种等价但适配不同生态的输出：
 - `packages/ditto-react`：`useStreamV1`（把 stream protocol v1 映射成 React state）
 
 它们不追求 1:1 复刻 AI SDK UI，只提供“能用、易嵌入、易排障”的最小 DX。
+
+---
+
+## 6) AI SDK UI Message Stream（可选）
+
+如果你希望直接对接 Vercel AI SDK UI（例如 `@ai-sdk/react` 的 `useChat`），你需要输出 **UI Message Stream** 的 SSE 协议（与 Ditto 的 stream protocol v1 不同）。
+
+Ditto 提供一个最小适配器（feature `sdk`）：
+
+- `ditto_llm::sdk::http::ui_message_stream_v1_sse(stream)`：把 Ditto `StreamResult` 转为 UI Message Stream SSE（末尾以 `data: [DONE]` 结束）
+
+HTTP 响应侧需要额外设置：
+
+- `x-vercel-ai-ui-message-stream: v1`

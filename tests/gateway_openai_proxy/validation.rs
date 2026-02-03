@@ -488,6 +488,7 @@ async fn openai_compat_proxy_applies_route_guardrails_override() {
             default_backends: Vec::new(),
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
+                exact: false,
                 backend: "primary".to_string(),
                 backends: Vec::new(),
                 guardrails: Some(GuardrailsConfig::default()),
