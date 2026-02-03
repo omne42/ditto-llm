@@ -149,6 +149,30 @@ impl std::fmt::Debug for BackendConfig {
 }
 
 fn expand_env_placeholders(value: &str, env: &Env) -> Result<String, super::GatewayError> {
+    let trimmed = value.trim();
+    if let Some(name) = trimmed.strip_prefix("os.environ/") {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: "empty env placeholder".to_string(),
+            });
+        }
+
+        let resolved = env
+            .get(name)
+            .ok_or_else(|| super::GatewayError::InvalidRequest {
+                reason: format!("missing env var: {name}"),
+            })?;
+
+        if resolved.trim().is_empty() {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!("env var is empty: {name}"),
+            });
+        }
+
+        return Ok(resolved);
+    }
+
     let bytes = value.as_bytes();
     let mut out = String::with_capacity(value.len());
     let mut idx = 0;
@@ -456,12 +480,45 @@ mod tests {
     }
 
     #[test]
+    fn backend_config_resolves_litellm_os_environ_strings() {
+        let env = Env {
+            dotenv: BTreeMap::from([("BASE_URL".to_string(), "https://example.com".to_string())]),
+        };
+
+        let mut backend = BackendConfig {
+            name: "primary".to_string(),
+            base_url: "os.environ/BASE_URL".to_string(),
+            max_in_flight: None,
+            timeout_seconds: None,
+            headers: BTreeMap::new(),
+            query_params: BTreeMap::new(),
+            provider: None,
+            provider_config: None,
+            model_map: BTreeMap::new(),
+        };
+
+        backend.resolve_env(&env).expect("resolve");
+        assert_eq!(backend.base_url, "https://example.com");
+    }
+
+    #[test]
     fn virtual_key_config_resolves_env_placeholder_in_token() {
         let env = Env {
             dotenv: BTreeMap::from([("DITTO_TEST_VK_TOKEN".to_string(), "vk-1".to_string())]),
         };
 
         let mut key = VirtualKeyConfig::new("key-1", "${DITTO_TEST_VK_TOKEN}");
+        key.resolve_env(&env).expect("resolve");
+        assert_eq!(key.token, "vk-1");
+    }
+
+    #[test]
+    fn virtual_key_config_resolves_litellm_os_environ_token() {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_VK_TOKEN".to_string(), "vk-1".to_string())]),
+        };
+
+        let mut key = VirtualKeyConfig::new("key-1", "os.environ/DITTO_TEST_VK_TOKEN");
         key.resolve_env(&env).expect("resolve");
         assert_eq!(key.token, "vk-1");
     }

@@ -30,6 +30,7 @@
 ### Rule 匹配规则
 
 - 默认：`model_prefix` 是前缀匹配：`model.starts_with(model_prefix)`。
+- 兼容：如果 `model_prefix` 以 `*` 结尾（例如 `anthropic/*`），Ditto 会忽略 `*` 并按前缀匹配。
 - 可选：如果 rule 设置了 `"exact": true`，则变为精确匹配：`model == model_prefix`。
 - 优先级：**exact rules 优先于 prefix rules**；同一类里仍是“第一条匹配生效”（按 `rules` 数组顺序）。
 

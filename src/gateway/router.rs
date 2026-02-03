@@ -43,7 +43,11 @@ impl RouteRule {
         if self.exact {
             model == self.model_prefix
         } else {
-            model.starts_with(&self.model_prefix)
+            let prefix = self
+                .model_prefix
+                .strip_suffix('*')
+                .unwrap_or(&self.model_prefix);
+            model.starts_with(prefix)
         }
     }
 }
@@ -362,5 +366,25 @@ mod tests {
             .select_backend_for_model("gpt-4o-mini", None)
             .expect("route");
         assert_eq!(out, "exact".to_string());
+    }
+
+    #[test]
+    fn wildcard_suffix_matches_as_prefix() {
+        let router = Router::new(RouterConfig {
+            default_backend: "default".to_string(),
+            default_backends: Vec::new(),
+            rules: vec![RouteRule {
+                model_prefix: "anthropic/*".to_string(),
+                exact: false,
+                backend: "primary".to_string(),
+                backends: Vec::new(),
+                guardrails: None,
+            }],
+        });
+
+        let out = router
+            .select_backend_for_model("anthropic/claude-3-opus", None)
+            .expect("route");
+        assert_eq!(out, "primary".to_string());
     }
 }

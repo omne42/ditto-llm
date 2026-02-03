@@ -144,3 +144,7 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `virtual_keys[].token`
 
 若 env 缺失或为空，启动会失败（避免 silent misconfig）。
+
+兼容性补充（迁移 LiteLLM 配置时常见）：
+
+- 如果某个字段的值是 `os.environ/ENV_KEY`（整段字符串），Ditto 会把它解析为环境变量引用并替换为对应的 env 值。

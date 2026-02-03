@@ -74,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: append admin write actions (key upsert/delete, backend reset, proxy cache purge) into sqlite/redis audit logs when a store is enabled.
 - Gateway: multipart parser now records per-part `content-type` (used by translation endpoints for file/audio uploads).
 - Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
-- Gateway: routing rules now support optional exact matching (`rules[].exact=true`) which takes precedence over prefix rules.
+- Gateway: routing rules now support optional exact matching (`rules[].exact=true`) which takes precedence over prefix rules, plus an optional `*` suffix for LiteLLM-style prefix patterns (e.g. `anthropic/*`).
+- Gateway: config env expansion now supports LiteLLM-style `os.environ/ENV_KEY` strings (in addition to `${ENV_KEY}` placeholders).
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
