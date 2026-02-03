@@ -91,6 +91,8 @@ Ditto 提供一个最小适配器（feature `sdk`）：
 
 - `ditto_llm::sdk::http::ui_message_stream_v1_sse(stream)`：把 Ditto `StreamResult` 转为 UI Message Stream SSE（末尾以 `data: [DONE]` 结束）
 
+输出中会包含基础的 step 边界事件（`start-step` / `finish-step`），并在 Ditto 侧额外附带一些 `data-ditto-*` 的诊断事件（例如 usage/warnings；客户端可忽略）。
+
 HTTP 响应侧需要额外设置：
 
 - `x-vercel-ai-ui-message-stream: v1`

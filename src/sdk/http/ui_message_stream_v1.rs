@@ -49,6 +49,7 @@ struct ToolState {
     name: String,
     input_json: String,
     truncated: bool,
+    started: bool,
 }
 
 #[derive(Debug)]
@@ -58,6 +59,7 @@ struct UiStreamState {
     message_id: String,
     text_id: String,
     reasoning_id: String,
+    step_started: bool,
     text_started: bool,
     reasoning_started: bool,
     finish_reason: FinishReason,
@@ -108,6 +110,7 @@ impl UiStreamState {
             message_id,
             text_id,
             reasoning_id,
+            step_started: false,
             text_started: false,
             reasoning_started: false,
             finish_reason: FinishReason::Unknown,
@@ -139,6 +142,17 @@ impl UiStreamState {
             "type": "start",
             "messageId": self.message_id,
         }));
+        self.ensure_step_started();
+    }
+
+    fn ensure_step_started(&mut self) {
+        if self.step_started {
+            return;
+        }
+        self.step_started = true;
+        self.push_json(serde_json::json!({
+            "type": "start-step",
+        }));
     }
 
     fn ensure_text_started(&mut self) {
@@ -160,6 +174,28 @@ impl UiStreamState {
         self.push_json(serde_json::json!({
             "type": "reasoning-start",
             "id": self.reasoning_id,
+        }));
+    }
+
+    fn ensure_tool_started(&mut self, id: &str) {
+        let tool_name = {
+            let entry = self.tool_calls.entry(id.to_string()).or_default();
+            if entry.started {
+                return;
+            }
+            entry.started = true;
+
+            if entry.name.trim().is_empty() {
+                "unknown".to_string()
+            } else {
+                entry.name.clone()
+            }
+        };
+
+        self.push_json(serde_json::json!({
+            "type": "tool-input-start",
+            "toolCallId": id,
+            "toolName": tool_name,
         }));
     }
 
@@ -206,16 +242,20 @@ impl UiStreamState {
             StreamChunk::ToolCallStart { id, name } => {
                 let entry = self.tool_calls.entry(id.clone()).or_default();
                 entry.name = name.clone();
-                self.push_json(serde_json::json!({
-                    "type": "tool-input-start",
-                    "toolCallId": id,
-                    "toolName": name,
-                }));
+                if !entry.started {
+                    entry.started = true;
+                    self.push_json(serde_json::json!({
+                        "type": "tool-input-start",
+                        "toolCallId": id,
+                        "toolName": name,
+                    }));
+                }
             }
             StreamChunk::ToolCallDelta {
                 id,
                 arguments_delta,
             } => {
+                self.ensure_tool_started(&id);
                 self.append_tool_input(&id, &arguments_delta);
                 self.push_json(serde_json::json!({
                     "type": "tool-input-delta",
@@ -317,6 +357,12 @@ impl UiStreamState {
             self.push_json(serde_json::json!({
                 "type": "reasoning-end",
                 "id": self.reasoning_id,
+            }));
+        }
+
+        if self.step_started {
+            self.push_json(serde_json::json!({
+                "type": "finish-step",
             }));
         }
 

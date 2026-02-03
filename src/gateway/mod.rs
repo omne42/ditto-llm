@@ -10,6 +10,8 @@ pub mod http;
 pub mod http_backend;
 mod interop;
 pub mod limits;
+#[cfg(feature = "gateway-config-yaml")]
+pub mod litellm_config;
 #[cfg(feature = "gateway-metrics-prometheus")]
 pub mod metrics_prometheus;
 mod multipart;

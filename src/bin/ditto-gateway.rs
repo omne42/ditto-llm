@@ -529,7 +529,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("yaml") | Some("yml") => {
             #[cfg(feature = "gateway-config-yaml")]
             {
-                serde_yaml::from_str(&raw)?
+                match serde_yaml::from_str::<ditto_llm::gateway::GatewayConfig>(&raw) {
+                    Ok(config) => config,
+                    Err(gateway_yaml_err) => {
+                        let litellm_config = serde_yaml::from_str::<
+                            ditto_llm::gateway::litellm_config::LitellmProxyConfig,
+                        >(&raw)
+                        .map_err(|litellm_err| {
+                            format!(
+                                "failed to parse config as ditto gateway yaml ({gateway_yaml_err}) or litellm proxy yaml ({litellm_err})"
+                            )
+                        })?;
+                        litellm_config.try_into_gateway_config().map_err(|err| {
+                            format!("failed to import litellm proxy config: {err}")
+                        })?
+                    }
+                }
             }
             #[cfg(not(feature = "gateway-config-yaml"))]
             {
@@ -541,9 +556,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(json_err) => {
                 #[cfg(feature = "gateway-config-yaml")]
                 {
-                    serde_yaml::from_str(&raw).map_err(|yaml_err| {
-                        format!("failed to parse config as json ({json_err}) or yaml ({yaml_err})")
-                    })?
+                    match serde_yaml::from_str::<ditto_llm::gateway::GatewayConfig>(&raw) {
+                        Ok(config) => config,
+                        Err(gateway_yaml_err) => {
+                            let litellm_config = serde_yaml::from_str::<
+                                ditto_llm::gateway::litellm_config::LitellmProxyConfig,
+                            >(&raw)
+                            .map_err(|litellm_err| {
+                                format!(
+                                    "failed to parse config as json ({json_err}), ditto gateway yaml ({gateway_yaml_err}), or litellm proxy yaml ({litellm_err})"
+                                )
+                            })?;
+                            litellm_config.try_into_gateway_config().map_err(|err| {
+                                format!("failed to import litellm proxy config: {err}")
+                            })?
+                        }
+                    }
                 }
                 #[cfg(not(feature = "gateway-config-yaml"))]
                 {

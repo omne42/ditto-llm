@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
+- Gateway: when built with `--features gateway-config-yaml`, allow `ditto-gateway` to read LiteLLM `proxy_config.yaml` / `proxy_server_config.yaml` and import them into a Ditto gateway config (via `model_list` + `general_settings.master_key`).
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
 - Gateway: add optional tenant attribution + shared quotas (`virtual_keys[].tenant_id` + `tenant_budget` / `tenant_limits`) and admin aggregated ledger views (`/admin/budgets/tenants` / `/admin/costs/tenants`).
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Utils: truncate non-2xx error bodies (default 64KiB) to avoid OOM in error paths.
 - SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
+- SDK: UI message stream SSE adapter now emits `start-step` / `finish-step` boundaries and synthesizes `tool-input-start` when tool deltas arrive before tool starts.
 - SDK: add max-bytes caps for `StreamCollector` and `stream_object` internal buffers (emit warnings + truncate to reduce OOM risk on extremely large streams).
 - Dev: pre-commit blocks `partNN.*` filenames in staged changes.
 - Refactor: rename remaining `partNN.rs` files to descriptive module names.

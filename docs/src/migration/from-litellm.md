@@ -81,6 +81,7 @@ Ditto 当前覆盖度：
 
 - Ditto 配置默认是 JSON（`gateway.json`）；如需 YAML（`gateway.yaml`），需要编译启用 feature `gateway-config-yaml`
 - 支持 `${ENV_VAR}` 占位符展开，并且 env 缺失会启动失败（避免 silent misconfig）
+- 兼容性补充：当启用 `gateway-config-yaml` 时，`ditto-gateway` 也支持直接读取 LiteLLM 的 `proxy_config.yaml` / `proxy_server_config.yaml`（会将 `model_list` 与 `general_settings.master_key` 转为 Ditto 配置）
 
 ### 3.2 Virtual keys 的行为差异
 

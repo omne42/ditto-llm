@@ -79,6 +79,9 @@ mod ui_message_stream_v1_tests {
                     "messageId": "msg_test",
                 })),
                 Frame::Json(serde_json::json!({
+                    "type": "start-step",
+                })),
+                Frame::Json(serde_json::json!({
                     "type": "message-metadata",
                     "messageMetadata": { "responseId": "resp_1" },
                 })),
@@ -125,6 +128,9 @@ mod ui_message_stream_v1_tests {
                     "id": "reasoning_test",
                 })),
                 Frame::Json(serde_json::json!({
+                    "type": "finish-step",
+                })),
+                Frame::Json(serde_json::json!({
                     "type": "finish",
                     "finishReason": "tool-calls",
                 })),
@@ -152,6 +158,9 @@ mod ui_message_stream_v1_tests {
                     "messageId": "msg_test",
                 })),
                 Frame::Json(serde_json::json!({
+                    "type": "start-step",
+                })),
+                Frame::Json(serde_json::json!({
                     "type": "text-start",
                     "id": "text_test",
                 })),
@@ -169,8 +178,61 @@ mod ui_message_stream_v1_tests {
                     "id": "text_test",
                 })),
                 Frame::Json(serde_json::json!({
+                    "type": "finish-step",
+                })),
+                Frame::Json(serde_json::json!({
                     "type": "finish",
                     "finishReason": "error",
+                })),
+                Frame::Done,
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn ui_message_stream_emits_tool_start_even_if_delta_arrives_first() {
+        let chunks = vec![
+            Ok(StreamChunk::ToolCallDelta {
+                id: "call_1".to_string(),
+                arguments_delta: "{\"q\":1}".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::ToolCalls)),
+        ];
+        let stream: StreamResult = stream::iter(chunks).boxed();
+
+        let payloads = collect_sse_payloads(stream).await;
+        assert_eq!(
+            payloads,
+            vec![
+                Frame::Json(serde_json::json!({
+                    "type": "start",
+                    "messageId": "msg_test",
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "start-step",
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "tool-input-start",
+                    "toolCallId": "call_1",
+                    "toolName": "unknown",
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "tool-input-delta",
+                    "toolCallId": "call_1",
+                    "inputTextDelta": "{\"q\":1}",
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "tool-input-available",
+                    "toolCallId": "call_1",
+                    "toolName": "unknown",
+                    "input": { "q": 1 },
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "finish-step",
+                })),
+                Frame::Json(serde_json::json!({
+                    "type": "finish",
+                    "finishReason": "tool-calls",
                 })),
                 Frame::Done,
             ]
