@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
+- Gateway: fix clippy lint in LiteLLM key regeneration handler (no behavior change).
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
 - Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.

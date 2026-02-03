@@ -49,7 +49,7 @@ async fn litellm_key_regenerate_inner(
 ) -> Result<Json<LitellmKeyGenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_write(&state, &headers)?;
 
-    let payload = payload.unwrap_or_else(|| LitellmKeyRegenerateRequest {
+    let payload = payload.unwrap_or(LitellmKeyRegenerateRequest {
         key: None,
         new_key: None,
         key_alias: None,
