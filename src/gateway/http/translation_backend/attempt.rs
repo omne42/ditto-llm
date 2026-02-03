@@ -15,7 +15,6 @@ async fn attempt_translation_backend(
     let path_and_query = params.path_and_query;
     let _now_epoch_seconds = params.now_epoch_seconds;
     let charge_tokens = params.charge_tokens;
-    let _max_output_tokens = params.max_output_tokens;
     let _stream_requested = params.stream_requested;
     let use_persistent_budget = params.use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
@@ -23,7 +22,6 @@ async fn attempt_translation_backend(
     let project_budget_scope = params.project_budget_scope;
     let user_budget_scope = params.user_budget_scope;
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
-    let _token_budget_reserved = params.token_budget_reserved;
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     let token_budget_reservation_ids = params.token_budget_reservation_ids;
