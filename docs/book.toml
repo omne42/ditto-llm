@@ -1,7 +1,6 @@
 [book]
 title = "Ditto-LLM Docs"
 language = "zh"
-multilingual = false
 src = "src"
 
 [output.html]

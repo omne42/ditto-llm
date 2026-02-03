@@ -1,0 +1,69 @@
+Ditto-LLM (Rust)
+================
+
+One-liner
+---------
+Ditto-LLM is a Rust-first project that aims to be a superset of:
+- LiteLLM Proxy (OpenAI-compatible gateway + control-plane), and
+- Vercel AI SDK (unified provider/model abstractions + helpers),
+while keeping the default build small via Cargo feature-gating.
+
+Primary entry points
+--------------------
+1) Rust SDK (AI SDK Core-like)
+   - Unified traits/types for multiple providers.
+   - Text helpers: generate_text / stream_text.
+   - Structured outputs: generate_object_json / stream_object (best-effort).
+   - Tool calling returns tool calls; optional tool-loop agent behind a feature.
+
+2) HTTP Gateway (LiteLLM-like)
+   - Optional OpenAI-compatible /v1/* proxy surface.
+   - Control-plane: virtual keys, limits, budgets/costing, caching, routing, audit, metrics/OTel.
+   - Supports passthrough proxy; optional translation proxy (OpenAI in/out -> native providers).
+
+3) JS/React clients (AI SDK UI-like, minimal)
+   - Parse Ditto Stream Protocol v1 over SSE/NDJSON.
+   - A lightweight React hook for streaming UI state.
+
+Quickstart (repo-local)
+-----------------------
+Docs (mdBook):
+- mdbook serve docs
+- Source markdown lives in docs/src
+
+Rust examples:
+- cargo run --example basic
+- cargo run --example streaming
+- cargo run --example tool_calling
+
+Gateway (local):
+- cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+- curl -sS http://127.0.0.1:8080/health
+- curl -sS http://127.0.0.1:8080/v1/models | head
+
+Core concepts (Ditto terminology)
+---------------------------------
+- Provider: an LLM service backend (OpenAI / Anthropic / Google / OpenAI-compatible / ...)
+- Model: a specific model within a provider (e.g. gpt-4o-mini, claude-3-5-sonnet-...)
+- Request/Response: Ditto's unified request/response types.
+- Streaming: Ditto emits a sequence of StreamChunk values.
+- Warnings: provider incompatibilities and best-effort downgrades are explicit, not silent.
+- Passthrough vs Translation (Gateway): forward OpenAI-compatible traffic as-is vs translate to native providers.
+
+Code + file map
+---------------
+- src/: the main Rust crate implementation.
+- examples/: runnable Rust examples.
+- deploy/: docker-compose/k8s/helm templates for ditto-gateway.
+- docs/: mdBook docs (see docs/src/SUMMARY.md).
+- packages/ditto-client: minimal JS client (Stream Protocol v1 parsing + admin client).
+- packages/ditto-react: React hook (useStreamV1).
+- apps/admin-ui: minimal React admin console for ditto-gateway.
+
+Repo conventions (important for changes)
+----------------------------------------
+- Update CHANGELOG.md under [Unreleased] in the same commit as the code/doc change.
+- Conventional Commits are enforced for commit messages.
+- Pre-commit runs: cargo fmt --check and cargo check for the ditto-llm package.
+- Avoid huge Rust files: staged .rs files over 1000 lines are rejected by pre-commit.
+

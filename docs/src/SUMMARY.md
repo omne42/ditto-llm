@@ -2,6 +2,7 @@
 
 - [总览](./index.md)
 - [快速开始](./getting-started.md)
+- [模板与示例](./templates/index.md)
 
 - [核心概念](./concepts/index.md)
   - [Feature Flags](./concepts/features.md)
@@ -31,6 +32,10 @@
   - [MCP（Tool Schema 互转）](./sdk/mcp.md)
   - [错误处理](./sdk/errors.md)
   - [测试与集成](./sdk/testing.md)
+
+- [客户端（JS/React，AI SDK UI-like）](./clients/index.md)
+  - [JS：Stream Protocol v1 解析](./clients/js-client.md)
+  - [React：useStreamV1](./clients/react.md)
 
 - [Gateway（LiteLLM-like）](./gateway/index.md)
   - [运行网关](./gateway/quickstart.md)

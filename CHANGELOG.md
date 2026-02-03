@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Admin UI: add a minimal React admin console for `ditto-gateway` (`apps/admin-ui`) plus minimal multi-language gateway client examples (Node/Python/Go).
 - Docs: add an mdBook-based `docs/` handbook (SDK + Gateway + migration + roadmap).
 - Docs: expand SDK/Gateway guides with recipes and advanced topics (agents, middleware, stream protocol v1, devtools/telemetry/MCP).
+- Docs: refresh docs information architecture (new templates page, JS/React client docs, updated homepage/navigation) and add a repo-root `llms.txt` entrypoint.
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
