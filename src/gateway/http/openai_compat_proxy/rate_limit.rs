@@ -1,3 +1,4 @@
+#[cfg(feature = "gateway-store-redis")]
 fn normalize_rate_limit_route(path_and_query: &str) -> String {
     let path = path_and_query
         .split_once('?')

@@ -53,8 +53,9 @@ async fn handle_google_genai(
     if use_virtual_keys && !headers.contains_key("authorization") {
         let token = extract_header(&parts.headers, "x-ditto-virtual-key")
             .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
+            .or_else(|| extract_litellm_api_key(&parts.headers))
             .or_else(|| extract_bearer(&parts.headers));
-        if let Some(token) = token.and_then(|t| synthesize_bearer_header(&t)) {
+        if let Some(token) = token.as_deref().and_then(synthesize_bearer_header) {
             headers.insert("authorization", token);
         }
     }
@@ -284,8 +285,9 @@ async fn handle_cloudcode_generate_content_inner(
     if use_virtual_keys && !headers.contains_key("authorization") {
         let token = extract_header(&parts.headers, "x-ditto-virtual-key")
             .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
+            .or_else(|| extract_litellm_api_key(&parts.headers))
             .or_else(|| extract_bearer(&parts.headers));
-        if let Some(token) = token.and_then(|t| synthesize_bearer_header(&t)) {
+        if let Some(token) = token.as_deref().and_then(synthesize_bearer_header) {
             headers.insert("authorization", token);
         }
     }

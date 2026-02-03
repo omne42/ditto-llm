@@ -10,7 +10,6 @@ struct ProxyAttemptParams<'a> {
     path_and_query: &'a str,
     now_epoch_seconds: u64,
     charge_tokens: u32,
-    max_output_tokens: u32,
     stream_requested: bool,
     strip_authorization: bool,
     use_persistent_budget: bool,
@@ -20,7 +19,6 @@ struct ProxyAttemptParams<'a> {
     project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     charge_cost_usd_micros: Option<u64>,
-    token_budget_reserved: bool,
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     token_budget_reservation_ids: &'a [String],
     cost_budget_reserved: bool,
@@ -46,4 +44,3 @@ enum BackendAttemptOutcome {
 }
 
 include!("multipart_schema.rs");
-

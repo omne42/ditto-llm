@@ -90,10 +90,10 @@ async fn handle_anthropic_messages(
         headers.insert("authorization", value.clone());
     }
     if use_virtual_keys && !headers.contains_key("authorization") {
-        let token = extract_header(&parts.headers, "x-ditto-virtual-key")
-            .or_else(|| extract_header(&parts.headers, "x-api-key"))
-            .or_else(|| extract_bearer(&parts.headers));
-        if let Some(token) = token.and_then(|t| synthesize_bearer_header(&t)) {
+        if let Some(token) = extract_virtual_key(&parts.headers)
+            .as_deref()
+            .and_then(synthesize_bearer_header)
+        {
             headers.insert("authorization", token);
         }
     }
@@ -277,16 +277,13 @@ async fn handle_anthropic_count_tokens(
 
     let (parts, body) = req.into_parts();
     if gateway_uses_virtual_keys(&state).await {
-        let token = extract_header(&parts.headers, "x-ditto-virtual-key")
-            .or_else(|| extract_header(&parts.headers, "x-api-key"))
-            .or_else(|| extract_bearer(&parts.headers))
-            .ok_or_else(|| {
+        let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
                 anthropic_error(
                     StatusCode::UNAUTHORIZED,
                     "authentication_error",
                     "missing api key",
                 )
-            })?;
+        })?;
         let gateway = state.gateway.lock().await;
         let authorized = gateway
             .config

@@ -2,7 +2,7 @@
 
 Ditto Gateway 的鉴权分两层：
 
-- **Virtual Keys**：给“业务调用方/客户端”使用，作用于 `/v1/*` 与 `POST /v1/gateway`。
+- **Virtual Keys**：给“业务调用方/客户端”使用，作用于 `/v1/*` 与 `POST /v1/gateway`，以及 Ditto 暴露的 MCP/A2A/Anthropic/Google 兼容端点（例如 `/mcp*`、`/a2a/*`、`/messages`、`/v1beta/models/*`）。
 - **Admin Token**：给“运维/平台管理员”使用，作用于 `/admin/*`（仅在显式启用时挂载）。
 
 本文以网关实现为准（见 `src/gateway/config.rs`、`src/gateway/http/core.rs`、`src/gateway/http/openai_compat_proxy.rs`、`src/gateway/http/admin/auth.rs`）。
@@ -16,6 +16,7 @@ Ditto Gateway 的鉴权分两层：
 当 `gateway.json` 中 `virtual_keys` **非空**时：
 
 - `/v1/*` passthrough proxy 会要求客户端提供 virtual key（否则 401）。
+- `/mcp*`、`/a2a/*`、`/messages`、`/v1beta/models/*` 等兼容端点同样会要求 virtual key（用于统一的限流/预算/审计归因）。
 - 客户端提供的 key 会绑定到一个 `VirtualKeyConfig`，并作为 **策略单位**：limits/budget/cache/guardrails/routing/审计归因等。
 
 当 `virtual_keys` 为空时：
@@ -33,6 +34,7 @@ Ditto Gateway 的鉴权分两层：
 对 OpenAI-compatible passthrough：`ANY /v1/*`
 
 - `Authorization: Bearer <virtual_key>`
+- `x-litellm-api-key: Bearer <virtual_key>`（也接受不带 `Bearer` 的纯 token）
 - `x-ditto-virtual-key: <virtual_key>`
 - `x-api-key: <virtual_key>`
 
@@ -40,13 +42,13 @@ Ditto Gateway 的鉴权分两层：
 
 - JSON body 的 `virtual_key` 字段（可选）
 - `Authorization: Bearer <virtual_key>`
+- `x-litellm-api-key: Bearer <virtual_key>`（也接受不带 `Bearer` 的纯 token）
 - `x-ditto-virtual-key: <virtual_key>`
-
-> `/v1/gateway` 没有读取 `x-api-key`；但 `/v1/*` 会读取它。
+- `x-api-key: <virtual_key>`
 
 ### 启用 Virtual Keys 后：Upstream 的真实鉴权怎么做？
 
-当 `virtual_keys` 非空时，Ditto 会把客户端提供的 `authorization` / `x-api-key` 当作 virtual key 使用，并在转发 upstream 前做清理（见 `sanitize_proxy_headers`），以避免把虚拟 key 泄露到上游。
+当 `virtual_keys` 非空时，Ditto 会把客户端提供的 `authorization` / `x-api-key` / `x-litellm-api-key` 当作 virtual key 使用，并在转发 upstream 前做清理（见 `sanitize_proxy_headers`），以避免把虚拟 key 泄露到上游。
 
 因此 upstream 的鉴权必须来自：
 

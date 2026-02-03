@@ -91,6 +91,12 @@ Ditto 提供最小 JS/React 客户端用于解析 **Stream Protocol v1**（SSE/N
 
 如果你在用 LLM 辅助理解 Ditto（例如让它帮你改配置/写集成代码），可以直接把仓库根目录的 `llms.txt` 丢给它作为上下文入口。
 
+`llms.txt` 包含一段“手写入口 + 约定”，并在末尾追加 **自动聚合的文档全文**（来自 `docs/src/SUMMARY.md`）。如需刷新：
+
+```bash
+cargo run --bin ditto-llms-txt -- --out llms.txt
+```
+
 ## 本地构建（推荐）
 
 本目录采用 `mdBook`（Rust 生态、零前端依赖）组织导航。

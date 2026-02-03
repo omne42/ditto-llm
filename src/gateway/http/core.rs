@@ -392,6 +392,8 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/responses", any(handle_openai_compat_proxy_root))
         .route("/responses/compact", any(handle_openai_compat_proxy_root))
         .route("/responses/*path", any(handle_openai_compat_proxy))
+        .route("/messages", post(handle_anthropic_messages))
+        .route("/messages/count_tokens", post(handle_anthropic_count_tokens))
         .route("/v1/messages", post(handle_anthropic_messages))
         .route(
             "/v1/messages/count_tokens",
@@ -500,8 +502,7 @@ async fn handle_gateway(
 ) -> Result<Json<GatewayResponse>, (StatusCode, Json<ErrorResponse>)> {
     let virtual_key = payload
         .virtual_key
-        .or_else(|| extract_bearer(&headers))
-        .or_else(|| extract_header(&headers, "x-ditto-virtual-key"))
+        .or_else(|| extract_virtual_key(&headers))
         .ok_or_else(|| {
             error_response(
                 StatusCode::UNAUTHORIZED,
@@ -641,6 +642,7 @@ fn openai_error(
     )
 }
 
+#[cfg(feature = "gateway-costing")]
 fn max_option_u64(left: Option<u64>, right: Option<u64>) -> Option<u64> {
     match (left, right) {
         (Some(left), Some(right)) => Some(left.max(right)),

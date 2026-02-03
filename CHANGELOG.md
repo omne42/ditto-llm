@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gateway: add LiteLLM-compatible key management endpoints (`/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`) gated by Ditto admin auth.
 - Gateway: accept LiteLLM-style OpenAI-compatible endpoints without the `/v1` prefix (e.g. `/chat/completions`, `/embeddings`, `/moderations`, `/files/*`, `/batches/*`, `/models/*`, `/responses/*`).
+- Gateway: accept LiteLLM virtual key header `x-litellm-api-key` (optionally `Bearer ...`) across gateway endpoints and strip it before proxying upstream when virtual keys are enabled.
+- Gateway: add Anthropic Messages endpoint aliases without the `/v1` prefix (`POST /messages` and `POST /messages/count_tokens`).
 - Gateway: add LiteLLM-like A2A agent gateway proxy endpoints (`/a2a/*` and `/v1/a2a/*`) backed by a new `a2a_agents` registry in `gateway.json`/`gateway.yaml`.
 - Gateway: add LiteLLM-like MCP gateway endpoints (`/mcp`, `/mcp/tools/list`, `/mcp/tools/call`) backed by a new `mcp_servers` registry in `gateway.json`/`gateway.yaml`.
 - Gateway: add MCP tools integration for `POST /v1/chat/completions` via `tools: [{"type":"mcp", ...}]` (multi-server tool name prefixing and optional auto-execution when `require_approval: "never"`).
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: refresh docs information architecture (new templates page, JS/React client docs, updated homepage/navigation) and add a repo-root `llms.txt` entrypoint.
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
+- Docs: make repo-root `llms.txt` include an auto-generated docs bundle (based on `docs/src/SUMMARY.md`) and add a generator CLI (`ditto-llms-txt`) to refresh it.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
 - Gateway: when built with `--features gateway-config-yaml`, allow `ditto-gateway` to read LiteLLM `proxy_config.yaml` / `proxy_server_config.yaml` and import them into a Ditto gateway config (via `model_list` + `general_settings.master_key`).
@@ -97,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
+- Gateway: fix streaming multipart passthrough (/v1/files and /v1/audio/* uploads) spending so in-memory budgets are decremented even when store features are disabled.
 - Gateway: fix clippy lint in LiteLLM key regeneration handler (no behavior change).
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).

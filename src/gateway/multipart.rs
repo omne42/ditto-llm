@@ -4,6 +4,7 @@ use bytes::Bytes;
 pub(crate) struct MultipartPart {
     pub(crate) name: String,
     pub(crate) filename: Option<String>,
+    #[cfg(feature = "gateway-translation")]
     pub(crate) content_type: Option<String>,
     pub(crate) data: Bytes,
 }
@@ -99,6 +100,7 @@ pub(crate) fn parse_multipart_form(
         let headers_raw = String::from_utf8_lossy(&bytes[cursor..headers_end]);
         let mut name: Option<String> = None;
         let mut filename: Option<String> = None;
+        #[cfg(feature = "gateway-translation")]
         let mut content_type: Option<String> = None;
 
         for line in headers_raw.lines() {
@@ -125,7 +127,9 @@ pub(crate) fn parse_multipart_form(
                         filename = Some(value.to_string());
                     }
                 }
-            } else if key.eq_ignore_ascii_case("content-type") && !value.is_empty() {
+            }
+            #[cfg(feature = "gateway-translation")]
+            if key.eq_ignore_ascii_case("content-type") && !value.is_empty() {
                 content_type = Some(value.to_string());
             }
         }
@@ -143,6 +147,7 @@ pub(crate) fn parse_multipart_form(
         parts.push(MultipartPart {
             name,
             filename,
+            #[cfg(feature = "gateway-translation")]
             content_type,
             data,
         });

@@ -155,6 +155,137 @@ async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
 }
 
 #[tokio::test]
+async fn anthropic_messages_proxy_accepts_messages_alias() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .header("x-request-id", "req-1")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}],
+                "stream": false,
+                "max_tokens": 64
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "chatcmpl_123",
+                    "model": "gpt-4o-mini",
+                    "choices": [{
+                        "message": {"role":"assistant","content":"hello"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                })
+                .to_string(),
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "max_tokens": 64,
+        "stream": false,
+        "messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/messages")
+        .header("x-litellm-api-key", "Bearer vk-1")
+        .header("x-request-id", "req-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert_eq!(value.get("type").and_then(|v| v.as_str()), Some("message"));
+    assert_eq!(
+        value.get("role").and_then(|v| v.as_str()),
+        Some("assistant")
+    );
+    assert_eq!(
+        value.get("id").and_then(|v| v.as_str()),
+        Some("chatcmpl_123")
+    );
+
+    mock.assert();
+}
+
+#[tokio::test]
+async fn anthropic_count_tokens_accepts_messages_alias() {
+    let config = GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/messages/count_tokens")
+        .header("x-litellm-api-key", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert!(
+        value
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            > 0
+    );
+}
+
+#[tokio::test]
 async fn anthropic_messages_streaming_translates_openai_sse() {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return;

@@ -140,6 +140,7 @@ async fn handle_openai_compat_proxy(
 
     let _now_epoch_seconds = now_epoch_seconds();
     let minute = _now_epoch_seconds / 60;
+    #[cfg(feature = "gateway-store-redis")]
     let rate_limit_route = normalize_rate_limit_route(path_and_query);
 
     let (
@@ -163,17 +164,14 @@ async fn handle_openai_compat_proxy(
         let key = if gateway.config.virtual_keys.is_empty() {
             None
         } else {
-            let token = extract_bearer(&parts.headers)
-                .or_else(|| extract_header(&parts.headers, "x-ditto-virtual-key"))
-                .or_else(|| extract_header(&parts.headers, "x-api-key"))
-                .ok_or_else(|| {
-                    openai_error(
-                        StatusCode::UNAUTHORIZED,
-                        "authentication_error",
-                        Some("invalid_api_key"),
-                        "missing virtual key",
-                    )
-                })?;
+            let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+                openai_error(
+                    StatusCode::UNAUTHORIZED,
+                    "authentication_error",
+                    Some("invalid_api_key"),
+                    "missing virtual key",
+                )
+            })?;
             let key = gateway
                 .config
                 .virtual_keys
@@ -853,17 +851,15 @@ async fn handle_openai_compat_proxy(
         path_and_query,
         now_epoch_seconds: _now_epoch_seconds,
         charge_tokens,
-        max_output_tokens,
         stream_requested: _stream_requested,
         strip_authorization,
-	        use_persistent_budget,
-	        virtual_key_id: &virtual_key_id,
-	        budget: &budget,
+		        use_persistent_budget,
+		        virtual_key_id: &virtual_key_id,
+		        budget: &budget,
 	        tenant_budget_scope: &tenant_budget_scope,
-	        project_budget_scope: &project_budget_scope,
-	        user_budget_scope: &user_budget_scope,
-	        charge_cost_usd_micros,
-        token_budget_reserved: _token_budget_reserved,
+		        project_budget_scope: &project_budget_scope,
+		        user_budget_scope: &user_budget_scope,
+		        charge_cost_usd_micros,
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         token_budget_reservation_ids: &token_budget_reservation_ids,
         cost_budget_reserved: _cost_budget_reserved,

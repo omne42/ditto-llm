@@ -783,7 +783,7 @@ async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> 
         }
         #[cfg(not(feature = "gateway-tokenizer"))]
         {
-            ((body_string.len().saturating_add(3) / 4) as u32)
+            (body_string.len().saturating_add(3) / 4) as u32
         }
     };
 

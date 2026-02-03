@@ -36,6 +36,10 @@ mod sanitize_proxy_headers_tests {
             axum::http::HeaderValue::from_static("Bearer abc"),
         );
         headers.insert("x-api-key", axum::http::HeaderValue::from_static("abc"));
+        headers.insert(
+            "x-litellm-api-key",
+            axum::http::HeaderValue::from_static("Bearer abc"),
+        );
         headers.insert("x-test", axum::http::HeaderValue::from_static("ok"));
 
         sanitize_proxy_headers(&mut headers, false);
@@ -58,6 +62,7 @@ mod sanitize_proxy_headers_tests {
 
         assert!(headers.get("authorization").is_some());
         assert!(headers.get("x-api-key").is_some());
+        assert!(headers.get("x-litellm-api-key").is_some());
         assert_eq!(headers.get("x-test").unwrap().to_str().unwrap(), "ok");
     }
 
@@ -69,12 +74,17 @@ mod sanitize_proxy_headers_tests {
             axum::http::HeaderValue::from_static("Bearer abc"),
         );
         headers.insert("x-api-key", axum::http::HeaderValue::from_static("abc"));
+        headers.insert(
+            "x-litellm-api-key",
+            axum::http::HeaderValue::from_static("Bearer abc"),
+        );
         headers.insert("x-test", axum::http::HeaderValue::from_static("ok"));
 
         sanitize_proxy_headers(&mut headers, true);
 
         assert!(headers.get("authorization").is_none());
         assert!(headers.get("x-api-key").is_none());
+        assert!(headers.get("x-litellm-api-key").is_none());
         assert_eq!(headers.get("x-test").unwrap().to_str().unwrap(), "ok");
     }
 }

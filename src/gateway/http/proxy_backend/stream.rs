@@ -161,6 +161,26 @@
                 )))]
                 let _ = spent_cost_usd_micros;
 
+                #[cfg(not(any(
+                    feature = "gateway-costing",
+                    feature = "gateway-store-sqlite",
+                    feature = "gateway-store-redis",
+                    feature = "sdk",
+                )))]
+                let _ = (
+                    &self.method,
+                    &self.path_and_query,
+                    &self.model,
+                    &self.service_tier,
+                    &self.backend_model_map,
+                    self.charge_cost_usd_micros,
+                    self.use_persistent_budget,
+                    &self.token_budget_reservation_ids,
+                    self.cost_budget_reserved,
+                    &self.cost_budget_reservation_ids,
+                    self.request_body_len,
+                );
+
                 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
                 if !self.token_budget_reservation_ids.is_empty() {
                     settle_proxy_token_budget_reservations(

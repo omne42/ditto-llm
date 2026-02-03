@@ -62,6 +62,18 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 - `x-ditto-translation: <provider>`
 
+## Anthropic Messages（compat）
+
+Ditto Gateway 提供 Anthropic Messages API 的兼容端点（请求/响应为 Anthropic 口径），内部会转成 OpenAI-compatible 的 `/v1/chat/completions` 进行代理，然后再翻回 Anthropic message（含 streaming）。
+
+- `POST /v1/messages`
+- `POST /v1/messages/count_tokens`
+- 兼容别名：
+  - `POST /messages`
+  - `POST /messages/count_tokens`
+
+`/messages/count_tokens` 是 best-effort 估算（启用 `gateway-tokenizer` 时会尽量按模型计数，否则回退按 body 字节估算）。
+
 ## A2A Agents（LiteLLM-like，beta）
 
 Ditto Gateway 支持 LiteLLM 风格的 A2A 协议端点（JSON-RPC 2.0），用于“通过网关调用已注册的 agent 服务”：

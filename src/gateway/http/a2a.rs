@@ -91,17 +91,14 @@ async fn require_virtual_key_if_configured(
         return Ok(false);
     }
 
-    let token = extract_bearer(headers)
-        .or_else(|| extract_header(headers, "x-ditto-virtual-key"))
-        .or_else(|| extract_header(headers, "x-api-key"))
-        .ok_or_else(|| {
+    let token = extract_virtual_key(headers).ok_or_else(|| {
             error_response(
                 StatusCode::UNAUTHORIZED,
                 "unauthorized",
                 "missing virtual key",
             )
             .into_response()
-        })?;
+    })?;
 
     let key = gateway
         .config
@@ -195,7 +192,7 @@ async fn handle_a2a_agent_card(
         format!("/a2a/{agent_id}")
     };
 
-    let mut value = agent.agent_card_params.clone();
+    let value = agent.agent_card_params.clone();
     let mut obj = match value {
         Value::Object(obj) => obj,
         _ => Map::new(),

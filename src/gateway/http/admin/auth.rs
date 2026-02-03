@@ -112,6 +112,23 @@ fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     (!token.is_empty()).then(|| token.to_string())
 }
 
+fn extract_litellm_api_key(headers: &HeaderMap) -> Option<String> {
+    let raw = extract_header(headers, "x-litellm-api-key")?;
+    let token = raw
+        .strip_prefix("Bearer ")
+        .or_else(|| raw.strip_prefix("bearer "))
+        .unwrap_or(raw.as_str())
+        .trim();
+    (!token.is_empty()).then(|| token.to_string())
+}
+
+fn extract_virtual_key(headers: &HeaderMap) -> Option<String> {
+    extract_litellm_api_key(headers)
+        .or_else(|| extract_bearer(headers))
+        .or_else(|| extract_header(headers, "x-ditto-virtual-key"))
+        .or_else(|| extract_header(headers, "x-api-key"))
+}
+
 fn map_gateway_error(err: GatewayError) -> (StatusCode, Json<ErrorResponse>) {
     match err {
         GatewayError::Unauthorized => error_response(

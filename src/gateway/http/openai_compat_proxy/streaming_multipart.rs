@@ -53,6 +53,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
     request_id: String,
     path_and_query: String,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     let model: Option<String> = None;
     let content_length = parts
         .headers
@@ -81,6 +82,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
 
     let now_epoch_seconds = now_epoch_seconds();
     let minute = now_epoch_seconds / 60;
+    #[cfg(feature = "gateway-store-redis")]
     let rate_limit_route = normalize_rate_limit_route(&path_and_query);
 
     let (
@@ -103,17 +105,14 @@ async fn handle_openai_compat_proxy_streaming_multipart(
         let key = if gateway.config.virtual_keys.is_empty() {
             None
         } else {
-            let token = extract_bearer(&parts.headers)
-                .or_else(|| extract_header(&parts.headers, "x-ditto-virtual-key"))
-                .or_else(|| extract_header(&parts.headers, "x-api-key"))
-                .ok_or_else(|| {
-                    openai_error(
-                        StatusCode::UNAUTHORIZED,
-                        "authentication_error",
-                        Some("invalid_api_key"),
-                        "missing virtual key",
-                    )
-                })?;
+            let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+                openai_error(
+                    StatusCode::UNAUTHORIZED,
+                    "authentication_error",
+                    Some("invalid_api_key"),
+                    "missing virtual key",
+                )
+            })?;
             let key = gateway
                 .config
                 .virtual_keys
@@ -307,6 +306,14 @@ async fn handle_openai_compat_proxy_streaming_multipart(
             strip_authorization,
         )
     };
+
+    #[cfg(not(feature = "gateway-store-redis"))]
+    let _ = (
+        &limits,
+        &tenant_limits_scope,
+        &project_limits_scope,
+        &user_limits_scope,
+    );
 
     #[cfg(feature = "gateway-store-redis")]
     if use_redis_budget {
@@ -523,8 +530,10 @@ async fn handle_openai_compat_proxy_streaming_multipart(
             spent_tokens,
         )
         .await;
-    } else if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-        if spend_tokens {
+    }
+
+    if token_budget_reservation_ids.is_empty() && spend_tokens && !use_persistent_budget {
+        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
             let mut gateway = state.gateway.lock().await;
             gateway.budget.spend(&virtual_key_id, &budget, spent_tokens);
             if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
@@ -538,28 +547,23 @@ async fn handle_openai_compat_proxy_streaming_multipart(
             }
 
             #[cfg(feature = "gateway-costing")]
-            if !use_persistent_budget {
-                if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                    gateway.budget.spend_cost_usd_micros(
-                        &virtual_key_id,
-                        &budget,
-                        spent_cost_usd_micros,
-                    );
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        gateway.budget.spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        gateway
-                            .budget
-                            .spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        gateway.budget.spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
-                    }
+            if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                gateway.budget.spend_cost_usd_micros(&virtual_key_id, &budget, spent_cost_usd_micros);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    gateway.budget.spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                    gateway.budget.spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                    gateway.budget.spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
                 }
             }
         }
     }
+
+    #[cfg(not(feature = "gateway-costing"))]
+    let _ = &spent_cost_usd_micros;
 
     #[cfg(all(
         feature = "gateway-costing",

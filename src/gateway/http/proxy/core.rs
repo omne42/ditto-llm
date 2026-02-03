@@ -380,6 +380,7 @@ fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
     if strip_authorization {
         headers.remove("authorization");
         headers.remove("x-api-key");
+        headers.remove("x-litellm-api-key");
     }
     headers.remove("proxy-authorization");
     headers.remove("x-forwarded-authorization");
