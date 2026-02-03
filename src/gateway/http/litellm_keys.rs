@@ -99,7 +99,6 @@ struct LitellmKeyListResponse {
 
 fn litellm_key_info_value(key: &VirtualKeyConfig) -> serde_json::Value {
     serde_json::json!({
-        "token": key.token,
         "key_alias": key.id,
         "key_name": key.id,
         "user_id": key.user_id,
@@ -111,6 +110,17 @@ fn litellm_key_info_value(key: &VirtualKeyConfig) -> serde_json::Value {
         "max_budget": key.budget.total_usd_micros.map(|v| (v as f64) / 1_000_000.0),
         "models": key.guardrails.allow_models,
     })
+}
+
+fn litellm_key_full_value(key: &VirtualKeyConfig) -> serde_json::Value {
+    let mut value = litellm_key_info_value(key);
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "token".to_string(),
+            serde_json::Value::String(key.token.clone()),
+        );
+    }
+    value
 }
 
 fn litellm_key_router() -> Router<GatewayHttpState> {
@@ -499,7 +509,7 @@ async fn litellm_key_list(
     let mut out = Vec::<serde_json::Value>::with_capacity(keys.len());
     for key in keys {
         if return_full_object {
-            out.push(litellm_key_info_value(&key));
+            out.push(litellm_key_full_value(&key));
         } else {
             out.push(serde_json::Value::String(key.token));
         }

@@ -344,6 +344,11 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/health", get(health))
         .route("/metrics", get(metrics))
         .route("/v1/gateway", post(handle_gateway))
+        .route("/chat/completions", any(handle_openai_compat_proxy_root))
+        .route("/completions", any(handle_openai_compat_proxy_root))
+        .route("/embeddings", any(handle_openai_compat_proxy_root))
+        .route("/models", any(handle_openai_compat_proxy_root))
+        .route("/models/*path", any(handle_openai_compat_proxy))
         .route("/v1/messages", post(handle_anthropic_messages))
         .route(
             "/v1/messages/count_tokens",

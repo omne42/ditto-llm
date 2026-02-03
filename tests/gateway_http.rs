@@ -329,6 +329,19 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm
         .unwrap();
     let info_response = app.clone().oneshot(info).await.unwrap();
     assert_eq!(info_response.status(), StatusCode::OK);
+    let info_body = to_bytes(info_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let info_json: serde_json::Value = serde_json::from_slice(&info_body)?;
+    assert_eq!(
+        info_json.get("key").and_then(|value| value.as_str()),
+        Some(key.as_str())
+    );
+    let info_value = info_json
+        .get("info")
+        .and_then(|value| value.as_object())
+        .expect("info");
+    assert!(!info_value.contains_key("token"));
 
     let delete_payload = json!({
         "keys": [key.clone()],

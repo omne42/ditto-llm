@@ -2,6 +2,7 @@ include!("openai_compat_proxy/preamble.rs");
 include!("openai_compat_proxy/costing.rs");
 include!("openai_compat_proxy/rate_limit.rs");
 include!("openai_compat_proxy/streaming_multipart.rs");
+include!("openai_compat_proxy/path_normalize.rs");
 
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
@@ -20,6 +21,8 @@ async fn handle_openai_compat_proxy(
         .path_and_query()
         .map(|pq| pq.as_str())
         .unwrap_or_else(|| parts.uri.path());
+    let normalized_path_and_query = normalize_openai_compat_path_and_query(path_and_query);
+    let path_and_query = normalized_path_and_query.as_ref();
 
     #[cfg(feature = "gateway-otel")]
     let proxy_span = tracing::info_span!(

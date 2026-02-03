@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Gateway: add LiteLLM-compatible key management endpoints (`/key/generate`, `/key/delete`, `/key/info`, `/key/list`) gated by Ditto admin auth.
+- Gateway: accept LiteLLM-style OpenAI-compatible endpoints without the `/v1` prefix (`/chat/completions`, `/completions`, `/embeddings`, `/models`).
 - Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
 - Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
 - Gateway: add `ditto-audit-export` CLI to fetch `/admin/audit/export`, write a local export + manifest, and optionally upload to S3/GCS (supports S3 Object Lock flags).
@@ -78,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: append admin write actions (key upsert/delete, backend reset, proxy cache purge) into sqlite/redis audit logs when a store is enabled.
 - Gateway: multipart parser now records per-part `content-type` (used by translation endpoints for file/audio uploads).
 - Gateway: abort background health-check task on shutdown to avoid leaking tasks in-process.
+- Gateway: normalize OpenAI-compatible proxy paths to `/v1/*` equivalents for internal checks/metrics (e.g. `/chat/completions` → `/v1/chat/completions`).
+- Gateway: `/key/info` no longer includes `token` inside the `info` object (matches LiteLLM behavior).
 - Gateway: routing rules now support optional exact matching (`rules[].exact=true`) which takes precedence over prefix rules, plus an optional `*` suffix for LiteLLM-style prefix patterns (e.g. `anthropic/*`).
 - Gateway: config env expansion now supports LiteLLM-style `os.environ/ENV_KEY` strings (in addition to `${ENV_KEY}` placeholders).
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
