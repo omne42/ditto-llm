@@ -400,6 +400,16 @@ If your gateway expects auth in a query param (e.g. `...?api_key=...`), use:
 auth = { type = "query_param_env", param = "api_key", keys = ["GATEWAY_API_KEY"] }
 ```
 
+If you need to fetch a token dynamically (e.g. `gcloud auth print-access-token`, `aws-vault`, Vault CLI), use:
+
+```toml
+auth = { type = "command", command = ["gcloud", "auth", "print-access-token"] }
+```
+
+The command stdout may be a plain token, a JSON string (`"sk-..."`), or a JSON object with
+`api_key`/`token`/`access_token`. Ditto enforces a 15s timeout (configurable via
+`DITTO_AUTH_COMMAND_TIMEOUT_MS/SECS`) and a 64KiB stdout/stderr cap.
+
 ## Provider Query Params (Optional)
 
 If your provider requires additional fixed query params on every request (e.g. Azure OpenAI

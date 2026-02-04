@@ -96,6 +96,16 @@ Ditto 支持多种鉴权方式，覆盖企业网关的常见形态。
 }
 ```
 
+约定：
+
+- command 的 stdout 支持：
+  - **纯文本 token**（推荐）
+  - **JSON string**：`"sk-..."`
+  - **JSON object**：`{"api_key":"..."}` / `{"token":"..."}` / `{"access_token":"..."}`
+- Ditto 会对 stdout 做 `trim()`，并在执行时应用安全边界：
+  - 超时：默认 15s，可通过 `DITTO_AUTH_COMMAND_TIMEOUT_MS/SECS` 调整
+  - 输出上限：stdout/stderr 各 64KiB（超过则报错）
+
 ### 5) SigV4 / OAuth client credentials
 
 用于 Bedrock（SigV4）与 Vertex（OAuth client credentials）等场景。字段较多，建议结合你组织的密钥管理方案统一下发。
