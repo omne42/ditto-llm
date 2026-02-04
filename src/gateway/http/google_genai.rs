@@ -40,8 +40,6 @@ async fn handle_google_genai(
         )
     })?;
 
-    let use_virtual_keys = gateway_uses_virtual_keys(&state).await;
-
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("x-ditto-protocol", "google".parse().unwrap());
@@ -51,7 +49,7 @@ async fn handle_google_genai(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if use_virtual_keys && !headers.contains_key("authorization") {
+    if !headers.contains_key("authorization") {
         let token = extract_header(&parts.headers, "x-ditto-virtual-key")
             .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
             .or_else(|| extract_query_param(&parts.uri, "key"))
@@ -275,7 +273,6 @@ async fn handle_cloudcode_generate_content_inner(
         )
     })?;
 
-    let use_virtual_keys = gateway_uses_virtual_keys(&state).await;
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("x-ditto-protocol", "google".parse().unwrap());
@@ -285,7 +282,7 @@ async fn handle_cloudcode_generate_content_inner(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if use_virtual_keys && !headers.contains_key("authorization") {
+    if !headers.contains_key("authorization") {
         let token = extract_header(&parts.headers, "x-ditto-virtual-key")
             .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
             .or_else(|| extract_query_param(&parts.uri, "key"))

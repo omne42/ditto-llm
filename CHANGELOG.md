@@ -98,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 - Gateway: enrich proxy response logs with `provider`/`upstream_model` and detailed `usage` token breakdown (input/cache/output/reasoning/total).
+- Gateway: allow Anthropic/Google shims to forward provider-style API keys (e.g. `x-api-key`, `x-goog-api-key`, `?key=`) as upstream `Authorization: Bearer ...` when virtual keys are disabled.
+- Gateway: aggregate `/models` and `/v1/models` across all configured proxy backends (dedup by model id).
 
 ### Fixed
 

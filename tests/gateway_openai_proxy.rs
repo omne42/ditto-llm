@@ -47,6 +47,7 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
 include!("gateway_openai_proxy/basic_proxying.rs");
 include!("gateway_openai_proxy/model_map.rs");
 include!("gateway_openai_proxy/auth_headers.rs");
+include!("gateway_openai_proxy/models.rs");
 include!("gateway_openai_proxy/basic_proxying_litellm_aliases.rs");
 include!("gateway_openai_proxy/routing.rs");
 include!("gateway_openai_proxy/validation.rs");

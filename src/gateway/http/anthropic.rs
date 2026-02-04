@@ -79,8 +79,6 @@ async fn handle_anthropic_messages(
         )
     })?;
 
-    let use_virtual_keys = gateway_uses_virtual_keys(&state).await;
-
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
     headers.insert("x-ditto-protocol", "anthropic".parse().unwrap());
@@ -90,7 +88,7 @@ async fn handle_anthropic_messages(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if use_virtual_keys && !headers.contains_key("authorization") {
+    if !headers.contains_key("authorization") {
         if let Some(token) = extract_virtual_key(&parts.headers)
             .as_deref()
             .and_then(synthesize_bearer_header)

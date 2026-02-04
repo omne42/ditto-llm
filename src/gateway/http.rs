@@ -3,6 +3,7 @@ include!("http/core.rs");
 include!("http/anthropic.rs");
 include!("http/google_genai.rs");
 include!("http/openai_compat_proxy.rs");
+include!("http/openai_models.rs");
 include!("http/proxy.rs");
 include!("http/admin.rs");
 include!("http/translation_backend.rs");

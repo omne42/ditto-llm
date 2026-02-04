@@ -29,6 +29,20 @@ fn backend_config(name: &str, base_url: String, auth: &str) -> BackendConfig {
     }
 }
 
+fn backend_config_no_auth(name: &str, base_url: String) -> BackendConfig {
+    BackendConfig {
+        name: name.to_string(),
+        base_url,
+        max_in_flight: None,
+        timeout_seconds: None,
+        headers: BTreeMap::new(),
+        query_params: BTreeMap::new(),
+        provider: None,
+        provider_config: None,
+        model_map: BTreeMap::new(),
+    }
+}
+
 fn build_proxy_backends(
     config: &GatewayConfig,
 ) -> Result<HashMap<String, ProxyBackend>, ditto_llm::gateway::GatewayError> {
@@ -151,6 +165,76 @@ async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
         Some(1)
     );
 
+    mock.assert();
+}
+
+#[tokio::test]
+async fn anthropic_messages_proxy_forwards_x_api_key_when_virtual_keys_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-upstream")
+            .header("x-request-id", "req-1")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}],
+                "stream": false,
+                "max_tokens": 64
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "chatcmpl_123",
+                    "model": "gpt-4o-mini",
+                    "choices": [{
+                        "message": {"role":"assistant","content":"hello"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                })
+                .to_string(),
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config_no_auth("primary", upstream.base_url())],
+        virtual_keys: Vec::new(),
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "max_tokens": 64,
+        "stream": false,
+        "messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/messages")
+        .header("x-api-key", "sk-upstream")
+        .header("x-request-id", "req-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
     mock.assert();
 }
 
@@ -362,6 +446,137 @@ async fn anthropic_messages_streaming_translates_openai_sse() {
     assert!(text.contains("llo"));
     assert!(text.contains("message_stop"));
 
+    mock.assert();
+}
+
+#[tokio::test]
+async fn google_generate_content_forwards_x_goog_api_key_when_virtual_keys_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-upstream")
+            .json_body(json!({
+                "model": "gemini-pro",
+                "messages": [{"role":"user","content":"hi"}],
+                "stream": false,
+                "max_tokens": 64
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "chatcmpl_123",
+                    "model": "gemini-pro",
+                    "choices": [{
+                        "message": {"role":"assistant","content":"hello"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                })
+                .to_string(),
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config_no_auth("primary", upstream.base_url())],
+        virtual_keys: Vec::new(),
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "contents": [{"role":"user","parts":[{"text":"hi"}]}],
+        "generationConfig": { "maxOutputTokens": 64 }
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1beta/models/gemini-pro:generateContent")
+        .header("x-goog-api-key", "sk-upstream")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    mock.assert();
+}
+
+#[tokio::test]
+async fn google_generate_content_forwards_query_key_when_virtual_keys_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-upstream")
+            .json_body(json!({
+                "model": "gemini-pro",
+                "messages": [{"role":"user","content":"hi"}],
+                "stream": false,
+                "max_tokens": 64
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "chatcmpl_123",
+                    "model": "gemini-pro",
+                    "choices": [{
+                        "message": {"role":"assistant","content":"hello"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                })
+                .to_string(),
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config_no_auth("primary", upstream.base_url())],
+        virtual_keys: Vec::new(),
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "contents": [{"role":"user","parts":[{"text":"hi"}]}],
+        "generationConfig": { "maxOutputTokens": 64 }
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1beta/models/gemini-pro:generateContent?key=sk-upstream")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
     mock.assert();
 }
 
