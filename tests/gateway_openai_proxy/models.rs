@@ -49,8 +49,7 @@ async fn openai_models_list_merges_across_backends() {
         ],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "a".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "a".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

@@ -656,7 +656,6 @@ mod tests {
             backends: Vec::new(),
             virtual_keys: vec![VirtualKeyConfig::new("key-1", "secret://env/REAL_TOKEN")],
             router: RouterConfig {
-                default_backend: String::new(),
                 default_backends: Vec::new(),
                 rules: Vec::new(),
             },

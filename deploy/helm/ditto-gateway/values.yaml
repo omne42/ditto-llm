@@ -53,7 +53,7 @@ gateway:
           "route": null
         }
       ],
-      "router": { "default_backend": "openai", "default_backends": [], "rules": [] }
+      "router": { "default_backends": [{ "backend": "openai", "weight": 1.0 }], "rules": [] }
     }
 
   jsonLogs: true

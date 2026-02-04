@@ -57,7 +57,7 @@ REDIS_URL=redis://127.0.0.1:6379
       "route": null
     }
   ],
-  "router": { "default_backend": "openai", "default_backends": [], "rules": [] }
+  "router": { "default_backends": [{ "backend": "openai", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -115,7 +115,6 @@ curl -sS http://127.0.0.1:8080/admin/keys -H "Authorization: Bearer ${DITTO_ADMI
     { "name": "backup", "base_url": "http://litellm:4000/v1", "headers": { "authorization": "Bearer ${LITELLM_MASTER_KEY}" } }
   ],
   "router": {
-    "default_backend": "",
     "default_backends": [
       { "backend": "primary", "weight": 9 },
       { "backend": "backup", "weight": 1 }

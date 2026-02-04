@@ -25,8 +25,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

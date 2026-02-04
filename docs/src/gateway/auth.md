@@ -69,7 +69,7 @@ Ditto Gateway 的鉴权分两层：
   "virtual_keys": [
     { "id": "vk-dev", "token": "${DITTO_VK_DEV}", "enabled": true, "limits": {}, "budget": {}, "cache": {}, "guardrails": {}, "passthrough": { "allow": true, "bypass_cache": true }, "route": null }
   ],
-  "router": { "default_backend": "openai", "rules": [], "default_backends": [] }
+  "router": { "default_backends": [{ "backend": "openai", "weight": 1.0 }], "rules": [] }
 }
 ```
 

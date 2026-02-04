@@ -33,6 +33,5 @@
       "route": null
     }
   ],
-  "router": { "default_backend": "litellm", "default_backends": [], "rules": [] }
+  "router": { "default_backends": [{ "backend": "litellm", "weight": 1.0 }], "rules": [] }
 }
-

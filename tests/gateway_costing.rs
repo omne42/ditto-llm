@@ -6,7 +6,7 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
     BackendConfig, BudgetConfig, Gateway, GatewayConfig, GatewayHttpState, PricingTable,
-    ProxyBackend, RouterConfig, VirtualKeyConfig,
+    ProxyBackend, RouteBackend, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -74,8 +74,10 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -150,8 +152,10 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -253,8 +257,10 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -347,8 +353,10 @@ async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<(
         backends: vec![backend],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -429,8 +437,10 @@ async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -520,8 +530,10 @@ async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::Result<()>
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

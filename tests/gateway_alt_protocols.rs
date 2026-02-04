@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashMap};
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
-    BackendConfig, Gateway, GatewayConfig, GatewayHttpState, ProxyBackend, RouterConfig,
-    VirtualKeyConfig,
+    BackendConfig, Gateway, GatewayConfig, GatewayHttpState, ProxyBackend, RouteBackend,
+    RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -98,8 +98,10 @@ async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -205,8 +207,10 @@ async fn anthropic_messages_proxy_forwards_x_api_key_when_virtual_keys_disabled(
         backends: vec![backend_config_no_auth("primary", upstream.base_url())],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -279,8 +283,10 @@ async fn anthropic_messages_proxy_accepts_messages_alias() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -331,7 +337,6 @@ async fn anthropic_count_tokens_accepts_messages_alias() {
         backends: Vec::new(),
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
             default_backends: Vec::new(),
             rules: Vec::new(),
         },
@@ -399,8 +404,10 @@ async fn anthropic_messages_streaming_translates_openai_sse() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -485,8 +492,10 @@ async fn google_generate_content_forwards_x_goog_api_key_when_virtual_keys_disab
         backends: vec![backend_config_no_auth("primary", upstream.base_url())],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -551,8 +560,10 @@ async fn google_generate_content_forwards_query_key_when_virtual_keys_disabled()
         backends: vec![backend_config_no_auth("primary", upstream.base_url())],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -620,8 +631,10 @@ async fn google_generate_content_translates_to_openai_chat_completions() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -713,8 +726,10 @@ async fn google_generate_content_accepts_virtual_key_via_query_param() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -798,8 +813,10 @@ async fn cloudcode_generate_content_wraps_google_format() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

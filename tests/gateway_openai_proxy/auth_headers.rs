@@ -22,8 +22,7 @@ async fn openai_compat_proxy_accepts_x_litellm_api_key_for_virtual_key_auth() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

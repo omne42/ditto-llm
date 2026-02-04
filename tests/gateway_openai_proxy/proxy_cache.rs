@@ -18,8 +18,7 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
         backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -98,8 +97,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
         backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -211,8 +209,7 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
         backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

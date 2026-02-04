@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
-    Gateway, GatewayConfig, GatewayHttpState, RouterConfig, VirtualKeyConfig,
+    Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -17,8 +17,10 @@ fn base_config() -> GatewayConfig {
         backends: Vec::new(),
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

@@ -3,7 +3,8 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
-    Gateway, GatewayConfig, GatewayHttpState, RouterConfig, SqliteStore, VirtualKeyConfig,
+    Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, SqliteStore,
+    VirtualKeyConfig,
 };
 use tower::util::ServiceExt;
 
@@ -18,8 +19,10 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
         backends: Vec::new(),
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

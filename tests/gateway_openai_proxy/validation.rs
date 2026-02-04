@@ -24,8 +24,7 @@ async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_llm::Result<()
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -87,8 +86,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_reque
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -153,8 +151,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_reque
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -220,8 +217,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -286,8 +282,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -353,8 +348,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_transcripti
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -426,8 +420,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_files_upload_requ
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -498,8 +491,7 @@ async fn openai_compat_proxy_applies_route_guardrails_override() {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
                 exact: false,
@@ -568,8 +560,7 @@ async fn openai_compat_proxy_rejects_not_allowed_model() {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -627,8 +618,7 @@ async fn openai_compat_proxy_allows_requests_without_virtual_keys() {
         )],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -683,8 +673,7 @@ async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
         }],
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

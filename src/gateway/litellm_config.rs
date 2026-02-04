@@ -87,8 +87,7 @@ impl LitellmProxyConfig {
             None => Vec::new(),
         };
 
-        let (default_backend, default_backends, mut rules) =
-            build_router_from_model_groups(&model_groups)?;
+        let (default_backends, mut rules) = build_router_from_model_groups(&model_groups)?;
 
         rules.sort_by(|a, b| match (a.exact, b.exact) {
             (true, false) => std::cmp::Ordering::Less,
@@ -100,7 +99,6 @@ impl LitellmProxyConfig {
             backends,
             virtual_keys,
             router: RouterConfig {
-                default_backend,
                 default_backends,
                 rules,
             },
@@ -112,24 +110,19 @@ impl LitellmProxyConfig {
 
 fn build_router_from_model_groups(
     groups: &BTreeMap<String, Vec<String>>,
-) -> Result<(String, Vec<RouteBackend>, Vec<RouteRule>), GatewayError> {
-    let mut default_backend = String::new();
+) -> Result<(Vec<RouteBackend>, Vec<RouteRule>), GatewayError> {
     let mut default_backends: Vec<RouteBackend> = Vec::new();
     let mut rules: Vec<RouteRule> = Vec::new();
 
     let wildcard_backends = groups.get("*").cloned().unwrap_or_default();
     if !wildcard_backends.is_empty() {
-        if wildcard_backends.len() == 1 {
-            default_backend = wildcard_backends[0].clone();
-        } else {
-            default_backends = wildcard_backends
-                .iter()
-                .map(|name| RouteBackend {
-                    backend: name.clone(),
-                    weight: 1,
-                })
-                .collect();
-        }
+        default_backends = wildcard_backends
+            .iter()
+            .map(|name| RouteBackend {
+                backend: name.clone(),
+                weight: 1.0,
+            })
+            .collect();
     }
 
     for (model_name, backends) in groups {
@@ -160,15 +153,15 @@ fn build_router_from_model_groups(
                 .iter()
                 .map(|name| RouteBackend {
                     backend: name.clone(),
-                    weight: 1,
+                    weight: 1.0,
                 })
                 .collect(),
             guardrails: None,
         });
     }
 
-    if default_backend.trim().is_empty() && default_backends.is_empty() {
-        default_backend = groups
+    if default_backends.is_empty() {
+        let default_backend = groups
             .values()
             .flat_map(|values| values.iter())
             .next()
@@ -176,9 +169,13 @@ fn build_router_from_model_groups(
             .ok_or_else(|| GatewayError::InvalidRequest {
                 reason: "litellm config produced no backends".to_string(),
             })?;
+        default_backends.push(RouteBackend {
+            backend: default_backend,
+            weight: 1.0,
+        });
     }
 
-    Ok((default_backend, default_backends, rules))
+    Ok((default_backends, rules))
 }
 
 fn backend_from_litellm_entry(
@@ -320,10 +317,7 @@ general_settings:
         assert_eq!(config.virtual_keys.len(), 1);
         assert_eq!(config.virtual_keys[0].token, "sk-1234");
         assert!(!config.backends.is_empty());
-        assert!(
-            !config.router.default_backend.trim().is_empty()
-                || !config.router.default_backends.is_empty()
-        );
+        assert!(!config.router.default_backends.is_empty());
     }
 
     #[test]

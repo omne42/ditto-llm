@@ -16,14 +16,12 @@
 ```json
 {
   "router": {
-    "default_backend": "primary",
-    "default_backends": [],
+    "default_backends": [{ "backend": "primary", "weight": 1.0 }],
     "rules": []
   }
 }
 ```
 
-- `default_backend`：最简单的默认 backend（必填，除非你用 `default_backends`）。
 - `default_backends`：支持权重的默认候选集（会选出主 backend，并附带 fallback 顺序）。
 - `rules[]`：按 `model_prefix` 覆盖路由；每条 rule 也可以用单 backend 或 weighted backends。
 
@@ -50,7 +48,6 @@
 ```json
 {
   "router": {
-    "default_backend": "",
     "default_backends": [
       { "backend": "primary", "weight": 9 },
       { "backend": "backup", "weight": 1 }

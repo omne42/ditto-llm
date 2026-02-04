@@ -7,7 +7,7 @@ use ditto_llm::gateway::observability::ObservabilitySnapshot;
 use ditto_llm::gateway::{
     Backend, BudgetConfig, CacheConfig, Gateway, GatewayConfig, GatewayError, GatewayHttpState,
     GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig,
-    RouterConfig, VirtualKeyConfig,
+    RouteBackend, RouterConfig, VirtualKeyConfig,
 };
 use serde_json::json;
 use tower::util::ServiceExt;
@@ -54,8 +54,10 @@ fn base_config() -> GatewayConfig {
         backends: Vec::new(),
         virtual_keys: vec![base_key()],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

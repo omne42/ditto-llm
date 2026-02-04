@@ -129,7 +129,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -153,7 +153,7 @@ Translation backends (feature `gateway-translation`) can be configured with `pro
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "anthropic", "rules": [] }
+  "router": { "default_backends": [{ "backend": "anthropic", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -162,7 +162,7 @@ For OpenAI-compatible upstreams, `provider` can be `openai-compatible`/`openai_c
 Routing (optional):
 
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
-- `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backend` if empty)
+- `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backends` when empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
 - With `--features gateway-routing-advanced`, proxying can also use retry/circuit breaker/active health checks (`--proxy-retry*` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
 

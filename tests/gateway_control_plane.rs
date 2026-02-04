@@ -9,8 +9,8 @@ use async_trait::async_trait;
 
 use ditto_llm::gateway::{
     Backend, BudgetConfig, CacheConfig, Clock, Gateway, GatewayConfig, GatewayError,
-    GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouteRule,
-    RouterConfig, VirtualKeyConfig,
+    GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig,
+    RouteBackend, RouteRule, RouterConfig, VirtualKeyConfig,
 };
 
 struct FixedClock {
@@ -93,8 +93,10 @@ fn base_config(key: VirtualKeyConfig) -> GatewayConfig {
         backends: Vec::new(),
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -284,8 +286,10 @@ async fn project_budget_is_shared_across_virtual_keys() {
         backends: Vec::new(),
         virtual_keys: vec![key_1, key_2],
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -329,8 +333,10 @@ async fn user_budget_limit_blocks_request() {
 async fn router_switches_backend_by_model_prefix() {
     let mut config = base_config(base_key());
     config.router = RouterConfig {
-        default_backend: "primary".to_string(),
-        default_backends: Vec::new(),
+        default_backends: vec![RouteBackend {
+            backend: "primary".to_string(),
+            weight: 1.0,
+        }],
         rules: vec![RouteRule {
             model_prefix: "gpt-4".to_string(),
             exact: false,
@@ -367,8 +373,10 @@ async fn guardrail_override_applies_for_route_rule() {
 
     let mut config = base_config(key);
     config.router = RouterConfig {
-        default_backend: "primary".to_string(),
-        default_backends: Vec::new(),
+        default_backends: vec![RouteBackend {
+            backend: "primary".to_string(),
+            weight: 1.0,
+        }],
         rules: vec![RouteRule {
             model_prefix: "gpt-".to_string(),
             exact: false,

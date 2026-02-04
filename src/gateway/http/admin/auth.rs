@@ -312,7 +312,6 @@ mod admin_auth_tests {
             backends: Vec::new(),
             virtual_keys: Vec::new(),
             router: crate::gateway::RouterConfig {
-                default_backend: "default".to_string(),
                 default_backends: Vec::new(),
                 rules: Vec::new(),
             },

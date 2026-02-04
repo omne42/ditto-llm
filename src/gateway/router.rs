@@ -1,24 +1,68 @@
+use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 
 use super::{GatewayError, GatewayRequest, GuardrailsConfig, VirtualKeyConfig};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct RouterConfig {
-    pub default_backend: String,
     #[serde(default)]
     pub default_backends: Vec<RouteBackend>,
     pub rules: Vec<RouteRule>,
+}
+
+impl<'de> Deserialize<'de> for RouterConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RouterConfigCompat {
+            #[serde(default)]
+            default_backends: Vec<RouteBackend>,
+            #[serde(default)]
+            rules: Vec<RouteRule>,
+            #[serde(default)]
+            default_backend: Option<String>,
+        }
+
+        let mut compat = RouterConfigCompat::deserialize(deserializer)?;
+
+        let legacy_default = compat
+            .default_backend
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if legacy_default.is_some() && !compat.default_backends.is_empty() {
+            return Err(de::Error::custom(
+                "router.default_backend is deprecated; use router.default_backends only",
+            ));
+        }
+
+        if compat.default_backends.is_empty() {
+            if let Some(default_backend) = legacy_default {
+                compat.default_backends.push(RouteBackend {
+                    backend: default_backend.to_string(),
+                    weight: default_weight(),
+                });
+            }
+        }
+
+        Ok(Self {
+            default_backends: compat.default_backends,
+            rules: compat.rules,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RouteBackend {
     pub backend: String,
     #[serde(default = "default_weight")]
-    pub weight: u32,
+    pub weight: f64,
 }
 
-fn default_weight() -> u32 {
-    1
+fn default_weight() -> f64 {
+    1.0
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -174,13 +218,9 @@ impl Router {
                 return Ok(out);
             }
         }
-
-        if self.config.default_backend.is_empty() {
-            return Err(GatewayError::BackendNotFound {
-                name: "default".to_string(),
-            });
-        }
-        Ok(vec![self.config.default_backend.clone()])
+        Err(GatewayError::BackendNotFound {
+            name: "default".to_string(),
+        })
     }
 }
 
@@ -190,7 +230,7 @@ fn select_weighted<'a>(
 ) -> Vec<String> {
     let candidates: Vec<&RouteBackend> = backends
         .filter(|backend| !backend.backend.trim().is_empty())
-        .filter(|backend| backend.weight > 0)
+        .filter(|backend| backend.weight.is_finite() && backend.weight > 0.0)
         .collect();
     if candidates.is_empty() {
         return Vec::new();
@@ -200,20 +240,22 @@ fn select_weighted<'a>(
         return vec![candidates[0].backend.clone()];
     }
 
-    let total_weight: u64 = candidates.iter().map(|b| u64::from(b.weight)).sum();
-    if total_weight == 0 {
+    let total_weight: f64 = candidates.iter().map(|b| b.weight).sum();
+    if !total_weight.is_finite() || total_weight <= 0.0 {
         return Vec::new();
     }
 
-    let mut pick = hash64_fnv1a(seed.as_bytes()) % total_weight;
-    let mut selected_index = 0usize;
+    let hash = hash64_fnv1a(seed.as_bytes());
+    let unit = ((hash >> 11) as f64) / ((1u64 << 53) as f64);
+    let mut pick = unit * total_weight;
+    let mut selected_index = candidates.len().saturating_sub(1);
     for (idx, backend) in candidates.iter().enumerate() {
-        let weight = u64::from(backend.weight);
+        let weight = backend.weight;
         if pick < weight {
             selected_index = idx;
             break;
         }
-        pick = pick.saturating_sub(weight);
+        pick -= weight;
     }
 
     let mut out = Vec::with_capacity(candidates.len());
@@ -252,17 +294,19 @@ mod tests {
         let candidates: Vec<&RouteBackend> = backends
             .iter()
             .filter(|backend| !backend.backend.trim().is_empty())
-            .filter(|backend| backend.weight > 0)
+            .filter(|backend| backend.weight.is_finite() && backend.weight > 0.0)
             .collect();
         assert!(!candidates.is_empty());
-        let total_weight: u64 = candidates.iter().map(|b| u64::from(b.weight)).sum();
-        let mut pick = hash64_fnv1a(seed.as_bytes()) % total_weight;
+        let total_weight: f64 = candidates.iter().map(|b| b.weight).sum();
+        let hash = hash64_fnv1a(seed.as_bytes());
+        let unit = ((hash >> 11) as f64) / ((1u64 << 53) as f64);
+        let mut pick = unit * total_weight;
         for backend in candidates {
-            let weight = u64::from(backend.weight);
+            let weight = backend.weight;
             if pick < weight {
                 return backend.backend.clone();
             }
-            pick = pick.saturating_sub(weight);
+            pick -= weight;
         }
         unreachable!("weight selection must pick an element")
     }
@@ -276,22 +320,24 @@ mod tests {
             backends: vec![
                 RouteBackend {
                     backend: "a".to_string(),
-                    weight: 1,
+                    weight: 1.0,
                 },
                 RouteBackend {
                     backend: "b".to_string(),
-                    weight: 2,
+                    weight: 2.0,
                 },
                 RouteBackend {
                     backend: "b".to_string(),
-                    weight: 2,
+                    weight: 2.0,
                 },
             ],
             guardrails: None,
         };
         let router = Router::new(RouterConfig {
-            default_backend: "default".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "default".to_string(),
+                weight: 1.0,
+            }],
             rules: vec![rule.clone()],
         });
 
@@ -309,8 +355,10 @@ mod tests {
     #[test]
     fn weighted_selection_skips_zero_weight_and_empty_backend() {
         let router = Router::new(RouterConfig {
-            default_backend: "default".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "default".to_string(),
+                weight: 1.0,
+            }],
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
                 exact: false,
@@ -318,15 +366,15 @@ mod tests {
                 backends: vec![
                     RouteBackend {
                         backend: String::new(),
-                        weight: 10,
+                        weight: 10.0,
                     },
                     RouteBackend {
                         backend: "a".to_string(),
-                        weight: 0,
+                        weight: 0.0,
                     },
                     RouteBackend {
                         backend: "b".to_string(),
-                        weight: 1,
+                        weight: 1.0,
                     },
                 ],
                 guardrails: None,
@@ -342,8 +390,10 @@ mod tests {
     #[test]
     fn exact_rules_take_precedence_over_prefix_rules() {
         let router = Router::new(RouterConfig {
-            default_backend: "default".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "default".to_string(),
+                weight: 1.0,
+            }],
             rules: vec![
                 RouteRule {
                     model_prefix: "gpt-".to_string(),
@@ -371,8 +421,10 @@ mod tests {
     #[test]
     fn wildcard_suffix_matches_as_prefix() {
         let router = Router::new(RouterConfig {
-            default_backend: "default".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "default".to_string(),
+                weight: 1.0,
+            }],
             rules: vec![RouteRule {
                 model_prefix: "anthropic/*".to_string(),
                 exact: false,

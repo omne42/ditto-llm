@@ -9,7 +9,7 @@ use ditto_llm::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_llm::batch::BatchClient;
 use ditto_llm::embedding::EmbeddingModel;
 use ditto_llm::gateway::{
-    Gateway, GatewayConfig, GatewayHttpState, RouterConfig, TranslationBackend,
+    Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
 use ditto_llm::image::ImageGenerationModel;
 use ditto_llm::model::{LanguageModel, StreamResult};
@@ -381,8 +381,10 @@ fn base_gateway() -> Gateway {
         backends: Vec::new(),
         virtual_keys: Vec::new(),
         router: RouterConfig {
-            default_backend: "primary".to_string(),
-            default_backends: Vec::new(),
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

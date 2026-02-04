@@ -6,7 +6,7 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
     BackendConfig, BudgetConfig, Gateway, GatewayConfig, GatewayHttpState, GuardrailsConfig,
-    ProxyBackend, RouteRule, RouterConfig, VirtualKeyConfig,
+    ProxyBackend, RouteBackend, RouteRule, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;

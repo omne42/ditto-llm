@@ -65,7 +65,7 @@ cargo build --features gateway --bin ditto-gateway
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -91,7 +91,7 @@ cargo build --features gateway --bin ditto-gateway
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 

@@ -209,7 +209,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -233,7 +233,7 @@ Translation backends (feature `gateway-translation`) can be configured with `pro
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "anthropic", "rules": [] }
+  "router": { "default_backends": [{ "backend": "anthropic", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -242,7 +242,7 @@ For OpenAI-compatible upstreams, `provider` can be `openai-compatible`/`openai_c
 Routing (optional):
 
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
-- `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backend` if empty)
+- `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backends` when empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
 - With `--features gateway-routing-advanced`, proxying can also use retry/circuit breaker/active health checks (`--proxy-retry*` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
 
@@ -3212,7 +3212,7 @@ cargo build --features gateway --bin ditto-gateway
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -3238,7 +3238,7 @@ cargo build --features gateway --bin ditto-gateway
     }
   ],
   "virtual_keys": [],
-  "router": { "default_backend": "primary", "rules": [] }
+  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -3492,7 +3492,7 @@ REDIS_URL=redis://127.0.0.1:6379
       "route": null
     }
   ],
-  "router": { "default_backend": "openai", "default_backends": [], "rules": [] }
+  "router": { "default_backends": [{ "backend": "openai", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -3550,7 +3550,6 @@ curl -sS http://127.0.0.1:8080/admin/keys -H "Authorization: Bearer ${DITTO_ADMI
     { "name": "backup", "base_url": "http://litellm:4000/v1", "headers": { "authorization": "Bearer ${LITELLM_MASTER_KEY}" } }
   ],
   "router": {
-    "default_backend": "",
     "default_backends": [
       { "backend": "primary", "weight": 9 },
       { "backend": "backup", "weight": 1 }
@@ -3654,6 +3653,77 @@ cargo run --features "gateway gateway-routing-advanced" --bin ditto-gateway -- .
   --proxy-retry --proxy-retry-max-attempts 2 \
   --proxy-circuit-breaker --proxy-cb-failure-threshold 3 --proxy-cb-cooldown-secs 30 \
   --proxy-health-checks --proxy-health-check-path /v1/models --proxy-health-check-interval-secs 10
+```
+
+---
+
+## Recipe 6：OpenAI-compatible upstream → Claude Code CLI + Gemini CLI（指向 localhost）
+
+目标：
+
+- 上游是 **OpenAI-compatible**（例如 LiteLLM 的 `/v1`），模型为 `glm-4.7`
+- 本地启动 `ditto-gateway`，同时对外提供：
+  - OpenAI：`/v1/*`
+  - Claude（Anthropic Messages）：`/v1/messages`
+  - Gemini（Google GenAI）：`/v1beta/models/*:generateContent` / `:streamGenerateContent`
+- 让 **Claude Code CLI** / **Gemini CLI** 都能通过 `localhost` 直接使用
+
+### 1) 配置文件（示例）
+
+直接用仓库内示例：`deploy/gateway.litellm.talesofai.cn.glm47.json`。
+
+这个示例做了两件事：
+
+- 上游鉴权从环境变量注入：`TALES_LITELLM_API_KEY`
+- 任意下游 `model` 都会被改写到上游 `glm-4.7`：`model_map: { "*": "glm-4.7" }`
+
+### 2) 启动
+
+```bash
+export TALES_LITELLM_API_KEY='...'
+export DITTO_VK='vk-local'
+
+cargo run --features gateway --bin ditto-gateway -- ./deploy/gateway.litellm.talesofai.cn.glm47.json \
+  --listen 127.0.0.1:18080
+```
+
+### 3) 验证（curl）
+
+```bash
+# OpenAI
+curl -sS http://127.0.0.1:18080/v1/models \
+  -H "Authorization: Bearer ${DITTO_VK}" | head
+
+# Claude (Anthropic Messages)
+curl -sS http://127.0.0.1:18080/v1/messages \
+  -H "x-api-key: ${DITTO_VK}" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-local","max_tokens":16,"messages":[{"role":"user","content":[{"type":"text","text":"Reply with ok"}]}]}' | jq -r '.content[0].text'
+
+# Gemini (Google GenAI)
+curl -sS http://127.0.0.1:18080/v1beta/models/gemini-pro:generateContent \
+  -H "x-goog-api-key: ${DITTO_VK}" \
+  -H "content-type: application/json" \
+  -d '{"contents":[{"role":"user","parts":[{"text":"Reply with ok"}]}]}' | jq -r '.candidates[0].content.parts[0].text'
+```
+
+### 4) Claude Code CLI（Anthropic Base URL 指向 localhost）
+
+```bash
+export ANTHROPIC_BASE_URL='http://127.0.0.1:18080'
+export ANTHROPIC_API_KEY="${DITTO_VK}"
+
+claude -p 'Reply with ok'
+```
+
+### 5) Gemini CLI（Gemini Base URL 指向 localhost）
+
+```bash
+export GOOGLE_GEMINI_BASE_URL='http://127.0.0.1:18080'
+export GEMINI_API_KEY="${DITTO_VK}"
+
+# 建议显式选一个模型（避免 auto 模式走 classifier / generateJson）
+gemini -m flash -p 'Reply with ok'
 ```
 
 ---
@@ -3784,7 +3854,6 @@ virtual key 的字段很多，建议先从最小配置开始：
 
 `RouterConfig` 支持：
 
-- `default_backend`：默认 backend
 - `default_backends`：按 weight 选择主 backend（并返回 fallback 顺序）
 - `rules[]`：按 `model_prefix` 覆盖路由（默认前缀匹配；可选 `exact=true` 精确匹配；也可写 weighted backends）
 
@@ -3792,8 +3861,7 @@ virtual key 的字段很多，建议先从最小配置开始：
 
 ```json
 {
-  "default_backend": "primary",
-  "default_backends": [],
+  "default_backends": [{ "backend": "primary", "weight": 1.0 }],
   "rules": [
     {
       "model_prefix": "gpt-4",
@@ -4280,7 +4348,7 @@ Ditto Gateway 的鉴权分两层：
   "virtual_keys": [
     { "id": "vk-dev", "token": "${DITTO_VK_DEV}", "enabled": true, "limits": {}, "budget": {}, "cache": {}, "guardrails": {}, "passthrough": { "allow": true, "bypass_cache": true }, "route": null }
   ],
-  "router": { "default_backend": "openai", "rules": [], "default_backends": [] }
+  "router": { "default_backends": [{ "backend": "openai", "weight": 1.0 }], "rules": [] }
 }
 ```
 
@@ -4358,14 +4426,12 @@ FILE: docs/src/gateway/routing.md
 ```json
 {
   "router": {
-    "default_backend": "primary",
-    "default_backends": [],
+    "default_backends": [{ "backend": "primary", "weight": 1.0 }],
     "rules": []
   }
 }
 ```
 
-- `default_backend`：最简单的默认 backend（必填，除非你用 `default_backends`）。
 - `default_backends`：支持权重的默认候选集（会选出主 backend，并附带 fallback 顺序）。
 - `rules[]`：按 `model_prefix` 覆盖路由；每条 rule 也可以用单 backend 或 weighted backends。
 
@@ -4392,7 +4458,6 @@ FILE: docs/src/gateway/routing.md
 ```json
 {
   "router": {
-    "default_backend": "",
     "default_backends": [
       { "backend": "primary", "weight": 9 },
       { "backend": "backup", "weight": 1 }
@@ -6352,7 +6417,7 @@ Ditto 当前覆盖度：
   "virtual_keys": [
     { "id": "vk-dev", "token": "${DITTO_VK_DEV}", "enabled": true, "limits": {}, "budget": {}, "cache": {}, "guardrails": {}, "passthrough": { "allow": true, "bypass_cache": true }, "route": null }
   ],
-  "router": { "default_backend": "litellm", "default_backends": [], "rules": [] }
+  "router": { "default_backends": [{ "backend": "litellm", "weight": 1.0 }], "rules": [] }
 }
 ```
 

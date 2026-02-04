@@ -50,7 +50,7 @@ Ditto 当前覆盖度：
   "virtual_keys": [
     { "id": "vk-dev", "token": "${DITTO_VK_DEV}", "enabled": true, "limits": {}, "budget": {}, "cache": {}, "guardrails": {}, "passthrough": { "allow": true, "bypass_cache": true }, "route": null }
   ],
-  "router": { "default_backend": "litellm", "default_backends": [], "rules": [] }
+  "router": { "default_backends": [{ "backend": "litellm", "weight": 1.0 }], "rules": [] }
 }
 ```
 
