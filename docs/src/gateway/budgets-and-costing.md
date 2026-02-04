@@ -181,6 +181,21 @@ Ditto 会对请求做 cost 估算：
 
 与 token 预算类似，cost 预算在启用 store 后也会“预留 + 结算”，并可在 `/admin/costs*` 查看 ledger。
 
+### 4.3 适用端点（重要）
+
+Ditto 的 cost budget 基于 **token 定价**（LiteLLM pricing JSON 的 `*_cost_per_token` / `*_cost_per_1k_tokens` 等字段），因此只对“token 口径”端点有意义：
+
+- ✅ `POST /v1/chat/completions`
+- ✅ `POST /v1/responses`（含 Ditto 的 shim fallback）
+- ✅ `POST /v1/completions`
+- ✅ `POST /v1/embeddings`
+- ✅ `POST /v1/moderations`
+- ✅ `POST /v1/rerank`
+
+对于非 token 计费端点（例如 images/audio/batches 等），Ditto 在检测到任意 scope 配置了 `total_usd_micros` 时会直接拒绝请求（`cost_budget_unsupported_endpoint`），避免“误计费/绕过治理”。
+
+例外：`POST /v1/files` 与所有非 `POST` 请求会被视为 **0 成本**（仍可能受 rpm/tpm/token budget 约束）。
+
 ---
 
 ## 5) 建议的生产配置组合

@@ -75,10 +75,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
 
     let use_persistent_budget = use_sqlite_budget || use_redis_budget;
 
-    #[cfg(feature = "gateway-costing")]
-    let charge_cost_usd_micros: Option<u64> = Some(0);
-    #[cfg(not(feature = "gateway-costing"))]
-    let charge_cost_usd_micros: Option<u64> = None;
+    let mut charge_cost_usd_micros: Option<u64> = None;
 
     let now_epoch_seconds = now_epoch_seconds();
     let minute = now_epoch_seconds / 60;
@@ -203,6 +200,48 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     .map(|limits| (scope.clone(), limits.clone()))
             })
         });
+
+        #[cfg(feature = "gateway-costing")]
+        {
+            let has_cost_budget = key
+                .as_ref()
+                .is_some_and(|key| key.budget.total_usd_micros.is_some())
+                || tenant_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                || project_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                || user_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some());
+
+            if has_cost_budget {
+                match cost_budget_endpoint_policy(&parts.method, &path_and_query) {
+                    CostBudgetEndpointPolicy::Free => {
+                        charge_cost_usd_micros = Some(0);
+                    }
+                    CostBudgetEndpointPolicy::TokenBased => {
+                        charge_cost_usd_micros = Some(0);
+                    }
+                    CostBudgetEndpointPolicy::Unsupported => {
+                        let path = path_and_query
+                            .split_once('?')
+                            .map(|(path, _)| path)
+                            .unwrap_or(path_and_query.as_str())
+                            .trim_end_matches('/');
+                        return Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("cost_budget_unsupported_endpoint"),
+                            format!(
+                                "cost budgets are token-based and do not support {path} (disable total_usd_micros or use token budgets)"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
 
         if !use_redis_budget {
             if let (Some(key), Some(limits)) = (key.as_ref(), limits.as_ref()) {

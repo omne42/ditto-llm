@@ -1,4 +1,5 @@
 include!("openai_compat_proxy/preamble.rs");
+include!("openai_compat_proxy/cost_budget.rs");
 include!("openai_compat_proxy/costing.rs");
 include!("openai_compat_proxy/rate_limit.rs");
 include!("openai_compat_proxy/streaming_multipart.rs");
@@ -254,6 +255,50 @@ async fn handle_openai_compat_proxy(
                     .map(|limits| (scope.clone(), limits.clone()))
             });
 
+            #[cfg(feature = "gateway-costing")]
+            let (has_cost_budget, cost_budget_policy) = {
+                let has_cost_budget = key.budget.total_usd_micros.is_some()
+                    || tenant_budget_scope
+                        .as_ref()
+                        .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                    || project_budget_scope
+                        .as_ref()
+                        .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                    || user_budget_scope
+                        .as_ref()
+                        .is_some_and(|(_, budget)| budget.total_usd_micros.is_some());
+
+                let cost_budget_policy = if has_cost_budget {
+                    Some(cost_budget_endpoint_policy(&parts.method, path_and_query))
+                } else {
+                    None
+                };
+
+                (has_cost_budget, cost_budget_policy)
+            };
+
+            #[cfg(feature = "gateway-costing")]
+            if has_cost_budget
+                && matches!(
+                    cost_budget_policy,
+                    Some(CostBudgetEndpointPolicy::Unsupported)
+                )
+            {
+                let path = path_and_query
+                    .split_once('?')
+                    .map(|(path, _)| path)
+                    .unwrap_or(path_and_query)
+                    .trim_end_matches('/');
+                return Err(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("cost_budget_unsupported_endpoint"),
+                    format!(
+                        "cost budgets are token-based and do not support {path} (disable total_usd_micros or use token budgets)"
+                    ),
+                ));
+            }
+
             if !use_redis_budget {
                 if let Err(err) = gateway
                     .limits
@@ -424,15 +469,59 @@ async fn handle_openai_compat_proxy(
                 .map_err(map_openai_gateway_error)?;
 
             #[cfg(feature = "gateway-costing")]
-            let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
-                &state,
-                &gateway,
-                model.as_deref(),
-                input_tokens_estimate,
-                max_output_tokens,
-                service_tier.as_deref(),
-                &backends,
-            );
+            let charge_cost_usd_micros = {
+                if has_cost_budget {
+                    match cost_budget_policy.unwrap_or(CostBudgetEndpointPolicy::Unsupported) {
+                        CostBudgetEndpointPolicy::Free => Some(0),
+                        CostBudgetEndpointPolicy::TokenBased => {
+                            if state.pricing.is_none() {
+                                return Err(openai_error(
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    "api_error",
+                                    Some("pricing_not_configured"),
+                                    "pricing not configured for cost budgets",
+                                ));
+                            }
+                            if model.as_deref().is_none() {
+                                return Err(openai_error(
+                                    StatusCode::BAD_REQUEST,
+                                    "invalid_request_error",
+                                    Some("invalid_request"),
+                                    "missing field `model`",
+                                ));
+                            }
+
+                            estimate_charge_cost_usd_micros(
+                                &state,
+                                &gateway,
+                                model.as_deref(),
+                                input_tokens_estimate,
+                                max_output_tokens,
+                                service_tier.as_deref(),
+                                &backends,
+                            )
+                        }
+                        CostBudgetEndpointPolicy::Unsupported => {
+                            return Err(openai_error(
+                                StatusCode::BAD_REQUEST,
+                                "invalid_request_error",
+                                Some("cost_budget_unsupported_endpoint"),
+                                "cost budgets are token-based and do not support this endpoint (disable total_usd_micros or use token budgets)",
+                            ));
+                        }
+                    }
+                } else {
+                    estimate_charge_cost_usd_micros(
+                        &state,
+                        &gateway,
+                        model.as_deref(),
+                        input_tokens_estimate,
+                        max_output_tokens,
+                        service_tier.as_deref(),
+                        &backends,
+                    )
+                }
+            };
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 

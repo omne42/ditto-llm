@@ -103,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: allow Anthropic/Google shims to forward provider-style API keys (e.g. `x-api-key`, `x-goog-api-key`, `?key=`) as upstream `Authorization: Bearer ...` when virtual keys are disabled.
 - Gateway: aggregate `/models` and `/v1/models` across all configured proxy backends (dedup by model id).
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
+- CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
 
 ### Fixed
 
@@ -114,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build: fix `cargo clippy --no-default-features -- -D warnings` by tightening cfg gating for provider-only helpers.
 - Docs: fix parity notes to reflect MCP tools integration support for `POST /v1/responses`.
 - Docs: fix MCP gateway docs drift for `/v1/responses` and refresh `llms.txt`.
+- Gateway: when cost budgets (`total_usd_micros`) are enabled, treat non-token endpoints as unsupported (`cost_budget_unsupported_endpoint`) to avoid mis-accounting or bypass.
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
 - Security: harden `ProviderAuth::*_command` by adding timeouts and a 64KiB output cap (configurable via `DITTO_AUTH_COMMAND_TIMEOUT_MS/SECS`); command stdout may now be plain text, a JSON string, or a JSON object (`api_key`/`token`/`access_token`).
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
