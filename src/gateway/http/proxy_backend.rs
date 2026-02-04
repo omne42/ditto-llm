@@ -97,24 +97,25 @@ async fn attempt_proxy_backend(
         apply_backend_headers(&mut outgoing_headers, backend.headers());
         insert_request_id(&mut outgoing_headers, &request_id);
 
-        let outgoing_body = if let (Some(request_model), Some(parsed_json)) =
-            (model.as_deref(), parsed_json.as_ref())
-        {
-            backend_model_map
-                .get(request_model)
-                .and_then(|mapped_model| {
-                    let mut value = parsed_json.clone();
-                    let obj = value.as_object_mut()?;
-                    obj.insert(
-                        "model".to_string(),
-                        serde_json::Value::String(mapped_model.clone()),
-                    );
-                    serde_json::to_vec(&value).ok().map(Bytes::from)
-                })
-                .unwrap_or_else(|| body.clone())
-        } else {
-            body.clone()
-        };
+        let outgoing_body =
+            if let (Some(request_model), Some(parsed_json)) = (model.as_deref(), parsed_json.as_ref())
+            {
+                backend_model_map
+                    .get(request_model)
+                    .or_else(|| backend_model_map.get("*"))
+                    .and_then(|mapped_model| {
+                        let mut value = parsed_json.clone();
+                        let obj = value.as_object_mut()?;
+                        obj.insert(
+                            "model".to_string(),
+                            serde_json::Value::String(mapped_model.clone()),
+                        );
+                        serde_json::to_vec(&value).ok().map(Bytes::from)
+                    })
+                    .unwrap_or_else(|| body.clone())
+            } else {
+                body.clone()
+            };
 
         #[cfg(feature = "sdk")]
         if let Some(logger) = state.devtools.as_ref() {
@@ -202,7 +203,7 @@ async fn attempt_proxy_backend(
                 if let Some(mapped_model) = chat_body
                     .get("model")
                     .and_then(|value| value.as_str())
-                    .and_then(|model| backend_model_map.get(model))
+                    .and_then(|model| backend_model_map.get(model).or_else(|| backend_model_map.get("*")))
                     .cloned()
                 {
                     if let Some(obj) = chat_body.as_object_mut() {

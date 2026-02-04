@@ -110,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: settle passthrough SSE stream budgets using the final `usage` chunk when present (prefer actual usage over request estimates).
 - Gateway: stream large multipart uploads to upstream for `/v1/files` and `/v1/audio/{transcriptions,translations}` (avoid buffering the full request body).
 - Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).
+- Gateway: fix Google GenAI streaming encoding to emit incremental text deltas (avoids duplicated output when clients concatenate chunks).
 
 ## [0.1.2] - 2026-02-01
 
@@ -211,6 +212,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: guardrails support regex patterns (`banned_regexes`) and optional PII blocking (`block_pii`).
 - Gateway: guardrails support optional request schema validation via `guardrails.validate_schema`.
 - Gateway: add Claude Code / Anthropic Messages API compatibility (`POST /v1/messages`, `POST /v1/messages/count_tokens`) and Gemini-compatible generateContent endpoints (`POST /v1beta/models/*:generateContent`, `POST /v1beta/models/*:streamGenerateContent`, and `POST /v1internal:*GenerateContent`).
+- Gateway: Google GenAI endpoints accept virtual keys via `x-goog-api-key` and `?key=` (same virtual key auth as OpenAI/Anthropic endpoints).
+- Gateway: proxy backend `model_map` supports wildcard `*` to rewrite any requested model name (useful for model aliasing across clients).
+- Docs: add a gateway recipe for driving Claude Code CLI and Gemini CLI via a localhost `ditto-gateway`.
 - Gateway translation: support legacy `POST /v1/completions` (non-streaming + streaming).
 - Gateway translation: serve `GET /v1/models` and `GET /v1/models/*` locally (no upstream OpenAI-compatible required).
 - Gateway translation: support `POST /v1/audio/translations` (same parsing/response as transcriptions).

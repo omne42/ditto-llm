@@ -1,0 +1,38 @@
+{
+  "backends": [
+    {
+      "name": "litellm",
+      "base_url": "https://litellm.talesofai.cn/v1",
+      "headers": { "authorization": "Bearer ${TALES_LITELLM_API_KEY}" },
+      "query_params": {},
+      "timeout_seconds": 300,
+      "max_in_flight": 64,
+      "model_map": { "*": "glm-4.7" }
+    }
+  ],
+  "virtual_keys": [
+    {
+      "id": "vk-local",
+      "token": "${DITTO_VK}",
+      "enabled": true,
+      "project_id": null,
+      "user_id": null,
+      "project_budget": null,
+      "user_budget": null,
+      "limits": { "rpm": 600, "tpm": 200000 },
+      "budget": { "total_tokens": 50000000, "total_usd_micros": null },
+      "cache": {
+        "enabled": false,
+        "ttl_seconds": null,
+        "max_entries": 1024,
+        "max_body_bytes": 1048576,
+        "max_total_body_bytes": 67108864
+      },
+      "guardrails": { "block_pii": false, "validate_schema": false },
+      "passthrough": { "allow": true, "bypass_cache": true },
+      "route": null
+    }
+  ],
+  "router": { "default_backend": "litellm", "default_backends": [], "rules": [] }
+}
+

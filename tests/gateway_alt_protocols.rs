@@ -459,6 +459,91 @@ async fn google_generate_content_translates_to_openai_chat_completions() {
 }
 
 #[tokio::test]
+async fn google_generate_content_accepts_virtual_key_via_query_param() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .json_body(json!({
+                "model": "gemini-pro",
+                "messages": [{"role":"user","content":"hi"}],
+                "stream": false,
+                "max_tokens": 64
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "id": "chatcmpl_123",
+                    "model": "gemini-pro",
+                    "choices": [{
+                        "message": {"role":"assistant","content":"hello"},
+                        "finish_reason": "stop"
+                    }],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                })
+                .to_string(),
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backend: "primary".to_string(),
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "contents": [{"role":"user","parts":[{"text":"hi"}]}],
+        "generationConfig": { "maxOutputTokens": 64 }
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1beta/models/gemini-pro:generateContent?key=vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert_eq!(
+        value
+            .get("candidates")
+            .and_then(|v| v.as_array())
+            .and_then(|items| items.first())
+            .and_then(|c| c.get("content"))
+            .and_then(|c| c.get("parts"))
+            .and_then(|p| p.as_array())
+            .and_then(|p| p.first())
+            .and_then(|p| p.get("text"))
+            .and_then(|v| v.as_str()),
+        Some("hello")
+    );
+
+    mock.assert();
+}
+
+#[tokio::test]
 async fn cloudcode_generate_content_wraps_google_format() {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return;

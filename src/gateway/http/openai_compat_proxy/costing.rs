@@ -28,7 +28,12 @@ fn estimate_charge_cost_usd_micros(
             .backends
             .iter()
             .find(|backend| backend.name == backend_name.as_str())
-            .and_then(|backend| backend.model_map.get(request_model))
+            .and_then(|backend| {
+                backend
+                    .model_map
+                    .get(request_model)
+                    .or_else(|| backend.model_map.get("*"))
+            })
             .map(|model| model.as_str());
 
         if let Some(mapped_model) = mapped_model {

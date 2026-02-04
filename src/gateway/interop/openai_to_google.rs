@@ -396,7 +396,6 @@ impl AnthropicSseEncoder {
 pub(crate) struct GoogleSseEncoder {
     response_id: String,
     model: String,
-    text: String,
     finish_reason: Option<String>,
     usage: OpenAiUsage,
     wrap_cloudcode: bool,
@@ -407,7 +406,6 @@ impl GoogleSseEncoder {
         Self {
             response_id: fallback_id,
             model: String::new(),
-            text: String::new(),
             finish_reason: None,
             usage: OpenAiUsage::default(),
             wrap_cloudcode,
@@ -469,11 +467,10 @@ impl GoogleSseEncoder {
             return Ok(Vec::new());
         }
 
-        self.text.push_str(text_delta);
         let chunk = serde_json::json!({
             "candidates": [{
                 "index": 0,
-                "content": { "role": "model", "parts": [{ "text": &self.text }] },
+                "content": { "role": "model", "parts": [{ "text": text_delta }] },
             }]
         });
         Ok(vec![self.wrap_if_needed(chunk)])
@@ -499,7 +496,7 @@ impl GoogleSseEncoder {
             Value::Array(vec![serde_json::json!({
                 "index": 0,
                 "finishReason": finish_reason,
-                "content": { "role": "model", "parts": [{ "text": self.text }] },
+                "content": { "role": "model", "parts": [] },
             })]),
         );
         out.insert("usageMetadata".to_string(), usage_metadata);

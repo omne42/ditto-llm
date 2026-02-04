@@ -660,7 +660,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "gateway-translation")]
     let mut translation_backends = std::collections::HashMap::new();
 
-    #[cfg(feature = "gateway-translation")]
     for backend in &config.backends {
         if backend
             .provider
@@ -695,13 +694,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 {
                     return Err(format!("duplicate backend name: {}", backend.name).into());
                 }
+                continue;
             }
             #[cfg(not(feature = "gateway-translation"))]
             {
                 return Err("provider backend requires `--features gateway-translation`".into());
             }
-
-            continue;
         }
 
         if backend.base_url.trim().is_empty() {

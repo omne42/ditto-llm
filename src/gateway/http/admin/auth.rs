@@ -99,6 +99,66 @@ fn extract_header(headers: &HeaderMap, name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn extract_query_param(uri: &axum::http::Uri, name: &str) -> Option<String> {
+    let query = uri.query()?;
+    extract_query_param_str(query, name)
+}
+
+fn extract_query_param_str(query: &str, name: &str) -> Option<String> {
+    for pair in query.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        if key != name {
+            continue;
+        }
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        return percent_decode_www_form(value);
+    }
+    None
+}
+
+fn percent_decode_www_form(value: &str) -> Option<String> {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return None;
+                }
+                let hi = from_hex(bytes[i + 1])?;
+                let lo = from_hex(bytes[i + 2])?;
+                out.push((hi << 4) | lo);
+                i += 3;
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn from_hex(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     let auth = headers
         .get("authorization")
