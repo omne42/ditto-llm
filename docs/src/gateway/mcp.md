@@ -118,17 +118,39 @@ Ditto 支持 LiteLLM 风格的请求写法：在 `tools` 数组中放入 `type: 
 
 ### 4.1 自动执行（require_approval: "never"）
 
-当任意 MCP tool config 中包含：
+当 **所有** MCP tool config 中都包含：
 
 ```json
 { "type": "mcp", "require_approval": "never" }
 ```
 
-Ditto 会做一次最小 tool loop（对齐 LiteLLM 的行为）：
+Ditto 会做一个最小 tool loop（对齐 LiteLLM 的默认行为）：
 
 1) 先用 `stream=false` 调一次对应端点（`/v1/chat/completions` 或 `/v1/responses`）获取 tool calls
 2) 逐个调用 MCP `tools/call`
 3) 把结果回填后再发起一次最终请求（最终请求的 `stream` 会保持和原请求一致）
+
+### 4.2 多步 tool loop（max_steps）
+
+在 `require_approval: "never"` 的基础上，你可以用 `max_steps` 扩展为多步：
+
+```json
+{ "type": "mcp", "require_approval": "never", "max_steps": 2 }
+```
+
+语义：
+
+- `max_steps` 表示 Ditto 最多自动执行多少轮 tool calls（默认 `1`，最大 `8`）
+- 当模型在 follow-up 里再次产生 tool calls，Ditto 会继续执行，直到：
+  - 没有新的 tool calls，或
+  - 达到 `max_steps` 上限（此时会把包含 tool calls 的响应原样返回给客户端）
+
+已知限制（务实口径）：
+
+- `POST /v1/chat/completions`：`max_steps` 对 `stream=true/false` 都生效（但 `stream=true` 可能会导致额外的 upstream 调用）
+- `POST /v1/responses`：
+  - upstream 支持 `/v1/responses` 时：`max_steps` 仅对 `stream=false` 生效（避免重复提交非幂等的 `/responses` continuation）
+  - upstream 不支持 `/v1/responses`、走 shim fallback（`/chat/completions` → `/responses`）时：`max_steps` 生效
 
 ---
 

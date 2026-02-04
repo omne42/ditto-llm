@@ -69,22 +69,29 @@ async fn execute_mcp_tool_calls(
     out
 }
 
+struct McpResponsesToolLoopParams<'a> {
+    request_id: &'a str,
+    request_json: &'a Value,
+    server_ids: &'a [String],
+    tools_for_llm: Vec<Value>,
+    initial_tool_calls: &'a [ResponsesToolCall],
+    initial_tool_results: &'a [String],
+    max_steps: usize,
+}
+
 async fn follow_up_via_chat_completions_to_responses(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
-    request_id: &str,
-    request_json: &Value,
-    tools_for_llm: Vec<Value>,
-    tool_calls: &[ResponsesToolCall],
-    tool_results: &[String],
-) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
-    let original_stream = request_json
+    params: McpResponsesToolLoopParams<'_>,
+) -> Result<axum::response::Response, OpenAiCompatProxyError> {
+    let original_stream = params
+        .request_json
         .get("stream")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let mut request_with_tools = request_json.clone();
-    set_json_tools(&mut request_with_tools, tools_for_llm);
+    let mut request_with_tools = params.request_json.clone();
+    set_json_tools(&mut request_with_tools, params.tools_for_llm);
 
     let chat_req =
         responses_shim::responses_request_to_chat_completions(&request_with_tools).ok_or_else(
@@ -99,16 +106,7 @@ async fn follow_up_via_chat_completions_to_responses(
         )?;
     let mut chat_req = chat_req;
 
-    let Some(obj) = chat_req.as_object_mut() else {
-        return Err(openai_error(
-            StatusCode::BAD_REQUEST,
-            "invalid_request_error",
-            Some("invalid_mcp_request"),
-            "invalid /responses request",
-        ));
-    };
-
-    let Some(messages) = obj.get("messages").and_then(|v| v.as_array()).cloned() else {
+    let Some(messages) = chat_req.get("messages").and_then(|v| v.as_array()).cloned() else {
         return Err(openai_error(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
@@ -119,7 +117,8 @@ async fn follow_up_via_chat_completions_to_responses(
 
     let mut messages = messages;
 
-    let tool_calls_value = tool_calls
+    let tool_calls_value = params
+        .initial_tool_calls
         .iter()
         .map(|call| {
             let args = match &call.arguments {
@@ -140,7 +139,11 @@ async fn follow_up_via_chat_completions_to_responses(
         "tool_calls": tool_calls_value,
     }));
 
-    for (call, output) in tool_calls.iter().zip(tool_results.iter()) {
+    for (call, output) in params
+        .initial_tool_calls
+        .iter()
+        .zip(params.initial_tool_results.iter())
+    {
         messages.push(serde_json::json!({
             "role": "tool",
             "tool_call_id": call.call_id.clone(),
@@ -148,20 +151,143 @@ async fn follow_up_via_chat_completions_to_responses(
         }));
     }
 
-    obj.insert("messages".to_string(), Value::Array(messages));
-    obj.insert("stream".to_string(), Value::Bool(original_stream));
+    let mut tool_rounds_executed: usize = 1;
+    loop {
+        if tool_rounds_executed >= params.max_steps {
+            let Some(obj) = chat_req.as_object_mut() else {
+                return Err(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_mcp_request"),
+                    "invalid /responses request",
+                ));
+            };
+            obj.insert("messages".to_string(), Value::Array(messages));
+            obj.insert("stream".to_string(), Value::Bool(original_stream));
 
-    let response = call_openai_compat_proxy_with_body_and_path(
-        state,
-        parts,
-        request_id,
-        &chat_req,
-        original_stream,
-        "/v1/chat/completions",
-    )
-    .await?;
+            let response = call_openai_compat_proxy_with_body_and_path(
+                state,
+                parts,
+                params.request_id,
+                &chat_req,
+                original_stream,
+                "/v1/chat/completions",
+            )
+            .await?;
 
-    convert_chat_response_to_responses(response, request_id.to_string()).await
+            return convert_chat_response_to_responses(response, params.request_id.to_string())
+                .await;
+        }
+
+        let step_request_id = format!("{}-mcp{tool_rounds_executed}", params.request_id);
+        let Some(obj) = chat_req.as_object_mut() else {
+            return Err(openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_mcp_request"),
+                "invalid /responses request",
+            ));
+        };
+        obj.insert("messages".to_string(), Value::Array(messages.clone()));
+        obj.insert("stream".to_string(), Value::Bool(false));
+
+        let step_response = call_openai_compat_proxy_with_body_and_path(
+            state,
+            parts,
+            &step_request_id,
+            &chat_req,
+            false,
+            "/v1/chat/completions",
+        )
+        .await?;
+
+        let (step_status, step_headers, step_body) =
+            split_response(step_response, 8 * 1024 * 1024).await?;
+        let value: Value = match serde_json::from_slice(&step_body) {
+            Ok(value) => value,
+            Err(_) => return Ok(rebuild_response(step_status, step_headers, step_body)),
+        };
+
+        let assistant_message = extract_chat_assistant_message(&value);
+        let tool_calls = assistant_message
+            .as_ref()
+            .map(extract_chat_tool_calls_from_message)
+            .unwrap_or_default();
+
+        if tool_calls.is_empty() {
+            if original_stream {
+                let Some(obj) = chat_req.as_object_mut() else {
+                    return Err(openai_error(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request_error",
+                        Some("invalid_mcp_request"),
+                        "invalid /responses request",
+                    ));
+                };
+                obj.insert("messages".to_string(), Value::Array(messages));
+                obj.insert("stream".to_string(), Value::Bool(true));
+                let response = call_openai_compat_proxy_with_body_and_path(
+                    state,
+                    parts,
+                    params.request_id,
+                    &chat_req,
+                    true,
+                    "/v1/chat/completions",
+                )
+                .await?;
+                return convert_chat_response_to_responses(response, params.request_id.to_string())
+                    .await;
+            }
+
+            let mapped =
+                responses_shim::chat_completions_response_to_responses(&value).ok_or_else(|| {
+                    openai_error(
+                        StatusCode::BAD_GATEWAY,
+                        "api_error",
+                        Some("invalid_backend_response"),
+                        "chat/completions response cannot be mapped to /responses",
+                    )
+                })?;
+            let bytes = serde_json::to_vec(&mapped)
+                .map(Bytes::from)
+                .unwrap_or_else(|_| Bytes::from(mapped.to_string()));
+
+            let mut headers = step_headers;
+            headers.insert(
+                "x-ditto-shim",
+                "responses_via_chat_completions".parse().unwrap(),
+            );
+            headers.insert("content-type", "application/json".parse().unwrap());
+            headers.remove("content-length");
+
+            return Ok(rebuild_response(step_status, headers, bytes));
+        }
+
+        if let Some(message) =
+            assistant_message.or_else(|| build_chat_assistant_message_from_tool_calls(&tool_calls))
+        {
+            messages.push(message);
+        }
+
+        for call in &tool_calls {
+            let result = mcp_call_tool(
+                state,
+                params.server_ids,
+                &call.name,
+                call.arguments.clone(),
+            )
+                .await
+                .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
+            let content = mcp_tool_result_to_text(&result);
+            messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": content,
+            }));
+        }
+
+        tool_rounds_executed = tool_rounds_executed.saturating_add(1);
+    }
 }
 
 async fn call_openai_compat_proxy_with_body_and_path(
@@ -296,4 +422,3 @@ async fn convert_chat_response_to_responses(
 
     Ok(rebuild_response(status, headers, bytes))
 }
-

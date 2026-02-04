@@ -38,7 +38,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         return Ok(None);
     };
 
-    let (mcp_tool_cfgs, other_tools) = split_mcp_tool_configs(tools);
+    let (mcp_tool_cfgs, other_tools) = split_mcp_tool_configs(tools)?;
     if mcp_tool_cfgs.is_empty() {
         return Ok(None);
     }
@@ -49,7 +49,8 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         .unwrap_or(false);
     let auto_execute = mcp_tool_cfgs
         .iter()
-        .any(|cfg| cfg.require_approval.as_deref() == Some("never"));
+        .all(|cfg| cfg.require_approval.as_deref() == Some("never"));
+    let max_steps = resolve_mcp_max_steps(&mcp_tool_cfgs)?;
 
     let requested_servers = resolve_mcp_servers_from_tool_cfgs(&mcp_tool_cfgs);
     let server_ids = match requested_servers {
@@ -108,48 +109,11 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         return Ok(Some(response));
     }
 
-    // 1) Initial non-stream call to extract tool calls.
-    let initial_request_id = format!("{request_id}-mcp0");
-    let mut initial_req_json = request_json.clone();
-    set_json_tools(&mut initial_req_json, tools_for_llm.clone());
-    let initial_response = call_openai_compat_proxy_with_body(
-        state,
-        parts,
-        &initial_request_id,
-        &initial_req_json,
-        false,
-    )
-    .await?;
-
-    let (initial_status, initial_headers, initial_body) =
-        split_response(initial_response, 8 * 1024 * 1024).await?;
-
-    let initial_json: Option<Value> = serde_json::from_slice(&initial_body).ok();
-    let tool_calls = initial_json
-        .as_ref()
-        .map(extract_chat_tool_calls)
-        .unwrap_or_default();
-
-    if tool_calls.is_empty() {
-        if original_stream {
-            let mut req_json = request_json.clone();
-            set_json_tools(&mut req_json, tools_for_llm.clone());
-            let response =
-                call_openai_compat_proxy_with_body(state, parts, request_id, &req_json, true)
-                    .await?;
-            return Ok(Some(response));
-        }
-        return Ok(Some(rebuild_response(
-            initial_status,
-            initial_headers,
-            initial_body,
-        )));
-    }
-
-    let Some(mut messages) = request_json
+    let Some(messages) = request_json
         .get("messages")
         .and_then(|v| v.as_array())
-        .cloned() else {
+        .cloned()
+    else {
         return Err(openai_error(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
@@ -157,42 +121,93 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
             "missing messages",
         ));
     };
+    let mut messages = messages;
 
-    if let Some(assistant_message) = initial_json
-        .as_ref()
-        .and_then(|value| value.get("choices"))
-        .and_then(|v| v.as_array())
-        .and_then(|choices| choices.first())
-        .and_then(|choice| choice.get("message"))
-        .cloned()
-    {
-        messages.push(assistant_message);
-    }
-
-    for call in &tool_calls {
-        let result = mcp_call_tool(state, &server_ids, &call.name, call.arguments.clone())
-            .await
-            .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
-        let content = mcp_tool_result_to_text(&result);
-        messages.push(serde_json::json!({
-            "role": "tool",
-            "tool_call_id": call.id,
-            "content": content,
-        }));
-    }
-
-    // 2) Follow-up call with tool results.
-    let mut follow_up = request_json.clone();
-    set_json_tools(&mut follow_up, tools_for_llm);
-    if let Some(obj) = follow_up.as_object_mut() {
-        obj.insert("messages".to_string(), Value::Array(messages));
-        obj.insert("stream".to_string(), Value::Bool(original_stream));
-    }
-
-    let response =
-        call_openai_compat_proxy_with_body(state, parts, request_id, &follow_up, original_stream)
+    let mut tool_rounds_executed: usize = 0;
+    loop {
+        if tool_rounds_executed >= max_steps {
+            let mut req_json = request_json.clone();
+            set_json_tools(&mut req_json, tools_for_llm.clone());
+            if let Some(obj) = req_json.as_object_mut() {
+                obj.insert("messages".to_string(), Value::Array(messages));
+            }
+            let response = call_openai_compat_proxy_with_body(
+                state,
+                parts,
+                request_id,
+                &req_json,
+                original_stream,
+            )
             .await?;
-    Ok(Some(response))
+            return Ok(Some(response));
+        }
+
+        // Non-stream call to extract tool calls.
+        let step_request_id = format!("{request_id}-mcp{tool_rounds_executed}");
+        let mut step_req_json = request_json.clone();
+        set_json_tools(&mut step_req_json, tools_for_llm.clone());
+        if let Some(obj) = step_req_json.as_object_mut() {
+            obj.insert("messages".to_string(), Value::Array(messages.clone()));
+        }
+        let step_response = call_openai_compat_proxy_with_body(
+            state,
+            parts,
+            &step_request_id,
+            &step_req_json,
+            false,
+        )
+        .await?;
+
+        let (step_status, step_headers, step_body) =
+            split_response(step_response, 8 * 1024 * 1024).await?;
+
+        let step_json: Value = match serde_json::from_slice(&step_body) {
+            Ok(value) => value,
+            Err(_) => {
+                return Ok(Some(rebuild_response(step_status, step_headers, step_body)));
+            }
+        };
+        let assistant_message = extract_chat_assistant_message(&step_json);
+        let tool_calls = assistant_message
+            .as_ref()
+            .map(extract_chat_tool_calls_from_message)
+            .unwrap_or_default();
+
+        if tool_calls.is_empty() {
+            if original_stream {
+                let mut req_json = request_json.clone();
+                set_json_tools(&mut req_json, tools_for_llm.clone());
+                if let Some(obj) = req_json.as_object_mut() {
+                    obj.insert("messages".to_string(), Value::Array(messages));
+                }
+                let response =
+                    call_openai_compat_proxy_with_body(state, parts, request_id, &req_json, true)
+                        .await?;
+                return Ok(Some(response));
+            }
+            return Ok(Some(rebuild_response(step_status, step_headers, step_body)));
+        }
+
+        if let Some(message) =
+            assistant_message.or_else(|| build_chat_assistant_message_from_tool_calls(&tool_calls))
+        {
+            messages.push(message);
+        }
+
+        for call in &tool_calls {
+            let result = mcp_call_tool(state, &server_ids, &call.name, call.arguments.clone())
+                .await
+                .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
+            let content = mcp_tool_result_to_text(&result);
+            messages.push(serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": content,
+            }));
+        }
+
+        tool_rounds_executed = tool_rounds_executed.saturating_add(1);
+    }
 }
 
 async fn maybe_handle_mcp_tools_responses(
@@ -210,7 +225,7 @@ async fn maybe_handle_mcp_tools_responses(
         return Ok(None);
     };
 
-    let (mcp_tool_cfgs, other_tools) = split_mcp_tool_configs(tools);
+    let (mcp_tool_cfgs, other_tools) = split_mcp_tool_configs(tools)?;
     if mcp_tool_cfgs.is_empty() {
         return Ok(None);
     }
@@ -221,7 +236,8 @@ async fn maybe_handle_mcp_tools_responses(
         .unwrap_or(false);
     let auto_execute = mcp_tool_cfgs
         .iter()
-        .any(|cfg| cfg.require_approval.as_deref() == Some("never"));
+        .all(|cfg| cfg.require_approval.as_deref() == Some("never"));
+    let max_steps = resolve_mcp_max_steps(&mcp_tool_cfgs)?;
 
     let requested_servers = resolve_mcp_servers_from_tool_cfgs(&mcp_tool_cfgs);
     let server_ids = match requested_servers {
@@ -333,11 +349,15 @@ async fn maybe_handle_mcp_tools_responses(
         let response = follow_up_via_chat_completions_to_responses(
             state,
             parts,
-            request_id,
-            request_json,
-            tools_for_llm,
-            &tool_calls,
-            &tool_results,
+            McpResponsesToolLoopParams {
+                request_id,
+                request_json,
+                server_ids: &server_ids,
+                tools_for_llm,
+                initial_tool_calls: &tool_calls,
+                initial_tool_results: &tool_results,
+                max_steps,
+            },
         )
         .await?;
         return Ok(Some(response));
@@ -345,34 +365,136 @@ async fn maybe_handle_mcp_tools_responses(
 
     let response_id = response_id.unwrap_or_default();
 
-    // 2) Follow-up call with tool results via native /responses.
-    let mut follow_up = request_json.clone();
-    set_json_tools(&mut follow_up, tools_for_llm);
-    if let Some(obj) = follow_up.as_object_mut() {
-        obj.insert(
-            "previous_response_id".to_string(),
-            Value::String(response_id),
-        );
-        obj.insert("stream".to_string(), Value::Bool(original_stream));
-        let outputs = tool_calls
-            .iter()
-            .zip(tool_results.iter())
-            .map(|(call, output)| {
-                serde_json::json!({
-                    "type": "function_call_output",
-                    "call_id": call.call_id.clone(),
-                    "output": output,
+    // Native /responses: multi-step tool loop is safe only for non-stream.
+    if original_stream {
+        // 2) Follow-up call with tool results via native /responses.
+        let mut follow_up = request_json.clone();
+        set_json_tools(&mut follow_up, tools_for_llm);
+        if let Some(obj) = follow_up.as_object_mut() {
+            obj.insert(
+                "previous_response_id".to_string(),
+                Value::String(response_id),
+            );
+            obj.insert("stream".to_string(), Value::Bool(true));
+            let outputs = tool_calls
+                .iter()
+                .zip(tool_results.iter())
+                .map(|(call, output)| {
+                    serde_json::json!({
+                        "type": "function_call_output",
+                        "call_id": call.call_id.clone(),
+                        "output": output,
+                    })
                 })
-            })
-            .collect::<Vec<_>>();
-        obj.insert("input".to_string(), Value::Array(outputs));
-        obj.remove("messages");
+                .collect::<Vec<_>>();
+            obj.insert("input".to_string(), Value::Array(outputs));
+            obj.remove("messages");
+        }
+
+        let response =
+            call_openai_compat_proxy_with_body(state, parts, request_id, &follow_up, true).await?;
+        return Ok(Some(response));
     }
 
-    let response =
-        call_openai_compat_proxy_with_body(state, parts, request_id, &follow_up, original_stream)
+    let mut tool_rounds_executed: usize = 1;
+    let mut prev_response_id = response_id;
+    let mut tool_calls = tool_calls;
+    let mut tool_results = tool_results;
+    loop {
+        if tool_rounds_executed >= max_steps {
+            let mut follow_up = request_json.clone();
+            set_json_tools(&mut follow_up, tools_for_llm.clone());
+            if let Some(obj) = follow_up.as_object_mut() {
+                obj.insert(
+                    "previous_response_id".to_string(),
+                    Value::String(prev_response_id.clone()),
+                );
+                obj.insert("stream".to_string(), Value::Bool(false));
+                let outputs = tool_calls
+                    .iter()
+                    .zip(tool_results.iter())
+                    .map(|(call, output)| {
+                        serde_json::json!({
+                            "type": "function_call_output",
+                            "call_id": call.call_id.clone(),
+                            "output": output,
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                obj.insert("input".to_string(), Value::Array(outputs));
+                obj.remove("messages");
+            }
+
+            let response = call_openai_compat_proxy_with_body(
+                state,
+                parts,
+                request_id,
+                &follow_up,
+                false,
+            )
             .await?;
-    Ok(Some(response))
+            return Ok(Some(response));
+        }
+
+        let step_request_id = format!("{request_id}-mcp{tool_rounds_executed}");
+        let mut follow_up = request_json.clone();
+        set_json_tools(&mut follow_up, tools_for_llm.clone());
+        if let Some(obj) = follow_up.as_object_mut() {
+            obj.insert(
+                "previous_response_id".to_string(),
+                Value::String(prev_response_id.clone()),
+            );
+            obj.insert("stream".to_string(), Value::Bool(false));
+            let outputs = tool_calls
+                .iter()
+                .zip(tool_results.iter())
+                .map(|(call, output)| {
+                    serde_json::json!({
+                        "type": "function_call_output",
+                        "call_id": call.call_id.clone(),
+                        "output": output,
+                    })
+                })
+                .collect::<Vec<_>>();
+            obj.insert("input".to_string(), Value::Array(outputs));
+            obj.remove("messages");
+        }
+
+        let response = call_openai_compat_proxy_with_body(
+            state,
+            parts,
+            &step_request_id,
+            &follow_up,
+            false,
+        )
+        .await?;
+
+        let (status, headers, body) = split_response(response, 8 * 1024 * 1024).await?;
+        let value: Value = match serde_json::from_slice(&body) {
+            Ok(value) => value,
+            Err(_) => return Ok(Some(rebuild_response(status, headers, body))),
+        };
+
+        let next_tool_calls = extract_responses_tool_calls(&value);
+        if next_tool_calls.is_empty() {
+            return Ok(Some(rebuild_response(status, headers, body)));
+        }
+
+        let next_response_id = value
+            .get("id")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string());
+        let Some(next_response_id) = next_response_id else {
+            return Ok(Some(rebuild_response(status, headers, body)));
+        };
+
+        tool_results = execute_mcp_tool_calls(state, &server_ids, &next_tool_calls).await;
+        tool_calls = next_tool_calls;
+        prev_response_id = next_response_id;
+        tool_rounds_executed = tool_rounds_executed.saturating_add(1);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -380,9 +502,18 @@ struct McpToolConfig {
     server_url: Option<String>,
     require_approval: Option<String>,
     allowed_tools: Vec<String>,
+    max_steps: Option<usize>,
 }
 
-fn split_mcp_tool_configs(tools: &[Value]) -> (Vec<McpToolConfig>, Vec<Value>) {
+const MCP_MAX_STEPS: usize = 8;
+
+type OpenAiCompatProxyError = (StatusCode, Json<OpenAiErrorResponse>);
+type OpenAiCompatProxyResult<T> = Result<T, OpenAiCompatProxyError>;
+type McpToolSplit = (Vec<McpToolConfig>, Vec<Value>);
+
+fn split_mcp_tool_configs(
+    tools: &[Value],
+) -> OpenAiCompatProxyResult<McpToolSplit> {
     let mut mcp = Vec::new();
     let mut other = Vec::new();
 
@@ -405,6 +536,31 @@ fn split_mcp_tool_configs(tools: &[Value]) -> (Vec<McpToolConfig>, Vec<Value>) {
             .get("require_approval")
             .and_then(|v| v.as_str())
             .map(|v| v.to_string());
+        let max_steps_value = obj
+            .get("max_steps")
+            .or_else(|| obj.get("maxSteps"))
+            .cloned();
+        let max_steps = if let Some(value) = max_steps_value {
+            let Some(steps) = value.as_u64() else {
+                return Err(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_mcp_request"),
+                    "max_steps must be a positive integer",
+                ));
+            };
+            if steps == 0 || steps > MCP_MAX_STEPS as u64 {
+                return Err(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_mcp_request"),
+                    format!("max_steps must be between 1 and {MCP_MAX_STEPS}"),
+                ));
+            }
+            Some(steps as usize)
+        } else {
+            None
+        };
         let allowed_tools = obj
             .get("allowed_tools")
             .and_then(|v| v.as_array())
@@ -420,10 +576,31 @@ fn split_mcp_tool_configs(tools: &[Value]) -> (Vec<McpToolConfig>, Vec<Value>) {
             server_url,
             require_approval,
             allowed_tools,
+            max_steps,
         });
     }
 
-    (mcp, other)
+    Ok((mcp, other))
+}
+
+fn resolve_mcp_max_steps(
+    cfgs: &[McpToolConfig],
+) -> OpenAiCompatProxyResult<usize> {
+    let mut max_steps = 1usize;
+    for cfg in cfgs {
+        if let Some(steps) = cfg.max_steps {
+            max_steps = max_steps.max(steps);
+        }
+    }
+    if max_steps == 0 || max_steps > MCP_MAX_STEPS {
+        return Err(openai_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request_error",
+            Some("invalid_mcp_request"),
+            format!("max_steps must be between 1 and {MCP_MAX_STEPS}"),
+        ));
+    }
+    Ok(max_steps)
 }
 
 fn collect_allowed_tools(cfgs: &[McpToolConfig]) -> std::collections::BTreeSet<String> {
@@ -663,53 +840,82 @@ struct ChatToolCall {
     arguments: Value,
 }
 
-fn extract_chat_tool_calls(response: &Value) -> Vec<ChatToolCall> {
+fn extract_chat_assistant_message(response: &Value) -> Option<Value> {
+    response
+        .get("choices")
+        .and_then(|v| v.as_array())
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .cloned()
+}
+
+fn extract_chat_tool_calls_from_message(message: &Value) -> Vec<ChatToolCall> {
     let mut out = Vec::new();
-    let Some(choices) = response.get("choices").and_then(|v| v.as_array()) else {
+
+    let tool_calls = message.get("tool_calls").and_then(|v| v.as_array());
+    let Some(tool_calls) = tool_calls else {
         return out;
     };
 
-    for choice in choices {
-        let Some(message) = choice.get("message") else {
+    for (idx, call) in tool_calls.iter().enumerate() {
+        let id = call
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| format!("call_{idx}"));
+        let name = call
+            .get("function")
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        if name.trim().is_empty() {
             continue;
-        };
-        let tool_calls = message.get("tool_calls").and_then(|v| v.as_array());
-        let Some(tool_calls) = tool_calls else {
-            continue;
-        };
-        for (idx, call) in tool_calls.iter().enumerate() {
-            let id = call
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| format!("call_{idx}"));
-            let name = call
-                .get("function")
-                .and_then(|v| v.get("name"))
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            if name.trim().is_empty() {
-                continue;
-            }
-            let arguments_raw = call
-                .get("function")
-                .and_then(|v| v.get("arguments"))
-                .cloned()
-                .unwrap_or(Value::Null);
-            let arguments = match arguments_raw {
-                Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
-                other => other,
-            };
-            out.push(ChatToolCall {
-                id,
-                name,
-                arguments,
-            });
         }
+        let arguments_raw = call
+            .get("function")
+            .and_then(|v| v.get("arguments"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        let arguments = match arguments_raw {
+            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
+            other => other,
+        };
+        out.push(ChatToolCall {
+            id,
+            name,
+            arguments,
+        });
     }
 
     out
+}
+
+fn build_chat_assistant_message_from_tool_calls(tool_calls: &[ChatToolCall]) -> Option<Value> {
+    if tool_calls.is_empty() {
+        return None;
+    }
+
+    let tool_calls_value = tool_calls
+        .iter()
+        .map(|call| {
+            let args = match &call.arguments {
+                Value::Null => "{}".to_string(),
+                other => serde_json::to_string(other).unwrap_or_else(|_| "{}".to_string()),
+            };
+            serde_json::json!({
+                "id": call.id.clone(),
+                "type": "function",
+                "function": { "name": call.name.clone(), "arguments": args }
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Some(serde_json::json!({
+        "role": "assistant",
+        "content": "",
+        "tool_calls": tool_calls_value,
+    }))
 }
 
 fn mcp_tool_result_to_text(result: &Value) -> String {
