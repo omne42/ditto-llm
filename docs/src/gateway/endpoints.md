@@ -96,7 +96,7 @@ Ditto Gateway 支持 LiteLLM 风格的 A2A 协议端点（JSON-RPC 2.0），用�
 
 ## MCP Gateway（LiteLLM-like）
 
-Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 的 MCP tools 集成：
+Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 与 `/v1/responses` 的 MCP tools 集成：
 
 - MCP JSON-RPC：
   - `POST /mcp`

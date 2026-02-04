@@ -185,7 +185,7 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 
 ## mcp_servers：MCP server registry（LiteLLM-like）
 
-如果你希望通过 Ditto Gateway 暴露 `/mcp*` 端点，并在 `/v1/chat/completions` 中使用 `tools: [{"type":"mcp", ...}]`，可以在配置里注册 MCP servers：
+如果你希望通过 Ditto Gateway 暴露 `/mcp*` 端点，并在 `/v1/chat/completions` / `/v1/responses` 中使用 `tools: [{"type":"mcp", ...}]`，可以在配置里注册 MCP servers：
 
 ```json
 {

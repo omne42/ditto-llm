@@ -4,7 +4,7 @@ Ditto 在 `sdk` feature 里提供了 MCP tool schema 的轻量互转（只做结
 
 实现位置：`src/sdk/mcp.rs`。
 
-如果你需要 **Gateway 级别** 的 MCP proxy（`/mcp*`）与 MCP tools 集成（`/v1/chat/completions` 的 `tools: [{"type":"mcp", ...}]`），请看「Gateway → MCP Gateway（/mcp + tools）」。
+如果你需要 **Gateway 级别** 的 MCP proxy（`/mcp*`）与 MCP tools 集成（`/v1/chat/completions` / `/v1/responses` 的 `tools: [{"type":"mcp", ...}]`），请看「Gateway → MCP Gateway（/mcp + tools）」。
 
 ---
 

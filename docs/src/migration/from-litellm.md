@@ -115,7 +115,7 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 如果你在 LiteLLM 里已经用了 MCP（`/mcp` + `tools: [{"type":"mcp", ...}]`），Ditto Gateway 也支持相同方向：
 
 - ✅ `/mcp*` MCP JSON-RPC proxy（`tools/list` / `tools/call`）
-- ✅ `POST /v1/chat/completions` 的 MCP tools 集成（把 MCP tools 转成 OpenAI `function` tools；可选 `require_approval: "never"` 自动执行）
+- ✅ `POST /v1/chat/completions` 与 `POST /v1/responses` 的 MCP tools 集成（把 MCP tools 转成 OpenAI `function` tools；可选 `require_approval: "never"` 自动执行）
 
 迁移口径（最小映射）：
 
@@ -125,7 +125,7 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 差异/注意：
 
 - Ditto 当前不覆盖 LiteLLM 那种更细粒度的 MCP 权限控制面（例如 per-key/tool permissions、`allowed_params` 等）；可以先用请求级 `allowed_tools` + 多实例隔离承接。
-- ✅ Ditto 同时支持 `POST /v1/chat/completions` 与 `POST /v1/responses` 的 MCP tools（`require_approval: "never"` 会做一次最小 tool loop）。
+- ✅ 如果 upstream 不支持 `POST /v1/responses`，Ditto 会自动 shim 到 `POST /v1/chat/completions`（同样保留 MCP tools 集成）。
 
 完整说明见「Gateway → MCP Gateway（/mcp + tools）」。
 

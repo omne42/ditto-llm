@@ -258,7 +258,7 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
-- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` via `tools: [{"type":"mcp", ...}]`.
+- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]`.
 - A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured).
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
@@ -675,7 +675,7 @@ FILE: COMPARED_TO_LITELLM_AI_SDK.md
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
 - 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ 审计导出到对象存储（S3/GCS）+ manifest（sha256/chain hash；可配 S3 Object Lock 参数）；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule）。仍缺：IP-based/令牌桶限流、配置版本化/灰度/回滚等更完整平台能力。
 - 平台化生态：✅ Secret Manager 集成（`secret://...`）+ ✅ 最小 Admin UI；仍缺：更多 guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
-- 平台扩展项：✅ A2A agent gateway（LiteLLM-like `/a2a/*` JSON-RPC 代理）+ ✅ MCP gateway（LiteLLM-like `/mcp*` + `/v1/chat/completions` 的 `tools: [{\"type\":\"mcp\", ...}]`）已支持；仍缺 LiteLLM 那种更细粒度的 MCP 权限/参数白名单等企业策略（可先用 `allowed_tools` + 多实例隔离承接）
+- 平台扩展项：✅ A2A agent gateway（LiteLLM-like `/a2a/*` JSON-RPC 代理）+ ✅ MCP gateway（LiteLLM-like `/mcp*` + OpenAI-compatible `POST /v1/chat/completions` 与 `POST /v1/responses` 的 `tools: [{\"type\":\"mcp\", ...}]`）已支持；仍缺 LiteLLM 那种更细粒度的 MCP 权限/参数白名单等企业策略（可先用 `allowed_tools` + 多实例隔离承接）
 
 ---
 
@@ -2784,7 +2784,7 @@ Ditto 在 `sdk` feature 里提供了 MCP tool schema 的轻量互转（只做结
 
 实现位置：`src/sdk/mcp.rs`。
 
-如果你需要 **Gateway 级别** 的 MCP proxy（`/mcp*`）与 MCP tools 集成（`/v1/chat/completions` 的 `tools: [{"type":"mcp", ...}]`），请看「Gateway → MCP Gateway（/mcp + tools）」。
+如果你需要 **Gateway 级别** 的 MCP proxy（`/mcp*`）与 MCP tools 集成（`/v1/chat/completions` / `/v1/responses` 的 `tools: [{"type":"mcp", ...}]`），请看「Gateway → MCP Gateway（/mcp + tools）」。
 
 ---
 
@@ -3944,7 +3944,7 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 
 ## mcp_servers：MCP server registry（LiteLLM-like）
 
-如果你希望通过 Ditto Gateway 暴露 `/mcp*` 端点，并在 `/v1/chat/completions` 中使用 `tools: [{"type":"mcp", ...}]`，可以在配置里注册 MCP servers：
+如果你希望通过 Ditto Gateway 暴露 `/mcp*` 端点，并在 `/v1/chat/completions` / `/v1/responses` 中使用 `tools: [{"type":"mcp", ...}]`，可以在配置里注册 MCP servers：
 
 ```json
 {
@@ -4075,7 +4075,7 @@ Ditto Gateway 支持 LiteLLM 风格的 A2A 协议端点（JSON-RPC 2.0），用�
 
 ## MCP Gateway（LiteLLM-like）
 
-Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 的 MCP tools 集成：
+Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 与 `/v1/responses` 的 MCP tools 集成：
 
 - MCP JSON-RPC：
   - `POST /mcp`
@@ -6498,7 +6498,7 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 如果你在 LiteLLM 里已经用了 MCP（`/mcp` + `tools: [{"type":"mcp", ...}]`），Ditto Gateway 也支持相同方向：
 
 - ✅ `/mcp*` MCP JSON-RPC proxy（`tools/list` / `tools/call`）
-- ✅ `POST /v1/chat/completions` 的 MCP tools 集成（把 MCP tools 转成 OpenAI `function` tools；可选 `require_approval: "never"` 自动执行）
+- ✅ `POST /v1/chat/completions` 与 `POST /v1/responses` 的 MCP tools 集成（把 MCP tools 转成 OpenAI `function` tools；可选 `require_approval: "never"` 自动执行）
 
 迁移口径（最小映射）：
 
@@ -6508,7 +6508,7 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 差异/注意：
 
 - Ditto 当前不覆盖 LiteLLM 那种更细粒度的 MCP 权限控制面（例如 per-key/tool permissions、`allowed_params` 等）；可以先用请求级 `allowed_tools` + 多实例隔离承接。
-- ✅ Ditto 同时支持 `POST /v1/chat/completions` 与 `POST /v1/responses` 的 MCP tools（`require_approval: "never"` 会做一次最小 tool loop）。
+- ✅ 如果 upstream 不支持 `POST /v1/responses`，Ditto 会自动 shim 到 `POST /v1/chat/completions`（同样保留 MCP tools 集成）。
 
 完整说明见「Gateway → MCP Gateway（/mcp + tools）」。
 
@@ -6769,7 +6769,7 @@ LiteLLM 的强项是“平台化能力 + 企业功能覆盖”。Ditto Gateway �
 ### 2.6 “平台扩展项”（P2）
 
 - ✅ A2A agent gateway（LiteLLM-like）：已支持 `/a2a/*` 的 JSON-RPC 代理端点（beta；需要配置 `a2a_agents`）。
-- ✅ MCP gateway（LiteLLM-like）：已支持 `/mcp*` 的 MCP JSON-RPC proxy + `/v1/chat/completions` 的 `tools: [{"type":"mcp", ...}]` 工具集成（多 server 时工具名会加 `<server_id>-` 前缀；支持 `allowed_tools` 过滤）。
+- ✅ MCP gateway（LiteLLM-like）：已支持 `/mcp*` 的 MCP JSON-RPC proxy + OpenAI-compatible `POST /v1/chat/completions` 与 `POST /v1/responses` 的 `tools: [{"type":"mcp", ...}]` 工具集成（多 server 时工具名会加 `<server_id>-` 前缀；支持 `allowed_tools` 过滤）。
 - Provider 覆盖面：LiteLLM 的优势是“海量 providers”；Ditto 需要平衡“可维护的 native adapters”与“更强的 OpenAI-compatible 兼容层”。
 - Guardrails/告警/日志目的地生态：LiteLLM 提供大量集成；Ditto 需要优先补齐“通用扩展点 + 官方 adapter（Langfuse/Datadog/S3 等）”。
 - ✅ Secret 管理：已支持 `secret://...` 解析（env/file/Vault/AWS SM/GCP SM/Azure KV），并已接入 gateway/SDK 配置与 CLI flags。

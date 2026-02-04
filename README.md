@@ -178,7 +178,7 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
-- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` via `tools: [{"type":"mcp", ...}]`.
+- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]`.
 - A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured).
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
