@@ -5,13 +5,50 @@ use serde_json::{Map, Value};
 
 use crate::{DittoError, Result};
 
-mod generate_request_support;
-mod provider_options_support;
 mod tool_call;
 
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
+mod generate_request_support;
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
+mod provider_options_support;
+
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
 pub(crate) use generate_request_support::{
     GenerateRequestSupport, warn_unsupported_generate_request_options,
 };
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
 pub(crate) use provider_options_support::{
     ProviderOptionsSupport, warn_unsupported_provider_options,
 };
@@ -358,6 +395,15 @@ pub(crate) fn select_provider_options_value(
     Ok(Some(Value::Object(merged)))
 }
 
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
 pub(crate) fn merge_provider_options_into_body(
     body: &mut Map<String, Value>,
     options: Option<&Value>,

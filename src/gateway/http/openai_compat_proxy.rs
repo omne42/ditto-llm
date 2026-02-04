@@ -4,6 +4,8 @@ include!("openai_compat_proxy/rate_limit.rs");
 include!("openai_compat_proxy/streaming_multipart.rs");
 include!("openai_compat_proxy/path_normalize.rs");
 include!("openai_compat_proxy/mcp.rs");
+include!("openai_compat_proxy/proxy_cache_hit.rs");
+include!("openai_compat_proxy/proxy_failure.rs");
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
@@ -691,80 +693,23 @@ async fn handle_openai_compat_proxy(
     };
 
     #[cfg(feature = "gateway-proxy-cache")]
-    if let (Some(cache), Some(cache_key)) = (state.proxy_cache.as_ref(), proxy_cache_key.as_ref()) {
+    {
         #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            metrics
-                .lock()
-                .await
-                .record_proxy_cache_lookup(&metrics_path);
-        }
+        let proxy_metrics = Some((metrics_path.as_str(), metrics_timer_start));
+        #[cfg(not(feature = "gateway-metrics-prometheus"))]
+        let proxy_metrics = None;
 
-        let mut cache_source = "memory";
-        let mut cached = { cache.lock().await.get(cache_key, _now_epoch_seconds) };
-        #[cfg(feature = "gateway-store-redis")]
-        if cached.is_none() {
-            if let Some(store) = state.redis_store.as_ref() {
-                if let Ok(redis_cached) = store.get_proxy_cache_response(cache_key).await {
-                    if redis_cached.is_some() {
-                        cache_source = "redis";
-                    }
-                    cached = redis_cached;
-                }
-            }
-        }
-        if let Some(cached) = cached {
-            if cache_source == "redis" {
-                let mut cache = cache.lock().await;
-                cache.insert(cache_key.to_string(), cached.clone(), _now_epoch_seconds);
-            }
-            {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_cache_hit();
-            }
-
-            emit_json_log(
-                &state,
-                "proxy.cache_hit",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "cache": cache_source,
-                    "backend": &cached.backend,
-                    "path": path_and_query,
-                }),
-            );
-
-            #[cfg(feature = "gateway-otel")]
-            {
-                proxy_span.record("cache", tracing::field::display("hit"));
-                proxy_span.record("backend", tracing::field::display(&cached.backend));
-                proxy_span.record("status", tracing::field::display(cached.status));
-            }
-
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                let mut metrics = metrics.lock().await;
-                metrics.record_proxy_cache_hit();
-                metrics.record_proxy_cache_hit_by_source(cache_source);
-                metrics.record_proxy_cache_hit_by_path(&metrics_path);
-                metrics.record_proxy_response_status_by_path(&metrics_path, cached.status);
-                metrics
-                    .observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
-            }
-
-            let mut response = cached_proxy_response(cached, request_id.clone());
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                response.headers_mut().insert("x-ditto-cache-key", value);
-            }
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_source) {
-                response.headers_mut().insert("x-ditto-cache-source", value);
-            }
+        if let Some(response) = maybe_handle_proxy_cache_hit(
+            &state,
+            proxy_cache_key.as_deref(),
+            &request_id,
+            path_and_query,
+            _now_epoch_seconds,
+            proxy_metrics,
+        )
+        .await
+        {
             return Ok(response);
-        }
-
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            metrics.lock().await.record_proxy_cache_miss(&metrics_path);
         }
     }
 
@@ -926,70 +871,28 @@ async fn handle_openai_compat_proxy(
     ))]
     rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-    {
-        let (status, err_kind, err_code, err_message) = match last_err.as_ref() {
-            Some((status, body)) => (
-                Some(status.as_u16()),
-                Some(body.0.error.kind),
-                body.0.error.code,
-                Some(body.0.error.message.as_str()),
-            ),
-            None => (None, None, None, None),
-        };
-        let payload = serde_json::json!({
-            "request_id": &request_id,
-            "virtual_key_id": virtual_key_id.as_deref(),
-            "attempted_backends": &attempted_backends,
-            "method": parts.method.as_str(),
-            "path": path_and_query,
-            "model": &model,
-            "charge_tokens": charge_tokens,
-            "charge_cost_usd_micros": charge_cost_usd_micros,
-            "body_len": body.len(),
-            "status": status,
-            "error_type": err_kind,
-            "error_code": err_code,
-            "error_message": err_message,
-        });
-
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.sqlite_store.as_ref() {
-            let _ = store.append_audit_log("proxy.error", payload.clone()).await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.redis_store.as_ref() {
-            let _ = store.append_audit_log("proxy.error", payload.clone()).await;
-        }
-    }
-
-    emit_json_log(
-        &state,
-        "proxy.error",
-        serde_json::json!({
-            "request_id": &request_id,
-            "attempted_backends": &attempted_backends,
-            "status": last_err.as_ref().map(|(status, _)| status.as_u16()),
-        }),
-    );
-
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
-        let status = last_err
-            .as_ref()
-            .map(|(status, _)| status.as_u16())
-            .unwrap_or(StatusCode::BAD_GATEWAY.as_u16());
-        let mut metrics = metrics.lock().await;
-        metrics.record_proxy_response_status_by_path(&metrics_path, status);
-        metrics.observe_proxy_request_duration(&metrics_path, metrics_timer_start.elapsed());
-    }
+    let proxy_metrics = Some((metrics_path.as_str(), metrics_timer_start));
+    #[cfg(not(feature = "gateway-metrics-prometheus"))]
+    let proxy_metrics = None;
 
-    Err(last_err.unwrap_or_else(|| {
-        openai_error(
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            Some("backend_error"),
-            "all backends failed",
+    Err(
+        finalize_openai_compat_proxy_failure(
+            &state,
+            ProxyFailureContext {
+                request_id: &request_id,
+                method: &parts.method,
+                path_and_query,
+                model: &model,
+                virtual_key_id: virtual_key_id.as_deref(),
+                attempted_backends: &attempted_backends,
+                body_len: body.len(),
+                charge_tokens,
+                charge_cost_usd_micros,
+                last_err,
+                metrics: proxy_metrics,
+            },
         )
-    }))
+        .await,
+    )
 }
