@@ -54,4 +54,5 @@ include!("gateway_openai_proxy/validation.rs");
 include!("gateway_openai_proxy/validation_litellm_aliases.rs");
 include!("gateway_openai_proxy/mcp.rs");
 include!("gateway_openai_proxy/mcp_multi_step.rs");
+include!("gateway_openai_proxy/mcp_tools_cache.rs");
 include!("gateway_openai_proxy/proxy_cache.rs");

@@ -4191,6 +4191,10 @@ curl -sS http://127.0.0.1:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
+性能说明：
+
+- Ditto 会对每个 MCP server 的 `tools/list` 结果做短 TTL 缓存（默认 60s），减少把 MCP tools 融合进 `/v1/chat/completions` 与 `/v1/responses` 时的额外 RTT。
+
 ### 2.2 tools/call
 
 ```bash

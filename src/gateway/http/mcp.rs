@@ -1,5 +1,17 @@
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
+const MCP_TOOLS_LIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+#[derive(Debug, Clone)]
+struct McpToolsListCacheEntry {
+    expires_at: std::time::Instant,
+    tools: Vec<Value>,
+}
+
+#[derive(Debug, Default)]
+struct McpToolsListCache {
+    entries: std::collections::HashMap<Option<String>, McpToolsListCacheEntry>,
+}
 
 #[derive(Clone)]
 pub struct McpServerState {
@@ -9,6 +21,7 @@ pub struct McpServerState {
     headers: HeaderMap,
     query_params: BTreeMap<String, String>,
     request_timeout: Option<std::time::Duration>,
+    tools_list_cache: std::sync::Arc<tokio::sync::Mutex<McpToolsListCache>>,
 }
 
 impl McpServerState {
@@ -40,6 +53,9 @@ impl McpServerState {
             headers: HeaderMap::new(),
             query_params: BTreeMap::new(),
             request_timeout: None,
+            tools_list_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
+                McpToolsListCache::default(),
+            )),
         })
     }
 
@@ -70,6 +86,71 @@ impl McpServerState {
 
     pub fn headers(&self) -> &HeaderMap {
         &self.headers
+    }
+
+    async fn list_tools_uncached(&self, cursor: Option<&str>) -> Result<Vec<Value>, GatewayError> {
+        let mut params = serde_json::json!({});
+        if let Some(cursor) = cursor {
+            if let Some(obj) = params.as_object_mut() {
+                obj.insert("cursor".to_string(), Value::String(cursor.to_string()));
+            }
+        }
+        let req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": params,
+        });
+        let resp = self.jsonrpc(req).await?;
+
+        let result = resp.get("result").cloned().unwrap_or(Value::Null);
+        let tools = if let Some(tools) = result.get("tools").and_then(|v| v.as_array()) {
+            tools.clone()
+        } else if let Some(tools) = result.as_array() {
+            tools.clone()
+        } else {
+            return Err(GatewayError::Backend {
+                message: format!(
+                    "mcp tools/list invalid result for server {}",
+                    self.server_id
+                ),
+            });
+        };
+        Ok(tools)
+    }
+
+    pub async fn list_tools_cached(
+        &self,
+        cursor: Option<String>,
+    ) -> Result<Vec<Value>, GatewayError> {
+        let now = std::time::Instant::now();
+
+        {
+            let cache = self.tools_list_cache.lock().await;
+            if let Some(entry) = cache.entries.get(&cursor) {
+                if entry.expires_at > now {
+                    return Ok(entry.tools.clone());
+                }
+            }
+        }
+
+        let tools = self.list_tools_uncached(cursor.as_deref()).await?;
+
+        {
+            let mut cache = self.tools_list_cache.lock().await;
+            cache.entries.retain(|_, entry| entry.expires_at > now);
+            cache.entries.insert(
+                cursor,
+                McpToolsListCacheEntry {
+                    expires_at: now
+                        .checked_add(MCP_TOOLS_LIST_CACHE_TTL)
+                        .unwrap_or(now),
+                    tools: tools.clone(),
+                },
+            );
+        }
+
+        Ok(tools)
     }
 
     pub async fn jsonrpc(&self, req: Value) -> Result<Value, GatewayError> {
@@ -454,41 +535,26 @@ async fn mcp_list_tools(
     server_ids: &[String],
     cursor: Option<String>,
 ) -> Result<Value, GatewayError> {
-    let mut tools_out: Vec<Value> = Vec::new();
     let prefix_names = server_ids.len() > 1;
 
+    let mut futures = Vec::with_capacity(server_ids.len());
     for server_id in server_ids {
         let server = state.mcp_servers.get(server_id).ok_or_else(|| {
             GatewayError::InvalidRequest {
                 reason: format!("unknown MCP server: {server_id}"),
             }
         })?;
-
-        let mut params = serde_json::json!({});
-        if let Some(cursor) = cursor.as_deref() {
-            if let Some(obj) = params.as_object_mut() {
-                obj.insert("cursor".to_string(), Value::String(cursor.to_string()));
-            }
-        }
-        let req = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": params,
+        let server = server.clone();
+        let server_id = server_id.clone();
+        let cursor = cursor.clone();
+        futures.push(async move {
+            let tools = server.list_tools_cached(cursor).await?;
+            Ok::<_, GatewayError>((server_id, tools))
         });
-        let resp = server.jsonrpc(req).await?;
+    }
 
-        let result = resp.get("result").cloned().unwrap_or(Value::Null);
-        let tools = if let Some(tools) = result.get("tools").and_then(|v| v.as_array()) {
-            tools.clone()
-        } else if let Some(tools) = result.as_array() {
-            tools.clone()
-        } else {
-            return Err(GatewayError::Backend {
-                message: format!("mcp tools/list invalid result for server {server_id}"),
-            });
-        };
-
+    let mut tools_out: Vec<Value> = Vec::new();
+    for (server_id, tools) in futures_util::future::try_join_all(futures).await? {
         for tool in tools {
             let mut tool = tool;
             if prefix_names {
