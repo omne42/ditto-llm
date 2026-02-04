@@ -44,6 +44,7 @@ async fn handle_google_genai(
 
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
+    headers.insert("x-ditto-protocol", "google".parse().unwrap());
     if stream_requested {
         headers.insert("accept", "text/event-stream".parse().unwrap());
     }
@@ -277,6 +278,7 @@ async fn handle_cloudcode_generate_content_inner(
     let use_virtual_keys = gateway_uses_virtual_keys(&state).await;
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
+    headers.insert("x-ditto-protocol", "google".parse().unwrap());
     if stream_requested {
         headers.insert("accept", "text/event-stream".parse().unwrap());
     }

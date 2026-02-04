@@ -8,9 +8,8 @@
         let should_attempt_buffer_for_cache =
             status.is_success() && proxy_cache_key.is_some() && state.proxy_cache_config.is_some();
 
-        let should_attempt_buffer_for_usage = spend_tokens
-            && content_type.starts_with("application/json")
-            && state.proxy_usage_max_body_bytes > 0;
+        let should_attempt_buffer_for_usage =
+            content_type.starts_with("application/json") && state.proxy_usage_max_body_bytes > 0;
 
         let cache_max_buffer_bytes = {
             #[cfg(feature = "gateway-proxy-cache")]
@@ -283,18 +282,26 @@
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         {
             let payload = serde_json::json!({
-                    "request_id": &request_id,
-                    "virtual_key_id": virtual_key_id.as_deref(),
-                    "backend": &backend_name,
-                    "attempted_backends": &attempted_backends,
-                    "method": parts.method.as_str(),
-                    "path": path_and_query,
-                    "model": &model,
-                    "service_tier": service_tier.as_deref(),
-                    "status": status.as_u16(),
-                    "charge_tokens": charge_tokens,
-                    "spent_tokens": spent_tokens,
-                    "charge_cost_usd_micros": charge_cost_usd_micros,
+                "request_id": &request_id,
+                "provider": &protocol,
+                "virtual_key_id": virtual_key_id.as_deref(),
+                "backend": &backend_name,
+                "attempted_backends": &attempted_backends,
+                "method": parts.method.as_str(),
+                "path": path_and_query,
+                "model": &model,
+                "upstream_model": upstream_model.as_deref(),
+                "service_tier": service_tier.as_deref(),
+                "status": status.as_u16(),
+                "charge_tokens": charge_tokens,
+                "input_tokens": observed_usage.and_then(|usage| usage.input_tokens),
+                "cache_input_tokens": observed_usage.and_then(|usage| usage.cache_input_tokens),
+                "cache_creation_input_tokens": observed_usage.and_then(|usage| usage.cache_creation_input_tokens),
+                "output_tokens": observed_usage.and_then(|usage| usage.output_tokens),
+                "reasoning_tokens": observed_usage.and_then(|usage| usage.reasoning_tokens),
+                "total_tokens": observed_usage.and_then(|usage| usage.total_tokens),
+                "spent_tokens": spent_tokens,
+                "charge_cost_usd_micros": charge_cost_usd_micros,
                 "spent_cost_usd_micros": spent_cost_usd_micros,
                 "body_len": body.len(),
             });
@@ -314,9 +321,19 @@
             "proxy.response",
             serde_json::json!({
                 "request_id": &request_id,
+                "provider": &protocol,
                 "backend": &backend_name,
                 "status": status.as_u16(),
                 "attempted_backends": &attempted_backends,
+                "model": &model,
+                "upstream_model": upstream_model.as_deref(),
+                "input_tokens": observed_usage.and_then(|usage| usage.input_tokens),
+                "cache_input_tokens": observed_usage.and_then(|usage| usage.cache_input_tokens),
+                "cache_creation_input_tokens": observed_usage.and_then(|usage| usage.cache_creation_input_tokens),
+                "output_tokens": observed_usage.and_then(|usage| usage.output_tokens),
+                "reasoning_tokens": observed_usage.and_then(|usage| usage.reasoning_tokens),
+                "total_tokens": observed_usage.and_then(|usage| usage.total_tokens),
+                "spent_tokens": spent_tokens,
             }),
         );
 

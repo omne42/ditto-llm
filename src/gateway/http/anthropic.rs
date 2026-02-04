@@ -83,6 +83,7 @@ async fn handle_anthropic_messages(
 
     let mut headers = HeaderMap::new();
     headers.insert("content-type", "application/json".parse().unwrap());
+    headers.insert("x-ditto-protocol", "anthropic".parse().unwrap());
     if stream_requested {
         headers.insert("accept", "text/event-stream".parse().unwrap());
     }

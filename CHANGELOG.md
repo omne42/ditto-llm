@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
+- Gateway: enrich proxy response logs with `provider`/`upstream_model` and detailed `usage` token breakdown (input/cache/output/reasoning/total).
 
 ### Fixed
 

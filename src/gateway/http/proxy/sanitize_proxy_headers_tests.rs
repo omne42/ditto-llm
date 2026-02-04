@@ -40,6 +40,10 @@ mod sanitize_proxy_headers_tests {
             "x-litellm-api-key",
             axum::http::HeaderValue::from_static("Bearer abc"),
         );
+        headers.insert(
+            "x-ditto-protocol",
+            axum::http::HeaderValue::from_static("google"),
+        );
         headers.insert("x-test", axum::http::HeaderValue::from_static("ok"));
 
         sanitize_proxy_headers(&mut headers, false);
@@ -56,6 +60,7 @@ mod sanitize_proxy_headers_tests {
             "transfer-encoding",
             "upgrade",
             "content-length",
+            "x-ditto-protocol",
         ] {
             assert!(headers.get(name).is_none(), "{name} should be removed");
         }

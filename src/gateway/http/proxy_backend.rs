@@ -10,6 +10,8 @@ async fn attempt_proxy_backend(
     let body = params.body;
     let parsed_json = params.parsed_json;
     let model = params.model;
+    let protocol = extract_header(&parts.headers, "x-ditto-protocol")
+        .unwrap_or_else(|| "openai".to_string());
     let service_tier = params.service_tier;
     let request_id = params.request_id.to_string();
     let path_and_query = params.path_and_query;
@@ -97,24 +99,34 @@ async fn attempt_proxy_backend(
         apply_backend_headers(&mut outgoing_headers, backend.headers());
         insert_request_id(&mut outgoing_headers, &request_id);
 
-        let outgoing_body =
+        let (outgoing_body, upstream_model) =
             if let (Some(request_model), Some(parsed_json)) = (model.as_deref(), parsed_json.as_ref())
             {
-                backend_model_map
+                let mapped_model = backend_model_map
                     .get(request_model)
                     .or_else(|| backend_model_map.get("*"))
-                    .and_then(|mapped_model| {
+                    .cloned();
+
+                match mapped_model {
+                    Some(mapped_model) => {
                         let mut value = parsed_json.clone();
-                        let obj = value.as_object_mut()?;
-                        obj.insert(
-                            "model".to_string(),
-                            serde_json::Value::String(mapped_model.clone()),
-                        );
-                        serde_json::to_vec(&value).ok().map(Bytes::from)
-                    })
-                    .unwrap_or_else(|| body.clone())
+                        if let Some(obj) = value.as_object_mut() {
+                            obj.insert(
+                                "model".to_string(),
+                                serde_json::Value::String(mapped_model.clone()),
+                            );
+                            match serde_json::to_vec(&value) {
+                                Ok(bytes) => (Bytes::from(bytes), Some(mapped_model)),
+                                Err(_) => (body.clone(), Some(request_model.to_string())),
+                            }
+                        } else {
+                            (body.clone(), Some(request_model.to_string()))
+                        }
+                    }
+                    None => (body.clone(), Some(request_model.to_string())),
+                }
             } else {
-                body.clone()
+                (body.clone(), model.clone())
             };
 
         #[cfg(feature = "sdk")]
@@ -126,7 +138,9 @@ async fn attempt_proxy_backend(
                     "method": parts.method.as_str(),
                     "path": path_and_query,
                     "backend": &backend_name,
+                    "provider": &protocol,
                     "model": &model,
+                    "upstream_model": upstream_model.as_deref(),
                     "virtual_key_id": virtual_key_id.as_deref(),
                     "body_len": body.len(),
                 }),
@@ -583,12 +597,14 @@ async fn attempt_proxy_backend(
                 {
                     let payload = serde_json::json!({
                         "request_id": &request_id,
+                        "provider": &protocol,
                         "virtual_key_id": virtual_key_id.as_deref(),
                         "backend": &backend_name,
                         "attempted_backends": &attempted_backends,
                         "method": parts.method.as_str(),
                         "path": path_and_query,
                         "model": &model,
+                        "upstream_model": upstream_model.as_deref(),
                         "status": status.as_u16(),
                         "charge_tokens": charge_tokens,
                         "charge_cost_usd_micros": charge_cost_usd_micros,
@@ -611,9 +627,12 @@ async fn attempt_proxy_backend(
                     "proxy.response",
                     serde_json::json!({
                         "request_id": &request_id,
+                        "provider": &protocol,
                         "backend": &backend_name,
                         "status": status.as_u16(),
                         "attempted_backends": &attempted_backends,
+                        "model": &model,
+                        "upstream_model": upstream_model.as_deref(),
                     }),
                 );
 

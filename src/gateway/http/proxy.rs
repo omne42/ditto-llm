@@ -6,3 +6,5 @@ include!("proxy/budget_reservation.rs");
 
 #[cfg(test)]
 include!("proxy/sanitize_proxy_headers_tests.rs");
+#[cfg(test)]
+include!("proxy/usage_parsing_tests.rs");

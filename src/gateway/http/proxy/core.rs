@@ -317,14 +317,11 @@ fn estimate_tokens_from_bytes(body: &Bytes) -> u32 {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct ObservedUsage {
-    #[cfg(feature = "gateway-costing")]
     input_tokens: Option<u64>,
-    #[cfg(feature = "gateway-costing")]
     cache_input_tokens: Option<u64>,
-    #[cfg(feature = "gateway-costing")]
     cache_creation_input_tokens: Option<u64>,
-    #[cfg(feature = "gateway-costing")]
     output_tokens: Option<u64>,
+    reasoning_tokens: Option<u64>,
     total_tokens: Option<u64>,
 }
 
@@ -340,40 +337,42 @@ fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
         .get("output_tokens")
         .or_else(|| usage.get("completion_tokens"))
         .and_then(|v| v.as_u64());
+    let reasoning_tokens = usage
+        .get("reasoning_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            usage.get("output_tokens_details")
+                .or_else(|| usage.get("completion_tokens_details"))
+                .and_then(|details| details.get("reasoning_tokens"))
+                .and_then(|v| v.as_u64())
+        });
     let total_tokens = total_tokens.or_else(|| {
         input_tokens.and_then(|input| output_tokens.map(|output| input.saturating_add(output)))
     });
 
-    #[cfg(feature = "gateway-costing")]
-    {
-        let prompt_token_details = usage
-            .get("input_tokens_details")
-            .or_else(|| usage.get("prompt_tokens_details"));
-        let cache_input_tokens = prompt_token_details
-            .and_then(|details| details.get("cached_tokens"))
-            .and_then(|v| v.as_u64());
-        let cache_creation_input_tokens = usage
-            .get("cache_creation_input_tokens")
-            .and_then(|v| v.as_u64())
-            .or_else(|| {
-                prompt_token_details
-                    .and_then(|details| details.get("cache_creation_tokens"))
-                    .and_then(|v| v.as_u64())
-            });
+    let prompt_token_details = usage
+        .get("input_tokens_details")
+        .or_else(|| usage.get("prompt_tokens_details"));
+    let cache_input_tokens = prompt_token_details
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(|v| v.as_u64());
+    let cache_creation_input_tokens = usage
+        .get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64())
+        .or_else(|| {
+            prompt_token_details
+                .and_then(|details| details.get("cache_creation_tokens"))
+                .and_then(|v| v.as_u64())
+        });
 
-        Some(ObservedUsage {
-            input_tokens,
-            cache_input_tokens,
-            cache_creation_input_tokens,
-            output_tokens,
-            total_tokens,
-        })
-    }
-
-    #[cfg(not(feature = "gateway-costing"))]
-    {
-        Some(ObservedUsage { total_tokens })
-    }
+    Some(ObservedUsage {
+        input_tokens,
+        cache_input_tokens,
+        cache_creation_input_tokens,
+        output_tokens,
+        reasoning_tokens,
+        total_tokens,
+    })
 }
 
 fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
@@ -393,6 +392,7 @@ fn sanitize_proxy_headers(headers: &mut HeaderMap, strip_authorization: bool) {
     headers.remove("transfer-encoding");
     headers.remove("upgrade");
     headers.remove("x-ditto-virtual-key");
+    headers.remove("x-ditto-protocol");
     headers.remove("x-ditto-cache-bypass");
     headers.remove("x-ditto-bypass-cache");
     headers.remove("content-length");
