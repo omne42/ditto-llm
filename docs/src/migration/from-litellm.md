@@ -125,7 +125,7 @@ Ditto 支持加载 LiteLLM 风格 pricing JSON（`--pricing-litellm`）用于 co
 差异/注意：
 
 - Ditto 当前不覆盖 LiteLLM 那种更细粒度的 MCP 权限控制面（例如 per-key/tool permissions、`allowed_params` 等）；可以先用请求级 `allowed_tools` + 多实例隔离承接。
-- 当前只拦截 `/v1/chat/completions` 的 MCP tools；`/v1/responses` 的 MCP tools 暂未接入。
+- ✅ Ditto 同时支持 `POST /v1/chat/completions` 与 `POST /v1/responses` 的 MCP tools（`require_approval: "never"` 会做一次最小 tool loop）。
 
 完整说明见「Gateway → MCP Gateway（/mcp + tools）」。
 

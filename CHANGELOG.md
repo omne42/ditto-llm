@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add LiteLLM-like A2A agent gateway proxy endpoints (`/a2a/*` and `/v1/a2a/*`) backed by a new `a2a_agents` registry in `gateway.json`/`gateway.yaml`.
 - Gateway: add LiteLLM-like MCP gateway endpoints (`/mcp`, `/mcp/tools/list`, `/mcp/tools/call`) backed by a new `mcp_servers` registry in `gateway.json`/`gateway.yaml`.
 - Gateway: add MCP tools integration for `POST /v1/chat/completions` via `tools: [{"type":"mcp", ...}]` (multi-server tool name prefixing and optional auto-execution when `require_approval: "never"`).
+- Gateway: add MCP tools integration for `POST /v1/responses` via `tools: [{"type":"mcp", ...}]` (tool rewrite and optional auto-execution when `require_approval: "never"`; supports the Responses shim fallback when upstream lacks `/v1/responses`).
 - Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
 - Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
 - Gateway: add `ditto-audit-export` CLI to fetch `/admin/audit/export`, write a local export + manifest, and optionally upload to S3/GCS (supports S3 Object Lock flags).

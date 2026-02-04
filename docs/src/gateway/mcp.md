@@ -1,11 +1,11 @@
 # MCP Gateway（/mcp + tools）
 
-Ditto Gateway 提供一个 **LiteLLM-like** 的 MCP HTTP JSON-RPC proxy，并把 MCP tools 融合进 OpenAI-compatible 的 `POST /v1/chat/completions`。
+Ditto Gateway 提供一个 **LiteLLM-like** 的 MCP HTTP JSON-RPC proxy，并把 MCP tools 融合进 OpenAI-compatible 的 `POST /v1/chat/completions` 与 `POST /v1/responses`。
 
 你可以把它理解为两条能力：
 
 1) **MCP Proxy**：`/mcp*` 端点 → 转发 `tools/list` / `tools/call` 到你注册的 MCP servers  
-2) **Chat Completions 集成**：在 `tools` 里写 `{"type":"mcp", ...}`，Ditto 会把 MCP tools 转成 OpenAI `function` tools，并可选自动执行 tool calls
+2) **OpenAI endpoints 集成**：在 `tools` 里写 `{"type":"mcp", ...}`，Ditto 会把 MCP tools 转成 OpenAI `function` tools，并可选自动执行 tool calls
 
 ---
 
@@ -90,7 +90,7 @@ curl -sS http://127.0.0.1:8080/mcp/tools/call \
 
 ---
 
-## 4) 在 /v1/chat/completions 中使用 MCP tools
+## 4) 在 /v1/chat/completions / /v1/responses 中使用 MCP tools
 
 Ditto 支持 LiteLLM 风格的请求写法：在 `tools` 数组中放入 `type: "mcp"` 的条目。
 
@@ -126,12 +126,9 @@ Ditto 支持 LiteLLM 风格的请求写法：在 `tools` 数组中放入 `type: 
 
 Ditto 会做一次最小 tool loop（对齐 LiteLLM 的行为）：
 
-1) 先用 `stream=false` 调一次 `/v1/chat/completions` 获取 `tool_calls`
+1) 先用 `stream=false` 调一次对应端点（`/v1/chat/completions` 或 `/v1/responses`）获取 tool calls
 2) 逐个调用 MCP `tools/call`
-3) 把结果作为 `role:"tool"` message 追加回 `messages`
-4) 再发起一次最终请求（最终请求的 `stream` 会保持和原请求一致）
-
-> 当前只拦截 `POST /v1/chat/completions` 的 MCP tools；`/v1/responses` 的 MCP tools 暂未接入。
+3) 把结果回填后再发起一次最终请求（最终请求的 `stream` 会保持和原请求一致）
 
 ---
 
@@ -161,4 +158,3 @@ Ditto 的 MCP gateway 当前聚焦在“让 MCP tools 能跑起来”：
 
 - per-key/team/org 的 MCP 权限管理、`allowed_params` 等更细粒度策略（LiteLLM 有更完整的控制面）
 - streaming cache / 更复杂的审批流
-

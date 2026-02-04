@@ -8,9 +8,27 @@ async fn maybe_handle_mcp_tools_chat_completions(
     if parts.headers.contains_key("x-ditto-skip-mcp") {
         return Ok(None);
     }
-    if path_and_query != "/v1/chat/completions" {
-        return Ok(None);
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+
+    match path {
+        "/v1/chat/completions" => {
+            maybe_handle_mcp_tools_chat_completions_impl(state, parts, parsed_json, request_id)
+                .await
+        }
+        "/v1/responses" => maybe_handle_mcp_tools_responses(state, parts, parsed_json, request_id).await,
+        _ => Ok(None),
     }
+}
+
+async fn maybe_handle_mcp_tools_chat_completions_impl(
+    state: &GatewayHttpState,
+    parts: &axum::http::request::Parts,
+    parsed_json: &Option<Value>,
+    request_id: &str,
+) -> Result<Option<axum::response::Response>, (StatusCode, Json<OpenAiErrorResponse>)> {
     let Some(request_json) = parsed_json.as_ref() else {
         return Ok(None);
     };
@@ -169,6 +187,186 @@ async fn maybe_handle_mcp_tools_chat_completions(
     if let Some(obj) = follow_up.as_object_mut() {
         obj.insert("messages".to_string(), Value::Array(messages));
         obj.insert("stream".to_string(), Value::Bool(original_stream));
+    }
+
+    let response =
+        call_openai_compat_proxy_with_body(state, parts, request_id, &follow_up, original_stream)
+            .await?;
+    Ok(Some(response))
+}
+
+async fn maybe_handle_mcp_tools_responses(
+    state: &GatewayHttpState,
+    parts: &axum::http::request::Parts,
+    parsed_json: &Option<Value>,
+    request_id: &str,
+) -> Result<Option<axum::response::Response>, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let Some(request_json) = parsed_json.as_ref() else {
+        return Ok(None);
+    };
+
+    let tools = request_json.get("tools").and_then(|v| v.as_array());
+    let Some(tools) = tools else {
+        return Ok(None);
+    };
+
+    let (mcp_tool_cfgs, other_tools) = split_mcp_tool_configs(tools);
+    if mcp_tool_cfgs.is_empty() {
+        return Ok(None);
+    }
+
+    let original_stream = request_json
+        .get("stream")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let auto_execute = mcp_tool_cfgs
+        .iter()
+        .any(|cfg| cfg.require_approval.as_deref() == Some("never"));
+
+    let requested_servers = resolve_mcp_servers_from_tool_cfgs(&mcp_tool_cfgs);
+    let server_ids = match requested_servers {
+        Some(servers) => servers,
+        None => {
+            let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+            all.sort();
+            all
+        }
+    };
+
+    if server_ids.is_empty() {
+        return Err(openai_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request_error",
+            Some("invalid_mcp_server"),
+            "no MCP servers selected",
+        ));
+    }
+
+    let mcp_tools_value = mcp_list_tools(state, &server_ids, None)
+        .await
+        .map_err(map_openai_gateway_error)?;
+    let mut mcp_tools = mcp_tools_value
+        .get("tools")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let allowed_tools = collect_allowed_tools(&mcp_tool_cfgs);
+    if !allowed_tools.is_empty() {
+        mcp_tools.retain(|tool| tool_name_allowed(tool, &allowed_tools));
+    }
+
+    let openai_tools: Vec<Value> = mcp_tools
+        .iter()
+        .filter_map(mcp_tool_to_openai_tool)
+        .collect();
+    let tools_for_llm: Vec<Value> = openai_tools
+        .iter()
+        .cloned()
+        .chain(other_tools.into_iter())
+        .collect();
+
+    if !auto_execute {
+        let mut req_json = request_json.clone();
+        set_json_tools(&mut req_json, tools_for_llm.clone());
+        let response = call_openai_compat_proxy_with_body(
+            state,
+            parts,
+            request_id,
+            &req_json,
+            original_stream,
+        )
+        .await?;
+        return Ok(Some(response));
+    }
+
+    // 1) Initial non-stream call to extract tool calls.
+    let initial_request_id = format!("{request_id}-mcp0");
+    let mut initial_req_json = request_json.clone();
+    set_json_tools(&mut initial_req_json, tools_for_llm.clone());
+    let initial_response = call_openai_compat_proxy_with_body(
+        state,
+        parts,
+        &initial_request_id,
+        &initial_req_json,
+        false,
+    )
+    .await?;
+
+    let (initial_status, initial_headers, initial_body) =
+        split_response(initial_response, 8 * 1024 * 1024).await?;
+
+    let initial_json: Option<Value> = serde_json::from_slice(&initial_body).ok();
+    let tool_calls = initial_json
+        .as_ref()
+        .map(extract_responses_tool_calls)
+        .unwrap_or_default();
+
+    if tool_calls.is_empty() {
+        if original_stream {
+            let mut req_json = request_json.clone();
+            set_json_tools(&mut req_json, tools_for_llm.clone());
+            let response =
+                call_openai_compat_proxy_with_body(state, parts, request_id, &req_json, true)
+                    .await?;
+            return Ok(Some(response));
+        }
+        return Ok(Some(rebuild_response(
+            initial_status,
+            initial_headers,
+            initial_body,
+        )));
+    }
+
+    let tool_results = execute_mcp_tool_calls(state, &server_ids, &tool_calls).await;
+
+    let initial_is_shim = initial_headers.contains_key("x-ditto-shim");
+    let response_id = initial_json
+        .as_ref()
+        .and_then(|value| value.get("id"))
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    if initial_is_shim || response_id.is_none() {
+        let response = follow_up_via_chat_completions_to_responses(
+            state,
+            parts,
+            request_id,
+            request_json,
+            tools_for_llm,
+            &tool_calls,
+            &tool_results,
+        )
+        .await?;
+        return Ok(Some(response));
+    }
+
+    let response_id = response_id.unwrap_or_default();
+
+    // 2) Follow-up call with tool results via native /responses.
+    let mut follow_up = request_json.clone();
+    set_json_tools(&mut follow_up, tools_for_llm);
+    if let Some(obj) = follow_up.as_object_mut() {
+        obj.insert(
+            "previous_response_id".to_string(),
+            Value::String(response_id),
+        );
+        obj.insert("stream".to_string(), Value::Bool(original_stream));
+        let outputs = tool_calls
+            .iter()
+            .zip(tool_results.iter())
+            .map(|(call, output)| {
+                serde_json::json!({
+                    "type": "function_call_output",
+                    "call_id": call.call_id.clone(),
+                    "output": output,
+                })
+            })
+            .collect::<Vec<_>>();
+        obj.insert("input".to_string(), Value::Array(outputs));
+        obj.remove("messages");
     }
 
     let response =
@@ -455,6 +653,8 @@ fn rebuild_response(status: StatusCode, headers: HeaderMap, body: Bytes) -> axum
     *response.headers_mut() = headers;
     response
 }
+
+include!("mcp_responses.rs");
 
 #[derive(Debug, Clone)]
 struct ChatToolCall {
