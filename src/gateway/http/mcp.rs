@@ -224,7 +224,7 @@ async fn handle_mcp_tools_list(
         None,
     ) {
         Ok(ids) => ids,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
 
     match mcp_list_tools(&state, &server_ids, cursor).await {
@@ -272,7 +272,7 @@ async fn handle_mcp_tools_call(
         None,
     ) {
         Ok(ids) => ids,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
 
     match mcp_call_tool(&state, &server_ids, &parsed.name, parsed.arguments).await {
@@ -328,7 +328,7 @@ async fn handle_mcp_impl(
 
     let server_ids = match resolve_requested_mcp_servers(&state, None, &parts.headers, selector) {
         Ok(ids) => ids,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
 
     let Some(id) = rpc.id.clone() else {
@@ -412,7 +412,7 @@ fn resolve_requested_mcp_servers(
     servers: Option<Vec<String>>,
     headers: &HeaderMap,
     selector: Option<String>,
-) -> Result<Vec<String>, axum::response::Response> {
+) -> Result<Vec<String>, Box<axum::response::Response>> {
     let selector = selector
         .as_deref()
         .and_then(|value| value.split('/').next())
@@ -439,11 +439,11 @@ fn resolve_requested_mcp_servers(
     requested.sort();
     requested.dedup();
     if requested.is_empty() {
-        return Err(StatusCode::BAD_REQUEST.into_response());
+        return Err(Box::new(StatusCode::BAD_REQUEST.into_response()));
     }
     for server_id in &requested {
         if !state.mcp_servers.contains_key(server_id) {
-            return Err(StatusCode::NOT_FOUND.into_response());
+            return Err(Box::new(StatusCode::NOT_FOUND.into_response()));
         }
     }
     Ok(requested)

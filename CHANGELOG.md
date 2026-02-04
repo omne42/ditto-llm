@@ -108,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: fix streaming multipart passthrough (/v1/files and /v1/audio/* uploads) spending so in-memory budgets are decremented even when store features are disabled.
 - Gateway: fix `cargo check --all-features` for `gateway-translation` after proxy attempt param cleanup (no behavior change).
 - Gateway: fix clippy lint in LiteLLM key regeneration handler (no behavior change).
+- Gateway: include translation-backed models in `GET /v1/models` when `gateway-translation` backends are configured (returns `200` even when no proxy backends are configured).
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
 - Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.

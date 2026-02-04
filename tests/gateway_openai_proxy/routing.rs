@@ -82,7 +82,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
         when.method(POST)
             .path("/v1/responses")
             .header("authorization", "Bearer sk-primary")
-            .header("x-request-id", "req-0");
+            .header("x-request-id", "req-primary");
         then.status(500)
             .header("content-type", "application/json")
             .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
@@ -91,7 +91,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
         when.method(POST)
             .path("/v1/responses")
             .header("authorization", "Bearer sk-secondary")
-            .header("x-request-id", "req-0");
+            .header("x-request-id", "req-primary");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"id":"ok"}"#);
@@ -143,7 +143,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
         .method("POST")
         .uri("/v1/responses")
         .header("authorization", "Bearer vk-1")
-        .header("x-request-id", "req-0")
+        .header("x-request-id", "req-primary")
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .unwrap();
@@ -176,7 +176,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
         when.method(POST)
             .path("/v1/responses")
             .header("authorization", "Bearer sk-primary")
-            .header("x-request-id", "req-0");
+            .header("x-request-id", "req-primary");
         then.status(500)
             .header("content-type", "application/json")
             .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
@@ -185,7 +185,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
         when.method(POST)
             .path("/v1/responses")
             .header("authorization", "Bearer sk-secondary")
-            .header("x-request-id", "req-0");
+            .header("x-request-id", "req-primary");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"id":"ok"}"#);
@@ -243,7 +243,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
             .method("POST")
             .uri("/v1/responses")
             .header("authorization", "Bearer vk-1")
-            .header("x-request-id", "req-0")
+            .header("x-request-id", "req-primary")
             .header("content-type", "application/json")
             .body(Body::from(body.to_string()))
             .unwrap();

@@ -8,6 +8,7 @@ async fn handle_openai_models_list(
 
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
+    let created = now_epoch_seconds();
 
     let (strip_authorization, key_route) = {
         let gateway = state.gateway.lock().await;
@@ -55,6 +56,19 @@ async fn handle_openai_models_list(
         if let Some((name, backend)) = backends.into_iter().find(|(name, _)| name == route) {
             backends = vec![(name, backend)];
         } else {
+            #[cfg(feature = "gateway-translation")]
+            if state.translation_backends.contains_key(route) {
+                backends = Vec::new();
+            } else {
+                return Err(openai_error(
+                    StatusCode::BAD_GATEWAY,
+                    "api_error",
+                    Some("backend_not_found"),
+                    format!("backend not found: {route}"),
+                ));
+            }
+
+            #[cfg(not(feature = "gateway-translation"))]
             return Err(openai_error(
                 StatusCode::BAD_GATEWAY,
                 "api_error",
@@ -64,15 +78,7 @@ async fn handle_openai_models_list(
         }
     }
 
-    if backends.is_empty() {
-        return Err(openai_error(
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            Some("backend_not_found"),
-            "no proxy backends configured",
-        ));
-    }
-
+    let had_proxy_backends = !backends.is_empty();
     let results = futures_util::future::join_all(backends.into_iter().map(|(name, backend)| {
         let mut headers = base_headers.clone();
         apply_backend_headers(&mut headers, backend.headers());
@@ -126,7 +132,29 @@ async fn handle_openai_models_list(
         );
     }
 
+    #[cfg(feature = "gateway-translation")]
+    let has_translation_backends = !state.translation_backends.is_empty();
+
+    #[cfg(feature = "gateway-translation")]
+    if has_translation_backends {
+        let models =
+            super::translation::collect_models_from_translation_backends(state.translation_backends.as_ref());
+        for (id, owned_by) in models {
+            models_by_id
+                .entry(id.to_string())
+                .or_insert_with(|| super::translation::model_to_openai(&id, &owned_by, created));
+        }
+    }
+
     if models_by_id.is_empty() {
+        if !had_proxy_backends {
+            return Err(openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("backend_not_found"),
+                "no proxy backends configured",
+            ));
+        }
         return Err(openai_error(
             StatusCode::BAD_GATEWAY,
             "api_error",
@@ -147,9 +175,14 @@ async fn handle_openai_models_list(
     response
         .headers_mut()
         .insert("content-type", "application/json".parse().unwrap());
+    #[cfg(feature = "gateway-translation")]
+    if has_translation_backends {
+        response
+            .headers_mut()
+            .insert("x-ditto-translation", "multi".parse().unwrap());
+    }
     if let Ok(value) = axum::http::HeaderValue::from_str(&request_id) {
         response.headers_mut().insert("x-request-id", value);
     }
     Ok(response)
 }
-

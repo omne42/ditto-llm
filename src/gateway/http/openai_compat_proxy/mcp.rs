@@ -63,10 +63,7 @@ async fn maybe_handle_mcp_tools_chat_completions(
 
     let allowed_tools = collect_allowed_tools(&mcp_tool_cfgs);
     if !allowed_tools.is_empty() {
-        mcp_tools = mcp_tools
-            .into_iter()
-            .filter(|tool| tool_name_allowed(tool, &allowed_tools))
-            .collect();
+        mcp_tools.retain(|tool| tool_name_allowed(tool, &allowed_tools));
     }
 
     let openai_tools: Vec<Value> = mcp_tools
