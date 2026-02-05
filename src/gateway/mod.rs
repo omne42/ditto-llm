@@ -77,7 +77,7 @@ pub use store_types::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord};
 #[cfg(feature = "gateway-translation")]
 pub use translation::TranslationBackend;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GatewayRequest {
     pub virtual_key: String,
     pub model: String,
@@ -85,6 +85,34 @@ pub struct GatewayRequest {
     pub input_tokens: u32,
     pub max_output_tokens: u32,
     pub passthrough: bool,
+}
+
+impl std::fmt::Debug for GatewayRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        struct HexU64(u64);
+
+        impl std::fmt::Debug for HexU64 {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:016x}", self.0)
+            }
+        }
+
+        f.debug_struct("GatewayRequest")
+            .field("virtual_key", &"<redacted>")
+            .field("virtual_key_len", &self.virtual_key.len())
+            .field(
+                "virtual_key_hash",
+                &HexU64(hash64_fnv1a(self.virtual_key.as_bytes())),
+            )
+            .field("model", &self.model)
+            .field("prompt", &"<redacted>")
+            .field("prompt_len", &self.prompt.len())
+            .field("prompt_hash", &HexU64(hash64_fnv1a(self.prompt.as_bytes())))
+            .field("input_tokens", &self.input_tokens)
+            .field("max_output_tokens", &self.max_output_tokens)
+            .field("passthrough", &self.passthrough)
+            .finish()
+    }
 }
 
 impl GatewayRequest {
@@ -550,16 +578,8 @@ impl Gateway {
         }
 
         if let Some(cache_key) = cache_key {
-            self.cache.insert(
-                &key.id,
-                cache_key,
-                response.clone(),
-                key.cache.ttl_seconds,
-                key.cache.max_entries,
-                key.cache.max_body_bytes,
-                key.cache.max_total_body_bytes,
-                now,
-            );
+            self.cache
+                .insert(&key.id, cache_key, response.clone(), &key.cache, now);
         }
 
         Ok(response)

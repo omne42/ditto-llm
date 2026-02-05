@@ -81,28 +81,25 @@ impl ResponseCache {
         Some(response)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn insert(
         &mut self,
         scope: &str,
         key: String,
         response: GatewayResponse,
-        ttl_seconds: Option<u64>,
-        max_entries: usize,
-        max_body_bytes: usize,
-        max_total_body_bytes: usize,
+        config: &CacheConfig,
         now: u64,
     ) {
-        if ttl_seconds.is_some_and(|ttl| ttl == 0)
-            || max_entries == 0
-            || max_body_bytes == 0
-            || max_total_body_bytes == 0
+        if !config.enabled
+            || config.ttl_seconds.is_some_and(|ttl| ttl == 0)
+            || config.max_entries == 0
+            || config.max_body_bytes == 0
+            || config.max_total_body_bytes == 0
         {
             return;
         }
 
         let body_bytes = response.content.len();
-        if body_bytes > max_body_bytes || body_bytes > max_total_body_bytes {
+        if body_bytes > config.max_body_bytes || body_bytes > config.max_total_body_bytes {
             if let Some(cache) = self.scopes.get_mut(scope) {
                 if let Some(entry) = cache.entries.remove(&key) {
                     cache.total_body_bytes =
@@ -116,7 +113,7 @@ impl ResponseCache {
             return;
         }
 
-        let expires_at = ttl_seconds.map(|ttl| now.saturating_add(ttl));
+        let expires_at = config.ttl_seconds.map(|ttl| now.saturating_add(ttl));
         let entry = CacheEntry {
             response,
             expires_at,
@@ -163,7 +160,9 @@ impl ResponseCache {
             }
         }
 
-        while cache.entries.len() > max_entries || cache.total_body_bytes > max_total_body_bytes {
+        while cache.entries.len() > config.max_entries
+            || cache.total_body_bytes > config.max_total_body_bytes
+        {
             let Some(candidate) = cache.order.pop_front() else {
                 break;
             };
@@ -189,6 +188,13 @@ mod tests {
     #[test]
     fn skips_entries_larger_than_max_body_bytes() {
         let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 4,
+            max_total_body_bytes: 100,
+        };
         cache.insert(
             "scope",
             "k".to_string(),
@@ -198,10 +204,7 @@ mod tests {
                 backend: "b".to_string(),
                 cached: false,
             },
-            Some(60),
-            10,
-            4,
-            100,
+            &config,
             0,
         );
         assert!(cache.get("scope", "k", 0).is_none());
@@ -210,6 +213,13 @@ mod tests {
     #[test]
     fn evicts_until_under_total_body_bytes_budget() {
         let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 4,
+        };
         for key in ["a", "b", "c"] {
             cache.insert(
                 "scope",
@@ -220,10 +230,7 @@ mod tests {
                     backend: "b".to_string(),
                     cached: false,
                 },
-                Some(60),
-                10,
-                10,
-                4,
+                &config,
                 0,
             );
         }
@@ -236,6 +243,13 @@ mod tests {
     #[test]
     fn overwriting_entry_updates_total_body_bytes() {
         let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
         cache.insert(
             "scope",
             "k".to_string(),
@@ -245,13 +259,17 @@ mod tests {
                 backend: "b".to_string(),
                 cached: false,
             },
-            Some(60),
-            10,
-            10,
-            100,
+            &config,
             0,
         );
 
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 3,
+        };
         cache.insert(
             "scope",
             "k".to_string(),
@@ -261,10 +279,7 @@ mod tests {
                 backend: "b".to_string(),
                 cached: false,
             },
-            Some(60),
-            10,
-            10,
-            3,
+            &config,
             0,
         );
 
@@ -274,6 +289,13 @@ mod tests {
     #[test]
     fn expired_entries_release_total_body_bytes() {
         let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(1),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
         cache.insert(
             "scope",
             "k".to_string(),
@@ -283,15 +305,19 @@ mod tests {
                 backend: "b".to_string(),
                 cached: false,
             },
-            Some(1),
-            10,
-            10,
-            100,
+            &config,
             0,
         );
 
         assert!(cache.get("scope", "k", 1).is_none());
 
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 2,
+        };
         cache.insert(
             "scope",
             "k2".to_string(),
@@ -301,10 +327,7 @@ mod tests {
                 backend: "b".to_string(),
                 cached: false,
             },
-            Some(60),
-            10,
-            10,
-            2,
+            &config,
             1,
         );
 

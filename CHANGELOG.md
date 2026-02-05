@@ -129,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
 - Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.
 - Gateway: avoid leaking raw virtual keys/prompts and reduce allocations by making `GatewayRequest::cache_key` return a hex digest, and using hashed route seeds for weighted backend selection.
+- Security: redact `GatewayRequest` debug output to avoid logging virtual keys and prompts (keeps only lengths + hashes).
 - Gateway: settle passthrough SSE stream budgets using the final `usage` chunk when present (prefer actual usage over request estimates).
 - Gateway: stream large multipart uploads to upstream for `/v1/files` and `/v1/audio/{transcriptions,translations}` (avoid buffering the full request body).
 - Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).
@@ -141,6 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK: cap OpenAI-like binary responses (`/files/*/content`, `/audio/speech`) via bounded reads and expose `with_max_binary_response_bytes` for tuning (avoid OOM on large downloads).
 - Gateway: proxy-cache buffering now uses bounded reads and returns `502 invalid_backend_response` on oversized bodies instead of silently truncating to empty (avoid OOM/incorrect responses).
 - Build: make the `agent` feature standalone by switching `safe-fs-tools` from a sibling path dependency to a pinned git dependency.
+- Gateway: refactor `ResponseCache::insert` to accept `CacheConfig` instead of a long argument list (no behavior change).
 
 ## [0.1.2] - 2026-02-01
 
