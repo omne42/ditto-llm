@@ -56,7 +56,7 @@
 
 - admin auth：`src/gateway/http/admin/auth.rs`
 - admin handlers：`src/gateway/http/admin/*`
-- 配置/启动参数：`src/bin/ditto-gateway.rs`（注意文件行数门禁；建议继续拆分 include）
+- 配置/启动参数：`src/bin/ditto-gateway.rs`（入口）+ `src/bin/ditto_gateway/cli.rs`（参数解析）+ `src/bin/ditto_gateway/attach.rs`（feature-gated attach）
 
 **验收/验证**：
 

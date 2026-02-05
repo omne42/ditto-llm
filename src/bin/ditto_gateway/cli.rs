@@ -124,8 +124,7 @@ pub(crate) fn parse_gateway_cli_args(
                 admin_token_env = Some(args.next().ok_or("missing value for --admin-token-env")?);
             }
             "--admin-read-token" => {
-                admin_read_token =
-                    Some(args.next().ok_or("missing value for --admin-read-token")?);
+                admin_read_token = Some(args.next().ok_or("missing value for --admin-read-token")?);
             }
             "--admin-read-token-env" => {
                 admin_read_token_env = Some(
@@ -380,8 +379,10 @@ pub(crate) fn parse_gateway_cli_args(
             }
             "--proxy-health-check-path" => {
                 proxy_health_checks_enabled = true;
-                proxy_health_check_path =
-                    Some(args.next().ok_or("missing value for --proxy-health-check-path")?);
+                proxy_health_check_path = Some(
+                    args.next()
+                        .ok_or("missing value for --proxy-health-check-path")?,
+                );
             }
             "--proxy-health-check-interval-secs" => {
                 proxy_health_checks_enabled = true;
@@ -474,6 +475,49 @@ pub(crate) fn parse_gateway_cli_args(
 }
 
 #[cfg(feature = "gateway")]
+fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("empty status code list".into());
+    }
+
+    let mut out = Vec::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        out.push(part.parse::<u16>().map_err(|_| "invalid status code")?);
+    }
+    if out.is_empty() {
+        return Err("empty status code list".into());
+    }
+    out.sort_unstable();
+    out.dedup();
+    Ok(out)
+}
+
+#[cfg(feature = "gateway")]
+pub(crate) async fn resolve_cli_secret(
+    raw: String,
+    env: &ditto_llm::Env,
+    label: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let raw = raw.trim().to_string();
+    if !raw.starts_with("secret://") {
+        return Ok(raw);
+    }
+
+    let resolved = ditto_llm::secrets::resolve_secret_string(raw.as_str(), env)
+        .await
+        .map_err(|err| format!("failed to resolve {label}: {err}"))?;
+    if resolved.trim().is_empty() {
+        return Err(format!("{label} resolved to an empty value").into());
+    }
+    Ok(resolved)
+}
+
+#[cfg(feature = "gateway")]
 fn usage() -> &'static str {
     #[cfg(feature = "gateway-config-yaml")]
     {
@@ -491,8 +535,8 @@ mod tests {
 
     #[test]
     fn parses_minimal_args() {
-        let cli = parse_gateway_cli_args(vec!["gateway.json".to_string()].into_iter())
-            .expect("parse");
+        let cli =
+            parse_gateway_cli_args(vec!["gateway.json".to_string()].into_iter()).expect("parse");
         assert_eq!(cli.path, "gateway.json");
         assert_eq!(cli.listen, "127.0.0.1:8080");
         assert!(!cli.json_logs);

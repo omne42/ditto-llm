@@ -86,6 +86,50 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 - 先用较小的上限跑在生产影子环境，观察 cardinality 再逐步放宽。
 
+### 指标契约（Prometheus）
+
+> 口径：以下是 Ditto Gateway **目前实现**的 Prometheus 指标族（`ditto_gateway_proxy_*`）。指标名与 label 我们会尽量保持稳定；如果需要破坏性调整，会在 `CHANGELOG.md` 里明确标注。
+
+#### Labels 与基数控制
+
+- `path`：不是原始 URL，而是**归一化后的 OpenAI 路径**（实现：`src/gateway/metrics_prometheus.rs` 的 `normalize_proxy_path_label`）。
+  - 例如：`/v1/models/<id>` 会归一化为 `/v1/models/*`，未知路径会归一化为 `/v1/*`。
+- `virtual_key_id`：未启用 virtual key 或未命中时为 `public`。
+- `model`：仅在请求体里可解析到 `model` 时才打点。
+- `backend` / `source` / `target` / `scope`：均做了基数上限控制。
+- 当某个 label 维度超过 `--prometheus-max-*-series` 上限时，会把后续新值聚合到 `__overflow__`（避免把 Prometheus 打爆）。
+
+#### Histogram buckets（duration）
+
+`*_duration_seconds` 直方图使用固定 buckets（秒）：`0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`。
+
+#### Metrics（概览）
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `ditto_gateway_proxy_requests_total` | counter | - | 代理请求总数 |
+| `ditto_gateway_proxy_requests_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的请求计数 |
+| `ditto_gateway_proxy_requests_by_model_total` | counter | `model` | 按 model 分组的请求计数 |
+| `ditto_gateway_proxy_requests_by_path_total` | counter | `path` | 按归一化 OpenAI 路径分组的请求计数 |
+| `ditto_gateway_proxy_request_duration_seconds` | histogram | `path` | 端到端代理请求耗时（按 path） |
+| `ditto_gateway_proxy_responses_total` | counter | `status` | 按 HTTP status 分组的响应计数 |
+| `ditto_gateway_proxy_responses_by_path_status_total` | counter | `path,status` | 按 path+status 分组的响应计数 |
+| `ditto_gateway_proxy_backend_attempts_total` | counter | `backend` | 后端尝试次数（含 fallback） |
+| `ditto_gateway_proxy_backend_success_total` | counter | `backend` | 后端成功次数 |
+| `ditto_gateway_proxy_backend_failures_total` | counter | `backend` | 后端失败次数（网络错误/可重试 status 等） |
+| `ditto_gateway_proxy_backend_in_flight` | gauge | `backend` | 后端 in-flight 请求数（用于背压观测） |
+| `ditto_gateway_proxy_backend_request_duration_seconds` | histogram | `backend` | 后端请求耗时（按 backend） |
+| `ditto_gateway_proxy_cache_lookups_total` | counter | - | proxy cache 查找次数 |
+| `ditto_gateway_proxy_cache_lookups_by_path_total` | counter | `path` | 按 path 分组的 proxy cache 查找次数 |
+| `ditto_gateway_proxy_cache_hits_total` | counter | - | proxy cache 命中次数 |
+| `ditto_gateway_proxy_cache_hits_by_source_total` | counter | `source` | 按来源分组的命中次数（例如 memory/redis） |
+| `ditto_gateway_proxy_cache_hits_by_path_total` | counter | `path` | 按 path 分组的命中次数 |
+| `ditto_gateway_proxy_cache_misses_total` | counter | - | proxy cache 未命中次数 |
+| `ditto_gateway_proxy_cache_misses_by_path_total` | counter | `path` | 按 path 分组的未命中次数 |
+| `ditto_gateway_proxy_cache_stores_total` | counter | `target` | cache 写入次数（例如 memory/redis） |
+| `ditto_gateway_proxy_cache_store_errors_total` | counter | `target` | cache 写入错误次数 |
+| `ditto_gateway_proxy_cache_purges_total` | counter | `scope` | admin purge 次数（按 scope） |
+
 ### Dashboard / 告警模板
 
 仓库内提供一套“开箱即用但不强绑定”的模板资产：

@@ -679,7 +679,7 @@ FILE: COMPARED_TO_LITELLM_AI_SDK.md
 
 - 路由：已支持“主动健康检查/探活”（feature `gateway-routing-advanced`），仍缺更丰富的策略（更细粒度熔断、分级 fallback、更细粒度 backpressure）
 - 成本：支持 **tiktoken-based token 计数**（best-effort；feature `gateway-tokenizer`）+ **usage-based settle**（非 streaming 响应优先按 `usage` 结算；否则回退预估）+ LiteLLM prompt cache 成本（read: `cache_read_input_token_cost` + `cached_tokens`；write: `cache_creation_input_token_cost` + `cache_creation_input_tokens`；tiered: `*_above_*_tokens`）+ LiteLLM service tier 成本（`*_priority`/`*_flex` + request `service_tier`）+ proxy `model_map` 计费对齐（按 backend 映射后的 model 选价）；支持按 tenant/project/user 归因与共享预算（`virtual_keys[].tenant_id/project_id/user_id` + `tenant_budget/project_budget/user_budget` + `/admin/budgets/tenants|projects|users` + `/admin/costs/tenants|projects|users`）
-- 观测：Prometheus/OTel/JSON logs 已有，但缺更丰富的指标（latency histograms、per-route tags、采样/脱敏策略）
+- 观测：Prometheus/OTel/JSON logs 已有，并提供 per-path/per-backend latency histograms 与状态码计数；仍缺更细粒度的指标维度（例如按 model/provider 聚合、streaming 特有指标）以及可配置的采样/脱敏策略
 - 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
 - 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ 审计导出到对象存储（S3/GCS）+ manifest（sha256/chain hash；可配 S3 Object Lock 参数）；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule）。仍缺：IP-based/令牌桶限流、配置版本化/灰度/回滚等更完整平台能力。
@@ -5270,6 +5270,50 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 - 先用较小的上限跑在生产影子环境，观察 cardinality 再逐步放宽。
 
+### 指标契约（Prometheus）
+
+> 口径：以下是 Ditto Gateway **目前实现**的 Prometheus 指标族（`ditto_gateway_proxy_*`）。指标名与 label 我们会尽量保持稳定；如果需要破坏性调整，会在 `CHANGELOG.md` 里明确标注。
+
+#### Labels 与基数控制
+
+- `path`：不是原始 URL，而是**归一化后的 OpenAI 路径**（实现：`src/gateway/metrics_prometheus.rs` 的 `normalize_proxy_path_label`）。
+  - 例如：`/v1/models/<id>` 会归一化为 `/v1/models/*`，未知路径会归一化为 `/v1/*`。
+- `virtual_key_id`：未启用 virtual key 或未命中时为 `public`。
+- `model`：仅在请求体里可解析到 `model` 时才打点。
+- `backend` / `source` / `target` / `scope`：均做了基数上限控制。
+- 当某个 label 维度超过 `--prometheus-max-*-series` 上限时，会把后续新值聚合到 `__overflow__`（避免把 Prometheus 打爆）。
+
+#### Histogram buckets（duration）
+
+`*_duration_seconds` 直方图使用固定 buckets（秒）：`0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10`。
+
+#### Metrics（概览）
+
+| Metric | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `ditto_gateway_proxy_requests_total` | counter | - | 代理请求总数 |
+| `ditto_gateway_proxy_requests_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的请求计数 |
+| `ditto_gateway_proxy_requests_by_model_total` | counter | `model` | 按 model 分组的请求计数 |
+| `ditto_gateway_proxy_requests_by_path_total` | counter | `path` | 按归一化 OpenAI 路径分组的请求计数 |
+| `ditto_gateway_proxy_request_duration_seconds` | histogram | `path` | 端到端代理请求耗时（按 path） |
+| `ditto_gateway_proxy_responses_total` | counter | `status` | 按 HTTP status 分组的响应计数 |
+| `ditto_gateway_proxy_responses_by_path_status_total` | counter | `path,status` | 按 path+status 分组的响应计数 |
+| `ditto_gateway_proxy_backend_attempts_total` | counter | `backend` | 后端尝试次数（含 fallback） |
+| `ditto_gateway_proxy_backend_success_total` | counter | `backend` | 后端成功次数 |
+| `ditto_gateway_proxy_backend_failures_total` | counter | `backend` | 后端失败次数（网络错误/可重试 status 等） |
+| `ditto_gateway_proxy_backend_in_flight` | gauge | `backend` | 后端 in-flight 请求数（用于背压观测） |
+| `ditto_gateway_proxy_backend_request_duration_seconds` | histogram | `backend` | 后端请求耗时（按 backend） |
+| `ditto_gateway_proxy_cache_lookups_total` | counter | - | proxy cache 查找次数 |
+| `ditto_gateway_proxy_cache_lookups_by_path_total` | counter | `path` | 按 path 分组的 proxy cache 查找次数 |
+| `ditto_gateway_proxy_cache_hits_total` | counter | - | proxy cache 命中次数 |
+| `ditto_gateway_proxy_cache_hits_by_source_total` | counter | `source` | 按来源分组的命中次数（例如 memory/redis） |
+| `ditto_gateway_proxy_cache_hits_by_path_total` | counter | `path` | 按 path 分组的命中次数 |
+| `ditto_gateway_proxy_cache_misses_total` | counter | - | proxy cache 未命中次数 |
+| `ditto_gateway_proxy_cache_misses_by_path_total` | counter | `path` | 按 path 分组的未命中次数 |
+| `ditto_gateway_proxy_cache_stores_total` | counter | `target` | cache 写入次数（例如 memory/redis） |
+| `ditto_gateway_proxy_cache_store_errors_total` | counter | `target` | cache 写入错误次数 |
+| `ditto_gateway_proxy_cache_purges_total` | counter | `scope` | admin purge 次数（按 scope） |
+
 ### Dashboard / 告警模板
 
 仓库内提供一套“开箱即用但不强绑定”的模板资产：
@@ -6065,7 +6109,7 @@ FILE: docs/src/reference/cli.md
 
 # CLI 选项（ditto-gateway）
 
-本页是 `ditto-gateway` 的运行参数速查（实现见 `src/bin/ditto-gateway.rs`）。
+本页是 `ditto-gateway` 的运行参数速查（实现见 `src/bin/ditto_gateway/cli.rs` + `src/bin/ditto-gateway.rs`）。
 
 > 当前 CLI 采用轻量参数解析：**没有 `--help`**。运行时缺少必填参数会打印 usage（并退出）。
 
@@ -6736,6 +6780,107 @@ Ditto-LLM 的定位是“可替换 LiteLLM、并覆盖 AI SDK Core 使用场景�
 如果你希望把 Roadmap 变成任务拆分（可直接落地到 issues），可以继续让我按你的部署规模拆成里程碑。
 
 ================================================================================
+FILE: docs/src/roadmap/contract.md
+================================================================================
+
+# Superset Contract（兼容性口径）
+
+本页把“成为 LiteLLM Proxy + Vercel AI SDK Core 的能力超集”这句话，落成一个**可执行、可验收**的契约：
+
+- 哪些行为必须 **严格对齐**（否则就不是可替换/可迁移）
+- 哪些行为是 **best-effort**（允许差异，但必须显式暴露）
+- 哪些行为是 **非目标**（避免把项目拖成“全都要”的泥潭）
+
+> 说明：Ditto 的实现策略是“分层 + feature gating”。默认构建保持小；需要 gateway/translation/metrics/otel 等能力时再显式开启 features。
+
+---
+
+## 1) 四种形态（长期不变）
+
+Ditto 必须能同时以 4 种形态工作（见 `README.md` / `TODO.md`）：
+
+1. **SDK**：Rust 里直接调用 providers（统一类型/Warnings/严格错误边界）
+2. **Gateway**：提供 OpenAI-compatible HTTP surface + control-plane（virtual keys/limits/budget/cache/routing）
+3. **Passthrough Proxy**：payload 不变形直通（对接 OpenAI-compatible upstream）
+4. **Translation Proxy**：OpenAI in/out → native providers（并把差异显式化）
+
+---
+
+## 2) Must-have（严格对齐）
+
+### 2.1 OpenAI Responses 的不变形路径
+
+目标：对接 Codex CLI 等“依赖 items round-trip”场景时，不允许 silent downgrade。
+
+契约：
+
+- raw passthrough 时，**请求/响应 body 不做语义层面的改写**（除了必要的 hop-by-hop header 清理）。
+- `/responses` 与 `/responses/compact` 需要支持 items round-trip（含 streaming）。
+- 如果发生降级/兼容 shim，必须在响应头中显式标注（例如 `x-ditto-shim: ...`），并保持 OpenAI-style error shape。
+
+### 2.2 Gateway 的 OpenAI-compatible 行为
+
+契约（核心）：
+
+- OpenAI-compatible 端点在行为上尽量对齐 OpenAI（含 SSE streaming）。
+- 错误必须以 OpenAI-style error shape 返回（不要吞错/静默成功）。
+- 差异必须可观测：响应头 `x-ditto-request-id` 贯穿；必要时添加 `x-ditto-*` headers 解释行为。
+
+---
+
+## 3) Best-effort（允许差异，但必须显式）
+
+### 3.1 Provider 差异暴露
+
+Ditto 的策略不是“把差异藏起来”，而是：
+
+- SDK 层用 `Warning` 暴露兼容性缺口（例如 tools/schema/多模态不支持）
+- Gateway 层用 OpenAI-style error + `x-ditto-*` headers 暴露降级/回退
+
+### 3.2 结构化输出 / JSON Schema 转换
+
+契约：
+
+- 转换是 best-effort 且可能有损；不支持的关键字应被丢弃并以 `Warning` 暴露（避免静默数据损失）。
+
+### 3.3 Token 计数与成本估算
+
+契约：
+
+- token 计数/成本估算允许 best-effort（失败可回退估算），但必须可观测、可配置、可限制（避免 OOM/超大缓冲）。
+
+---
+
+## 4) Non-goals（当前明确不做）
+
+- 不 1:1 复刻 AI SDK UI/前端 hooks/RSC 生态（Ditto 只提供最小 JS/React client 以降低接入成本）。
+- 不承诺一次性覆盖所有 LiteLLM 企业能力（RBAC/SSO/SCIM/审批流等按切片推进；外层 IAM/WAF/API gateway 可先承接）。
+
+---
+
+## 5) 验证（Stop Gate）
+
+本仓库建议的最小验证集：
+
+```bash
+cargo fmt -- --check
+cargo run --bin ditto-llms-txt -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+
+cargo check --no-default-features
+cargo clippy --no-default-features -- -D warnings
+```
+
+Node/前端（如改动涉及 `packages/*` 或 `apps/*`）：
+
+```bash
+pnpm -r run typecheck
+pnpm -r run build
+```
+
+
+================================================================================
 FILE: docs/src/roadmap/gaps.md
 ================================================================================
 
@@ -6930,7 +7075,7 @@ FILE: docs/src/roadmap/superset.md
 
 - admin auth：`src/gateway/http/admin/auth.rs`
 - admin handlers：`src/gateway/http/admin/*`
-- 配置/启动参数：`src/bin/ditto-gateway.rs`（注意文件行数门禁；建议继续拆分 include）
+- 配置/启动参数：`src/bin/ditto-gateway.rs`（入口）+ `src/bin/ditto_gateway/cli.rs`（参数解析）+ `src/bin/ditto_gateway/attach.rs`（feature-gated attach）
 
 **验收/验证**：
 

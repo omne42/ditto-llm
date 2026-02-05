@@ -1,6 +1,6 @@
 # CLI 选项（ditto-gateway）
 
-本页是 `ditto-gateway` 的运行参数速查（实现见 `src/bin/ditto-gateway.rs`）。
+本页是 `ditto-gateway` 的运行参数速查（实现见 `src/bin/ditto_gateway/cli.rs` + `src/bin/ditto-gateway.rs`）。
 
 > 当前 CLI 采用轻量参数解析：**没有 `--help`**。运行时缺少必填参数会打印 usage（并退出）。
 

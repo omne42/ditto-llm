@@ -1,5 +1,5 @@
 #[cfg(all(feature = "gateway", feature = "sdk"))]
-fn attach_devtools(
+pub(crate) fn attach_devtools(
     state: ditto_llm::gateway::GatewayHttpState,
     devtools_path: Option<String>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -10,7 +10,7 @@ fn attach_devtools(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "sdk")))]
-fn attach_devtools(
+pub(crate) fn attach_devtools(
     state: ditto_llm::gateway::GatewayHttpState,
     devtools_path: Option<String>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ fn attach_devtools(
 }
 
 #[cfg(feature = "gateway")]
-fn attach_proxy_backpressure(
+pub(crate) fn attach_proxy_backpressure(
     state: ditto_llm::gateway::GatewayHttpState,
     max_in_flight: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -37,7 +37,7 @@ fn attach_proxy_backpressure(
 }
 
 #[cfg(feature = "gateway")]
-fn attach_proxy_max_body_bytes(
+pub(crate) fn attach_proxy_max_body_bytes(
     state: ditto_llm::gateway::GatewayHttpState,
     max_body_bytes: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -51,7 +51,7 @@ fn attach_proxy_max_body_bytes(
 }
 
 #[cfg(feature = "gateway")]
-fn attach_proxy_usage_max_body_bytes(
+pub(crate) fn attach_proxy_usage_max_body_bytes(
     state: ditto_llm::gateway::GatewayHttpState,
     max_body_bytes: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -62,7 +62,7 @@ fn attach_proxy_usage_max_body_bytes(
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-proxy-cache"))]
-fn attach_proxy_cache(
+pub(crate) fn attach_proxy_cache(
     state: ditto_llm::gateway::GatewayHttpState,
     enabled: bool,
     ttl_seconds: Option<u64>,
@@ -87,7 +87,7 @@ fn attach_proxy_cache(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "gateway-proxy-cache")))]
-fn attach_proxy_cache(
+pub(crate) fn attach_proxy_cache(
     state: ditto_llm::gateway::GatewayHttpState,
     enabled: bool,
     _ttl_seconds: Option<u64>,
@@ -103,17 +103,17 @@ fn attach_proxy_cache(
 
 #[cfg(feature = "gateway")]
 #[derive(Default)]
-struct ProxyRoutingCliOptions {
-    retry_enabled: bool,
-    retry_status_codes: Option<Vec<u16>>,
-    retry_max_attempts: Option<usize>,
-    circuit_breaker_enabled: bool,
-    cb_failure_threshold: Option<u32>,
-    cb_cooldown_secs: Option<u64>,
-    health_checks_enabled: bool,
-    health_check_path: Option<String>,
-    health_check_interval_secs: Option<u64>,
-    health_check_timeout_secs: Option<u64>,
+pub(crate) struct ProxyRoutingCliOptions {
+    pub(crate) retry_enabled: bool,
+    pub(crate) retry_status_codes: Option<Vec<u16>>,
+    pub(crate) retry_max_attempts: Option<usize>,
+    pub(crate) circuit_breaker_enabled: bool,
+    pub(crate) cb_failure_threshold: Option<u32>,
+    pub(crate) cb_cooldown_secs: Option<u64>,
+    pub(crate) health_checks_enabled: bool,
+    pub(crate) health_check_path: Option<String>,
+    pub(crate) health_check_interval_secs: Option<u64>,
+    pub(crate) health_check_timeout_secs: Option<u64>,
 }
 
 #[cfg(feature = "gateway")]
@@ -133,7 +133,7 @@ impl ProxyRoutingCliOptions {
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
-fn attach_proxy_routing(
+pub(crate) fn attach_proxy_routing(
     state: ditto_llm::gateway::GatewayHttpState,
     opts: ProxyRoutingCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -180,7 +180,7 @@ fn attach_proxy_routing(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "gateway-routing-advanced")))]
-fn attach_proxy_routing(
+pub(crate) fn attach_proxy_routing(
     state: ditto_llm::gateway::GatewayHttpState,
     opts: ProxyRoutingCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -190,31 +190,8 @@ fn attach_proxy_routing(
     Ok(state)
 }
 
-#[cfg(feature = "gateway")]
-fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Err("empty status code list".into());
-    }
-
-    let mut out = Vec::new();
-    for part in raw.split(',') {
-        let part = part.trim();
-        if part.is_empty() {
-            continue;
-        }
-        out.push(part.parse::<u16>().map_err(|_| "invalid status code")?);
-    }
-    if out.is_empty() {
-        return Err("empty status code list".into());
-    }
-    out.sort_unstable();
-    out.dedup();
-    Ok(out)
-}
-
 #[cfg(all(feature = "gateway", feature = "gateway-costing"))]
-fn attach_pricing_table(
+pub(crate) fn attach_pricing_table(
     state: ditto_llm::gateway::GatewayHttpState,
     litellm_pricing_path: Option<String>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -227,7 +204,7 @@ fn attach_pricing_table(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "gateway-costing")))]
-fn attach_pricing_table(
+pub(crate) fn attach_pricing_table(
     state: ditto_llm::gateway::GatewayHttpState,
     litellm_pricing_path: Option<String>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
@@ -238,7 +215,7 @@ fn attach_pricing_table(
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-metrics-prometheus"))]
-fn attach_prometheus_metrics(
+pub(crate) fn attach_prometheus_metrics(
     state: ditto_llm::gateway::GatewayHttpState,
     enabled: bool,
     max_key_series: Option<usize>,
@@ -267,7 +244,7 @@ fn attach_prometheus_metrics(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "gateway-metrics-prometheus")))]
-fn attach_prometheus_metrics(
+pub(crate) fn attach_prometheus_metrics(
     state: ditto_llm::gateway::GatewayHttpState,
     enabled: bool,
     max_key_series: Option<usize>,
@@ -287,7 +264,7 @@ fn attach_prometheus_metrics(
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-otel"))]
-fn attach_otel(
+pub(crate) fn attach_otel(
     enabled: bool,
     endpoint: Option<&str>,
     json_logs: bool,
@@ -304,7 +281,7 @@ fn attach_otel(
 }
 
 #[cfg(all(feature = "gateway", not(feature = "gateway-otel")))]
-fn attach_otel(
+pub(crate) fn attach_otel(
     enabled: bool,
     _endpoint: Option<&str>,
     _json_logs: bool,
@@ -313,24 +290,4 @@ fn attach_otel(
         return Err("otel requires `--features gateway-otel`".into());
     }
     Ok(None)
-}
-
-#[cfg(feature = "gateway")]
-async fn resolve_cli_secret(
-    raw: String,
-    env: &ditto_llm::Env,
-    label: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let raw = raw.trim().to_string();
-    if !raw.starts_with("secret://") {
-        return Ok(raw);
-    }
-
-    let resolved = ditto_llm::secrets::resolve_secret_string(raw.as_str(), env)
-        .await
-        .map_err(|err| format!("failed to resolve {label}: {err}"))?;
-    if resolved.trim().is_empty() {
-        return Err(format!("{label} resolved to an empty value").into());
-    }
-    Ok(resolved)
 }

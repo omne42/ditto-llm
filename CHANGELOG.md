@@ -65,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deps: update Rust dependency lockfile (`cargo update`).
 - Gateway: remove `router.default_backend` in favor of `router.default_backends` (weighted float `weight`).
 - Gateway: refactor `ditto-gateway` CLI parsing into `src/bin/ditto_gateway/cli.rs` (usage now documents the `--addr` alias; adds parser tests).
+- Gateway: refactor `ditto-gateway` binary composition to use real modules (`src/bin/ditto_gateway/mod.rs`) instead of `include!` (no behavior change; improves navigation/maintainability).
+- Docs: align LiteLLM/AI SDK parity notes for observability (Prometheus already ships per-path/per-backend latency histograms) and document the Prometheus metrics contract.
+- Docs: add “Superset Contract（兼容性口径）” page to define must/best-effort/non-goals and link it in the mdBook summary.
+- Docs: make `TODO.md` trackable by adding an explicit unchecked backlog with DoD + verification commands.
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
 - Profile: add prompt-cache capability/config flags (`ProviderCapabilities.prompt_cache` and `ModelConfig.prompt_cache`).
 - Profile: replace `include!(".../partNN.rs")` with real modules (`auth`/`config`/`env`/`http`/`openai_*`).

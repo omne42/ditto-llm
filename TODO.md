@@ -126,6 +126,47 @@
 
 ## 3) Roadmap（按优先级推进）
 
+### Backlog（未完成项，必须可追踪）
+
+- [ ] 观测：统一的采样/脱敏策略（logs/audit/devtools/metrics）
+  - DoD：
+    - 提供可配置的脱敏规则（headers/query/json-path/正则），并为敏感字段提供默认规则
+    - JSON logs、audit export、devtools JSONL、Prometheus labels 均遵守同一套脱敏策略（默认不泄漏 token/密钥/Authorization）
+    - 为脱敏策略补充单测与文档（含“默认会脱什么、不脱什么”的契约）
+  - 验证：
+    - `cargo test --all-targets --all-features`
+- [ ] 观测：补齐更细粒度指标维度（按 model/provider 聚合、streaming 特有指标）
+  - DoD：
+    - Prometheus 支持按 `model`/`provider` 聚合的 latency/错误/限流指标，并提供基数上限参数
+    - streaming 侧提供关键指标（例如 SSE 连接数、stream bytes、abort/timeout 计数）
+    - 文档更新（指标表/labels/基数上限/含义）
+  - 验证：
+    - `cargo test --all-targets --all-features`
+- [ ] 路由：更丰富的策略（分级 fallback、按错误类型熔断、按路由 backpressure）
+  - DoD：
+    - 路由策略可以表达“哪些错误才允许 fallback / retry”，并提供可解释的决策日志
+    - 为路由策略补充回归测试（至少覆盖：网络错误、429/5xx、超时、熔断恢复）
+  - 验证：
+    - `cargo test --all-targets --all-features`
+- [ ] 代理缓存：支持 streaming cache 与更细粒度 invalidation
+  - DoD：
+    - streaming 场景可选择性缓存（可控上限/TTL/回放），并具备明确的禁用/绕过机制
+    - 提供按 key/model/path 的 purge/invalidation 策略与运维端点
+  - 验证：
+    - `cargo test --all-targets --all-features`
+- [ ] Translation：扩面 OpenAI 端点覆盖（保持 feature gating）
+  - DoD：
+    - 明确每个端点的“best-effort”语义与错误边界（不 silent downgrade）
+    - 为新增端点补充 fixture/回归测试（含 streaming 与 files/multipart）
+  - 验证：
+    - `cargo test --all-targets --all-features`
+- [ ] 企业平台：配置版本化/灰度/回滚（以运维可控为第一优先级）
+  - DoD：
+    - 配置有版本号与变更历史；支持灰度发布与一键回滚
+    - 关键变更（keys/budgets/router）具备审计记录与可复现性
+  - 验证：
+    - `cargo test --all-targets --all-features`
+
 ### P0（让 Gateway 达到 LiteLLM 的“可替换”）
 
 - [x] Gateway 代理路径：基础持久化（virtual keys via `--state` or `--sqlite`）
@@ -139,7 +180,7 @@
   - [x] spend ledger by virtual key（sqlite/redis + `/admin/budgets` + `/admin/costs`）
   - [x] spend aggregation by tenant/project/user（`virtual_keys[].tenant_id/project_id/user_id` + `/admin/budgets/tenants|projects|users` + `/admin/costs/tenants|projects|users`）
   - [x] shared budgets/limits by tenant/project/user（`tenant_budget/tenant_limits` 等；与 project/user 同语义）
-- [x] 观测：structured logs + OpenTelemetry + per-key metrics tags（request_id 已完成；logs/otel 已做）
+- [x] 观测：structured logs + OpenTelemetry + Prometheus metrics（含 per-path/per-backend latency histograms；request_id 已完成）
 - [x] Proxy caching（非流式请求；并提供显式绕过）
 - [x] 内存安全：proxy cache 增加体积上限（单条/总量）
 - [x] 内存安全：SSE parsing 增加单行/单事件上限（防止异常上游导致 OOM）
@@ -181,8 +222,14 @@
 cd ditto-llm
 
 cargo fmt -- --check
+cargo run --bin ditto-llms-txt -- --check
 cargo test --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
+cargo check --no-default-features
+cargo clippy --no-default-features -- -D warnings
+
+pnpm -r run typecheck
+pnpm -r run build
 ```
 
 跑 examples（需要相应环境变量）：

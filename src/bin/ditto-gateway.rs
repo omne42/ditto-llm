@@ -1,4 +1,17 @@
 #[cfg(feature = "gateway")]
+mod ditto_gateway;
+
+#[cfg(feature = "gateway")]
+use ditto_gateway::attach::{
+    ProxyRoutingCliOptions, attach_devtools, attach_otel, attach_pricing_table,
+    attach_prometheus_metrics, attach_proxy_backpressure, attach_proxy_cache,
+    attach_proxy_max_body_bytes, attach_proxy_routing, attach_proxy_usage_max_body_bytes,
+};
+
+#[cfg(feature = "gateway")]
+use ditto_gateway::cli::{GatewayCliArgs, parse_gateway_cli_args, resolve_cli_secret};
+
+#[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -568,10 +581,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
     Ok(())
 }
-
-include!("ditto_gateway/cli.rs");
-
-include!("ditto_gateway/attach.rs");
 
 #[cfg(not(feature = "gateway"))]
 fn main() {
