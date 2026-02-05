@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).
 - Gateway: fix Google GenAI streaming encoding to emit incremental text deltas (avoids duplicated output when clients concatenate chunks).
 - Gateway: bound MCP backend JSON-RPC response bodies and truncate error body snippets (avoid OOM/huge error logs on oversized responses).
+- Gateway: MCP `tools/list` now follows `nextCursor` (up to 8 pages) to return a complete tool list and returns `nextCursor` when a `cursor` is explicitly provided (single-server only).
 - Gateway: cap per-backend `/v1/models` aggregation response size (skips oversized backends).
 - SDK: cap OpenAI-like binary responses (`/files/*/content`, `/audio/speech`) via bounded reads and expose `with_max_binary_response_bytes` for tuning (avoid OOM on large downloads).
 - Gateway: proxy-cache buffering now uses bounded reads and returns `502 invalid_backend_response` on oversized bodies instead of silently truncating to empty (avoid OOM/incorrect responses).

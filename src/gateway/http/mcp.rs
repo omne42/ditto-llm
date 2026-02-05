@@ -4,11 +4,19 @@ const MCP_MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MCP_MAX_ERROR_RESPONSE_BYTES: usize = 64 * 1024;
 const MCP_MAX_ERROR_BODY_SNIPPET_BYTES: usize = 8 * 1024;
 const MCP_TOOLS_LIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+const MCP_TOOLS_LIST_MAX_PAGES: usize = 8;
+
+#[derive(Debug, Clone)]
+struct McpToolsListResult {
+    tools: Vec<Value>,
+    next_cursor: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 struct McpToolsListCacheEntry {
     expires_at: std::time::Instant,
     tools: Vec<Value>,
+    next_cursor: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -91,7 +99,43 @@ impl McpServerState {
         &self.headers
     }
 
-    async fn list_tools_uncached(&self, cursor: Option<&str>) -> Result<Vec<Value>, GatewayError> {
+    fn parse_tools_list_result(
+        &self,
+        result: Value,
+    ) -> Result<McpToolsListResult, GatewayError> {
+        if let Some(tools) = result.as_array() {
+            return Ok(McpToolsListResult {
+                tools: tools.clone(),
+                next_cursor: None,
+            });
+        }
+        let Some(obj) = result.as_object() else {
+            return Err(GatewayError::Backend {
+                message: format!("mcp tools/list invalid result for server {}", self.server_id),
+            });
+        };
+        let tools = obj
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .ok_or_else(|| GatewayError::Backend {
+                message: format!("mcp tools/list invalid result for server {}", self.server_id),
+            })?;
+        let next_cursor = obj
+            .get("nextCursor")
+            .and_then(|v| v.as_str())
+            .or_else(|| obj.get("next_cursor").and_then(|v| v.as_str()))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.to_string());
+
+        Ok(McpToolsListResult { tools, next_cursor })
+    }
+
+    async fn list_tools_page_uncached(
+        &self,
+        cursor: Option<&str>,
+    ) -> Result<McpToolsListResult, GatewayError> {
         let mut params = serde_json::json!({});
         if let Some(cursor) = cursor {
             if let Some(obj) = params.as_object_mut() {
@@ -106,38 +150,78 @@ impl McpServerState {
         });
         let resp = self.jsonrpc(req).await?;
 
-        let result = resp.get("result").cloned().unwrap_or(Value::Null);
-        let tools = if let Some(tools) = result.get("tools").and_then(|v| v.as_array()) {
-            tools.clone()
-        } else if let Some(tools) = result.as_array() {
-            tools.clone()
-        } else {
+        if let Some(err) = resp.get("error") {
             return Err(GatewayError::Backend {
-                message: format!(
-                    "mcp tools/list invalid result for server {}",
-                    self.server_id
-                ),
+                message: format!("mcp tools/list failed for server {}: {err}", self.server_id),
             });
-        };
-        Ok(tools)
+        }
+
+        let result = resp.get("result").cloned().unwrap_or(Value::Null);
+        self.parse_tools_list_result(result)
+    }
+
+    async fn list_tools_all_uncached(&self) -> Result<Vec<Value>, GatewayError> {
+        let mut tools_out = Vec::<Value>::new();
+        let mut cursor: Option<String> = None;
+        let mut seen_cursors = std::collections::HashSet::<String>::new();
+
+        for _ in 0..MCP_TOOLS_LIST_MAX_PAGES {
+            let page = self.list_tools_page_uncached(cursor.as_deref()).await?;
+            tools_out.extend(page.tools);
+            let Some(next_cursor) = page.next_cursor else {
+                return Ok(tools_out);
+            };
+            if !seen_cursors.insert(next_cursor.clone()) {
+                return Err(GatewayError::Backend {
+                    message: format!(
+                        "mcp tools/list cursor loop detected for server {}",
+                        self.server_id
+                    ),
+                });
+            }
+            cursor = Some(next_cursor);
+        }
+
+        Err(GatewayError::Backend {
+            message: format!(
+                "mcp tools/list exceeded max pages ({MCP_TOOLS_LIST_MAX_PAGES}) for server {}",
+                self.server_id
+            ),
+        })
     }
 
     pub async fn list_tools_cached(
         &self,
         cursor: Option<String>,
     ) -> Result<Vec<Value>, GatewayError> {
+        Ok(self.list_tools_page_cached(cursor).await?.tools)
+    }
+
+    async fn list_tools_page_cached(
+        &self,
+        cursor: Option<String>,
+    ) -> Result<McpToolsListResult, GatewayError> {
         let now = std::time::Instant::now();
 
         {
             let cache = self.tools_list_cache.lock().await;
             if let Some(entry) = cache.entries.get(&cursor) {
                 if entry.expires_at > now {
-                    return Ok(entry.tools.clone());
+                    return Ok(McpToolsListResult {
+                        tools: entry.tools.clone(),
+                        next_cursor: entry.next_cursor.clone(),
+                    });
                 }
             }
         }
 
-        let tools = self.list_tools_uncached(cursor.as_deref()).await?;
+        let result = match cursor.as_deref() {
+            Some(cursor) => self.list_tools_page_uncached(Some(cursor)).await?,
+            None => McpToolsListResult {
+                tools: self.list_tools_all_uncached().await?,
+                next_cursor: None,
+            },
+        };
 
         {
             let mut cache = self.tools_list_cache.lock().await;
@@ -148,12 +232,13 @@ impl McpServerState {
                     expires_at: now
                         .checked_add(MCP_TOOLS_LIST_CACHE_TTL)
                         .unwrap_or(now),
-                    tools: tools.clone(),
+                    tools: result.tools.clone(),
+                    next_cursor: result.next_cursor.clone(),
                 },
             );
         }
 
-        Ok(tools)
+        Ok(result)
     }
 
     pub async fn jsonrpc(&self, req: Value) -> Result<Value, GatewayError> {
@@ -555,6 +640,11 @@ async fn mcp_list_tools(
     server_ids: &[String],
     cursor: Option<String>,
 ) -> Result<Value, GatewayError> {
+    if cursor.is_some() && server_ids.len() != 1 {
+        return Err(GatewayError::InvalidRequest {
+            reason: "cursor is only supported when selecting a single MCP server".to_string(),
+        });
+    }
     let prefix_names = server_ids.len() > 1;
 
     let mut futures = Vec::with_capacity(server_ids.len());
@@ -568,14 +658,18 @@ async fn mcp_list_tools(
         let server_id = server_id.clone();
         let cursor = cursor.clone();
         futures.push(async move {
-            let tools = server.list_tools_cached(cursor).await?;
-            Ok::<_, GatewayError>((server_id, tools))
+            let result = server.list_tools_page_cached(cursor).await?;
+            Ok::<_, GatewayError>((server_id, result))
         });
     }
 
+    let mut next_cursor_out: Option<String> = None;
     let mut tools_out: Vec<Value> = Vec::new();
-    for (server_id, tools) in futures_util::future::try_join_all(futures).await? {
-        for tool in tools {
+    for (server_id, result) in futures_util::future::try_join_all(futures).await? {
+        if server_ids.len() == 1 {
+            next_cursor_out = result.next_cursor;
+        }
+        for tool in result.tools {
             let mut tool = tool;
             if prefix_names {
                 if let Some(obj) = tool.as_object_mut() {
@@ -591,7 +685,13 @@ async fn mcp_list_tools(
         }
     }
 
-    Ok(serde_json::json!({ "tools": tools_out }))
+    let mut out = serde_json::Map::new();
+    out.insert("tools".to_string(), Value::Array(tools_out));
+    if let Some(next_cursor) = next_cursor_out {
+        out.insert("nextCursor".to_string(), Value::String(next_cursor));
+    }
+
+    Ok(Value::Object(out))
 }
 
 async fn mcp_call_tool(

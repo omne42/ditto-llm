@@ -109,6 +109,241 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_llm
 }
 
 #[tokio::test]
+async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+    let page_1 = upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": { "tools": [{ "name": "t1", "inputSchema": {} }], "nextCursor": "c1" }
+                })
+                .to_string(),
+            );
+    });
+    let page_2 = upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": { "cursor": "c1" },
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": { "tools": [{ "name": "t2", "inputSchema": {} }] }
+                })
+                .to_string(),
+            );
+    });
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+            .expect("mcp state"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+
+    let tool_names: Vec<String> = payload
+        .get("result")
+        .and_then(|v| v.get("tools"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.as_slice())
+        .unwrap_or(&[])
+        .iter()
+        .filter_map(|tool| tool.get("name").and_then(|v| v.as_str()))
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(tool_names, vec!["t1".to_string(), "t2".to_string()]);
+    assert!(
+        payload
+            .get("result")
+            .and_then(|v| v.get("nextCursor"))
+            .is_none()
+    );
+
+    page_1.assert();
+    page_2.assert();
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+    let page = upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": { "cursor": "c1" },
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": { "tools": [{ "name": "t2", "inputSchema": {} }], "nextCursor": "c2" }
+                })
+                .to_string(),
+            );
+    });
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+            .expect("mcp state"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": { "cursor": "c1" }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+
+    assert_eq!(
+        payload
+            .get("result")
+            .and_then(|v| v.get("tools"))
+            .and_then(|v| v.get(0))
+            .and_then(|v| v.get("name"))
+            .and_then(|v| v.as_str()),
+        Some("t2")
+    );
+    assert_eq!(
+        payload
+            .get("result")
+            .and_then(|v| v.get("nextCursor"))
+            .and_then(|v| v.as_str()),
+        Some("c2")
+    );
+
+    page.assert();
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream_a = MockServer::start();
+    let upstream_b = MockServer::start();
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "a".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("a".to_string(), upstream_a.url("/mcp"))
+            .expect("mcp state a"),
+    );
+    mcp_servers.insert(
+        "b".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("b".to_string(), upstream_b.url("/mcp"))
+            .expect("mcp state b"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("x-mcp-servers", "a,b")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+                "params": { "cursor": "c1" }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32000)
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("cursor is only supported"), "{message}");
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected() -> ditto_llm::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
