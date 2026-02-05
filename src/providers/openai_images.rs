@@ -85,6 +85,7 @@ macro_rules! define_openai_like_images {
     };
 }
 
+#[cfg(feature = "openai")]
 define_openai_like_images!(
     OpenAIImages,
     provider = "openai",
@@ -110,6 +111,7 @@ mod tests {
     use crate::types::ImageSource;
     use httpmock::{Method::POST, MockServer};
 
+    #[cfg(feature = "openai")]
     #[tokio::test]
     async fn generate_images_supports_base64() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

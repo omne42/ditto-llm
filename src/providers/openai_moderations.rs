@@ -82,6 +82,7 @@ macro_rules! define_openai_like_moderations {
     };
 }
 
+#[cfg(feature = "openai")]
 define_openai_like_moderations!(
     OpenAIModerations,
     provider = "openai",
@@ -102,6 +103,7 @@ define_openai_like_moderations!(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "openai")]
     mod openai {
         use super::super::{OpenAIModerations, Result};
         use crate::moderation::ModerationModel;

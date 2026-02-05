@@ -5,8 +5,10 @@ use crate::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
+#[cfg(feature = "openai")]
+use crate::profile::ProviderAuth;
 use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
+    Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
     resolve_request_auth_with_default_keys,
 };
 use crate::{DittoError, Result};
@@ -39,6 +41,7 @@ pub(crate) fn auth_from_api_key(api_key: &str) -> Option<RequestAuth> {
     HttpAuth::bearer(api_key).ok().map(RequestAuth::Http)
 }
 
+#[cfg(feature = "openai")]
 pub(crate) async fn resolve_auth_required(
     config: &ProviderConfig,
     env: &Env,
@@ -139,6 +142,7 @@ impl OpenAiLikeClient {
         self
     }
 
+    #[cfg(feature = "openai")]
     pub(crate) async fn from_config_required(
         config: &ProviderConfig,
         env: &Env,

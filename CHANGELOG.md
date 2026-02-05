@@ -147,7 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: cap per-backend `/v1/models` aggregation response size (skips oversized backends).
 - SDK: cap OpenAI-like binary responses (`/files/*/content`, `/audio/speech`) via bounded reads and expose `with_max_binary_response_bytes` for tuning (avoid OOM on large downloads).
 - Gateway: proxy-cache buffering now uses bounded reads and returns `502 invalid_backend_response` on oversized bodies instead of silently truncating to empty (avoid OOM/incorrect responses).
-- Build: make the `agent` feature standalone by switching `safe-fs-tools` from a sibling path dependency to a pinned git dependency.
+- Build: decouple `openai-compatible` from `openai` and tighten cfg gating for OpenAI-like provider helpers (fixes `--no-default-features --features openai-compatible` builds).
+- Build: vendor `safe-fs-tools` to remove the git dependency (agent feature can build offline).
+- Providers: remove panic-prone `expect` from OpenAI-like images provider metadata assembly (no behavior change).
 - Gateway: refactor `ResponseCache::insert` to accept `CacheConfig` instead of a long argument list (no behavior change).
 
 ## [0.1.2] - 2026-02-01

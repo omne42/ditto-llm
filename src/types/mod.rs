@@ -13,7 +13,6 @@ mod tool_call;
     feature = "cohere",
     feature = "google",
     feature = "openai",
-    feature = "openai-compatible",
     feature = "vertex",
 ))]
 mod generate_request_support;
@@ -23,7 +22,6 @@ mod generate_request_support;
     feature = "cohere",
     feature = "google",
     feature = "openai",
-    feature = "openai-compatible",
     feature = "vertex",
 ))]
 mod provider_options_support;
@@ -34,7 +32,6 @@ mod provider_options_support;
     feature = "cohere",
     feature = "google",
     feature = "openai",
-    feature = "openai-compatible",
     feature = "vertex",
 ))]
 pub(crate) use generate_request_support::{
@@ -46,7 +43,6 @@ pub(crate) use generate_request_support::{
     feature = "cohere",
     feature = "google",
     feature = "openai",
-    feature = "openai-compatible",
     feature = "vertex",
 ))]
 pub(crate) use provider_options_support::{

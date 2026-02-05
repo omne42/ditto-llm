@@ -191,6 +191,7 @@ macro_rules! define_openai_like_speech {
     };
 }
 
+#[cfg(feature = "openai")]
 define_openai_like_audio_transcription!(
     OpenAIAudioTranscription,
     provider = "openai",
@@ -199,6 +200,7 @@ define_openai_like_audio_transcription!(
     missing_model_error = "openai audio transcription model is not set (set request.model or OpenAIAudioTranscription::with_model)",
 );
 
+#[cfg(feature = "openai")]
 define_openai_like_speech!(
     OpenAISpeech,
     provider = "openai",
@@ -231,6 +233,7 @@ mod tests {
     use crate::types::{SpeechResponseFormat, TranscriptionResponseFormat, Warning};
     use httpmock::{Method::POST, MockServer};
 
+    #[cfg(feature = "openai")]
     mod openai {
         use super::super::*;
         use super::*;

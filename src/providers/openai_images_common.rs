@@ -115,27 +115,22 @@ pub(super) async fn generate_images(
         });
     }
 
-    let mut provider_metadata = serde_json::json!({ "model": model });
+    let mut provider_metadata = Map::<String, Value>::new();
+    provider_metadata.insert("model".to_string(), Value::String(model));
     if let Some(created) = parsed.created {
-        provider_metadata
-            .as_object_mut()
-            .expect("provider_metadata is object")
-            .insert("created".to_string(), Value::Number(created.into()));
+        provider_metadata.insert("created".to_string(), Value::Number(created.into()));
     }
     if !revised_prompts.is_empty() {
-        provider_metadata
-            .as_object_mut()
-            .expect("provider_metadata is object")
-            .insert(
-                "revised_prompts".to_string(),
-                Value::Array(revised_prompts.into_iter().map(Value::String).collect()),
-            );
+        provider_metadata.insert(
+            "revised_prompts".to_string(),
+            Value::Array(revised_prompts.into_iter().map(Value::String).collect()),
+        );
     }
 
     Ok(ImageGenerationResponse {
         images,
         usage,
         warnings,
-        provider_metadata: Some(provider_metadata),
+        provider_metadata: Some(Value::Object(provider_metadata)),
     })
 }

@@ -1659,7 +1659,6 @@ checksum = "a50f4cf475b65d88e057964e0e9bb1f0aa9bbb2036dc65c64596b42932536984"
 [[package]]
 name = "safe-fs-tools"
 version = "0.1.0"
-source = "git+https://github.com/omne42/safe-fs-tools.git?rev=7bfdfe429ebfec1b529ed26bf8f486e3ba62b51e#7bfdfe429ebfec1b529ed26bf8f486e3ba62b51e"
 dependencies = [
  "diffy",
  "globset",

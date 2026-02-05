@@ -10,7 +10,10 @@ mod genai;
 pub mod google;
 #[cfg(feature = "openai")]
 pub mod openai;
-#[cfg(all(feature = "audio", feature = "openai"))]
+#[cfg(all(
+    feature = "audio",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 pub mod openai_audio;
 #[cfg(all(feature = "batches", feature = "openai"))]
 pub mod openai_batches;
@@ -24,24 +27,45 @@ pub mod openai_compatible_batches;
 pub mod openai_compatible_images;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]
 pub mod openai_compatible_moderations;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    feature = "images",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 pub mod openai_images;
-#[cfg(all(feature = "moderations", feature = "openai"))]
+#[cfg(all(
+    feature = "moderations",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 pub mod openai_moderations;
 #[cfg(feature = "vertex")]
 pub mod vertex;
 
-#[cfg(all(feature = "audio", feature = "openai"))]
+#[cfg(all(
+    feature = "audio",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 mod openai_audio_common;
-#[cfg(all(feature = "batches", feature = "openai"))]
+#[cfg(all(
+    feature = "batches",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 mod openai_batches_common;
-#[cfg(all(feature = "embeddings", feature = "openai"))]
+#[cfg(all(
+    feature = "embeddings",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 mod openai_embeddings_common;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    feature = "images",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 mod openai_images_common;
-#[cfg(feature = "openai")]
+#[cfg(any(feature = "openai", feature = "openai-compatible"))]
 mod openai_like;
-#[cfg(all(feature = "moderations", feature = "openai"))]
+#[cfg(all(
+    feature = "moderations",
+    any(feature = "openai", feature = "openai-compatible")
+))]
 mod openai_moderations_common;
 
 #[cfg(feature = "anthropic")]
