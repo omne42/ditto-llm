@@ -135,8 +135,8 @@ impl Router {
         request: &GatewayRequest,
         key: &VirtualKeyConfig,
     ) -> Result<String, GatewayError> {
-        let seed = request.cache_key();
-        self.select_backends_for_model_seeded(&request.model, Some(key), Some(&seed))
+        let seed_hash = request.route_seed_hash(&key.id);
+        self.select_backends_for_model_seeded_hash(&request.model, Some(key), Some(seed_hash))
             .and_then(|backends| {
                 backends
                     .into_iter()
@@ -152,7 +152,7 @@ impl Router {
         model: &str,
         key: Option<&VirtualKeyConfig>,
     ) -> Result<String, GatewayError> {
-        self.select_backends_for_model_seeded(model, key, None)
+        self.select_backends_for_model_seeded_hash(model, key, None)
             .and_then(|backends| {
                 backends
                     .into_iter()
@@ -169,20 +169,31 @@ impl Router {
         key: Option<&VirtualKeyConfig>,
         seed: Option<&str>,
     ) -> Result<Vec<String>, GatewayError> {
+        let seed_hash = seed.map(|seed| super::hash64_fnv1a(seed.as_bytes()));
+        self.select_backends_for_model_seeded_hash(model, key, seed_hash)
+    }
+
+    pub fn select_backends_for_model_seeded_hash(
+        &self,
+        model: &str,
+        key: Option<&VirtualKeyConfig>,
+        seed_hash: Option<u64>,
+    ) -> Result<Vec<String>, GatewayError> {
         if let Some(key) = key {
             if let Some(route) = &key.route {
                 return Ok(vec![route.clone()]);
             }
         }
 
+        let seed_hash = seed_hash.unwrap_or_else(|| super::hash64_fnv1a(model.as_bytes()));
+
         for rule in self.config.rules.iter().filter(|rule| rule.exact) {
             if !rule.matches(model) {
                 continue;
             }
 
-            let seed = seed.unwrap_or(model);
             if !rule.backends.is_empty() {
-                let out = select_weighted(rule.backends.iter(), seed);
+                let out = select_weighted(rule.backends.iter(), seed_hash);
                 if !out.is_empty() {
                     return Ok(out);
                 }
@@ -198,9 +209,8 @@ impl Router {
                 continue;
             }
 
-            let seed = seed.unwrap_or(model);
             if !rule.backends.is_empty() {
-                let out = select_weighted(rule.backends.iter(), seed);
+                let out = select_weighted(rule.backends.iter(), seed_hash);
                 if !out.is_empty() {
                     return Ok(out);
                 }
@@ -211,9 +221,8 @@ impl Router {
             }
         }
 
-        let seed = seed.unwrap_or(model);
         if !self.config.default_backends.is_empty() {
-            let out = select_weighted(self.config.default_backends.iter(), seed);
+            let out = select_weighted(self.config.default_backends.iter(), seed_hash);
             if !out.is_empty() {
                 return Ok(out);
             }
@@ -226,7 +235,7 @@ impl Router {
 
 fn select_weighted<'a>(
     backends: impl Iterator<Item = &'a RouteBackend>,
-    seed: &str,
+    seed_hash: u64,
 ) -> Vec<String> {
     let candidates: Vec<&RouteBackend> = backends
         .filter(|backend| !backend.backend.trim().is_empty())
@@ -245,8 +254,7 @@ fn select_weighted<'a>(
         return Vec::new();
     }
 
-    let hash = hash64_fnv1a(seed.as_bytes());
-    let unit = ((hash >> 11) as f64) / ((1u64 << 53) as f64);
+    let unit = ((seed_hash >> 11) as f64) / ((1u64 << 53) as f64);
     let mut pick = unit * total_weight;
     let mut selected_index = candidates.len().saturating_sub(1);
     for (idx, backend) in candidates.iter().enumerate() {
@@ -277,20 +285,11 @@ fn select_weighted<'a>(
     out
 }
 
-fn hash64_fnv1a(bytes: &[u8]) -> u64 {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for b in bytes {
-        hash ^= u64::from(*b);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    hash
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn expected_primary(backends: &[RouteBackend], seed: &str) -> String {
+    fn expected_primary(backends: &[RouteBackend], seed_hash: u64) -> String {
         let candidates: Vec<&RouteBackend> = backends
             .iter()
             .filter(|backend| !backend.backend.trim().is_empty())
@@ -298,8 +297,7 @@ mod tests {
             .collect();
         assert!(!candidates.is_empty());
         let total_weight: f64 = candidates.iter().map(|b| b.weight).sum();
-        let hash = hash64_fnv1a(seed.as_bytes());
-        let unit = ((hash >> 11) as f64) / ((1u64 << 53) as f64);
+        let unit = ((seed_hash >> 11) as f64) / ((1u64 << 53) as f64);
         let mut pick = unit * total_weight;
         for backend in candidates {
             let weight = backend.weight;
@@ -342,6 +340,7 @@ mod tests {
         });
 
         let seed = "req-123";
+        let seed_hash = super::super::hash64_fnv1a(seed.as_bytes());
         let out = router
             .select_backends_for_model_seeded("gpt-4o-mini", None, Some(seed))
             .expect("route");
@@ -349,7 +348,7 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert!(out.contains(&"a".to_string()));
         assert!(out.contains(&"b".to_string()));
-        assert_eq!(out[0], expected_primary(&rule.backends, seed));
+        assert_eq!(out[0], expected_primary(&rule.backends, seed_hash));
     }
 
     #[test]

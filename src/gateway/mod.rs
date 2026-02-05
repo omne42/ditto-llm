@@ -92,11 +92,41 @@ impl GatewayRequest {
         self.input_tokens.saturating_add(self.max_output_tokens)
     }
 
+    pub fn cache_key_hash(&self) -> u64 {
+        let mut hash = fnv1a64_init();
+        hash = fnv1a64_update(hash, b"ditto-gateway-request-cache-key-v1|");
+        hash = fnv1a64_update(hash, self.virtual_key.as_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, self.model.as_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, &u64::from(self.input_tokens).to_le_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, &u64::from(self.max_output_tokens).to_le_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, self.prompt.as_bytes());
+        hash
+    }
+
+    pub(crate) fn route_seed_hash(&self, key_id: &str) -> u64 {
+        let mut hash = fnv1a64_init();
+        hash = fnv1a64_update(hash, b"ditto-gateway-route-seed-v1|");
+        hash = fnv1a64_update(hash, key_id.as_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, self.model.as_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, &u64::from(self.input_tokens).to_le_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, &u64::from(self.max_output_tokens).to_le_bytes());
+        hash = fnv1a64_update(hash, b"|");
+        hash = fnv1a64_update(hash, self.prompt.as_bytes());
+        hash
+    }
+
+    #[deprecated(
+        note = "cache_key() previously returned raw request fields (including the virtual key and prompt); it now returns a stable, non-sensitive hex digest. Prefer `cache_key_hash()`."
+    )]
     pub fn cache_key(&self) -> String {
-        format!(
-            "{}|{}|{}|{}|{}",
-            self.virtual_key, self.model, self.input_tokens, self.max_output_tokens, self.prompt
-        )
+        format!("{:016x}", self.cache_key_hash())
     }
 }
 
@@ -113,12 +143,46 @@ fn control_plane_cache_key(key_id: &str, request: &GatewayRequest) -> String {
 }
 
 fn hash64_fnv1a(bytes: &[u8]) -> u64 {
-    let mut hash: u64 = 0xcbf29ce484222325;
+    fnv1a64_update(fnv1a64_init(), bytes)
+}
+
+const FNV1A64_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+const FNV1A64_PRIME: u64 = 0x100000001b3;
+
+fn fnv1a64_init() -> u64 {
+    FNV1A64_OFFSET_BASIS
+}
+
+fn fnv1a64_update(mut hash: u64, bytes: &[u8]) -> u64 {
     for byte in bytes {
         hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
+        hash = hash.wrapping_mul(FNV1A64_PRIME);
     }
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gateway_request_cache_key_is_not_raw() {
+        let request = GatewayRequest {
+            virtual_key: "sk-test-secret".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello secret prompt".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        #[allow(deprecated)]
+        let key = request.cache_key();
+        assert_eq!(key.len(), 16);
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(!key.contains("sk-test-secret"));
+        assert!(!key.contains("hello secret prompt"));
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
