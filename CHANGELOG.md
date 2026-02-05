@@ -116,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: fix `cargo check --all-features` for `gateway-translation` after proxy attempt param cleanup (no behavior change).
 - Gateway: fix clippy lint in LiteLLM key regeneration handler (no behavior change).
 - Gateway: include translation-backed models in `GET /v1/models` when `gateway-translation` backends are configured (returns `200` even when no proxy backends are configured).
-- Build: fix `cargo clippy --no-default-features -- -D warnings` by tightening cfg gating for provider-only helpers.
+- Build: fix `cargo clippy --no-default-features -- -D warnings` by tightening cfg gating for provider/gateway-only HTTP helpers.
 - Docs: fix parity notes to reflect MCP tools integration support for `POST /v1/responses`.
 - Docs: fix MCP gateway docs drift for `/v1/responses` and refresh `llms.txt`.
 - Docs: update admin UI setup instructions to use pnpm (workspaces).

@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use futures_util::StreamExt;
+#[cfg(any(feature = "gateway", feature = "openai"))]
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 
@@ -52,6 +53,7 @@ async fn response_bytes_truncated(
     (out, truncated)
 }
 
+#[cfg(any(feature = "gateway", feature = "openai"))]
 pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
     response: reqwest::Response,
     headers: &HeaderMap,
