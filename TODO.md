@@ -114,7 +114,7 @@
   - [x] banned regex patterns（feature `gateway`，配置 `guardrails.banned_regexes`）
   - [x] basic PII blocking（email/ssn；配置 `guardrails.block_pii`）
   - [x] per-route guardrails override（router rules by `model_prefix`）
-  - [x] schema validation（request/response shape; TBD）
+  - [x] schema validation（request shape）
 
 ### 2.3 Interop：不变形与多协议互转
 

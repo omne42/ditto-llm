@@ -695,11 +695,25 @@ fn resolve_requested_mcp_servers(
     requested.sort();
     requested.dedup();
     if requested.is_empty() {
-        return Err(Box::new(StatusCode::BAD_REQUEST.into_response()));
+        let message = if state.mcp_servers.is_empty() {
+            "no MCP servers configured"
+        } else {
+            "no MCP servers selected"
+        };
+        return Err(Box::new(
+            error_response(StatusCode::BAD_REQUEST, "invalid_request", message).into_response(),
+        ));
     }
     for server_id in &requested {
         if !state.mcp_servers.contains_key(server_id) {
-            return Err(Box::new(StatusCode::NOT_FOUND.into_response()));
+            return Err(Box::new(
+                error_response(
+                    StatusCode::NOT_FOUND,
+                    "not_found",
+                    format!("mcp server not found: {server_id}"),
+                )
+                .into_response(),
+            ));
         }
     }
     Ok(requested)

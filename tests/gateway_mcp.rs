@@ -649,6 +649,101 @@ async fn gateway_mcp_tools_call_http_invalid_json_returns_400() -> ditto_llm::Re
 }
 
 #[tokio::test]
+async fn gateway_mcp_tools_list_http_get_rejects_when_no_servers_configured()
+-> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/mcp/tools/list")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("invalid_request")
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("no MCP servers configured"), "{message}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_http_unknown_server_returns_404() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp/tools/list")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "servers": ["missing"] }).to_string()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("not_found")
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("mcp server not found"), "{message}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_call_http_unknown_server_returns_404() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp/tools/call")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "server_id": "missing", "name": "hello", "arguments": {} }).to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("not_found")
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_selected()
 -> ditto_llm::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
