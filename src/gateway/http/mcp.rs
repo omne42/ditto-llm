@@ -519,28 +519,35 @@ async fn handle_mcp_impl(
 
     let bytes = match to_bytes(body, MCP_MAX_REQUEST_BYTES).await {
         Ok(bytes) => bytes,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(_) => {
+            let message = format!("request exceeded max bytes ({MCP_MAX_REQUEST_BYTES})");
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                Json(mcp_jsonrpc_error(Value::Null, -32600, &message)),
+            )
+                .into_response();
+        }
     };
     if bytes.is_empty() {
-        return StatusCode::BAD_REQUEST.into_response();
+        return Json(mcp_jsonrpc_error(Value::Null, -32600, "Invalid Request")).into_response();
     }
 
     let value: Value = match serde_json::from_slice(&bytes) {
         Ok(value) => value,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(_) => return Json(mcp_jsonrpc_error(Value::Null, -32700, "Parse error")).into_response(),
     };
     if value.is_array() {
-        return StatusCode::BAD_REQUEST.into_response();
+        return Json(mcp_jsonrpc_error(
+            Value::Null,
+            -32600,
+            "Batch requests are not supported",
+        ))
+        .into_response();
     }
 
     let rpc: JsonRpcRequest = match serde_json::from_value(value) {
         Ok(rpc) => rpc,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-
-    let server_ids = match resolve_requested_mcp_servers(&state, None, &parts.headers, selector) {
-        Ok(ids) => ids,
-        Err(resp) => return *resp,
+        Err(_) => return Json(mcp_jsonrpc_error(Value::Null, -32600, "Invalid Request")).into_response(),
     };
 
     let Some(id) = rpc.id.clone() else {
@@ -567,6 +574,16 @@ async fn handle_mcp_impl(
         }
         "notifications/initialized" => StatusCode::NO_CONTENT.into_response(),
         "tools/list" => {
+            let server_ids = match resolve_requested_mcp_servers_jsonrpc(
+                &state,
+                &parts.headers,
+                selector.as_deref(),
+            ) {
+                Ok(ids) => ids,
+                Err(reason) => {
+                    return Json(mcp_jsonrpc_error(id, -32602, &reason)).into_response();
+                }
+            };
             let cursor = rpc
                 .params
                 .as_ref()
@@ -575,6 +592,9 @@ async fn handle_mcp_impl(
                 .map(|value| value.to_string());
             match mcp_list_tools(&state, &server_ids, cursor).await {
                 Ok(result) => Json(mcp_jsonrpc_result(id, result)).into_response(),
+                Err(GatewayError::InvalidRequest { reason }) => {
+                    Json(mcp_jsonrpc_error(id, -32602, &reason)).into_response()
+                }
                 Err(err) => Json(mcp_jsonrpc_error(id, -32000, &err.to_string())).into_response(),
             }
         }
@@ -587,8 +607,21 @@ async fn handle_mcp_impl(
                 return Json(mcp_jsonrpc_error(id, -32602, "Invalid params")).into_response();
             }
             let arguments = params.get("arguments").cloned().unwrap_or(Value::Null);
+            let server_ids = match resolve_requested_mcp_servers_jsonrpc(
+                &state,
+                &parts.headers,
+                selector.as_deref(),
+            ) {
+                Ok(ids) => ids,
+                Err(reason) => {
+                    return Json(mcp_jsonrpc_error(id, -32602, &reason)).into_response();
+                }
+            };
             match mcp_call_tool(&state, &server_ids, name, arguments).await {
                 Ok(result) => Json(mcp_jsonrpc_result(id, result)).into_response(),
+                Err(GatewayError::InvalidRequest { reason }) => {
+                    Json(mcp_jsonrpc_error(id, -32602, &reason)).into_response()
+                }
                 Err(err) => Json(mcp_jsonrpc_error(id, -32000, &err.to_string())).into_response(),
             }
         }
@@ -714,6 +747,49 @@ fn resolve_requested_mcp_servers(
                 )
                 .into_response(),
             ));
+        }
+    }
+    Ok(requested)
+}
+
+fn resolve_requested_mcp_servers_jsonrpc(
+    state: &GatewayHttpState,
+    headers: &HeaderMap,
+    selector: Option<&str>,
+) -> Result<Vec<String>, String> {
+    let selector = selector
+        .and_then(|value| value.split('/').next())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    let header_selector = extract_header(headers, "x-mcp-servers");
+
+    let mut requested = if let Some(selector) = selector.or(header_selector) {
+        selector
+            .split(',')
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .collect()
+    } else {
+        let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+        all.sort();
+        all
+    };
+
+    requested.sort();
+    requested.dedup();
+    if requested.is_empty() {
+        let message = if state.mcp_servers.is_empty() {
+            "no MCP servers configured"
+        } else {
+            "no MCP servers selected"
+        };
+        return Err(message.to_string());
+    }
+    for server_id in &requested {
+        if !state.mcp_servers.contains_key(server_id) {
+            return Err(format!("mcp server not found: {server_id}"));
         }
     }
     Ok(requested)

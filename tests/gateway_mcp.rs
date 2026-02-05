@@ -332,7 +332,7 @@ async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
             .get("error")
             .and_then(|v| v.get("code"))
             .and_then(|v| v.as_i64()),
-        Some(-32000)
+        Some(-32602)
     );
     let message = payload
         .get("error")
@@ -591,6 +591,110 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_llm::Result
     assert_eq!(response.status(), StatusCode::OK);
 
     upstream_mock.assert();
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from("{"))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(payload.get("id"), Some(&Value::Null));
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32700)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("x-mcp-servers", "missing")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(payload.get("id").and_then(|v| v.as_i64()), Some(1));
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32602)
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("mcp server not found"), "{message}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("result")
+            .and_then(|v| v.get("protocolVersion"))
+            .and_then(|v| v.as_str()),
+        Some("2025-06-18")
+    );
     Ok(())
 }
 
