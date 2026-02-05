@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Deps: update Rust dependency lockfile (`cargo update`).
+- Build: depend on `safe-fs-tools` via the external repo checkout (`../safe-fs-tools`) instead of a vendored copy.
 - Gateway: remove `router.default_backend` in favor of `router.default_backends` (weighted float `weight`).
 - Gateway: refactor `ditto-gateway` CLI parsing into `src/bin/ditto_gateway/cli.rs` (usage now documents the `--addr` alias; adds parser tests).
 - Gateway: refactor `ditto-gateway` binary composition to use real modules (`src/bin/ditto_gateway/mod.rs`) instead of `include!` (no behavior change; improves navigation/maintainability).

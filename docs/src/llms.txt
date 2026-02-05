@@ -1720,7 +1720,7 @@ FILE: docs/src/sdk/agents.md
 
 启用 features：
 
-- `agent`（会带上一个参考工具箱执行器：基于 `safe-fs-tools` 的文件系统工具、受控 shell 执行等；`safe-fs-tools` 会由 Cargo 自动拉取）
+- `agent`（会带上一个参考工具箱执行器：基于 `safe-fs-tools` 的文件系统工具、受控 shell 执行等；需要在仓库同级目录存在 `safe-fs-tools` checkout（`../safe-fs-tools`））
 
 示例（伪代码风格，展示结构）：
 
@@ -2727,7 +2727,8 @@ cargo run --features "gateway-devtools" --bin ditto-gateway -- ./gateway.json \
 
 注意事项：
 
-- devtools 日志可能包含敏感信息（尤其是管理面 payload）；生产环境务必做好权限与脱敏。
+- 你在自己的服务里直接用 `DevtoolsLogger` 时，不会自动脱敏；生产环境务必做好权限与脱敏。
+- Ditto Gateway 通过 `--devtools` 写入的 JSONL 会应用 `gateway.json` 的 `observability.redaction` 统一脱敏策略（JSON logs / audit 同一套）。
 - JSONL 文件会持续 append；建议配合日志轮转或定期清理。
 
 ================================================================================
@@ -3778,7 +3779,8 @@ Ditto 支持用 **JSON** 表达配置；如果你希望用 YAML，也可以启�
   "virtual_keys": [ ... ],
   "router": { ... },
   "a2a_agents": [ ... ],
-  "mcp_servers": [ ... ]
+  "mcp_servers": [ ... ],
+  "observability": { ... }
 }
 ```
 
@@ -3981,6 +3983,48 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `url` 同时接受别名字段 `http_url`
 
 使用方式与端点说明见「Gateway → MCP Gateway（/mcp + tools）」。
+
+## observability：观测与脱敏（重要）
+
+`observability.redaction` 定义了 Ditto Gateway 写出的观测数据如何脱敏，包括：
+
+- 结构化 JSON logs（`--json-logs`）
+- 审计日志（sqlite/redis store）
+- Devtools JSONL（`--devtools`）
+
+> 这不是“安全万无一失”的魔法，而是把泄露面收敛到一处可配置的策略。生产环境仍需要最小权限、日志保留策略与访问控制。
+
+### 默认行为（开箱即用）
+
+默认会把匹配到的敏感信息替换为 `"<redacted>"`：
+
+- 按 key 名脱敏（不区分大小写）：`authorization` / `token` / `secret` / `api_key` / `password` 等
+- 对 `path` / `url` / `base_url` / `endpoint` 这类字段的字符串值：会把 URL query 中匹配到的参数值脱敏（例如 `?api_key=...` / `?token=...`）
+- 额外正则（默认）：`Bearer <...>` 与 `sk-...` 风格 token
+
+### 配置示例
+
+```json
+{
+  "observability": {
+    "redaction": {
+      "replacement": "<redacted>",
+      "redact_headers": ["authorization", "x-api-key"],
+      "redact_key_names": ["token", "api_key", "secret"],
+      "sanitize_query_in_keys": ["path", "url", "base_url", "endpoint"],
+      "redact_query_params": ["api_key", "token"],
+      "redact_json_pointers": ["/request/headers/authorization"],
+      "redact_regexes": ["(?i)bearer\\s+[^\\s]+", "sk-[A-Za-z0-9]{10,}"]
+    }
+  }
+}
+```
+
+说明：
+
+- “按 key 名脱敏”作用于任意 JSON（不仅限 headers）。这是一种务实的策略：不要把 token 放进 payload 里指望“你会记得别打印”。
+- 如果你真的要关闭脱敏（不推荐），把上面所有 `redact_*` 列表设为空数组即可；`replacement` 仍必须是非空字符串。
+- `ditto-gateway` 启动时会校验 `redact_json_pointers` 与 `redact_regexes`，避免带着错误配置在生产里“以为自己脱敏了”。
 
 ================================================================================
 FILE: docs/src/gateway/endpoints.md
@@ -5359,6 +5403,11 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 运行时传 `--json-logs` 后，Ditto 会把关键事件以 JSON 行写到 stderr（见 `emit_json_log`）。
 
+注意：
+
+- 日志 payload 会应用 `observability.redaction` 的统一脱敏策略（见「Gateway → 配置文件」的 `observability`）。
+- 默认会替换 `authorization`/`token`/`api_key` 等字段，并对 `path/url/base_url/endpoint` 中的敏感 query 参数做 value 脱敏。
+
 事件示例（概念）：
 
 - `proxy.request` / `proxy.response` / `proxy.error`
@@ -5391,6 +5440,7 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 
 - OTel 使用 `tracing_subscriber::EnvFilter`，可以通过 `RUST_LOG` 控制级别。
 - `--otel-json` 会把 tracing logs 也输出为 JSON（便于收集）。
+- 为避免把敏感 query 参数带进 tracing，Ditto 的 proxy span `path` 默认会丢弃 query string（只保留路径部分）。
 
 ---
 
@@ -5402,6 +5452,8 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 - 运行时传 `--devtools <path>`
 
 > Devtools 日志包含敏感信息的风险更高；生产环境务必配合脱敏/权限控制。
+
+Ditto Gateway 写入 devtools 前同样会应用 `observability.redaction`（与 JSON logs / audit 一致），但这不等于你可以忽略生产的权限与留存策略。
 
 更多格式与用法见「SDK → Devtools（JSONL 日志）」。
 
