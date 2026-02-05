@@ -107,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
 - CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.
+- Build: add `pnpm-lock.yaml` and use frozen installs in CI for deterministic JS/TS builds.
 
 ### Fixed
 

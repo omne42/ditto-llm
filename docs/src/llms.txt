@@ -184,7 +184,7 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 Minimal admin UI (React):
 
 ```bash
-pnpm install --no-lockfile
+pnpm install
 pnpm dev
 ```
 

@@ -11,7 +11,7 @@ Minimal React admin UI for `ditto-gateway`:
 From repo root:
 
 ```bash
-pnpm install --no-lockfile
+pnpm install
 pnpm dev
 ```
 

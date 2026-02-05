@@ -19,6 +19,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: ditto-llm/pnpm-lock.yaml
 
       - name: Enable corepack
         working-directory: ditto-llm
@@ -30,7 +32,7 @@ jobs:
 
       - name: pnpm install
         working-directory: ditto-llm
-        run: pnpm install --no-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: pnpm typecheck
         working-directory: ditto-llm
