@@ -129,6 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: stream large multipart uploads to upstream for `/v1/files` and `/v1/audio/{transcriptions,translations}` (avoid buffering the full request body).
 - Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).
 - Gateway: fix Google GenAI streaming encoding to emit incremental text deltas (avoids duplicated output when clients concatenate chunks).
+- Gateway: bound MCP backend JSON-RPC response bodies and truncate error body snippets (avoid OOM/huge error logs on oversized responses).
+- Gateway: cap per-backend `/v1/models` aggregation response size (skips oversized backends).
 
 ## [0.1.2] - 2026-02-01
 

@@ -212,6 +212,77 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected() -> dit
 }
 
 #[tokio::test]
+async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+    let too_large = "x".repeat(6 * 1024 * 1024);
+    let upstream_mock = upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(too_large.clone());
+    });
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+            .expect("mcp state"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/list",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(payload.get("jsonrpc").and_then(|v| v.as_str()), Some("2.0"));
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32000)
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(
+        message.contains("max bytes"),
+        "unexpected error message: {message}"
+    );
+
+    upstream_mock.assert();
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_llm::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());

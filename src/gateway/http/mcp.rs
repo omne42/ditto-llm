@@ -1,5 +1,8 @@
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
+const MCP_MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+const MCP_MAX_ERROR_RESPONSE_BYTES: usize = 64 * 1024;
+const MCP_MAX_ERROR_BODY_SNIPPET_BYTES: usize = 8 * 1024;
 const MCP_TOOLS_LIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
@@ -169,15 +172,32 @@ impl McpServerState {
             message: format!("mcp request failed: {err}"),
         })?;
         let status = response.status();
-        let bytes = response.bytes().await.map_err(|err| GatewayError::Backend {
-            message: format!("mcp response read failed: {err}"),
-        })?;
+        let headers = response.headers().clone();
+        let max_bytes = if status.is_success() {
+            MCP_MAX_RESPONSE_BYTES
+        } else {
+            MCP_MAX_ERROR_RESPONSE_BYTES
+        };
+        let bytes =
+            read_reqwest_body_bytes_bounded_with_content_length(response, &headers, max_bytes)
+                .await
+                .map_err(|err| GatewayError::Backend {
+                    message: format!("mcp response read failed: {err}"),
+                })?;
         if !status.is_success() {
+            let body_slice = bytes.as_ref();
+            let truncated = body_slice.len() > MCP_MAX_ERROR_BODY_SNIPPET_BYTES;
+            let body_slice = &body_slice[..body_slice.len().min(MCP_MAX_ERROR_BODY_SNIPPET_BYTES)];
+            let mut body = String::from_utf8_lossy(body_slice).to_string();
+            if truncated {
+                body.push('…');
+            }
+
             return Err(GatewayError::Backend {
                 message: format!(
                     "mcp server responded with status={} body={}",
                     status.as_u16(),
-                    String::from_utf8_lossy(&bytes)
+                    body
                 ),
             });
         }

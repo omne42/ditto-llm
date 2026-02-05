@@ -3,6 +3,7 @@ async fn handle_openai_models_list(
     req: axum::http::Request<Body>,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     const PER_BACKEND_TIMEOUT_SECS: u64 = 10;
+    const PER_BACKEND_MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
     let (parts, _body) = req.into_parts();
 
@@ -102,7 +103,14 @@ async fn handle_openai_models_list(
         if !response.status().is_success() {
             continue;
         }
-        let bytes = match response.bytes().await {
+        let headers = response.headers().clone();
+        let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
+            response,
+            &headers,
+            PER_BACKEND_MAX_BODY_BYTES,
+        )
+        .await
+        {
             Ok(bytes) => bytes,
             Err(_) => continue,
         };
