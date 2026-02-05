@@ -27,7 +27,7 @@
 
 启用 features：
 
-- `agent`（会带上一个参考工具箱执行器：基于 `safe-fs-tools` 的文件系统工具、受控 shell 执行等）
+- `agent`（会带上一个参考工具箱执行器：基于 `safe-fs-tools` 的文件系统工具、受控 shell 执行等；`safe-fs-tools` 会由 Cargo 自动拉取）
 
 示例（伪代码风格，展示结构）：
 

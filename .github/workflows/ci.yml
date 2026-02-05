@@ -50,14 +50,6 @@ jobs:
         with:
           path: ditto-llm
 
-      # ditto-llm enables the agent feature under --all-features, which depends on a sibling repo.
-      - name: Checkout safe-fs-tools
-        uses: actions/checkout@v4
-        with:
-          repository: omne42/safe-fs-tools
-          ref: 7bfdfe429ebfec1b529ed26bf8f486e3ba62b51e
-          path: safe-fs-tools
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -69,7 +61,6 @@ jobs:
         with:
           workspaces: |
             ditto-llm -> target
-            safe-fs-tools -> target
 
       - name: cargo fmt
         working-directory: ditto-llm
