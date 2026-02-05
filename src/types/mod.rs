@@ -19,7 +19,6 @@ mod generate_request_support;
 #[cfg(any(
     feature = "anthropic",
     feature = "bedrock",
-    feature = "cohere",
     feature = "google",
     feature = "vertex",
 ))]
@@ -39,7 +38,6 @@ pub(crate) use generate_request_support::{
 #[cfg(any(
     feature = "anthropic",
     feature = "bedrock",
-    feature = "cohere",
     feature = "google",
     feature = "vertex",
 ))]

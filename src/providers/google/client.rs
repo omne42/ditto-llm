@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -13,9 +15,11 @@ use crate::profile::{
     resolve_request_auth_with_default_keys,
 };
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, StreamChunk, Tool,
-    ToolChoice, Usage, Warning,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Tool, ToolChoice, Usage,
+    Warning,
 };
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 #[cfg(feature = "embeddings")]
@@ -144,6 +148,7 @@ impl Google {
         format!("{base}/{path}:generateContent")
     }
 
+    #[cfg(feature = "streaming")]
     fn stream_url(&self, model: &str) -> String {
         let base = self.base_url.trim_end_matches('/');
         let path = Self::model_path(model);

@@ -1,9 +1,15 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
+#[cfg(feature = "streaming")]
+use std::collections::VecDeque;
 
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use base64::Engine;
+#[cfg(feature = "streaming")]
 use base64::engine::general_purpose::STANDARD as BASE64;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use reqwest::Url;
 use serde::Deserialize;
@@ -15,8 +21,10 @@ use crate::profile::Env;
 use crate::profile::ProviderConfig;
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
+    Role, Tool, ToolChoice, Usage, Warning,
 };
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 const DEFAULT_VERSION: &str = "bedrock-2023-05-31";
@@ -115,6 +123,7 @@ impl Bedrock {
         format!("{base}/model/{model}/invoke")
     }
 
+    #[cfg(feature = "streaming")]
     fn invoke_stream_url(&self, model: &str) -> String {
         if self.base_url.contains("{model}") {
             let replaced = self.base_url.replace("{model}", model);

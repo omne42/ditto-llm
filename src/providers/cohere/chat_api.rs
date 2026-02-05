@@ -239,9 +239,9 @@ impl LanguageModel for Cohere {
         #[cfg(not(feature = "streaming"))]
         {
             let _ = request;
-            return Err(DittoError::InvalidResponse(
+            Err(DittoError::InvalidResponse(
                 "ditto-llm built without streaming feature".to_string(),
-            ));
+            ))
         }
 
         #[cfg(feature = "streaming")]

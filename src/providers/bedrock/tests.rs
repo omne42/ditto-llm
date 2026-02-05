@@ -4,6 +4,7 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use serde_json::json;
 
+    #[cfg(feature = "streaming")]
     fn build_event_stream_message(payload: &Value) -> Vec<u8> {
         let payload_bytes = serde_json::to_vec(payload).expect("payload json");
 
@@ -28,6 +29,7 @@ mod tests {
         out
     }
 
+    #[cfg(feature = "streaming")]
     fn bedrock_event(inner: Value) -> Value {
         let bytes = BASE64.encode(serde_json::to_vec(&inner).expect("inner json"));
         json!({

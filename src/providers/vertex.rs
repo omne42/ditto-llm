@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use reqwest::Url;
 use serde::Deserialize;
@@ -11,7 +13,9 @@ use super::genai;
 use crate::auth::oauth::{OAuthClientCredentials, resolve_oauth_client_credentials};
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, HttpAuth, ProviderConfig};
-use crate::types::{ContentPart, GenerateRequest, GenerateResponse, StreamChunk, Usage, Warning};
+use crate::types::{ContentPart, GenerateRequest, GenerateResponse, Warning};
+#[cfg(feature = "streaming")]
+use crate::types::{StreamChunk, Usage};
 use crate::{DittoError, Result};
 
 #[derive(Clone)]
@@ -111,6 +115,7 @@ impl Vertex {
         format!("{base}/models/{model}:generateContent")
     }
 
+    #[cfg(feature = "streaming")]
     fn stream_url(&self, model: &str) -> String {
         if self.base_url.contains("{model}") {
             let replaced = self.base_url.replace("{model}", model);
@@ -340,18 +345,17 @@ impl LanguageModel for Vertex {
         })
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
+    async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
         #[cfg(not(feature = "streaming"))]
         {
-            let _ = _request;
-            return Err(DittoError::InvalidResponse(
+            let _ = request;
+            Err(DittoError::InvalidResponse(
                 "ditto-llm built without streaming feature".to_string(),
-            ));
+            ))
         }
 
         #[cfg(feature = "streaming")]
         {
-            let request = _request;
             let model = self.resolve_model(&request)?.to_string();
             let selected_provider_options = request.provider_options_value_for(self.provider())?;
             let provider_options = selected_provider_options

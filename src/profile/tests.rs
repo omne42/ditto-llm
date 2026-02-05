@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{DittoError, Result};
 
+use super::auth::{RequestAuth, resolve_request_auth_with_default_keys};
 use super::*;
 
 #[tokio::test]

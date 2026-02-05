@@ -1,7 +1,11 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
+#[cfg(feature = "streaming")]
+use std::collections::HashMap;
 
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -16,10 +20,13 @@ use crate::profile::{
 #[cfg(feature = "rerank")]
 use crate::rerank::RerankModel;
 use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, RerankDocument,
-    RerankRequest, RerankResponse, RerankResult, Role, StreamChunk, Tool, ToolChoice, Usage,
-    Warning,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool, ToolChoice,
+    Usage, Warning,
 };
+#[cfg(feature = "rerank")]
+use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";

@@ -93,3 +93,23 @@ jobs:
       - name: cargo clippy (no default features + openai-compatible)
         working-directory: ditto-llm
         run: cargo clippy -p ditto-llm --no-default-features --features openai-compatible --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + anthropic)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features anthropic --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + google)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features google --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + cohere)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features cohere --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + bedrock)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features bedrock --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + vertex)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features vertex --all-targets -- -D warnings

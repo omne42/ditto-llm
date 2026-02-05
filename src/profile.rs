@@ -19,21 +19,26 @@ pub use openai_models::{OpenAiModelsProvider, Provider, list_available_models};
 
 #[cfg(any(
     feature = "anthropic",
-    feature = "bedrock",
     feature = "cohere",
     feature = "google",
     feature = "openai",
     feature = "openai-compatible",
     feature = "vertex",
 ))]
-pub(crate) use auth::{HttpAuth, RequestAuth, resolve_request_auth_with_default_keys};
+pub(crate) use auth::HttpAuth;
 #[cfg(any(
     feature = "anthropic",
-    feature = "bedrock",
     feature = "cohere",
     feature = "google",
     feature = "openai",
     feature = "openai-compatible",
-    feature = "vertex",
+))]
+pub(crate) use auth::{RequestAuth, resolve_request_auth_with_default_keys};
+#[cfg(any(
+    feature = "anthropic",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
 ))]
 pub(crate) use http::{apply_http_query_params, build_http_client};
