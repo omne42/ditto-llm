@@ -104,8 +104,8 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 Minimal admin UI (React):
 
 ```bash
-npm install
-npm run --workspace apps/admin-ui dev
+pnpm install --no-lockfile
+pnpm dev
 ```
 
 Minimal multi-language gateway clients:

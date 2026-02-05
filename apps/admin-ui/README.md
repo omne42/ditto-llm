@@ -11,8 +11,8 @@ Minimal React admin UI for `ditto-gateway`:
 From repo root:
 
 ```bash
-npm install
-npm run --workspace apps/admin-ui dev
+pnpm install --no-lockfile
+pnpm dev
 ```
 
 Then open `http://127.0.0.1:5173`.

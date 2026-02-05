@@ -4,5 +4,13 @@
   "workspaces": [
     "packages/*",
     "apps/*"
-  ]
+  ],
+  "scripts": {
+    "typecheck": "pnpm -r run typecheck",
+    "build": "pnpm -r run build",
+    "dev": "pnpm --filter ditto-admin-ui dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
 }

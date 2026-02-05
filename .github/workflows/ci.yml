@@ -7,6 +7,39 @@ on:
     branches: [main]
 
 jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack
+        working-directory: ditto-llm
+        run: corepack enable
+
+      - name: Install pnpm
+        working-directory: ditto-llm
+        run: corepack prepare pnpm@10.28.2 --activate
+
+      - name: pnpm install
+        working-directory: ditto-llm
+        run: pnpm install --no-lockfile
+
+      - name: pnpm typecheck
+        working-directory: ditto-llm
+        run: pnpm run typecheck
+
+      - name: pnpm build
+        working-directory: ditto-llm
+        run: pnpm run build
+
   rust:
     runs-on: ubuntu-latest
     steps:
