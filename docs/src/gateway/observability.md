@@ -175,6 +175,11 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 运行时传 `--json-logs` 后，Ditto 会把关键事件以 JSON 行写到 stderr（见 `emit_json_log`）。
 
+注意：
+
+- 日志 payload 会应用 `observability.redaction` 的统一脱敏策略（见「Gateway → 配置文件」的 `observability`）。
+- 默认会替换 `authorization`/`token`/`api_key` 等字段，并对 `path/url/base_url/endpoint` 中的敏感 query 参数做 value 脱敏。
+
 事件示例（概念）：
 
 - `proxy.request` / `proxy.response` / `proxy.error`
@@ -207,6 +212,7 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 
 - OTel 使用 `tracing_subscriber::EnvFilter`，可以通过 `RUST_LOG` 控制级别。
 - `--otel-json` 会把 tracing logs 也输出为 JSON（便于收集）。
+- 为避免把敏感 query 参数带进 tracing，Ditto 的 proxy span `path` 默认会丢弃 query string（只保留路径部分）。
 
 ---
 
@@ -218,5 +224,7 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 - 运行时传 `--devtools <path>`
 
 > Devtools 日志包含敏感信息的风险更高；生产环境务必配合脱敏/权限控制。
+
+Ditto Gateway 写入 devtools 前同样会应用 `observability.redaction`（与 JSON logs / audit 一致），但这不等于你可以忽略生产的权限与留存策略。
 
 更多格式与用法见「SDK → Devtools（JSONL 日志）」。

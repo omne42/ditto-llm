@@ -120,16 +120,15 @@ async fn upsert_key(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "admin.key.upsert",
-            serde_json::json!({
-                "key_id": &key.id,
-                "enabled": key.enabled,
-                "inserted": inserted,
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "admin.key.upsert",
+        serde_json::json!({
+            "key_id": &key.id,
+            "enabled": key.enabled,
+            "inserted": inserted,
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
@@ -190,16 +189,15 @@ async fn upsert_key_with_id(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "admin.key.upsert",
-            serde_json::json!({
-                "key_id": &key.id,
-                "enabled": key.enabled,
-                "inserted": inserted,
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "admin.key.upsert",
+        serde_json::json!({
+            "key_id": &key.id,
+            "enabled": key.enabled,
+            "inserted": inserted,
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
@@ -256,14 +254,13 @@ async fn delete_key(
         persist_virtual_keys(&state, &persisted_keys).await?;
 
         #[cfg(feature = "sdk")]
-        if let Some(logger) = state.devtools.as_ref() {
-            let _ = logger.log_event(
-                "admin.key.delete",
-                serde_json::json!({
-                    "key_id": &id,
-                }),
-            );
-        }
+        emit_devtools_log(
+            &state,
+            "admin.key.delete",
+            serde_json::json!({
+                "key_id": &id,
+            }),
+        );
 
         #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
         append_admin_audit_log(

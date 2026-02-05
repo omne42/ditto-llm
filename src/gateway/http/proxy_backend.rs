@@ -130,22 +130,21 @@ async fn attempt_proxy_backend(
             };
 
         #[cfg(feature = "sdk")]
-        if let Some(logger) = state.devtools.as_ref() {
-            let _ = logger.log_event(
-                "proxy.request",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "method": parts.method.as_str(),
-                    "path": path_and_query,
-                    "backend": &backend_name,
-                    "provider": &protocol,
-                    "model": &model,
-                    "upstream_model": upstream_model.as_deref(),
-                    "virtual_key_id": virtual_key_id.as_deref(),
-                    "body_len": body.len(),
-                }),
-            );
-        }
+        emit_devtools_log(
+            state,
+            "proxy.request",
+            serde_json::json!({
+                "request_id": &request_id,
+                "method": parts.method.as_str(),
+                "path": path_and_query,
+                "backend": &backend_name,
+                "provider": &protocol,
+                "model": &model,
+                "upstream_model": upstream_model.as_deref(),
+                "virtual_key_id": virtual_key_id.as_deref(),
+                "body_len": body.len(),
+            }),
+        );
 
         let upstream_response = match backend
             .request(
@@ -237,16 +236,15 @@ async fn attempt_proxy_backend(
                 );
 
                 #[cfg(feature = "sdk")]
-                if let Some(logger) = state.devtools.as_ref() {
-                    let _ = logger.log_event(
-                        "proxy.responses_shim",
-                        serde_json::json!({
-                            "request_id": &request_id,
-                            "backend": &backend_name,
-                            "path": path_and_query,
-                        }),
-                    );
-                }
+                emit_devtools_log(
+                    state,
+                    "proxy.responses_shim",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "backend": &backend_name,
+                        "path": path_and_query,
+                    }),
+                );
 
                 let chat_body_bytes = match serde_json::to_vec(&chat_body) {
                     Ok(bytes) => Bytes::from(bytes),
@@ -367,17 +365,16 @@ async fn attempt_proxy_backend(
                     );
 
                     #[cfg(feature = "sdk")]
-                    if let Some(logger) = state.devtools.as_ref() {
-                        let _ = logger.log_event(
-                            "proxy.retry",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "backend": &backend_name,
-                                "status": status.as_u16(),
-                                "path": path_and_query,
-                            }),
-                        );
-                    }
+                    emit_devtools_log(
+                        state,
+                        "proxy.retry",
+                        serde_json::json!({
+                            "request_id": &request_id,
+                            "backend": &backend_name,
+                            "status": status.as_u16(),
+                            "path": path_and_query,
+                        }),
+                    );
 
                     return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
                         status,
@@ -613,14 +610,7 @@ async fn attempt_proxy_backend(
                         "shim": "responses_via_chat_completions",
                     });
 
-                    #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.sqlite_store.as_ref() {
-                        let _ = store.append_audit_log("proxy", payload.clone()).await;
-                    }
-                    #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.redis_store.as_ref() {
-                        let _ = store.append_audit_log("proxy", payload.clone()).await;
-                    }
+                    append_audit_log(state, "proxy", payload).await;
                 }
 
                 emit_json_log(
@@ -638,17 +628,16 @@ async fn attempt_proxy_backend(
                 );
 
                 #[cfg(feature = "sdk")]
-                if let Some(logger) = state.devtools.as_ref() {
-                    let _ = logger.log_event(
-                        "proxy.response",
-                        serde_json::json!({
-                            "request_id": &request_id,
-                            "status": status.as_u16(),
-                            "path": path_and_query,
-                            "backend": &backend_name,
-                        }),
-                    );
-                }
+                emit_devtools_log(
+                    state,
+                    "proxy.response",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "status": status.as_u16(),
+                        "path": path_and_query,
+                        "backend": &backend_name,
+                    }),
+                );
 
                 #[cfg(feature = "gateway-otel")]
                 {
@@ -730,17 +719,16 @@ async fn attempt_proxy_backend(
             );
 
             #[cfg(feature = "sdk")]
-            if let Some(logger) = state.devtools.as_ref() {
-                let _ = logger.log_event(
-                    "proxy.retry",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "backend": &backend_name,
-                        "status": status.as_u16(),
-                        "path": path_and_query,
-                    }),
-                );
-            }
+            emit_devtools_log(
+                state,
+                "proxy.retry",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "backend": &backend_name,
+                    "status": status.as_u16(),
+                    "path": path_and_query,
+                }),
+            );
 
             return Ok(BackendAttemptOutcome::Continue(None));
         }

@@ -24,6 +24,7 @@ pub mod proxy_backend;
 pub mod proxy_cache;
 #[cfg(feature = "gateway-routing-advanced")]
 pub mod proxy_routing;
+mod redaction;
 #[cfg(feature = "gateway-store-redis")]
 pub mod redis_store;
 mod responses_shim;
@@ -52,7 +53,10 @@ use router::Router;
 
 pub use budget::BudgetConfig;
 pub use cache::CacheConfig;
-pub use config::{BackendConfig, GatewayConfig, VirtualKeyConfig};
+pub use config::{
+    BackendConfig, GatewayConfig, GatewayObservabilityConfig, GatewayRedactionConfig,
+    VirtualKeyConfig,
+};
 #[cfg(feature = "gateway-costing")]
 pub use costing::{PricingTable, PricingTableError};
 pub use guardrails::GuardrailsConfig;

@@ -271,6 +271,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_chat_completions_w
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -534,6 +535,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_with_max
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -859,6 +861,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_via_shim
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -916,4 +919,3 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_via_shim
     openai_chat_step1.assert();
     openai_chat_final.assert();
 }
-

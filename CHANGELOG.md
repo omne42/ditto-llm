@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: cache MCP `tools/list` results (60s TTL) and fetch them concurrently when multiple servers are selected.
 - Gateway: add tenant-scoped admin tokens (read/write) to enforce per-tenant isolation in `/admin/*` (new CLI flags: `--admin-tenant-token*` / `--admin-tenant-read-token*`).
 - Gateway: add audit export endpoint (`GET /admin/audit/export`) with JSONL/CSV output and a tamper-evident SHA-256 hash-chain (`prev_hash`/`hash`), plus a verifier CLI (`ditto-audit-verify`).
+- Gateway: add `observability.redaction` config to apply a unified redaction policy to JSON logs, audit logs, and devtools JSONL output.
 - Gateway: add `ditto-audit-export` CLI to fetch `/admin/audit/export`, write a local export + manifest, and optionally upload to S3/GCS (supports S3 Object Lock flags).
 - Gateway: add per-route Redis rate limiting (route-scoped keys) and upgrade the algorithm to a weighted sliding window across the current and previous minute (60s window).
 - Security: add `secret://...` secret resolution (env/file/Vault/AWS SM/GCP SM/Azure KV) and wire it into SDK `ProviderAuth`, Gateway config values, and gateway CLI flags (admin tokens / redis url).
@@ -67,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: refactor `ditto-gateway` CLI parsing into `src/bin/ditto_gateway/cli.rs` (usage now documents the `--addr` alias; adds parser tests).
 - Gateway: refactor `ditto-gateway` binary composition to use real modules (`src/bin/ditto_gateway/mod.rs`) instead of `include!` (no behavior change; improves navigation/maintainability).
 - Docs: align LiteLLM/AI SDK parity notes for observability (Prometheus already ships per-path/per-backend latency histograms) and document the Prometheus metrics contract.
+- Gateway: redact sensitive fields in JSON logs, audit payloads, and devtools JSONL by default via `observability.redaction`; proxy OTel span paths now drop query strings.
 - Docs: add “Superset Contract（兼容性口径）” page to define must/best-effort/non-goals and link it in the mdBook summary.
 - Docs: make `TODO.md` trackable by adding an explicit unchecked backlog with DoD + verification commands.
 - Profile: accept `max_context`/`max_context_window` and `best_context`/`best_context_window` config aliases.
@@ -137,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.
 - Gateway: avoid leaking raw virtual keys/prompts and reduce allocations by making `GatewayRequest::cache_key` return a hex digest, and using hashed route seeds for weighted backend selection.
 - Security: redact `GatewayRequest` debug output to avoid logging virtual keys and prompts (keeps only lengths + hashes).
+- Gateway: avoid persisting deleted raw key tokens in `/key/delete` audit payload and redact audit reads/exports to reduce token leakage risk.
 - Gateway: settle passthrough SSE stream budgets using the final `usage` chunk when present (prefer actual usage over request estimates).
 - Gateway: stream large multipart uploads to upstream for `/v1/files` and `/v1/audio/{transcriptions,translations}` (avoid buffering the full request body).
 - Gateway translation: return `501 unsupported_feature` for backends requiring a build-time-disabled capability (distinguish from upstream failures).

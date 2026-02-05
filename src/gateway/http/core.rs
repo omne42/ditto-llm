@@ -70,6 +70,7 @@ use super::interop;
 use super::responses_shim;
 #[cfg(feature = "gateway-translation")]
 use super::translation;
+use super::redaction::GatewayRedactor;
 use super::{
     Gateway, GatewayError, GatewayRequest, GatewayResponse, GatewayStateFile,
     ObservabilitySnapshot, ProxyBackend, VirtualKeyConfig,
@@ -87,6 +88,7 @@ struct AdminTenantToken {
 #[derive(Clone)]
 pub struct GatewayHttpState {
     gateway: Arc<Mutex<Gateway>>,
+    redactor: Arc<GatewayRedactor>,
     proxy_backends: Arc<HashMap<String, ProxyBackend>>,
     a2a_agents: Arc<HashMap<String, A2aAgentState>>,
     mcp_servers: Arc<HashMap<String, McpServerState>>,
@@ -125,6 +127,9 @@ pub struct GatewayHttpState {
 
 impl GatewayHttpState {
     pub fn new(gateway: Gateway) -> Self {
+        let redactor = Arc::new(GatewayRedactor::from_config(
+            &gateway.config.observability.redaction,
+        ));
         let mut proxy_backend_backpressure: HashMap<String, Arc<Semaphore>> = HashMap::new();
         for backend in &gateway.config.backends {
             let Some(max_in_flight) = backend.max_in_flight else {
@@ -138,6 +143,7 @@ impl GatewayHttpState {
 
         Self {
             gateway: Arc::new(Mutex::new(gateway)),
+            redactor,
             proxy_backends: Arc::new(HashMap::new()),
             a2a_agents: Arc::new(HashMap::new()),
             mcp_servers: Arc::new(HashMap::new()),
@@ -548,18 +554,6 @@ async fn handle_gateway(
     if let Some(store) = state.sqlite_store.as_ref() {
         if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
             let _ = store.record_spent_tokens(virtual_key_id, tokens).await;
-            let _ = store
-                .append_audit_log(
-                    "gateway",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "virtual_key_id": virtual_key_id,
-                        "model": &model,
-                        "tokens": tokens,
-                        "ok": result.is_ok(),
-                    }),
-                )
-                .await;
         }
     }
 
@@ -567,19 +561,23 @@ async fn handle_gateway(
     if let Some(store) = state.redis_store.as_ref() {
         if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
             let _ = store.record_spent_tokens(virtual_key_id, tokens).await;
-            let _ = store
-                .append_audit_log(
-                    "gateway",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "virtual_key_id": virtual_key_id,
-                        "model": &model,
-                        "tokens": tokens,
-                        "ok": result.is_ok(),
-                    }),
-                )
-                .await;
         }
+    }
+
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
+        append_audit_log(
+            &state,
+            "gateway",
+            serde_json::json!({
+                "request_id": &request_id,
+                "virtual_key_id": virtual_key_id,
+                "model": &model,
+                "tokens": tokens,
+                "ok": result.is_ok(),
+            }),
+        )
+        .await;
     }
 
     match result {

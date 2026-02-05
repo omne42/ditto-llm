@@ -426,6 +426,7 @@ fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Val
         return;
     }
 
+    let payload = state.redactor.redact(payload);
     let record = serde_json::json!({
         "ts_ms": SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -435,6 +436,30 @@ fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Val
         "payload": payload,
     });
     eprintln!("{record}");
+}
+
+#[cfg(feature = "sdk")]
+fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
+    let Some(logger) = state.devtools.as_ref() else {
+        return;
+    };
+    let payload = state.redactor.redact(payload);
+    let _ = logger.log_event(kind, payload);
+}
+
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+async fn append_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
+    let payload = state.redactor.redact(payload);
+
+    #[cfg(feature = "gateway-store-sqlite")]
+    if let Some(store) = state.sqlite_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload.clone()).await;
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let Some(store) = state.redis_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload).await;
+    }
 }
 
 type ProxyBodyStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
@@ -492,4 +517,3 @@ fn proxy_body_from_bytes_with_permit(bytes: Bytes, proxy_permits: ProxyPermits) 
     };
     Body::from_stream(stream)
 }
-

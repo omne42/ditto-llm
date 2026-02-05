@@ -30,6 +30,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");

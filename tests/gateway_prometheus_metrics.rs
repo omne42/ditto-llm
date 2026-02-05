@@ -74,6 +74,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -190,6 +191,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_llm:
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

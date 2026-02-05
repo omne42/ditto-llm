@@ -79,6 +79,8 @@ fn ensure_admin(
 
 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
 async fn append_admin_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
+    let payload = state.redactor.redact(payload);
+
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
@@ -317,6 +319,7 @@ mod admin_auth_tests {
             },
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
+            observability: Default::default(),
         };
         GatewayHttpState::new(crate::gateway::Gateway::new(config))
     }

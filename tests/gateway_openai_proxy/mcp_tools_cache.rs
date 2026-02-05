@@ -107,6 +107,7 @@ async fn openai_compat_proxy_caches_mcp_tools_list_between_requests() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

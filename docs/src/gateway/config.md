@@ -10,7 +10,8 @@ Ditto 支持用 **JSON** 表达配置；如果你希望用 YAML，也可以启�
   "virtual_keys": [ ... ],
   "router": { ... },
   "a2a_agents": [ ... ],
-  "mcp_servers": [ ... ]
+  "mcp_servers": [ ... ],
+  "observability": { ... }
 }
 ```
 
@@ -213,3 +214,45 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `url` 同时接受别名字段 `http_url`
 
 使用方式与端点说明见「Gateway → MCP Gateway（/mcp + tools）」。
+
+## observability：观测与脱敏（重要）
+
+`observability.redaction` 定义了 Ditto Gateway 写出的观测数据如何脱敏，包括：
+
+- 结构化 JSON logs（`--json-logs`）
+- 审计日志（sqlite/redis store）
+- Devtools JSONL（`--devtools`）
+
+> 这不是“安全万无一失”的魔法，而是把泄露面收敛到一处可配置的策略。生产环境仍需要最小权限、日志保留策略与访问控制。
+
+### 默认行为（开箱即用）
+
+默认会把匹配到的敏感信息替换为 `"<redacted>"`：
+
+- 按 key 名脱敏（不区分大小写）：`authorization` / `token` / `secret` / `api_key` / `password` 等
+- 对 `path` / `url` / `base_url` / `endpoint` 这类字段的字符串值：会把 URL query 中匹配到的参数值脱敏（例如 `?api_key=...` / `?token=...`）
+- 额外正则（默认）：`Bearer <...>` 与 `sk-...` 风格 token
+
+### 配置示例
+
+```json
+{
+  "observability": {
+    "redaction": {
+      "replacement": "<redacted>",
+      "redact_headers": ["authorization", "x-api-key"],
+      "redact_key_names": ["token", "api_key", "secret"],
+      "sanitize_query_in_keys": ["path", "url", "base_url", "endpoint"],
+      "redact_query_params": ["api_key", "token"],
+      "redact_json_pointers": ["/request/headers/authorization"],
+      "redact_regexes": ["(?i)bearer\\s+[^\\s]+", "sk-[A-Za-z0-9]{10,}"]
+    }
+  }
+}
+```
+
+说明：
+
+- “按 key 名脱敏”作用于任意 JSON（不仅限 headers）。这是一种务实的策略：不要把 token 放进 payload 里指望“你会记得别打印”。
+- 如果你真的要关闭脱敏（不推荐），把上面所有 `redact_*` 列表设为空数组即可；`replacement` 仍必须是非空字符串。
+- `ditto-gateway` 启动时会校验 `redact_json_pointers` 与 `redact_regexes`，避免带着错误配置在生产里“以为自己脱敏了”。

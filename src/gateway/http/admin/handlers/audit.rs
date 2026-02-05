@@ -48,6 +48,9 @@ async fn list_audit_logs(
                     == Some(tenant_id)
             });
         }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
         return Ok(Json(logs));
     }
 
@@ -70,6 +73,9 @@ async fn list_audit_logs(
                     .and_then(serde_json::Value::as_str)
                     == Some(tenant_id)
             });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
         }
         return Ok(Json(logs));
     }
@@ -162,6 +168,9 @@ async fn export_audit_logs(
                     == Some(tenant_id)
             });
         }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
         return render_audit_export(&format, logs);
     }
 
@@ -184,6 +193,9 @@ async fn export_audit_logs(
                     .and_then(serde_json::Value::as_str)
                     == Some(tenant_id)
             });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
         }
         return render_audit_export(&format, logs);
     }

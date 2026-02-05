@@ -31,11 +31,16 @@ async fn handle_openai_compat_proxy(
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_timer_start = Instant::now();
     #[cfg(feature = "gateway-otel")]
+    let otel_path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    #[cfg(feature = "gateway-otel")]
     let proxy_span = tracing::info_span!(
         "ditto.gateway.proxy",
         request_id = %request_id,
         method = %parts.method,
-        path = %path_and_query,
+        path = %otel_path,
         model = tracing::field::Empty,
         virtual_key_id = tracing::field::Empty,
         backend = tracing::field::Empty,

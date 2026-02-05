@@ -10,6 +10,108 @@ use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
 };
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GatewayObservabilityConfig {
+    #[serde(default)]
+    pub redaction: GatewayRedactionConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GatewayRedactionConfig {
+    #[serde(default = "default_redaction_replacement")]
+    pub replacement: String,
+    #[serde(default = "default_redact_headers")]
+    pub redact_headers: Vec<String>,
+    #[serde(default = "default_redact_key_names")]
+    pub redact_key_names: Vec<String>,
+    #[serde(default = "default_redact_query_params")]
+    pub redact_query_params: Vec<String>,
+    #[serde(default)]
+    pub redact_json_pointers: Vec<String>,
+    #[serde(default = "default_redact_regexes")]
+    pub redact_regexes: Vec<String>,
+    #[serde(default = "default_sanitize_query_in_keys")]
+    pub sanitize_query_in_keys: Vec<String>,
+}
+
+impl Default for GatewayRedactionConfig {
+    fn default() -> Self {
+        Self {
+            replacement: default_redaction_replacement(),
+            redact_headers: default_redact_headers(),
+            redact_key_names: default_redact_key_names(),
+            redact_query_params: default_redact_query_params(),
+            redact_json_pointers: Vec::new(),
+            redact_regexes: default_redact_regexes(),
+            sanitize_query_in_keys: default_sanitize_query_in_keys(),
+        }
+    }
+}
+
+impl GatewayRedactionConfig {
+    pub fn validate(&self) -> Result<(), super::GatewayError> {
+        super::redaction::GatewayRedactor::validate_config(self)
+    }
+}
+
+fn default_redaction_replacement() -> String {
+    "<redacted>".to_string()
+}
+
+fn default_redact_headers() -> Vec<String> {
+    vec![
+        "authorization".to_string(),
+        "proxy-authorization".to_string(),
+        "x-api-key".to_string(),
+        "x-litellm-api-key".to_string(),
+        "x-admin-token".to_string(),
+        "x-ditto-virtual-key".to_string(),
+    ]
+}
+
+fn default_redact_key_names() -> Vec<String> {
+    vec![
+        "virtual_key".to_string(),
+        "api_key".to_string(),
+        "apikey".to_string(),
+        "token".to_string(),
+        "access_token".to_string(),
+        "refresh_token".to_string(),
+        "client_secret".to_string(),
+        "secret".to_string(),
+        "password".to_string(),
+        "session_token".to_string(),
+    ]
+}
+
+fn default_redact_query_params() -> Vec<String> {
+    vec![
+        "api_key".to_string(),
+        "api-key".to_string(),
+        "key".to_string(),
+        "token".to_string(),
+        "access_token".to_string(),
+        "refresh_token".to_string(),
+        "authorization".to_string(),
+    ]
+}
+
+fn default_sanitize_query_in_keys() -> Vec<String> {
+    vec![
+        "path".to_string(),
+        "url".to_string(),
+        "base_url".to_string(),
+        "endpoint".to_string(),
+    ]
+}
+
+fn default_redact_regexes() -> Vec<String> {
+    vec![
+        "(?i)bearer\\s+[^\\s]+".to_string(),
+        "sk-[A-Za-z0-9]{10,}".to_string(),
+    ]
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayConfig {
     #[serde(default)]
@@ -20,6 +122,8 @@ pub struct GatewayConfig {
     pub a2a_agents: Vec<A2aAgentConfig>,
     #[serde(default)]
     pub mcp_servers: Vec<McpServerConfig>,
+    #[serde(default)]
+    pub observability: GatewayObservabilityConfig,
 }
 
 impl GatewayConfig {
@@ -52,6 +156,11 @@ impl GatewayConfig {
         for server in &mut self.mcp_servers {
             server.resolve_secrets(env).await?;
         }
+        Ok(())
+    }
+
+    pub fn validate(&self) -> Result<(), super::GatewayError> {
+        self.observability.redaction.validate()?;
         Ok(())
     }
 }
@@ -661,6 +770,7 @@ mod tests {
             },
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
+            observability: Default::default(),
         };
 
         config.resolve_secrets(&env).await.expect("resolve secrets");

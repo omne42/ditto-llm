@@ -230,15 +230,14 @@ async fn litellm_key_generate(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "litellm.key.generate",
-            serde_json::json!({
-                "key_id": &virtual_key.id,
-                "tenant_id": virtual_key.tenant_id.as_deref(),
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "litellm.key.generate",
+        serde_json::json!({
+            "key_id": &virtual_key.id,
+            "tenant_id": virtual_key.tenant_id.as_deref(),
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
@@ -442,15 +441,14 @@ async fn litellm_key_update(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "litellm.key.update",
-            serde_json::json!({
-                "key_id": &key.id,
-                "tenant_id": key.tenant_id.as_deref(),
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "litellm.key.update",
+        serde_json::json!({
+            "key_id": &key.id,
+            "tenant_id": key.tenant_id.as_deref(),
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
@@ -488,6 +486,7 @@ async fn litellm_key_delete(
     }
 
     let mut deleted_keys: Vec<String> = Vec::new();
+    let mut deleted_key_ids: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     let persisted_keys = {
         let mut gateway = state.gateway.lock().await;
@@ -517,6 +516,7 @@ async fn litellm_key_delete(
             }
             if gateway.remove_virtual_key(&found_id).is_some() {
                 deleted_keys.push(alias);
+                deleted_key_ids.push(found_id.clone());
                 current.retain(|key| key.id != found_id);
             } else {
                 missing.push(alias);
@@ -547,6 +547,7 @@ async fn litellm_key_delete(
             }
             if gateway.remove_virtual_key(&found_id).is_some() {
                 deleted_keys.push(token);
+                deleted_key_ids.push(found_id.clone());
                 current.retain(|key| key.id != found_id);
             } else {
                 missing.push(token);
@@ -567,22 +568,22 @@ async fn litellm_key_delete(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "litellm.key.delete",
-            serde_json::json!({
-                "deleted": deleted_keys.len(),
-                "tenant_id": admin.tenant_id.as_deref(),
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "litellm.key.delete",
+        serde_json::json!({
+            "deleted": deleted_keys.len(),
+            "tenant_id": admin.tenant_id.as_deref(),
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
         &state,
         "litellm.key.delete",
         serde_json::json!({
-            "deleted_keys": &deleted_keys,
+            "deleted": deleted_key_ids.len(),
+            "deleted_key_ids": &deleted_key_ids,
             "tenant_id": admin.tenant_id.as_deref(),
         }),
     )

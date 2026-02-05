@@ -23,6 +23,7 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -102,6 +103,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -214,6 +216,7 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -280,4 +283,3 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
 
     mock.assert_calls(2);
 }
-

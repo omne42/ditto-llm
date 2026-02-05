@@ -231,15 +231,14 @@ async fn litellm_key_regenerate_inner(
     persist_virtual_keys(&state, &persisted_keys).await?;
 
     #[cfg(feature = "sdk")]
-    if let Some(logger) = state.devtools.as_ref() {
-        let _ = logger.log_event(
-            "litellm.key.regenerate",
-            serde_json::json!({
-                "key_id": &key.id,
-                "tenant_id": key.tenant_id.as_deref(),
-            }),
-        );
-    }
+    emit_devtools_log(
+        &state,
+        "litellm.key.regenerate",
+        serde_json::json!({
+            "key_id": &key.id,
+            "tenant_id": key.tenant_id.as_deref(),
+        }),
+    );
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(

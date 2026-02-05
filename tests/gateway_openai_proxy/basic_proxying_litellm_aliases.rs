@@ -26,6 +26,7 @@ async fn openai_compat_proxy_forwards_moderations_without_v1_prefix() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -79,6 +80,7 @@ async fn openai_compat_proxy_forwards_files_path_without_v1_prefix() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

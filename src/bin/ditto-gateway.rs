@@ -348,6 +348,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    config.validate()?;
+
     let mut proxy_backends = std::collections::HashMap::new();
     #[cfg(feature = "gateway-translation")]
     let mut translation_backends = std::collections::HashMap::new();

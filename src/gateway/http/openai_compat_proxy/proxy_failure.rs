@@ -43,15 +43,7 @@ async fn finalize_openai_compat_proxy_failure(
             "error_code": err_code,
             "error_message": err_message,
         });
-
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.sqlite_store.as_ref() {
-            let _ = store.append_audit_log("proxy.error", payload.clone()).await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.redis_store.as_ref() {
-            let _ = store.append_audit_log("proxy.error", payload.clone()).await;
-        }
+        append_audit_log(state, "proxy.error", payload).await;
     }
 
     emit_json_log(

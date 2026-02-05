@@ -52,7 +52,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                 let _ = store
                                     .append_audit_log(
                                         "proxy.blocked",
-                                        serde_json::json!({
+                                        state.redactor.redact(serde_json::json!({
                                             "request_id": request_id,
                                             "virtual_key_id": virtual_key_id,
                                             "reason": "budget_exceeded",
@@ -61,7 +61,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                             "charge_tokens": charge_tokens,
                                             "path": path_and_query,
                                             "model": model,
-                                        }),
+                                        })),
                                     )
                                     .await;
                                 emit_json_log(
@@ -84,14 +84,14 @@ async fn reserve_proxy_token_budgets_for_request(
                                 let _ = store
                                     .append_audit_log(
                                         "proxy.blocked",
-                                        serde_json::json!({
+                                        state.redactor.redact(serde_json::json!({
                                             "request_id": request_id,
                                             "virtual_key_id": virtual_key_id,
                                             "reason": "storage_error",
                                             "error": err.to_string(),
                                             "path": path_and_query,
                                             "model": model,
-                                        }),
+                                        })),
                                     )
                                     .await;
                                 return Err(openai_error(
@@ -120,7 +120,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                         let _ = store
                                             .append_audit_log(
                                                 "proxy.blocked",
-                                                serde_json::json!({
+                                                state.redactor.redact(serde_json::json!({
                                                     "request_id": request_id,
                                                     "virtual_key_id": virtual_key_id,
                                                     "reason": "budget_exceeded",
@@ -129,7 +129,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                                     "charge_tokens": charge_tokens,
                                                     "path": path_and_query,
                                                     "model": model,
-                                                }),
+                                                })),
                                             )
                                             .await;
                                         emit_json_log(
@@ -151,14 +151,14 @@ async fn reserve_proxy_token_budgets_for_request(
                                         let _ = store
                                             .append_audit_log(
                                                 "proxy.blocked",
-                                                serde_json::json!({
+                                                state.redactor.redact(serde_json::json!({
                                                     "request_id": request_id,
                                                     "virtual_key_id": virtual_key_id,
                                                     "reason": "storage_error",
                                                     "error": err.to_string(),
                                                     "path": path_and_query,
                                                     "model": model,
-                                                }),
+                                                })),
                                             )
                                             .await;
                                         return Err(openai_error(
@@ -198,7 +198,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                     let _ = store
                                         .append_audit_log(
                                             "proxy.blocked",
-                                            serde_json::json!({
+                                            state.redactor.redact(serde_json::json!({
                                                 "request_id": request_id,
                                                 "virtual_key_id": virtual_key_id,
                                                 "reason": "budget_exceeded",
@@ -207,7 +207,7 @@ async fn reserve_proxy_token_budgets_for_request(
                                                 "charge_tokens": charge_tokens,
                                                 "path": path_and_query,
                                                 "model": model,
-                                            }),
+                                            })),
                                         )
                                         .await;
                                     emit_json_log(
@@ -229,14 +229,14 @@ async fn reserve_proxy_token_budgets_for_request(
                                     let _ = store
                                         .append_audit_log(
                                             "proxy.blocked",
-                                            serde_json::json!({
+                                            state.redactor.redact(serde_json::json!({
                                                 "request_id": request_id,
                                                 "virtual_key_id": virtual_key_id,
                                                 "reason": "storage_error",
                                                 "error": err.to_string(),
                                                 "path": path_and_query,
                                                 "model": model,
-                                            }),
+                                            })),
                                         )
                                         .await;
                                     return Err(openai_error(
@@ -412,7 +412,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                 let _ = store
                                     .append_audit_log(
                                         "proxy.blocked",
-                                        serde_json::json!({
+                                        state.redactor.redact(serde_json::json!({
                                             "request_id": request_id,
                                             "virtual_key_id": virtual_key_id,
                                             "reason": "cost_budget_exceeded",
@@ -421,7 +421,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                             "charge_cost_usd_micros": charge_cost_usd_micros,
                                             "path": path_and_query,
                                             "model": model,
-                                        }),
+                                        })),
                                     )
                                     .await;
                                 emit_json_log(
@@ -451,14 +451,14 @@ async fn reserve_proxy_cost_budgets_for_request(
                                 let _ = store
                                     .append_audit_log(
                                         "proxy.blocked",
-                                        serde_json::json!({
+                                        state.redactor.redact(serde_json::json!({
                                             "request_id": request_id,
                                             "virtual_key_id": virtual_key_id,
                                             "reason": "storage_error",
                                             "error": err.to_string(),
                                             "path": path_and_query,
                                             "model": model,
-                                        }),
+                                        })),
                                     )
                                     .await;
                                 return Err(openai_error(
@@ -495,7 +495,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                         let _ = store
                                             .append_audit_log(
                                                 "proxy.blocked",
-                                                serde_json::json!({
+                                                state.redactor.redact(serde_json::json!({
                                                     "request_id": request_id,
                                                     "virtual_key_id": virtual_key_id,
                                                     "reason": "cost_budget_exceeded",
@@ -504,7 +504,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                                     "charge_cost_usd_micros": charge_cost_usd_micros,
                                                     "path": path_and_query,
                                                     "model": model,
-                                                }),
+                                                })),
                                             )
                                             .await;
                                         emit_json_log(
@@ -534,14 +534,14 @@ async fn reserve_proxy_cost_budgets_for_request(
                                         let _ = store
                                             .append_audit_log(
                                                 "proxy.blocked",
-                                                serde_json::json!({
+                                                state.redactor.redact(serde_json::json!({
                                                     "request_id": request_id,
                                                     "virtual_key_id": virtual_key_id,
                                                     "reason": "storage_error",
                                                     "error": err.to_string(),
                                                     "path": path_and_query,
                                                     "model": model,
-                                                }),
+                                                })),
                                             )
                                             .await;
                                         return Err(openai_error(
@@ -589,7 +589,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                     let _ = store
                                         .append_audit_log(
                                             "proxy.blocked",
-                                            serde_json::json!({
+                                            state.redactor.redact(serde_json::json!({
                                                 "request_id": request_id,
                                                 "virtual_key_id": virtual_key_id,
                                                 "reason": "cost_budget_exceeded",
@@ -598,7 +598,7 @@ async fn reserve_proxy_cost_budgets_for_request(
                                                 "charge_cost_usd_micros": charge_cost_usd_micros,
                                                 "path": path_and_query,
                                                 "model": model,
-                                            }),
+                                            })),
                                         )
                                         .await;
                                     emit_json_log(
@@ -628,14 +628,14 @@ async fn reserve_proxy_cost_budgets_for_request(
                                     let _ = store
                                         .append_audit_log(
                                             "proxy.blocked",
-                                            serde_json::json!({
+                                            state.redactor.redact(serde_json::json!({
                                                 "request_id": request_id,
                                                 "virtual_key_id": virtual_key_id,
                                                 "reason": "storage_error",
                                                 "error": err.to_string(),
                                                 "path": path_and_query,
                                                 "model": model,
-                                            }),
+                                            })),
                                         )
                                         .await;
                                     return Err(openai_error(

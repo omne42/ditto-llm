@@ -55,5 +55,6 @@ cargo run --features "gateway-devtools" --bin ditto-gateway -- ./gateway.json \
 
 注意事项：
 
-- devtools 日志可能包含敏感信息（尤其是管理面 payload）；生产环境务必做好权限与脱敏。
+- 你在自己的服务里直接用 `DevtoolsLogger` 时，不会自动脱敏；生产环境务必做好权限与脱敏。
+- Ditto Gateway 通过 `--devtools` 写入的 JSONL 会应用 `gateway.json` 的 `observability.redaction` 统一脱敏策略（JSON logs / audit 同一套）。
 - JSONL 文件会持续 append；建议配合日志轮转或定期清理。

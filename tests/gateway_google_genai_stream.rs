@@ -91,6 +91,7 @@ async fn gateway_google_genai_stream_chunks_are_incremental() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

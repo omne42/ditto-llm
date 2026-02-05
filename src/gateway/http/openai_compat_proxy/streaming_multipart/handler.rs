@@ -935,15 +935,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
             "spent_cost_usd_micros": spent_cost_usd_micros,
             "body_len": content_length,
         });
-
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.sqlite_store.as_ref() {
-            let _ = store.append_audit_log("proxy", payload.clone()).await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.redis_store.as_ref() {
-            let _ = store.append_audit_log("proxy", payload.clone()).await;
-        }
+        append_audit_log(&state, "proxy", payload).await;
     }
 
     emit_json_log(

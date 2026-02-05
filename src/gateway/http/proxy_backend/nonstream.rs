@@ -311,15 +311,7 @@
                 "spent_cost_usd_micros": spent_cost_usd_micros,
                 "body_len": body.len(),
             });
-
-            #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.sqlite_store.as_ref() {
-                let _ = store.append_audit_log("proxy", payload.clone()).await;
-            }
-            #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.redis_store.as_ref() {
-                let _ = store.append_audit_log("proxy", payload.clone()).await;
-            }
+            append_audit_log(state, "proxy", payload).await;
         }
 
         emit_json_log(
@@ -344,17 +336,16 @@
         );
 
         #[cfg(feature = "sdk")]
-        if let Some(logger) = state.devtools.as_ref() {
-            let _ = logger.log_event(
-                "proxy.response",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "status": status.as_u16(),
-                    "path": path_and_query,
-                    "backend": &backend_name,
-                }),
-            );
-        }
+        emit_devtools_log(
+            state,
+            "proxy.response",
+            serde_json::json!({
+                "request_id": &request_id,
+                "status": status.as_u16(),
+                "path": path_and_query,
+                "backend": &backend_name,
+            }),
+        );
 
         #[cfg(feature = "gateway-otel")]
         {

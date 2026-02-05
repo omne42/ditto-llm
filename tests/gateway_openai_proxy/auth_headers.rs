@@ -27,6 +27,7 @@ async fn openai_compat_proxy_accepts_x_litellm_api_key_for_virtual_key_auth() {
         },
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
+        observability: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -52,4 +53,3 @@ async fn openai_compat_proxy_accepts_x_litellm_api_key_for_virtual_key_auth() {
     assert_eq!(bytes, r#"{"id":"ok"}"#);
     mock.assert();
 }
-
