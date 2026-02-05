@@ -535,31 +535,49 @@ async fn proxy_response(
             && {
                 #[cfg(feature = "gateway-proxy-cache")]
                 {
-                    let content_length = upstream_headers
-                        .get("content-length")
-                        .and_then(|value| value.to_str().ok())
-                        .and_then(|value| value.parse::<usize>().ok());
-
-                    _state.proxy_cache_config.as_ref().is_some_and(|config| {
-                        content_length.is_some_and(|len| len <= config.max_body_bytes)
-                    })
-                }
+	                    let content_length = upstream_headers
+	                        .get("content-length")
+	                        .and_then(|value| value.to_str().ok())
+	                        .and_then(|value| value.parse::<usize>().ok());
+	                    _state.proxy_cache_config.as_ref().is_some_and(|config| {
+	                        content_length.is_some_and(|len| len <= config.max_body_bytes)
+	                    })
+	                }
                 #[cfg(not(feature = "gateway-proxy-cache"))]
                 {
                     false
                 }
+	            };
+	        let mut headers = upstream_headers;
+	        apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+	        if let Some(cache_key) = _cache_key {
+	            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+	                headers.insert("x-ditto-cache-key", value);
+	            }
+	        }
+	        if should_buffer {
+	            let max_body_bytes =
+	                _state.proxy_cache_config.as_ref().map(|c| c.max_body_bytes).unwrap_or(1);
+	            let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
+                upstream,
+                &headers,
+                max_body_bytes,
+            )
+            .await
+            {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    return openai_error(
+                        StatusCode::BAD_GATEWAY,
+                        "api_error",
+                        Some("invalid_backend_response"),
+                        format_args!(
+                            "backend response too large to buffer/cache (max={max_body_bytes}): {err}; disable proxy cache or use streaming"
+                        ),
+                    )
+                    .into_response();
+                }
             };
-
-        let mut headers = upstream_headers;
-        apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        if let Some(cache_key) = _cache_key {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
-        }
-
-        if should_buffer {
-            let bytes = upstream.bytes().await.unwrap_or_default();
 
             #[cfg(feature = "gateway-proxy-cache")]
             if status.is_success() {

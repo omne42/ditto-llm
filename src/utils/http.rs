@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use futures_util::StreamExt;
+use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 
 use crate::{DittoError, Result};
@@ -49,6 +50,39 @@ async fn response_bytes_truncated(
         }
     }
     (out, truncated)
+}
+
+pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
+    response: reqwest::Response,
+    headers: &HeaderMap,
+    max_bytes: usize,
+) -> Result<Bytes> {
+    let max_bytes = max_bytes.max(1);
+
+    let content_length = headers
+        .get(reqwest::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<usize>().ok());
+    if content_length.is_some_and(|len| len > max_bytes) {
+        return Err(DittoError::InvalidResponse(format!(
+            "content-length={:?} exceeds max bytes ({max_bytes})",
+            content_length
+        )));
+    }
+
+    let mut stream = response.bytes_stream();
+    let mut buffered = bytes::BytesMut::new();
+    while let Some(next) = stream.next().await {
+        let chunk = next?;
+        if buffered.len().saturating_add(chunk.len()) > max_bytes {
+            return Err(DittoError::InvalidResponse(format!(
+                "response exceeded max bytes ({max_bytes})"
+            )));
+        }
+        buffered.extend_from_slice(chunk.as_ref());
+    }
+
+    Ok(buffered.freeze())
 }
 
 pub(crate) async fn send_checked(req: reqwest::RequestBuilder) -> Result<reqwest::Response> {

@@ -242,7 +242,7 @@ async fn process_raw_responses_sse<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use httpmock::{Method::POST, MockServer};
+    use httpmock::{Method::GET, Method::POST, MockServer};
     use serde_json::json;
     use std::collections::BTreeMap;
     use tokio::sync::mpsc;
@@ -296,6 +296,38 @@ mod tests {
 
         mock.assert_async().await;
         assert_eq!(id, "file_123");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn download_file_content_is_bounded() -> crate::Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(GET)
+                    .path("/v1/files/file_123/content")
+                    .header("authorization", "Bearer sk-test");
+                then.status(200)
+                    .header("content-type", "text/plain")
+                    .body("hello world");
+            })
+            .await;
+
+        let client = OpenAI::new("sk-test")
+            .with_base_url(server.url("/v1"))
+            .with_max_binary_response_bytes(4);
+        let err = client.download_file_content("file_123").await.unwrap_err();
+
+        mock.assert_async().await;
+        match err {
+            DittoError::InvalidResponse(message) => {
+                assert!(message.contains("exceeds max bytes"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
         Ok(())
     }
 

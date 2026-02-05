@@ -287,12 +287,21 @@ pub(super) async fn speak(
         crate::utils::http::send_checked(client.apply_auth(client.http.post(url)).json(&body))
             .await?;
 
-    let media_type = response
-        .headers()
+    let headers = response.headers().clone();
+    let media_type = headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(|v| v.to_string());
-    let bytes = response.bytes().await?;
+    let max_bytes = client.max_binary_response_bytes;
+    let bytes = crate::utils::http::read_reqwest_body_bytes_bounded_with_content_length(
+        response, &headers, max_bytes,
+    )
+    .await
+    .map_err(|err| {
+        DittoError::InvalidResponse(format!(
+            "audio/speech response too large (max={max_bytes}): {err}"
+        ))
+    })?;
 
     Ok(SpeechResponse {
         audio: bytes.to_vec(),

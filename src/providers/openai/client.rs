@@ -47,6 +47,11 @@ impl OpenAI {
         self
     }
 
+    pub fn with_max_binary_response_bytes(mut self, max_bytes: usize) -> Self {
+        self.client = self.client.with_max_binary_response_bytes(max_bytes);
+        self
+    }
+
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY"];
         Ok(Self {

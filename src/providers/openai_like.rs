@@ -13,6 +13,7 @@ use crate::{DittoError, Result};
 
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const HTTP_TIMEOUT: Duration = Duration::from_secs(300);
+pub(crate) const DEFAULT_MAX_BINARY_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 
 pub(crate) fn join_endpoint(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim_end_matches('/');
@@ -99,6 +100,7 @@ pub(crate) struct OpenAiLikeClient {
     pub(crate) auth: Option<RequestAuth>,
     pub(crate) model: String,
     pub(crate) http_query_params: BTreeMap<String, String>,
+    pub(crate) max_binary_response_bytes: usize,
 }
 
 impl OpenAiLikeClient {
@@ -113,6 +115,7 @@ impl OpenAiLikeClient {
             auth,
             model: String::new(),
             http_query_params: BTreeMap::new(),
+            max_binary_response_bytes: DEFAULT_MAX_BINARY_RESPONSE_BYTES,
         }
     }
 
@@ -128,6 +131,11 @@ impl OpenAiLikeClient {
 
     pub(crate) fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
+        self
+    }
+
+    pub(crate) fn with_max_binary_response_bytes(mut self, max_bytes: usize) -> Self {
+        self.max_binary_response_bytes = max_bytes.max(1);
         self
     }
 
@@ -233,8 +241,14 @@ impl OpenAiLikeClient {
 
     pub(crate) async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
         let url = format!("{}/{}/content", self.endpoint("files"), file_id.trim());
-        self::download_file_content(&self.http, url, self.auth.as_ref(), &self.http_query_params)
-            .await
+        self::download_file_content(
+            &self.http,
+            url,
+            self.auth.as_ref(),
+            &self.http_query_params,
+            self.max_binary_response_bytes,
+        )
+        .await
     }
 }
 
@@ -312,17 +326,27 @@ pub(crate) async fn download_file_content(
     url: String,
     auth: Option<&RequestAuth>,
     http_query_params: &BTreeMap<String, String>,
+    max_bytes: usize,
 ) -> Result<FileContent> {
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
     let response = crate::utils::http::send_checked(req).await?;
 
-    let media_type = response
-        .headers()
+    let headers = response.headers().clone();
+    let media_type = headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_string());
-    let bytes = response.bytes().await?.to_vec();
+    let bytes = crate::utils::http::read_reqwest_body_bytes_bounded_with_content_length(
+        response, &headers, max_bytes,
+    )
+    .await
+    .map_err(|err| {
+        DittoError::InvalidResponse(format!(
+            "files download response too large (max={max_bytes}): {err}"
+        ))
+    })?
+    .to_vec();
 
     Ok(FileContent { bytes, media_type })
 }

@@ -45,6 +45,11 @@ macro_rules! define_openai_like_audio_transcription {
                 self
             }
 
+            pub fn with_max_binary_response_bytes(mut self, max_bytes: usize) -> Self {
+                self.client = self.client.with_max_binary_response_bytes(max_bytes);
+                self
+            }
+
             pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
                 const DEFAULT_KEYS: &[&str] = $default_keys;
                 Ok(Self {
@@ -140,6 +145,11 @@ macro_rules! define_openai_like_speech {
 
             pub fn with_model(mut self, model: impl Into<String>) -> Self {
                 self.client = self.client.with_model(model);
+                self
+            }
+
+            pub fn with_max_binary_response_bytes(mut self, max_bytes: usize) -> Self {
+                self.client = self.client.with_max_binary_response_bytes(max_bytes);
                 self
             }
 
@@ -444,6 +454,51 @@ mod tests {
             mock.assert_async().await;
             assert_eq!(response.audio, b"MP3DATA".to_vec());
             assert_eq!(response.media_type.as_deref(), Some("audio/mpeg"));
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn speak_is_bounded() -> Result<()> {
+            if crate::utils::test_support::should_skip_httpmock() {
+                return Ok(());
+            }
+            let server = MockServer::start_async().await;
+            let mock = server
+                .mock_async(|when, then| {
+                    when.method(POST)
+                        .path("/v1/audio/speech")
+                        .body_includes("\"model\":\"gpt-4o-mini-tts\"")
+                        .body_includes("\"voice\":\"alloy\"")
+                        .body_includes("\"input\":\"hi\"");
+                    then.status(200)
+                        .header("content-type", "audio/mpeg")
+                        .body("MP3DATA");
+                })
+                .await;
+
+            let client = OpenAISpeech::new("")
+                .with_base_url(server.url("/v1"))
+                .with_model("gpt-4o-mini-tts")
+                .with_max_binary_response_bytes(4);
+            let err = client
+                .speak(SpeechRequest {
+                    input: "hi".to_string(),
+                    voice: "alloy".to_string(),
+                    model: None,
+                    response_format: Some(SpeechResponseFormat::Mp3),
+                    speed: None,
+                    provider_options: None,
+                })
+                .await
+                .unwrap_err();
+
+            mock.assert_async().await;
+            match err {
+                DittoError::InvalidResponse(message) => {
+                    assert!(message.contains("exceeds max bytes"));
+                }
+                other => panic!("unexpected error: {other:?}"),
+            }
             Ok(())
         }
     }
