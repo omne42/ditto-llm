@@ -111,14 +111,44 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 | `ditto_gateway_proxy_requests_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的请求计数 |
 | `ditto_gateway_proxy_requests_by_model_total` | counter | `model` | 按 model 分组的请求计数 |
 | `ditto_gateway_proxy_requests_by_path_total` | counter | `path` | 按归一化 OpenAI 路径分组的请求计数 |
+| `ditto_gateway_proxy_rate_limited_total` | counter | - | 触发限流的请求计数 |
+| `ditto_gateway_proxy_rate_limited_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的限流计数 |
+| `ditto_gateway_proxy_rate_limited_by_model_total` | counter | `model` | 按 model 分组的限流计数 |
+| `ditto_gateway_proxy_rate_limited_by_path_total` | counter | `path` | 按 path 分组的限流计数 |
+| `ditto_gateway_proxy_guardrail_blocked_total` | counter | - | 被 guardrail 拦截的请求计数 |
+| `ditto_gateway_proxy_guardrail_blocked_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的 guardrail 拦截计数 |
+| `ditto_gateway_proxy_guardrail_blocked_by_model_total` | counter | `model` | 按 model 分组的 guardrail 拦截计数 |
+| `ditto_gateway_proxy_guardrail_blocked_by_path_total` | counter | `path` | 按 path 分组的 guardrail 拦截计数 |
+| `ditto_gateway_proxy_budget_exceeded_total` | counter | - | 预算超限（token/USD）的请求计数 |
+| `ditto_gateway_proxy_budget_exceeded_by_key_total` | counter | `virtual_key_id` | 按 virtual key id 分组的预算超限计数 |
+| `ditto_gateway_proxy_budget_exceeded_by_model_total` | counter | `model` | 按 model 分组的预算超限计数 |
+| `ditto_gateway_proxy_budget_exceeded_by_path_total` | counter | `path` | 按 path 分组的预算超限计数 |
 | `ditto_gateway_proxy_request_duration_seconds` | histogram | `path` | 端到端代理请求耗时（按 path） |
+| `ditto_gateway_proxy_request_duration_seconds_by_model` | histogram | `model` | 端到端代理请求耗时（按 model） |
 | `ditto_gateway_proxy_responses_total` | counter | `status` | 按 HTTP status 分组的响应计数 |
 | `ditto_gateway_proxy_responses_by_path_status_total` | counter | `path,status` | 按 path+status 分组的响应计数 |
+| `ditto_gateway_proxy_responses_by_backend_status_total` | counter | `backend,status` | 按 backend+status 分组的响应计数 |
+| `ditto_gateway_proxy_responses_by_model_status_total` | counter | `model,status` | 按 model+status 分组的响应计数 |
 | `ditto_gateway_proxy_backend_attempts_total` | counter | `backend` | 后端尝试次数（含 fallback） |
 | `ditto_gateway_proxy_backend_success_total` | counter | `backend` | 后端成功次数 |
 | `ditto_gateway_proxy_backend_failures_total` | counter | `backend` | 后端失败次数（网络错误/可重试 status 等） |
 | `ditto_gateway_proxy_backend_in_flight` | gauge | `backend` | 后端 in-flight 请求数（用于背压观测） |
 | `ditto_gateway_proxy_backend_request_duration_seconds` | histogram | `backend` | 后端请求耗时（按 backend） |
+| `ditto_gateway_proxy_stream_connections` | gauge | - | 当前活跃 SSE 流数量 |
+| `ditto_gateway_proxy_stream_connections_by_backend` | gauge | `backend` | 按 backend 分组的活跃 SSE 流数量 |
+| `ditto_gateway_proxy_stream_connections_by_path` | gauge | `path` | 按 path 分组的活跃 SSE 流数量 |
+| `ditto_gateway_proxy_stream_bytes_total` | counter | - | SSE 流累计输出字节数（best-effort） |
+| `ditto_gateway_proxy_stream_bytes_by_backend_total` | counter | `backend` | 按 backend 分组的 SSE 输出字节数 |
+| `ditto_gateway_proxy_stream_bytes_by_path_total` | counter | `path` | 按 path 分组的 SSE 输出字节数 |
+| `ditto_gateway_proxy_stream_completed_total` | counter | - | 正常完成的 SSE 流计数 |
+| `ditto_gateway_proxy_stream_completed_by_backend_total` | counter | `backend` | 按 backend 分组的正常完成 SSE 流计数 |
+| `ditto_gateway_proxy_stream_completed_by_path_total` | counter | `path` | 按 path 分组的正常完成 SSE 流计数 |
+| `ditto_gateway_proxy_stream_errors_total` | counter | - | 出错结束的 SSE 流计数（含 timeout/断流等） |
+| `ditto_gateway_proxy_stream_errors_by_backend_total` | counter | `backend` | 按 backend 分组的 SSE error 计数 |
+| `ditto_gateway_proxy_stream_errors_by_path_total` | counter | `path` | 按 path 分组的 SSE error 计数 |
+| `ditto_gateway_proxy_stream_aborted_total` | counter | - | 客户端提前断开导致的 SSE abort 计数（best-effort） |
+| `ditto_gateway_proxy_stream_aborted_by_backend_total` | counter | `backend` | 按 backend 分组的 SSE abort 计数 |
+| `ditto_gateway_proxy_stream_aborted_by_path_total` | counter | `path` | 按 path 分组的 SSE abort 计数 |
 | `ditto_gateway_proxy_cache_lookups_total` | counter | - | proxy cache 查找次数 |
 | `ditto_gateway_proxy_cache_lookups_by_path_total` | counter | `path` | 按 path 分组的 proxy cache 查找次数 |
 | `ditto_gateway_proxy_cache_hits_total` | counter | - | proxy cache 命中次数 |

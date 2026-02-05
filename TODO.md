@@ -135,7 +135,7 @@
     - 为脱敏策略补充单测与文档（含“默认会脱什么、不脱什么”的契约）
   - 验证：
     - `cargo test --all-targets --all-features`
-- [ ] 观测：补齐更细粒度指标维度（按 model/provider 聚合、streaming 特有指标）
+- [x] 观测：补齐更细粒度指标维度（按 model/provider 聚合、streaming 特有指标）
   - DoD：
     - Prometheus 支持按 `model`/`provider` 聚合的 latency/错误/限流指标，并提供基数上限参数
     - streaming 侧提供关键指标（例如 SSE 连接数、stream bytes、abort/timeout 计数）

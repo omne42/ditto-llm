@@ -86,6 +86,13 @@
             &bytes[start..end]
         }
 
+        #[derive(Clone, Copy, Debug)]
+        enum StreamEnd {
+            Completed,
+            Error,
+            Aborted,
+        }
+
         struct ProxySseFinalizer {
             state: GatewayHttpState,
             backend_name: String,
@@ -94,6 +101,8 @@
             provider: String,
             method: String,
             path_and_query: String,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            metrics_path: String,
             model: Option<String>,
             upstream_model: Option<String>,
             service_tier: Option<String>,
@@ -115,7 +124,34 @@
         }
 
         impl ProxySseFinalizer {
-            async fn finalize(self, observed_usage: Option<ObservedUsage>) {
+            async fn finalize(
+                self,
+                observed_usage: Option<ObservedUsage>,
+                end: StreamEnd,
+                stream_bytes: u64,
+            ) {
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = self.state.prometheus_metrics.as_ref() {
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_stream_close(&self.backend_name, &self.metrics_path);
+                    metrics.record_proxy_stream_bytes(
+                        &self.backend_name,
+                        &self.metrics_path,
+                        stream_bytes,
+                    );
+                    match end {
+                        StreamEnd::Completed => {
+                            metrics.record_proxy_stream_completed(&self.backend_name, &self.metrics_path);
+                        }
+                        StreamEnd::Error => {
+                            metrics.record_proxy_stream_error(&self.backend_name, &self.metrics_path);
+                        }
+                        StreamEnd::Aborted => {
+                            metrics.record_proxy_stream_aborted(&self.backend_name, &self.metrics_path);
+                        }
+                    }
+                }
+
                 let spent_tokens = if self.spend_tokens {
                     observed_usage
                         .and_then(|usage| usage.total_tokens)
@@ -405,6 +441,7 @@
         struct ProxySseStreamState {
             upstream: ProxyBodyStream,
             tracker: SseUsageTracker,
+            bytes_sent: u64,
             finalizer: Option<ProxySseFinalizer>,
             _permits: ProxyPermits,
         }
@@ -415,17 +452,23 @@
                     return;
                 };
                 let observed = self.tracker.observed_usage();
-                tokio::spawn(async move { finalizer.finalize(observed).await });
+                let bytes_sent = self.bytes_sent;
+                tokio::spawn(async move {
+                    finalizer
+                        .finalize(observed, StreamEnd::Aborted, bytes_sent)
+                        .await;
+                });
             }
         }
 
         impl ProxySseStreamState {
-            async fn finalize(&mut self) {
+            async fn finalize(&mut self, end: StreamEnd) {
                 let Some(finalizer) = self.finalizer.take() else {
                     return;
                 };
                 let observed = self.tracker.observed_usage();
-                finalizer.finalize(observed).await;
+                let bytes_sent = self.bytes_sent;
+                finalizer.finalize(observed, end, bytes_sent).await;
             }
         }
 
@@ -474,6 +517,8 @@
             provider: protocol.clone(),
             method: parts.method.as_str().to_string(),
             path_and_query: path_and_query.to_string(),
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            metrics_path: metrics_path.to_string(),
             model: model.to_owned(),
             upstream_model: upstream_model.clone(),
             service_tier: service_tier.to_owned(),
@@ -494,9 +539,18 @@
             request_body_len: body.len(),
         };
 
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            metrics
+                .lock()
+                .await
+                .record_proxy_stream_open(&backend_name, metrics_path);
+        }
+
         let state = ProxySseStreamState {
             upstream: upstream_stream,
             tracker: SseUsageTracker::default(),
+            bytes_sent: 0,
             finalizer: Some(finalizer),
             _permits: proxy_permits.take(),
         };
@@ -504,15 +558,16 @@
         let stream = futures_util::stream::try_unfold(state, |mut state| async move {
             match state.upstream.next().await {
                 Some(Ok(chunk)) => {
+                    state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
                     state.tracker.ingest(&chunk);
                     Ok(Some((chunk, state)))
                 }
                 Some(Err(err)) => {
-                    state.finalize().await;
+                    state.finalize(StreamEnd::Error).await;
                     Err(err)
                 }
                 None => {
-                    state.finalize().await;
+                    state.finalize(StreamEnd::Completed).await;
                     Ok(None)
                 }
             }

@@ -73,9 +73,14 @@ async fn finalize_openai_compat_proxy_failure(
             .as_ref()
             .map(|(status, _)| status.as_u16())
             .unwrap_or(StatusCode::BAD_GATEWAY.as_u16());
+        let duration = metrics_timer_start.elapsed();
         let mut metrics = metrics.lock().await;
         metrics.record_proxy_response_status_by_path(metrics_path, status);
-        metrics.observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
+        if let Some(model) = ctx.model.as_deref() {
+            metrics.record_proxy_response_status_by_model(model, status);
+            metrics.observe_proxy_request_duration_by_model(model, duration);
+        }
+        metrics.observe_proxy_request_duration(metrics_path, duration);
     }
 
     ctx.last_err.unwrap_or_else(|| {

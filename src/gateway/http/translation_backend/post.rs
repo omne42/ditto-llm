@@ -23,6 +23,7 @@
 
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let duration = metrics_timer_start.elapsed();
                 let mut metrics = metrics.lock().await;
                 if spend_tokens {
                     metrics.record_proxy_backend_success(backend_name);
@@ -30,8 +31,13 @@
                     metrics.record_proxy_backend_failure(backend_name);
                 }
                 metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
+                metrics.record_proxy_response_status_by_backend(backend_name, status.as_u16());
+                if let Some(model) = model.as_deref() {
+                    metrics.record_proxy_response_status_by_model(model, status.as_u16());
+                    metrics.observe_proxy_request_duration_by_model(model, duration);
+                }
                 metrics
-                    .observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
+                    .observe_proxy_request_duration(metrics_path, duration);
             }
 
             #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]

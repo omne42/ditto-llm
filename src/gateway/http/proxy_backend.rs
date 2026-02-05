@@ -417,6 +417,7 @@ async fn attempt_proxy_backend(
                             status.is_server_error()
                         }
                     };
+                    let duration = metrics_timer_start.elapsed();
                     let mut metrics = metrics.lock().await;
                     if is_failure_status {
                         metrics.record_proxy_backend_failure(&backend_name);
@@ -424,10 +425,12 @@ async fn attempt_proxy_backend(
                         metrics.record_proxy_backend_success(&backend_name);
                     }
                     metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
-                    metrics.observe_proxy_request_duration(
-                        metrics_path,
-                        metrics_timer_start.elapsed(),
-                    );
+                    metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status.as_u16());
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
+                    metrics.observe_proxy_request_duration(metrics_path, duration);
                 }
 
                 #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
@@ -662,6 +665,8 @@ async fn attempt_proxy_backend(
                         shim_response,
                         backend_name.clone(),
                         request_id.clone(),
+                        #[cfg(feature = "gateway-metrics-prometheus")]
+                        metrics_path,
                         #[cfg(feature = "gateway-proxy-cache")]
                         proxy_cache_key.as_deref(),
                         #[cfg(not(feature = "gateway-proxy-cache"))]
@@ -681,6 +686,8 @@ async fn attempt_proxy_backend(
                         shim_response,
                         backend_name,
                         request_id.clone(),
+                        #[cfg(feature = "gateway-metrics-prometheus")]
+                        metrics_path,
                         #[cfg(feature = "gateway-proxy-cache")]
                         proxy_cache_key.as_deref(),
                         #[cfg(not(feature = "gateway-proxy-cache"))]
@@ -768,6 +775,7 @@ async fn attempt_proxy_backend(
                     status.is_server_error()
                 }
             };
+            let duration = metrics_timer_start.elapsed();
             let mut metrics = metrics.lock().await;
             if is_failure_status {
                 metrics.record_proxy_backend_failure(&backend_name);
@@ -775,7 +783,12 @@ async fn attempt_proxy_backend(
                 metrics.record_proxy_backend_success(&backend_name);
             }
             metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
-            metrics.observe_proxy_request_duration(metrics_path, metrics_timer_start.elapsed());
+            metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status.as_u16());
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(metrics_path, duration);
         }
 
         let upstream_headers = upstream_response.headers().clone();
