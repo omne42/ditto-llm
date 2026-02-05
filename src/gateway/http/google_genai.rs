@@ -41,10 +41,19 @@ async fn handle_google_genai(
     })?;
 
     let mut headers = HeaderMap::new();
-    headers.insert("content-type", "application/json".parse().unwrap());
-    headers.insert("x-ditto-protocol", "google".parse().unwrap());
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+    headers.insert(
+        "x-ditto-protocol",
+        axum::http::HeaderValue::from_static("google"),
+    );
     if stream_requested {
-        headers.insert("accept", "text/event-stream".parse().unwrap());
+        headers.insert(
+            axum::http::header::ACCEPT,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
     }
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
@@ -94,7 +103,10 @@ async fn handle_google_genai(
             let (mut parts, body) = openai_resp.into_parts();
             parts
                 .headers
-                .insert("content-type", "text/event-stream".parse().unwrap());
+                .insert(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static("text/event-stream"),
+                );
             parts.headers.remove("content-length");
 
             let data_stream = body
@@ -196,7 +208,10 @@ async fn handle_google_genai(
     *response.status_mut() = status;
     response
         .headers_mut()
-        .insert("content-type", "application/json".parse().unwrap());
+        .insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/json"),
+        );
     Ok(response)
 }
 
@@ -274,10 +289,19 @@ async fn handle_cloudcode_generate_content_inner(
     })?;
 
     let mut headers = HeaderMap::new();
-    headers.insert("content-type", "application/json".parse().unwrap());
-    headers.insert("x-ditto-protocol", "google".parse().unwrap());
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+    headers.insert(
+        "x-ditto-protocol",
+        axum::http::HeaderValue::from_static("google"),
+    );
     if stream_requested {
-        headers.insert("accept", "text/event-stream".parse().unwrap());
+        headers.insert(
+            axum::http::header::ACCEPT,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
     }
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
@@ -327,7 +351,10 @@ async fn handle_cloudcode_generate_content_inner(
             let (mut parts, body) = openai_resp.into_parts();
             parts
                 .headers
-                .insert("content-type", "text/event-stream".parse().unwrap());
+                .insert(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static("text/event-stream"),
+                );
             parts.headers.remove("content-length");
 
             let data_stream = body
@@ -429,6 +456,9 @@ async fn handle_cloudcode_generate_content_inner(
     *response.status_mut() = status;
     response
         .headers_mut()
-        .insert("content-type", "application/json".parse().unwrap());
+        .insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/json"),
+        );
     Ok(response)
 }

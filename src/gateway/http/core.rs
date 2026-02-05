@@ -488,10 +488,8 @@ async fn metrics_prometheus(
     let rendered = { metrics.lock().await.render() };
     let mut headers = HeaderMap::new();
     headers.insert(
-        "content-type",
-        "text/plain; version=0.0.4"
-            .parse()
-            .unwrap_or_else(|_| "text/plain".parse().unwrap()),
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("text/plain; version=0.0.4"),
     );
     Ok((StatusCode::OK, headers, rendered))
 }

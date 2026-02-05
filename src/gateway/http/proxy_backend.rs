@@ -266,10 +266,8 @@ async fn attempt_proxy_backend(
                 insert_request_id(&mut shim_headers, &request_id);
                 if _stream_requested {
                     shim_headers.insert(
-                        "accept",
-                        "text/event-stream"
-                            .parse()
-                            .unwrap_or_else(|_| "text/event-stream".parse().unwrap()),
+                        axum::http::header::ACCEPT,
+                        axum::http::HeaderValue::from_static("text/event-stream"),
                     );
                 }
 

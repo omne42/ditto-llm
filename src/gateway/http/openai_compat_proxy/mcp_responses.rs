@@ -255,9 +255,12 @@ async fn follow_up_via_chat_completions_to_responses(
             let mut headers = step_headers;
             headers.insert(
                 "x-ditto-shim",
-                "responses_via_chat_completions".parse().unwrap(),
+                axum::http::HeaderValue::from_static("responses_via_chat_completions"),
             );
-            headers.insert("content-type", "application/json".parse().unwrap());
+            headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/json"),
+            );
             headers.remove("content-length");
 
             return Ok(rebuild_response(step_status, headers, bytes));
@@ -367,11 +370,12 @@ async fn convert_chat_response_to_responses(
         let (mut parts, body) = response.into_parts();
         parts.headers.insert(
             "x-ditto-shim",
-            "responses_via_chat_completions".parse().unwrap(),
+            axum::http::HeaderValue::from_static("responses_via_chat_completions"),
         );
-        parts
-            .headers
-            .insert("content-type", "text/event-stream".parse().unwrap());
+        parts.headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
         parts.headers.remove("content-length");
 
         let data_stream = body
@@ -415,9 +419,12 @@ async fn convert_chat_response_to_responses(
 
     headers.insert(
         "x-ditto-shim",
-        "responses_via_chat_completions".parse().unwrap(),
+        axum::http::HeaderValue::from_static("responses_via_chat_completions"),
     );
-    headers.insert("content-type", "application/json".parse().unwrap());
+    headers.insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
     headers.remove("content-length");
 
     Ok(rebuild_response(status, headers, bytes))

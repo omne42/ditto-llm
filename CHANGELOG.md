@@ -119,6 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: remove panic-prone `expect/unwrap` from the HTTP proxy non-stream path and header construction (no behavior change).
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
 - Gateway: fix streaming multipart passthrough (/v1/files and /v1/audio/* uploads) spending so in-memory budgets are decremented even when store features are disabled.
 - Gateway: fix `cargo check --all-features` for `gateway-translation` after proxy attempt param cleanup (no behavior change).

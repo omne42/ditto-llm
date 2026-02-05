@@ -237,8 +237,8 @@ fn render_audit_export(
             }));
             let mut response = axum::response::Response::new(Body::from_stream(stream));
             response.headers_mut().insert(
-                "content-type",
-                "application/x-ndjson".parse().unwrap(),
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("application/x-ndjson"),
             );
             Ok(response)
         }
@@ -265,7 +265,10 @@ fn render_audit_export(
             let mut response = axum::response::Response::new(Body::from_stream(stream));
             response
                 .headers_mut()
-                .insert("content-type", "text/csv".parse().unwrap());
+                .insert(
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderValue::from_static("text/csv"),
+                );
             Ok(response)
         }
         _ => Err(error_response(

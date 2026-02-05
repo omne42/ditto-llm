@@ -182,12 +182,18 @@ async fn handle_openai_models_list(
     *response.status_mut() = StatusCode::OK;
     response
         .headers_mut()
-        .insert("content-type", "application/json".parse().unwrap());
+        .insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/json"),
+        );
     #[cfg(feature = "gateway-translation")]
     if has_translation_backends {
         response
             .headers_mut()
-            .insert("x-ditto-translation", "multi".parse().unwrap());
+            .insert(
+                "x-ditto-translation",
+                axum::http::HeaderValue::from_static("multi"),
+            );
     }
     if let Ok(value) = axum::http::HeaderValue::from_str(&request_id) {
         response.headers_mut().insert("x-request-id", value);

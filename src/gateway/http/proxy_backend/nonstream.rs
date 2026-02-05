@@ -40,7 +40,12 @@
         let should_try_buffer =
             max_buffer_bytes > 0 && content_length.is_none_or(|len| len <= max_buffer_bytes);
 
-        let (body_bytes, body_stream): (Option<Bytes>, Option<ProxyBodyStream>) = if should_try_buffer {
+        enum ProxyResponseBody {
+            Bytes(Bytes),
+            Stream(ProxyBodyStream),
+        }
+
+        let response_body = if should_try_buffer {
             let mut upstream_stream = upstream_response.bytes_stream();
             let mut buffered = bytes::BytesMut::new();
             let mut first_unbuffered: Option<Bytes> = None;
@@ -63,53 +68,54 @@
                 }
             }
 
-            if first_unbuffered.is_none() && stream_error.is_none() {
-                (Some(buffered.freeze()), None)
-            } else if let Some(chunk) = first_unbuffered {
-                let prefix_bytes = buffered.freeze();
-                let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
-                    futures_util::stream::empty().boxed()
-                } else {
-                    futures_util::stream::once(async move {
-                        Ok::<Bytes, std::io::Error>(prefix_bytes)
-                    })
-                    .boxed()
-                };
-                let first = futures_util::stream::once(async move {
-                    Ok::<Bytes, std::io::Error>(chunk)
-                });
-                let rest = upstream_stream.map(|chunk| chunk.map_err(std::io::Error::other));
-                let stream = prefix.chain(first).chain(rest).boxed();
-                (None, Some(stream))
-            } else {
-                let prefix_bytes = buffered.freeze();
-                let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
-                    futures_util::stream::empty().boxed()
-                } else {
-                    futures_util::stream::once(async move {
-                        Ok::<Bytes, std::io::Error>(prefix_bytes)
-                    })
-                    .boxed()
-                };
-                let err = stream_error.expect("upstream stream error");
-                let err_stream = futures_util::stream::once(async move {
-                    Err::<Bytes, std::io::Error>(err)
-                });
-                let stream = prefix.chain(err_stream).boxed();
-                (None, Some(stream))
+            match (first_unbuffered, stream_error) {
+                (None, None) => ProxyResponseBody::Bytes(buffered.freeze()),
+                (Some(chunk), _) => {
+                    let prefix_bytes = buffered.freeze();
+                    let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
+                        futures_util::stream::empty().boxed()
+                    } else {
+                        futures_util::stream::once(async move {
+                            Ok::<Bytes, std::io::Error>(prefix_bytes)
+                        })
+                        .boxed()
+                    };
+                    let first = futures_util::stream::once(async move {
+                        Ok::<Bytes, std::io::Error>(chunk)
+                    });
+                    let rest = upstream_stream.map(|chunk| chunk.map_err(std::io::Error::other));
+                    let stream = prefix.chain(first).chain(rest).boxed();
+                    ProxyResponseBody::Stream(stream)
+                }
+                (None, Some(err)) => {
+                    let prefix_bytes = buffered.freeze();
+                    let prefix: ProxyBodyStream = if prefix_bytes.is_empty() {
+                        futures_util::stream::empty().boxed()
+                    } else {
+                        futures_util::stream::once(async move {
+                            Ok::<Bytes, std::io::Error>(prefix_bytes)
+                        })
+                        .boxed()
+                    };
+                    let err_stream =
+                        futures_util::stream::once(async move { Err::<Bytes, std::io::Error>(err) });
+                    let stream = prefix.chain(err_stream).boxed();
+                    ProxyResponseBody::Stream(stream)
+                }
             }
         } else {
             let stream = upstream_response
                 .bytes_stream()
                 .map(|chunk| chunk.map_err(std::io::Error::other))
                 .boxed();
-            (None, Some(stream))
+            ProxyResponseBody::Stream(stream)
         };
 
         let observed_usage = if should_attempt_buffer_for_usage {
-            body_bytes
-                .as_ref()
-                .and_then(extract_openai_usage_from_bytes)
+            match &response_body {
+                ProxyResponseBody::Bytes(bytes) => extract_openai_usage_from_bytes(bytes),
+                ProxyResponseBody::Stream(_) => None,
+            }
         } else {
             None
         };
@@ -360,7 +366,7 @@
         #[cfg(feature = "gateway-proxy-cache")]
         if should_attempt_buffer_for_cache && status.is_success() {
             if let Some(cache_key) = proxy_cache_key.as_deref() {
-                if let Some(bytes) = body_bytes.as_ref() {
+                if let ProxyResponseBody::Bytes(bytes) = &response_body {
                     let cached = CachedProxyResponse {
                         status: status.as_u16(),
                         headers: upstream_headers.clone(),
@@ -380,22 +386,24 @@
                 headers.insert("x-ditto-cache-key", value);
             }
         }
-        if let Some(bytes) = body_bytes {
-            let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
-            let mut response = axum::response::Response::new(body);
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            Ok(BackendAttemptOutcome::Response(response))
-        } else {
-            headers.remove("content-length");
-            let stream = body_stream.expect("proxy body stream");
-            let stream = ProxyBodyStreamWithPermit {
-                inner: stream,
-                _permits: proxy_permits.take(),
-            };
-            let mut response = axum::response::Response::new(Body::from_stream(stream));
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            Ok(BackendAttemptOutcome::Response(response))
+        match response_body {
+            ProxyResponseBody::Bytes(bytes) => {
+                let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits.take());
+                let mut response = axum::response::Response::new(body);
+                *response.status_mut() = status;
+                *response.headers_mut() = headers;
+                Ok(BackendAttemptOutcome::Response(response))
+            }
+            ProxyResponseBody::Stream(stream) => {
+                headers.remove("content-length");
+                let stream = ProxyBodyStreamWithPermit {
+                    inner: stream,
+                    _permits: proxy_permits.take(),
+                };
+                let mut response = axum::response::Response::new(Body::from_stream(stream));
+                *response.status_mut() = status;
+                *response.headers_mut() = headers;
+                Ok(BackendAttemptOutcome::Response(response))
+            }
         }
 }

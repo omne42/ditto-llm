@@ -57,13 +57,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -146,13 +147,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -188,13 +190,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -232,17 +235,15 @@
 
                     let mut headers = HeaderMap::new();
                     headers.insert(
-                        "content-type",
-                        content_type
-                            .parse()
-                            .unwrap_or_else(|_| "application/octet-stream".parse().unwrap()),
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_str(&content_type).unwrap_or_else(|_| {
+                            axum::http::HeaderValue::from_static("application/octet-stream")
+                        }),
                     );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -304,13 +305,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -402,13 +404,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -505,13 +508,14 @@
                         .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                     let mut headers = HeaderMap::new();
-                    headers.insert("content-type", "application/json".parse().unwrap());
+                    headers.insert(
+                        axum::http::header::CONTENT_TYPE,
+                        axum::http::HeaderValue::from_static("application/json"),
+                    );
                     headers.insert(
                         "x-ditto-translation",
-                        translation_backend
-                            .provider
-                            .parse()
-                            .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                        axum::http::HeaderValue::from_str(&translation_backend.provider)
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -616,13 +620,16 @@
                         };
 
                         let mut headers = HeaderMap::new();
-                        headers.insert("content-type", "text/event-stream".parse().unwrap());
+                        headers.insert(
+                            axum::http::header::CONTENT_TYPE,
+                            axum::http::HeaderValue::from_static("text/event-stream"),
+                        );
                         headers.insert(
                             "x-ditto-translation",
-                            translation_backend
-                                .provider
-                                .parse()
-                                .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                            axum::http::HeaderValue::from_str(&translation_backend.provider)
+                                .unwrap_or_else(|_| {
+                                    axum::http::HeaderValue::from_static("enabled")
+                                }),
                         );
                         headers.remove("content-length");
                         apply_proxy_response_headers(
@@ -683,13 +690,16 @@
                             .unwrap_or_else(|_| Bytes::from(value.to_string()));
 
                         let mut headers = HeaderMap::new();
-                        headers.insert("content-type", "application/json".parse().unwrap());
+                        headers.insert(
+                            axum::http::header::CONTENT_TYPE,
+                            axum::http::HeaderValue::from_static("application/json"),
+                        );
                         headers.insert(
                             "x-ditto-translation",
-                            translation_backend
-                                .provider
-                                .parse()
-                                .unwrap_or_else(|_| "enabled".parse().unwrap()),
+                            axum::http::HeaderValue::from_str(&translation_backend.provider)
+                                .unwrap_or_else(|_| {
+                                    axum::http::HeaderValue::from_static("enabled")
+                                }),
                         );
                         apply_proxy_response_headers(
                             &mut headers,

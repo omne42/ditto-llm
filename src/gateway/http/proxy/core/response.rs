@@ -262,9 +262,12 @@ async fn responses_shim_response(
         let mut headers = upstream_headers;
         headers.insert(
             "x-ditto-shim",
-            "responses_via_chat_completions".parse().unwrap(),
+            axum::http::HeaderValue::from_static("responses_via_chat_completions"),
         );
-        headers.insert("content-type", "text/event-stream".parse().unwrap());
+        headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("text/event-stream"),
+        );
         headers.remove("content-length");
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
         if let Some(cache_key) = _cache_key {
@@ -435,9 +438,12 @@ async fn responses_shim_response(
         let mut headers = upstream_headers;
         headers.insert(
             "x-ditto-shim",
-            "responses_via_chat_completions".parse().unwrap(),
+            axum::http::HeaderValue::from_static("responses_via_chat_completions"),
         );
-        headers.insert("content-type", "application/json".parse().unwrap());
+        headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderValue::from_static("application/json"),
+        );
         headers.remove("content-length");
 
         #[cfg(feature = "gateway-proxy-cache")]
@@ -475,12 +481,14 @@ fn apply_proxy_response_headers(
 ) {
     headers.insert(
         "x-ditto-backend",
-        backend
-            .parse()
-            .unwrap_or_else(|_| "unknown".parse().unwrap()),
+        axum::http::HeaderValue::from_str(backend)
+            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("unknown")),
     );
     if cache_hit {
-        headers.insert("x-ditto-cache", "hit".parse().unwrap());
+        headers.insert(
+            "x-ditto-cache",
+            axum::http::HeaderValue::from_static("hit"),
+        );
     } else {
         headers.remove("x-ditto-cache");
     }
