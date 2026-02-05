@@ -2,6 +2,9 @@
 
 Ditto-LLM is a small Rust SDK that provides a unified interface for calling multiple LLM providers.
 
+Goal: become a superset of LiteLLM Proxy + Vercel AI SDK Core via layering + Cargo feature gating.
+See `COMPARED_TO_LITELLM_AI_SDK.md` and `TODO.md` for the parity notes and roadmap.
+
 Current scope:
 
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
@@ -27,13 +30,13 @@ Optional feature-gated modules:
 - SDK HTTP helpers: optional `axum` response builders for stream adapters (feature `sdk-axum`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`). Includes LiteLLM-like conveniences such as `/key/*` endpoints, `/a2a/*` agent proxy, and `/mcp*` MCP tool gateway.
 - Gateway token counting: tiktoken-based input token estimation for proxy budgets/guardrails/costing (feature `gateway-tokenizer`).
-- Gateway translation proxy: OpenAI-compatible `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`, and `/v1/models` backed by Ditto providers (feature `gateway-translation`).
+- Gateway translation proxy: OpenAI-compatible `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` backed by Ditto providers (feature `gateway-translation`).
 - Gateway proxy caching: in-memory cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
 - Gateway OpenTelemetry: OTLP tracing exporter + structured logs for gateway HTTP requests (feature `gateway-otel`).
 
 Non-goals (for now):
 
-- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech`, `/v1/rerank`, `/v1/batches`, and `/v1/models`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
+- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
 - Core helpers are single-step and return tool calls to the caller; the `agent` feature offers an opt-in tool loop, but it is not enabled by default.
 - It is not a full UI SDK (no frontend hooks or middleware ecosystem); the `sdk` feature only provides protocol/telemetry/devtools/MCP utilities.
 - Bedrock support targets Anthropic Messages-on-Bedrock; other Bedrock model families and Vertex service-account JWT flows are not covered yet.
@@ -99,6 +102,12 @@ Run the HTTP gateway (feature `gateway`):
 
 ```bash
 cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+```
+
+YAML config is optional (feature `gateway-config-yaml`):
+
+```bash
+cargo run --features gateway-config-yaml --bin ditto-gateway -- ./gateway.yaml --listen 0.0.0.0:8080
 ```
 
 Minimal admin UI (React):
@@ -173,7 +182,7 @@ Endpoints:
   - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key` / `x-api-key`).
   - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
-- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
+- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`

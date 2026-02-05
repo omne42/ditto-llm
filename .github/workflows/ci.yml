@@ -75,6 +75,10 @@ jobs:
         working-directory: ditto-llm
         run: cargo fmt -- --check
 
+      - name: llms.txt up to date
+        working-directory: ditto-llm
+        run: cargo run --bin ditto-llms-txt -- --check
+
       - name: cargo clippy (all features)
         working-directory: ditto-llm
         run: cargo clippy --all-targets --all-features -- -D warnings

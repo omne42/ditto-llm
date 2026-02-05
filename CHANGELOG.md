@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: add Gateway MCP documentation and update the LiteLLM/AI SDK parity notes.
 - Docs: refresh docs information architecture (new templates page, JS/React client docs, updated homepage/navigation) and add a repo-root `llms.txt` entrypoint.
 - Docs: add a roadmap gap-analysis page (vs LiteLLM + AI SDK) and update the parity checklist.
+- Docs: align README gateway-translation endpoint list (include `/v1/files*` and `GET /v1/models/*`) and document optional YAML config (`gateway-config-yaml`).
+- Docs: refresh the superset roadmap page to reflect shipped P0/P1 slices.
 - SDK: add `StreamTextHandle` / `StreamObjectHandle` plus `into_*_stream` helpers to avoid holding unused streaming fan-out receivers.
 - Docs: make repo-root `llms.txt` include an auto-generated docs bundle (based on `docs/src/SUMMARY.md`) and add a generator CLI (`ditto-llms-txt`) to refresh it.
 - Docs: mirror `llms.txt` into `docs/src/llms.txt` so `mdbook build docs` publishes it at `/llms.txt`, and update `ditto-llms-txt` to refresh both outputs by default.
@@ -107,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
 - CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.
+- CI: verify `llms.txt` is up to date (`ditto-llms-txt --check`).
 - Build: add `pnpm-lock.yaml` and use frozen installs in CI for deterministic JS/TS builds.
 
 ### Fixed
