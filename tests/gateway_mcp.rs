@@ -593,3 +593,174 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_llm::Result
     upstream_mock.assert();
     Ok(())
 }
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_http_invalid_json_returns_400() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp/tools/list")
+        .header("content-type", "application/json")
+        .body(Body::from("{"))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("invalid_json")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_call_http_invalid_json_returns_400() -> ditto_llm::Result<()> {
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp/tools/call")
+        .header("content-type", "application/json")
+        .body(Body::from("{"))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("invalid_json")
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_selected()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream_a = MockServer::start();
+    let upstream_b = MockServer::start();
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "a".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("a".to_string(), upstream_a.url("/mcp"))
+            .expect("mcp state a"),
+    );
+    mcp_servers.insert(
+        "b".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("b".to_string(), upstream_b.url("/mcp"))
+            .expect("mcp state b"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp/tools/list")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "servers": ["a", "b"],
+                "cursor": "c1",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("invalid_request")
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("cursor is only supported"), "{message}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+    let upstream_mock = upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }));
+        then.status(500)
+            .header("content-type", "text/plain")
+            .body("boom");
+    });
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+            .expect("mcp state"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/mcp/tools/list")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("mcp_backend_error")
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(message.contains("status=500"), "{message}");
+
+    upstream_mock.assert();
+    Ok(())
+}

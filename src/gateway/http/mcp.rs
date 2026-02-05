@@ -5,6 +5,7 @@ const MCP_MAX_ERROR_RESPONSE_BYTES: usize = 64 * 1024;
 const MCP_MAX_ERROR_BODY_SNIPPET_BYTES: usize = 8 * 1024;
 const MCP_TOOLS_LIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 const MCP_TOOLS_LIST_MAX_PAGES: usize = 8;
+const MCP_TOOLS_LIST_MAX_CURSOR_BYTES: usize = 1024;
 
 #[derive(Debug, Clone)]
 struct McpToolsListResult {
@@ -203,6 +204,21 @@ impl McpServerState {
     ) -> Result<McpToolsListResult, GatewayError> {
         let now = std::time::Instant::now();
 
+        if cursor
+            .as_ref()
+            .is_some_and(|cursor| cursor.len() > MCP_TOOLS_LIST_MAX_CURSOR_BYTES)
+        {
+            return Err(GatewayError::InvalidRequest {
+                reason: format!(
+                    "cursor exceeded max bytes ({MCP_TOOLS_LIST_MAX_CURSOR_BYTES})"
+                ),
+            });
+        }
+
+        if let Some(cursor) = cursor.as_deref() {
+            return self.list_tools_page_uncached(Some(cursor)).await;
+        }
+
         {
             let cache = self.tools_list_cache.lock().await;
             if let Some(entry) = cache.entries.get(&cursor) {
@@ -215,17 +231,14 @@ impl McpServerState {
             }
         }
 
-        let result = match cursor.as_deref() {
-            Some(cursor) => self.list_tools_page_uncached(Some(cursor)).await?,
-            None => McpToolsListResult {
-                tools: self.list_tools_all_uncached().await?,
-                next_cursor: None,
-            },
+        let result = McpToolsListResult {
+            tools: self.list_tools_all_uncached().await?,
+            next_cursor: None,
         };
 
         {
             let mut cache = self.tools_list_cache.lock().await;
-            cache.entries.retain(|_, entry| entry.expires_at > now);
+            cache.entries.retain(|key, entry| key.is_none() && entry.expires_at > now);
             cache.entries.insert(
                 cursor,
                 McpToolsListCacheEntry {
@@ -395,8 +408,25 @@ async fn handle_mcp_tools_list(
     let payload: Option<McpToolsListRequest> = if parts.method == axum::http::Method::POST {
         match to_bytes(body, MCP_MAX_REQUEST_BYTES).await {
             Ok(bytes) if bytes.is_empty() => None,
-            Ok(bytes) => serde_json::from_slice(&bytes).ok(),
-            Err(_) => None,
+            Ok(bytes) => match serde_json::from_slice(&bytes) {
+                Ok(parsed) => Some(parsed),
+                Err(_) => {
+                    return error_response(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_json",
+                        "invalid JSON body",
+                    )
+                    .into_response();
+                }
+            },
+            Err(_) => {
+                return error_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "request_too_large",
+                    format!("request exceeded max bytes ({MCP_MAX_REQUEST_BYTES})"),
+                )
+                .into_response();
+            }
         }
     } else {
         None
@@ -415,16 +445,7 @@ async fn handle_mcp_tools_list(
 
     match mcp_list_tools(&state, &server_ids, cursor).await {
         Ok(result) => Json(result).into_response(),
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse {
-                error: ErrorDetail {
-                    code: "mcp_backend_error",
-                    message: err.to_string(),
-                },
-            }),
-        )
-            .into_response(),
+        Err(err) => map_mcp_gateway_error(err).into_response(),
     }
 }
 
@@ -444,11 +465,25 @@ async fn handle_mcp_tools_call(
 
     let bytes = match to_bytes(body, MCP_MAX_REQUEST_BYTES).await {
         Ok(bytes) => bytes,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(_) => {
+            return error_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "request_too_large",
+                format!("request exceeded max bytes ({MCP_MAX_REQUEST_BYTES})"),
+            )
+            .into_response();
+        }
     };
     let parsed: McpToolsCallRequest = match serde_json::from_slice(&bytes) {
         Ok(parsed) => parsed,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_json",
+                "invalid JSON body",
+            )
+            .into_response();
+        }
     };
 
     let server_ids = match resolve_requested_mcp_servers(
@@ -463,16 +498,7 @@ async fn handle_mcp_tools_call(
 
     match mcp_call_tool(&state, &server_ids, &parsed.name, parsed.arguments).await {
         Ok(result) => Json(result).into_response(),
-        Err(err) => (
-            StatusCode::BAD_GATEWAY,
-            Json(ErrorResponse {
-                error: ErrorDetail {
-                    code: "mcp_backend_error",
-                    message: err.to_string(),
-                },
-            }),
-        )
-            .into_response(),
+        Err(err) => map_mcp_gateway_error(err).into_response(),
     }
 }
 
@@ -591,6 +617,50 @@ async fn enforce_mcp_auth(
     }
     gateway.observability.record_request();
     Ok(())
+}
+
+fn map_mcp_gateway_error(err: GatewayError) -> (StatusCode, Json<ErrorResponse>) {
+    match err {
+        GatewayError::Unauthorized => {
+            error_response(StatusCode::UNAUTHORIZED, "unauthorized", err.to_string())
+        }
+        GatewayError::RateLimited { limit } => error_response(
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate_limited",
+            format!("rate limit exceeded: {limit}"),
+        ),
+        GatewayError::GuardrailRejected { reason } => error_response(
+            StatusCode::FORBIDDEN,
+            "guardrail_rejected",
+            format!("guardrail rejected: {reason}"),
+        ),
+        GatewayError::BudgetExceeded { limit, attempted } => error_response(
+            StatusCode::PAYMENT_REQUIRED,
+            "budget_exceeded",
+            format!("budget exceeded: limit={limit} attempted={attempted}"),
+        ),
+        GatewayError::CostBudgetExceeded {
+            limit_usd_micros,
+            attempted_usd_micros,
+        } => error_response(
+            StatusCode::PAYMENT_REQUIRED,
+            "cost_budget_exceeded",
+            format!(
+                "cost budget exceeded: limit_usd_micros={limit_usd_micros} attempted_usd_micros={attempted_usd_micros}"
+            ),
+        ),
+        GatewayError::BackendNotFound { name } => error_response(
+            StatusCode::NOT_FOUND,
+            "backend_not_found",
+            format!("backend not found: {name}"),
+        ),
+        GatewayError::Backend { message } => {
+            error_response(StatusCode::BAD_GATEWAY, "mcp_backend_error", message)
+        }
+        GatewayError::InvalidRequest { reason } => {
+            error_response(StatusCode::BAD_REQUEST, "invalid_request", reason)
+        }
+    }
 }
 
 fn resolve_requested_mcp_servers(
