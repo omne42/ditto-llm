@@ -11,6 +11,7 @@ struct ResponsesApiResponse {
     usage: Option<Value>,
 }
 
+#[cfg(feature = "streaming")]
 #[derive(Debug, Deserialize)]
 struct ResponsesStreamEvent {
     #[serde(rename = "type")]
@@ -49,6 +50,7 @@ fn map_responses_finish_reason(
     }
 }
 
+#[cfg(feature = "streaming")]
 fn finish_reason_for_final_event(
     event_kind: &str,
     response: Option<&Value>,

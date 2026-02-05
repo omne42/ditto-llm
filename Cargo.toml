@@ -96,5 +96,37 @@ toml = "0.8"
 tower = { version = "0.5", features = ["util"] }
 
 [[example]]
+name = "anthropic_messages"
+required-features = ["anthropic"]
+
+[[example]]
+name = "basic"
+required-features = ["openai"]
+
+[[example]]
+name = "embeddings"
+required-features = ["openai", "embeddings"]
+
+[[example]]
+name = "local_native_formats"
+required-features = ["anthropic"]
+
+[[example]]
 name = "multimodal"
-required-features = ["base64"]
+required-features = ["openai", "base64"]
+
+[[example]]
+name = "openai_compatible"
+required-features = ["openai-compatible"]
+
+[[example]]
+name = "openai_compatible_embeddings"
+required-features = ["openai-compatible", "embeddings"]
+
+[[example]]
+name = "streaming"
+required-features = ["openai", "streaming"]
+
+[[example]]
+name = "tool_calling"
+required-features = ["openai", "tools"]

@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -13,8 +15,10 @@ use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderConfig};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
+    Role, Tool, ToolChoice, Usage, Warning,
 };
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 #[derive(Clone)]

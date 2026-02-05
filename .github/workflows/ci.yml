@@ -85,3 +85,11 @@ jobs:
       - name: cargo clippy (no default features)
         working-directory: ditto-llm
         run: cargo clippy --no-default-features -- -D warnings
+
+      - name: cargo clippy (no default features + openai)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features openai --all-targets -- -D warnings
+
+      - name: cargo clippy (no default features + openai-compatible)
+        working-directory: ditto-llm
+        run: cargo clippy -p ditto-llm --no-default-features --features openai-compatible --all-targets -- -D warnings

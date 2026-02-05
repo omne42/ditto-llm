@@ -61,6 +61,7 @@ pub(crate) async fn resolve_auth_required(
     .await
 }
 
+#[cfg(feature = "openai-compatible")]
 pub(crate) async fn resolve_auth_optional(
     config: &ProviderConfig,
     env: &Env,
@@ -172,6 +173,7 @@ impl OpenAiLikeClient {
         Ok(out)
     }
 
+    #[cfg(feature = "openai-compatible")]
     pub(crate) async fn from_config_optional(
         config: &ProviderConfig,
         env: &Env,

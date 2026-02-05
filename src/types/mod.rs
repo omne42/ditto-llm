@@ -21,7 +21,6 @@ mod generate_request_support;
     feature = "bedrock",
     feature = "cohere",
     feature = "google",
-    feature = "openai",
     feature = "vertex",
 ))]
 mod provider_options_support;
@@ -42,7 +41,6 @@ pub(crate) use generate_request_support::{
     feature = "bedrock",
     feature = "cohere",
     feature = "google",
-    feature = "openai",
     feature = "vertex",
 ))]
 pub(crate) use provider_options_support::{

@@ -1,5 +1,13 @@
 use serde_json::Number;
 
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai-compatible",
+    feature = "vertex"
+))]
 use std::collections::HashSet;
 
 use crate::types::Warning;
@@ -39,6 +47,14 @@ pub(crate) fn clamped_number_from_f32(
     Number::from_f64(clamped as f64)
 }
 
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai-compatible",
+    feature = "vertex"
+))]
 pub(crate) fn sanitize_stop_sequences(
     sequences: &[String],
     max: Option<usize>,
@@ -100,50 +116,62 @@ mod tests {
         )));
     }
 
-    #[test]
-    fn stop_sequences_sanitizes_and_dedups() {
-        let mut warnings = Vec::new();
-        let out = sanitize_stop_sequences(
-            &[
-                " a ".to_string(),
-                "a".to_string(),
-                "".to_string(),
-                " ".to_string(),
-                "b".to_string(),
-            ],
-            None,
-            &mut warnings,
-        );
-        assert_eq!(out, vec!["a".to_string(), "b".to_string()]);
-        assert!(warnings.is_empty());
-    }
+    #[cfg(any(
+        feature = "anthropic",
+        feature = "bedrock",
+        feature = "cohere",
+        feature = "google",
+        feature = "openai-compatible",
+        feature = "vertex"
+    ))]
+    mod stop_sequences {
+        use super::*;
 
-    #[test]
-    fn stop_sequences_truncates_with_warning() {
-        let mut warnings = Vec::new();
-        let out = sanitize_stop_sequences(
-            &[
-                "a".to_string(),
-                "b".to_string(),
-                "c".to_string(),
-                "d".to_string(),
-                "e".to_string(),
-            ],
-            Some(4),
-            &mut warnings,
-        );
-        assert_eq!(
-            out,
-            vec![
-                "a".to_string(),
-                "b".to_string(),
-                "c".to_string(),
-                "d".to_string()
-            ]
-        );
-        assert!(warnings.iter().any(|w| matches!(
-            w,
-            Warning::Compatibility { feature, .. } if feature == "stop_sequences"
-        )));
+        #[test]
+        fn stop_sequences_sanitizes_and_dedups() {
+            let mut warnings = Vec::new();
+            let out = sanitize_stop_sequences(
+                &[
+                    " a ".to_string(),
+                    "a".to_string(),
+                    "".to_string(),
+                    " ".to_string(),
+                    "b".to_string(),
+                ],
+                None,
+                &mut warnings,
+            );
+            assert_eq!(out, vec!["a".to_string(), "b".to_string()]);
+            assert!(warnings.is_empty());
+        }
+
+        #[test]
+        fn stop_sequences_truncates_with_warning() {
+            let mut warnings = Vec::new();
+            let out = sanitize_stop_sequences(
+                &[
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                ],
+                Some(4),
+                &mut warnings,
+            );
+            assert_eq!(
+                out,
+                vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string()
+                ]
+            );
+            assert!(warnings.iter().any(|w| matches!(
+                w,
+                Warning::Compatibility { feature, .. } if feature == "stop_sequences"
+            )));
+        }
     }
 }

@@ -113,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: aggregate `/models` and `/v1/models` across all configured proxy backends (dedup by model id).
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
 - CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
+- CI: extend the `--no-default-features` clippy matrix to cover provider-only builds for `openai` and `openai-compatible` (all targets).
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.
 - CI: verify `llms.txt` is up to date (`ditto-llms-txt --check`).
 - Build: add `pnpm-lock.yaml` and use frozen installs in CI for deterministic JS/TS builds.
@@ -150,6 +151,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build: decouple `openai-compatible` from `openai` and tighten cfg gating for OpenAI-like provider helpers (fixes `--no-default-features --features openai-compatible` builds).
 - Build: vendor `safe-fs-tools` to remove the git dependency (agent feature can build offline).
 - Providers: remove panic-prone `expect` from OpenAI-like images provider metadata assembly (no behavior change).
+- Build: fix `--no-default-features --features openai` / `openai-compatible` builds by tightening cfg gating around streaming-only OpenAI helpers and provider-only utilities (clippy `-D warnings`).
+- Build: when `streaming` is disabled, OpenAI streaming entrypoints now return a clear error instead of failing to compile.
+- Build: add `required-features` to examples so `cargo {check,clippy} --all-targets` works across provider-only feature sets.
 - Gateway: refactor `ResponseCache::insert` to accept `CacheConfig` instead of a long argument list (no behavior change).
 
 ## [0.1.2] - 2026-02-01

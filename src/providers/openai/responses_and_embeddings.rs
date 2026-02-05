@@ -124,6 +124,7 @@ impl Drop for OpenAIResponsesRawEventStream {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg(feature = "streaming")]
 struct RawResponsesStreamEvent {
     #[serde(rename = "type")]
     kind: String,
@@ -135,6 +136,7 @@ struct RawResponsesStreamEvent {
     delta: Option<String>,
 }
 
+#[cfg(feature = "streaming")]
 fn parse_raw_responses_event(
     event: RawResponsesStreamEvent,
 ) -> Result<Option<OpenAIResponsesRawEvent>> {
@@ -193,6 +195,7 @@ fn parse_raw_responses_event(
     }
 }
 
+#[cfg(feature = "streaming")]
 async fn process_raw_responses_sse<R>(
     reader: R,
     tx_event: mpsc::Sender<Result<OpenAIResponsesRawEvent>>,
@@ -245,6 +248,7 @@ mod tests {
     use httpmock::{Method::GET, Method::POST, MockServer};
     use serde_json::json;
     use std::collections::BTreeMap;
+    #[cfg(feature = "streaming")]
     use tokio::sync::mpsc;
 
     #[tokio::test]
@@ -385,6 +389,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "streaming")]
     async fn raw_responses_sse_parses_expected_events() -> crate::Result<()> {
         let sse = concat!(
             "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n",
@@ -754,6 +759,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "streaming")]
     fn finish_reason_for_final_event_prefers_response_payload() {
         let response = json!({
             "status": "completed",
@@ -767,6 +773,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "streaming")]
     fn finish_reason_for_final_event_marks_tool_calls() {
         let response = json!({ "status": "completed" });
         assert_eq!(

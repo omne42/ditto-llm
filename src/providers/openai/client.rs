@@ -1,10 +1,14 @@
 use async_trait::async_trait;
+#[cfg(feature = "streaming")]
 use futures_util::StreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::TryStreamExt;
+#[cfg(feature = "streaming")]
 use futures_util::stream;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tokio::sync::mpsc;
+#[cfg(feature = "streaming")]
 use tokio_util::io::StreamReader;
 
 use super::openai_like;
@@ -16,8 +20,10 @@ use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderConfig};
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    Role, StreamChunk, Tool, ToolChoice, Usage, Warning,
+    Role, Tool, ToolChoice, Usage, Warning,
 };
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 #[derive(Clone)]
@@ -468,84 +474,102 @@ impl OpenAI {
         &self,
         request: &OpenAIResponsesRawRequest<'_>,
     ) -> Result<OpenAIResponsesRawEventStream> {
-        if !request.stream {
-            return Err(DittoError::InvalidResponse(
-                "stream=true is required for create_response_stream_raw".to_string(),
-            ));
+        #[cfg(not(feature = "streaming"))]
+        {
+            let _ = request;
+            Err(DittoError::InvalidResponse(
+                "ditto-llm built without streaming feature".to_string(),
+            ))
         }
 
-        let mut body = Map::<String, Value>::new();
-        body.insert(
-            "model".to_string(),
-            Value::String(request.model.to_string()),
-        );
-        body.insert(
-            "instructions".to_string(),
-            Value::String(request.instructions.to_string()),
-        );
-        body.insert("input".to_string(), Value::Array(request.input.to_vec()));
-        body.insert("store".to_string(), Value::Bool(request.store));
-        body.insert("stream".to_string(), Value::Bool(true));
-        body.insert(
-            "parallel_tool_calls".to_string(),
-            Value::Bool(request.parallel_tool_calls),
-        );
-
-        if let Some(tools) = request.tools.as_ref() {
-            let mapped = tools.iter().map(Self::tool_to_openai).collect();
-            body.insert("tools".to_string(), Value::Array(mapped));
-        }
-        if let Some(tool_choice) = request.tool_choice.as_ref() {
-            body.insert(
-                "tool_choice".to_string(),
-                Self::tool_choice_to_openai(tool_choice),
-            );
-        }
-        if request.reasoning_effort.is_some() || request.reasoning_summary.is_some() {
-            let mut reasoning = Map::<String, Value>::new();
-            if let Some(effort) = request.reasoning_effort {
-                reasoning.insert("effort".to_string(), serde_json::json!(effort));
+        #[cfg(feature = "streaming")]
+        {
+            if !request.stream {
+                return Err(DittoError::InvalidResponse(
+                    "stream=true is required for create_response_stream_raw".to_string(),
+                ));
             }
-            if let Some(summary) = request.reasoning_summary {
-                reasoning.insert("summary".to_string(), serde_json::json!(summary));
+
+            let mut body = Map::<String, Value>::new();
+            body.insert(
+                "model".to_string(),
+                Value::String(request.model.to_string()),
+            );
+            body.insert(
+                "instructions".to_string(),
+                Value::String(request.instructions.to_string()),
+            );
+            body.insert("input".to_string(), Value::Array(request.input.to_vec()));
+            body.insert("store".to_string(), Value::Bool(request.store));
+            body.insert("stream".to_string(), Value::Bool(true));
+            body.insert(
+                "parallel_tool_calls".to_string(),
+                Value::Bool(request.parallel_tool_calls),
+            );
+
+            if let Some(tools) = request.tools.as_ref() {
+                let mapped = tools.iter().map(Self::tool_to_openai).collect();
+                body.insert("tools".to_string(), Value::Array(mapped));
             }
-            body.insert("reasoning".to_string(), Value::Object(reasoning));
-        }
-        if let Some(response_format) = request.response_format.as_ref() {
-            body.insert(
-                "response_format".to_string(),
-                serde_json::to_value(response_format)?,
-            );
-        }
-        if !request.include.is_empty() {
-            body.insert(
-                "include".to_string(),
-                Value::Array(request.include.iter().cloned().map(Value::String).collect()),
-            );
-        }
-        if let Some(key) = request.prompt_cache_key.as_deref() {
-            body.insert(
-                "prompt_cache_key".to_string(),
-                Value::String(key.to_string()),
-            );
-        }
+            if let Some(tool_choice) = request.tool_choice.as_ref() {
+                body.insert(
+                    "tool_choice".to_string(),
+                    Self::tool_choice_to_openai(tool_choice),
+                );
+            }
+            if request.reasoning_effort.is_some() || request.reasoning_summary.is_some() {
+                let mut reasoning = Map::<String, Value>::new();
+                if let Some(effort) = request.reasoning_effort {
+                    reasoning.insert("effort".to_string(), serde_json::json!(effort));
+                }
+                if let Some(summary) = request.reasoning_summary {
+                    reasoning.insert("summary".to_string(), serde_json::json!(summary));
+                }
+                body.insert("reasoning".to_string(), Value::Object(reasoning));
+            }
+            if let Some(response_format) = request.response_format.as_ref() {
+                body.insert(
+                    "response_format".to_string(),
+                    serde_json::to_value(response_format)?,
+                );
+            }
+            if !request.include.is_empty() {
+                body.insert(
+                    "include".to_string(),
+                    Value::Array(
+                        request
+                            .include
+                            .iter()
+                            .cloned()
+                            .map(Value::String)
+                            .collect(),
+                    ),
+                );
+            }
+            if let Some(key) = request.prompt_cache_key.as_deref() {
+                body.insert(
+                    "prompt_cache_key".to_string(),
+                    Value::String(key.to_string()),
+                );
+            }
 
-        let url = self.responses_url();
-        let req = self.client.http.post(url);
-        let mut req = self.apply_auth(req).json(&body);
-        for (name, value) in request.extra_headers.iter() {
-            req = req.header(name, value);
+            let url = self.responses_url();
+            let req = self.client.http.post(url);
+            let mut req = self.apply_auth(req).json(&body);
+            for (name, value) in request.extra_headers.iter() {
+                req = req.header(name, value);
+            }
+            req = req.header("Accept", "text/event-stream");
+            let response = crate::utils::http::send_checked(req).await?;
+
+            let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
+            let reader = StreamReader::new(byte_stream);
+            let reader = tokio::io::BufReader::new(reader);
+
+            let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(512);
+            let task = tokio::spawn(process_raw_responses_sse(reader, tx_event));
+            Ok(OpenAIResponsesRawEventStream { rx_event, task })
         }
-        req = req.header("Accept", "text/event-stream");
-        let response = crate::utils::http::send_checked(req).await?;
-
-        let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
-        let reader = StreamReader::new(byte_stream);
-        let reader = tokio::io::BufReader::new(reader);
-
-        let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(512);
-        let task = tokio::spawn(process_raw_responses_sse(reader, tx_event));
-        Ok(OpenAIResponsesRawEventStream { rx_event, task })
     }
 }
 
