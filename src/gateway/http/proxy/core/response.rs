@@ -1,3 +1,133 @@
+#[cfg(feature = "gateway-metrics-prometheus")]
+#[derive(Clone, Copy, Debug)]
+enum ProxyStreamEnd {
+    Completed,
+    Error,
+    Aborted,
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+struct ProxyStreamFinalizer {
+    metrics: Option<Arc<Mutex<super::metrics_prometheus::PrometheusMetrics>>>,
+    backend: String,
+    path: String,
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+impl ProxyStreamFinalizer {
+    async fn finalize(self, end: ProxyStreamEnd, stream_bytes: u64) {
+        let Some(metrics) = self.metrics else {
+            return;
+        };
+        let mut metrics = metrics.lock().await;
+        metrics.record_proxy_stream_close(&self.backend, &self.path);
+        metrics.record_proxy_stream_bytes(&self.backend, &self.path, stream_bytes);
+        match end {
+            ProxyStreamEnd::Completed => {
+                metrics.record_proxy_stream_completed(&self.backend, &self.path);
+            }
+            ProxyStreamEnd::Error => {
+                metrics.record_proxy_stream_error(&self.backend, &self.path);
+            }
+            ProxyStreamEnd::Aborted => {
+                metrics.record_proxy_stream_aborted(&self.backend, &self.path);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+const PROXY_STREAM_ABORT_FINALIZER_WORKERS: usize = 2;
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+const PROXY_STREAM_ABORT_FINALIZER_QUEUE_CAPACITY: usize = 1024;
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+struct ProxyStreamAbortFinalizeJob {
+    finalizer: ProxyStreamFinalizer,
+    bytes_sent: u64,
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+struct ProxyStreamAbortFinalizerPool {
+    senders: Vec<std::sync::mpsc::SyncSender<ProxyStreamAbortFinalizeJob>>,
+    next_sender: std::sync::atomic::AtomicUsize,
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+fn proxy_stream_abort_finalizer_pool() -> &'static ProxyStreamAbortFinalizerPool {
+    static POOL: std::sync::OnceLock<ProxyStreamAbortFinalizerPool> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let workers = PROXY_STREAM_ABORT_FINALIZER_WORKERS.max(1);
+        let capacity = PROXY_STREAM_ABORT_FINALIZER_QUEUE_CAPACITY.max(1);
+        let mut senders = Vec::with_capacity(workers);
+
+        for worker in 0..workers {
+            let (tx, rx) = std::sync::mpsc::sync_channel::<ProxyStreamAbortFinalizeJob>(capacity);
+            let thread_name = format!("ditto-proxy-stream-finalizer-{worker}");
+            let spawn_result = std::thread::Builder::new()
+                .name(thread_name)
+                .spawn(move || {
+                    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        return;
+                    };
+                    while let Ok(job) = rx.recv() {
+                        runtime.block_on(async move {
+                            job.finalizer
+                                .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
+                                .await;
+                        });
+                    }
+                });
+            if spawn_result.is_ok() {
+                senders.push(tx);
+            }
+        }
+
+        ProxyStreamAbortFinalizerPool {
+            senders,
+            next_sender: std::sync::atomic::AtomicUsize::new(0),
+        }
+    })
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
+fn enqueue_proxy_stream_abort_finalize(finalizer: ProxyStreamFinalizer, bytes_sent: u64) {
+    let job = ProxyStreamAbortFinalizeJob {
+        finalizer,
+        bytes_sent,
+    };
+    let pool = proxy_stream_abort_finalizer_pool();
+
+    if pool.senders.is_empty() {
+        tokio::spawn(async move {
+            job.finalizer
+                .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
+                .await;
+        });
+        return;
+    }
+
+    let idx = pool
+        .next_sender
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        % pool.senders.len();
+    if let Err(err) = pool.senders[idx].try_send(job) {
+        let job = match err {
+            std::sync::mpsc::TrySendError::Full(job) => job,
+            std::sync::mpsc::TrySendError::Disconnected(job) => job,
+        };
+        tokio::spawn(async move {
+            job.finalizer
+                .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
+                .await;
+        });
+    }
+}
+
 async fn proxy_response(
     _state: &GatewayHttpState,
     upstream: reqwest::Response,
@@ -32,45 +162,10 @@ async fn proxy_response(
 
         #[cfg(feature = "gateway-metrics-prometheus")]
         {
-            #[derive(Clone, Copy, Debug)]
-            enum StreamEnd {
-                Completed,
-                Error,
-                Aborted,
-            }
-
-            struct StreamFinalizer {
-                metrics: Option<Arc<Mutex<super::metrics_prometheus::PrometheusMetrics>>>,
-                backend: String,
-                path: String,
-            }
-
-            impl StreamFinalizer {
-                async fn finalize(self, end: StreamEnd, stream_bytes: u64) {
-                    let Some(metrics) = self.metrics else {
-                        return;
-                    };
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_stream_close(&self.backend, &self.path);
-                    metrics.record_proxy_stream_bytes(&self.backend, &self.path, stream_bytes);
-                    match end {
-                        StreamEnd::Completed => {
-                            metrics.record_proxy_stream_completed(&self.backend, &self.path);
-                        }
-                        StreamEnd::Error => {
-                            metrics.record_proxy_stream_error(&self.backend, &self.path);
-                        }
-                        StreamEnd::Aborted => {
-                            metrics.record_proxy_stream_aborted(&self.backend, &self.path);
-                        }
-                    }
-                }
-            }
-
             struct StreamState {
                 upstream: ProxyBodyStream,
                 bytes_sent: u64,
-                finalizer: Option<StreamFinalizer>,
+                finalizer: Option<ProxyStreamFinalizer>,
                 _permits: ProxyPermits,
             }
 
@@ -80,16 +175,12 @@ async fn proxy_response(
                         return;
                     };
                     let bytes_sent = self.bytes_sent;
-                    tokio::spawn(async move {
-                        finalizer
-                            .finalize(StreamEnd::Aborted, bytes_sent)
-                            .await;
-                    });
+                    enqueue_proxy_stream_abort_finalize(finalizer, bytes_sent);
                 }
             }
 
             impl StreamState {
-                async fn finalize(&mut self, end: StreamEnd) {
+                async fn finalize(&mut self, end: ProxyStreamEnd) {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -103,7 +194,7 @@ async fn proxy_response(
                 metrics.lock().await.record_proxy_stream_open(&backend, metrics_path);
             }
 
-            let finalizer = StreamFinalizer {
+            let finalizer = ProxyStreamFinalizer {
                 metrics,
                 backend: backend.clone(),
                 path: metrics_path.to_string(),
@@ -123,11 +214,11 @@ async fn proxy_response(
                         Ok(Some((chunk, state)))
                     }
                     Some(Err(err)) => {
-                        state.finalize(StreamEnd::Error).await;
+                        state.finalize(ProxyStreamEnd::Error).await;
                         Err(err)
                     }
                     None => {
-                        state.finalize(StreamEnd::Completed).await;
+                        state.finalize(ProxyStreamEnd::Completed).await;
                         Ok(None)
                     }
                 }
@@ -156,30 +247,45 @@ async fn proxy_response(
             && {
                 #[cfg(feature = "gateway-proxy-cache")]
                 {
-	                    let content_length = upstream_headers
-	                        .get("content-length")
-	                        .and_then(|value| value.to_str().ok())
-	                        .and_then(|value| value.parse::<usize>().ok());
-	                    _state.proxy_cache_config.as_ref().is_some_and(|config| {
-	                        content_length.is_some_and(|len| len <= config.max_body_bytes)
-	                    })
-	                }
+                    let content_length = upstream_headers
+                        .get("content-length")
+                        .and_then(|value| value.to_str().ok())
+                        .and_then(|value| value.parse::<usize>().ok());
+                    _state
+                        .proxy_cache_config
+                        .as_ref()
+                        .is_some_and(|config| {
+                            content_length.is_some_and(|len| len <= config.max_body_bytes)
+                        })
+                }
                 #[cfg(not(feature = "gateway-proxy-cache"))]
                 {
                     false
                 }
-	            };
-	        let mut headers = upstream_headers;
-	        apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-	        if let Some(cache_key) = _cache_key {
-	            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-	                headers.insert("x-ditto-cache-key", value);
-	            }
-	        }
-	        if should_buffer {
-	            let max_body_bytes =
-	                _state.proxy_cache_config.as_ref().map(|c| c.max_body_bytes).unwrap_or(1);
-	            let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
+            };
+        let mut headers = upstream_headers;
+        apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
+        if let Some(cache_key) = _cache_key {
+            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
+                headers.insert("x-ditto-cache-key", value);
+            }
+        }
+        if should_buffer {
+            let max_body_bytes = {
+                #[cfg(feature = "gateway-proxy-cache")]
+                {
+                    _state
+                        .proxy_cache_config
+                        .as_ref()
+                        .map(|c| c.max_body_bytes)
+                        .unwrap_or(1)
+                }
+                #[cfg(not(feature = "gateway-proxy-cache"))]
+                {
+                    1
+                }
+            };
+            let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
                 upstream,
                 &headers,
                 max_body_bytes,
@@ -278,45 +384,10 @@ async fn responses_shim_response(
 
         #[cfg(feature = "gateway-metrics-prometheus")]
         {
-            #[derive(Clone, Copy, Debug)]
-            enum StreamEnd {
-                Completed,
-                Error,
-                Aborted,
-            }
-
-            struct StreamFinalizer {
-                metrics: Option<Arc<Mutex<super::metrics_prometheus::PrometheusMetrics>>>,
-                backend: String,
-                path: String,
-            }
-
-            impl StreamFinalizer {
-                async fn finalize(self, end: StreamEnd, stream_bytes: u64) {
-                    let Some(metrics) = self.metrics else {
-                        return;
-                    };
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_stream_close(&self.backend, &self.path);
-                    metrics.record_proxy_stream_bytes(&self.backend, &self.path, stream_bytes);
-                    match end {
-                        StreamEnd::Completed => {
-                            metrics.record_proxy_stream_completed(&self.backend, &self.path);
-                        }
-                        StreamEnd::Error => {
-                            metrics.record_proxy_stream_error(&self.backend, &self.path);
-                        }
-                        StreamEnd::Aborted => {
-                            metrics.record_proxy_stream_aborted(&self.backend, &self.path);
-                        }
-                    }
-                }
-            }
-
             struct StreamState {
                 upstream: ProxyBodyStream,
                 bytes_sent: u64,
-                finalizer: Option<StreamFinalizer>,
+                finalizer: Option<ProxyStreamFinalizer>,
                 _permits: ProxyPermits,
             }
 
@@ -326,16 +397,12 @@ async fn responses_shim_response(
                         return;
                     };
                     let bytes_sent = self.bytes_sent;
-                    tokio::spawn(async move {
-                        finalizer
-                            .finalize(StreamEnd::Aborted, bytes_sent)
-                            .await;
-                    });
+                    enqueue_proxy_stream_abort_finalize(finalizer, bytes_sent);
                 }
             }
 
             impl StreamState {
-                async fn finalize(&mut self, end: StreamEnd) {
+                async fn finalize(&mut self, end: ProxyStreamEnd) {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -349,7 +416,7 @@ async fn responses_shim_response(
                 metrics.lock().await.record_proxy_stream_open(&backend, metrics_path);
             }
 
-            let finalizer = StreamFinalizer {
+            let finalizer = ProxyStreamFinalizer {
                 metrics,
                 backend: backend.clone(),
                 path: metrics_path.to_string(),
@@ -369,11 +436,11 @@ async fn responses_shim_response(
                         Ok(Some((chunk, state)))
                     }
                     Some(Err(err)) => {
-                        state.finalize(StreamEnd::Error).await;
+                        state.finalize(ProxyStreamEnd::Error).await;
                         Err(err)
                     }
                     None => {
-                        state.finalize(StreamEnd::Completed).await;
+                        state.finalize(ProxyStreamEnd::Completed).await;
                         Ok(None)
                     }
                 }
@@ -637,6 +704,8 @@ async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
 
 #[cfg(feature = "gateway-routing-advanced")]
 fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop>> {
+    const PROXY_HEALTH_CHECK_MAX_CONCURRENCY: usize = 8;
+
     let config = state.proxy_routing.as_ref()?;
     if !config.health_check.enabled {
         return None;
@@ -651,30 +720,43 @@ fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop
 
     let task = tokio::spawn(async move {
         loop {
-            for (backend_name, backend) in backends.iter() {
-                let mut headers = HeaderMap::new();
-                apply_backend_headers(&mut headers, backend.headers());
+            let check_stream = stream::iter(backends.iter())
+                .map(|(backend_name, backend)| {
+                    let backend_name = backend_name.clone();
+                    let backend = backend.clone();
+                    let path = path.clone();
+                    async move {
+                        let mut headers = HeaderMap::new();
+                        apply_backend_headers(&mut headers, backend.headers());
+                        let result = backend
+                            .request_with_timeout(
+                                reqwest::Method::GET,
+                                &path,
+                                headers,
+                                None,
+                                Some(timeout),
+                            )
+                            .await;
+                        (backend_name, result)
+                    }
+                })
+                .buffer_unordered(PROXY_HEALTH_CHECK_MAX_CONCURRENCY);
+            futures_util::pin_mut!(check_stream);
 
-                let result = backend
-                    .request_with_timeout(reqwest::Method::GET, &path, headers, None, Some(timeout))
-                    .await;
-
+            while let Some((backend_name, result)) = check_stream.next().await {
                 let mut health = health.lock().await;
-                let entry = health.entry(backend_name.clone()).or_default();
+                let entry = health.entry(backend_name).or_default();
                 match result {
+                    Ok(response) if response.status().is_success() => {
+                        entry.record_health_check_success();
+                    }
                     Ok(response) => {
-                        if response.status().is_success() {
-                            entry.record_health_check_success();
-                        } else {
-                            entry.record_health_check_failure(format!(
-                                "health check returned {}",
-                                response.status()
-                            ));
-                        }
+                        entry.record_health_check_failure(format!(
+                            "health check returned {}",
+                            response.status()
+                        ));
                     }
-                    Err(err) => {
-                        entry.record_health_check_failure(err.to_string());
-                    }
+                    Err(err) => entry.record_health_check_failure(err.to_string()),
                 }
             }
 
@@ -726,11 +808,86 @@ fn proxy_cache_scope(virtual_key_id: Option<&str>, headers: &HeaderMap) -> Strin
 }
 
 #[cfg(feature = "gateway-proxy-cache")]
-fn proxy_cache_key(method: &axum::http::Method, path: &str, body: &Bytes, scope: &str) -> String {
-    let body_hash = hash64_fnv1a(body);
-    let seed = format!("{}|{}|{}|{:016x}", method.as_str(), path, scope, body_hash);
-    let hash = hash64_fnv1a(seed.as_bytes());
-    format!("ditto-proxy-cache-v1-{hash:016x}")
+fn proxy_cache_header_affects_upstream(header: &str) -> bool {
+    !matches!(
+        header,
+        "authorization"
+            | "x-api-key"
+            | "x-litellm-api-key"
+            | "proxy-authorization"
+            | "x-forwarded-authorization"
+            | "connection"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-connection"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-ditto-virtual-key"
+            | "x-ditto-protocol"
+            | "x-ditto-cache-bypass"
+            | "x-ditto-bypass-cache"
+            | "content-length"
+            | "x-request-id"
+            | "traceparent"
+            | "tracestate"
+            | "baggage"
+    )
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+fn proxy_cache_key(
+    method: &axum::http::Method,
+    path: &str,
+    body: &Bytes,
+    scope: &str,
+    headers: &HeaderMap,
+) -> String {
+    use sha2::Digest as _;
+
+    let mut header_names: Vec<&str> = headers
+        .keys()
+        .map(|name| name.as_str())
+        .filter(|name| proxy_cache_header_affects_upstream(name))
+        .collect();
+    header_names.sort_unstable();
+    header_names.dedup();
+
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(b"ditto-proxy-cache-v2|");
+    hasher.update(method.as_str().as_bytes());
+    hasher.update(b"|");
+    hasher.update(path.as_bytes());
+    hasher.update(b"|");
+    hasher.update(scope.as_bytes());
+    hasher.update(b"|");
+    for name in header_names {
+        hasher.update(name.as_bytes());
+        hasher.update(b":");
+        for value in headers.get_all(name).iter() {
+            hasher.update(value.as_bytes());
+            hasher.update(b"\x1f");
+        }
+        hasher.update(b"\n");
+    }
+    hasher.update(b"|");
+    hasher.update(body.as_ref());
+    format!(
+        "ditto-proxy-cache-v2-{}",
+        proxy_cache_hex_lower(&hasher.finalize())
+    )
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+fn proxy_cache_hex_lower(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+    for &byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }
 
 #[cfg(feature = "gateway-proxy-cache")]

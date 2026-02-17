@@ -72,7 +72,7 @@ use super::responses_shim;
 use super::translation;
 use super::redaction::GatewayRedactor;
 use super::{
-    Gateway, GatewayError, GatewayRequest, GatewayResponse, GatewayStateFile,
+    Gateway, GatewayError, GatewayPreparedRequest, GatewayRequest, GatewayResponse, GatewayStateFile,
     ObservabilitySnapshot, ProxyBackend, VirtualKeyConfig,
 };
 
@@ -541,26 +541,83 @@ async fn handle_gateway(
         }),
     );
 
-    let (_virtual_key_id, result) = {
+    let prepared = {
         let mut gateway = state.gateway.lock().await;
-        let virtual_key_id = gateway
-            .config
-            .virtual_key(&request.virtual_key)
-            .map(|key| key.id.clone());
-        (virtual_key_id, gateway.handle(request).await)
+        gateway.prepare_handle_request(&request)
+    };
+    let (_virtual_key_id, result) = match prepared {
+        Ok(GatewayPreparedRequest::Cached { key_id, response }) => (Some(key_id), Ok(response)),
+        Ok(GatewayPreparedRequest::Call(prepared)) => {
+            let virtual_key_id = Some(prepared.key_id.clone());
+            match prepared.backend.call(&request).await {
+                Ok(mut response) => {
+                    response.backend = prepared.backend_name.clone();
+                    response.cached = false;
+                    {
+                        let mut gateway = state.gateway.lock().await;
+                        gateway.complete_handle_success(&prepared, &response);
+                    }
+                    (virtual_key_id, Ok(response))
+                }
+                Err(err) => {
+                    {
+                        let mut gateway = state.gateway.lock().await;
+                        gateway.complete_handle_failure(&prepared);
+                    }
+                    (virtual_key_id, Err(err))
+                }
+            }
+        }
+        Err(err) => (None, Err(err)),
     };
 
-    #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
-        if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-            let _ = store.record_spent_tokens(virtual_key_id, tokens).await;
-        }
-    }
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    {
+        let input_tokens = u64::from(request.input_tokens);
+        let spent_tokens = result
+            .as_ref()
+            .ok()
+            .map(|response| input_tokens.saturating_add(u64::from(response.output_tokens)));
+        if let Some(spent_tokens) = spent_tokens {
+            #[cfg(feature = "gateway-store-sqlite")]
+            if let Some(store) = state.sqlite_store.as_ref() {
+                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
+                    if let Err(err) = store.record_spent_tokens(virtual_key_id, spent_tokens).await
+                    {
+                        emit_json_log(
+                            &state,
+                            "gateway.warning",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "virtual_key_id": virtual_key_id,
+                                "warning": "store_record_spent_tokens_failed",
+                                "store": "sqlite",
+                                "error": err.to_string(),
+                            }),
+                        );
+                    }
+                }
+            }
 
-    #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
-        if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-            let _ = store.record_spent_tokens(virtual_key_id, tokens).await;
+            #[cfg(feature = "gateway-store-redis")]
+            if let Some(store) = state.redis_store.as_ref() {
+                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
+                    if let Err(err) = store.record_spent_tokens(virtual_key_id, spent_tokens).await
+                    {
+                        emit_json_log(
+                            &state,
+                            "gateway.warning",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "virtual_key_id": virtual_key_id,
+                                "warning": "store_record_spent_tokens_failed",
+                                "store": "redis",
+                                "error": err.to_string(),
+                            }),
+                        );
+                    }
+                }
+            }
         }
     }
 

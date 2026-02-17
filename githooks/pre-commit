@@ -109,6 +109,43 @@ EOF
   exit 1
 fi
 
+# Refuse newly introduced ignored async results in gateway runtime paths.
+# Use an explicit handling branch or an inline allow marker when intentional:
+#   // commit-check: allow-ignored-await
+ignored_await_offenders=()
+current_file=""
+while IFS= read -r line; do
+  if [[ "$line" == "+++ b/"* ]]; then
+    current_file="${line#+++ b/}"
+    continue
+  fi
+  [[ -z "$current_file" ]] && continue
+  if [[ "$current_file" != src/gateway/* && "$current_file" != src/bin/ditto_gateway/* ]]; then
+    continue
+  fi
+  if [[ "$line" == +* ]] && [[ "$line" != "+++"* ]]; then
+    code="${line#+}"
+    if [[ "$code" =~ let[[:space:]]+_[[:space:]]*=.*\.await([[:space:]]*;)?[[:space:]]*$ ]] &&
+      [[ "$code" != *"commit-check: allow-ignored-await"* ]]; then
+      ignored_await_offenders+=("$current_file: $code")
+    fi
+  fi
+done < <(git diff --cached -U0 -- '*.rs')
+
+if [[ "${#ignored_await_offenders[@]}" -gt 0 ]]; then
+  cat >&2 <<EOF
+pre-commit: refusing ignored async results in gateway runtime code.
+
+请不要使用 \`let _ = foo().await\` 吞掉错误；请显式处理 Err（日志/映射/传播）。
+如确有必要，请在该行添加注释：
+  // commit-check: allow-ignored-await
+
+Offenders:
+$(printf '  - %s\n' "${ignored_await_offenders[@]}")
+EOF
+  exit 1
+fi
+
 if [[ ! -f "$repo_root/Cargo.toml" ]]; then
   echo "pre-commit: no Cargo manifest found; skipping rust fmt/check." >&2
   exit 0
@@ -120,4 +157,23 @@ echo "pre-commit: running Rust gates in $repo_root" >&2
   cd "$repo_root"
   cargo fmt -p ditto-llm -- --check
   cargo check -p ditto-llm --all-targets
+  cargo clippy -p ditto-llm --all-targets -- -D warnings
 )
+
+needs_gateway_regression=0
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  if [[ "$path" == src/gateway/* || "$path" == src/bin/ditto_gateway/* || "$path" == tests/gateway* ]]; then
+    needs_gateway_regression=1
+    break
+  fi
+done <<<"$staged_non_deleted_files"
+
+if [[ "$needs_gateway_regression" -eq 1 ]]; then
+  echo "pre-commit: running gateway regression checks" >&2
+  (
+    cd "$repo_root"
+    cargo test -p ditto-llm --features gateway prepare_handle_request_reserves_budget_until_completed_or_rolled_back -- --nocapture
+    cargo test -p ditto-llm --features "gateway gateway-proxy-cache" --test gateway_openai_proxy openai_compat_proxy_cache_varies_by_semantic_request_headers -- --nocapture
+  )
+fi

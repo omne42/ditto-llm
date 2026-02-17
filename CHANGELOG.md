@@ -120,9 +120,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.
 - CI: verify `llms.txt` is up to date (`ditto-llms-txt --check`).
 - Build: add `pnpm-lock.yaml` and use frozen installs in CI for deterministic JS/TS builds.
+- Dev: strengthen `githooks/pre-commit` with `cargo clippy -D warnings`, gateway regression checks, and a staged-diff guard that blocks newly introduced `let _ = ...await` in gateway runtime paths (unless explicitly annotated).
 
 ### Fixed
 
+- Gateway: reserve `/v1/gateway` control-plane token budgets at request-prepare time and refund on backend failure, preventing concurrent in-flight requests from overspending shared budgets.
+- Gateway: when proxy cache is enabled, only pre-buffer/cache non-stream responses with a known `content-length` within cap; unknown-length bodies now stay on the streaming passthrough path instead of returning `502` on cache buffering overflow.
+- Gateway: proxy stream abort metrics finalization now falls back to async execution when the abort-finalizer queue is full (prevents dropped aborted-stream metrics).
+- Gateway: log sqlite/redis token-ledger persistence failures in `/v1/gateway` instead of silently ignoring them.
 - Gateway: remove panic-prone `expect/unwrap` from the HTTP proxy non-stream path and header construction (no behavior change).
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
 - Gateway: fix streaming multipart passthrough (/v1/files and /v1/audio/* uploads) spending so in-memory budgets are decremented even when store features are disabled.

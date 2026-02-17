@@ -690,6 +690,118 @@ async fn openai_compat_proxy_project_budget_is_shared_across_virtual_keys() -> d
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_tenant_budget_is_shared_across_virtual_keys() -> ditto_llm::Result<()>
+{
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                r#"{"id":"ok","choices":[{"message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+            );
+    });
+
+    let max_tokens = 1u32;
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "max_tokens": max_tokens,
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let body_string = body.to_string();
+    let input_tokens_estimate: u64 = {
+        #[cfg(feature = "gateway-tokenizer")]
+        {
+            u64::from(
+                ditto_llm::gateway::token_count::estimate_input_tokens(
+                    "/v1/chat/completions",
+                    "gpt-4o-mini",
+                    &body,
+                )
+                .expect("token_count"),
+            )
+        }
+        #[cfg(not(feature = "gateway-tokenizer"))]
+        {
+            body_string.len().div_ceil(4) as u64
+        }
+    };
+    let charge_tokens = input_tokens_estimate.saturating_add(u64::from(max_tokens));
+    let budget_total = charge_tokens.saturating_add(1);
+
+    let mut key_1 = VirtualKeyConfig::new("key-1", "vk-1");
+    key_1.tenant_id = Some("tenant-1".to_string());
+    key_1.tenant_budget = Some(BudgetConfig {
+        total_tokens: Some(budget_total),
+        total_usd_micros: None,
+    });
+
+    let mut key_2 = VirtualKeyConfig::new("key-2", "vk-2");
+    key_2.tenant_id = Some("tenant-1".to_string());
+    key_2.tenant_budget = Some(BudgetConfig {
+        total_tokens: Some(budget_total),
+        total_usd_micros: None,
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key_1, key_2],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request_1 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .header("x-request-id", "req-1")
+        .body(Body::from(body_string.clone()))
+        .unwrap();
+    let response_1 = app.clone().oneshot(request_1).await.unwrap();
+    assert_eq!(response_1.status(), StatusCode::OK);
+
+    let request_2 = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-2")
+        .header("content-type", "application/json")
+        .header("x-request-id", "req-2")
+        .body(Body::from(body_string))
+        .unwrap();
+    let response_2 = app.oneshot(request_2).await.unwrap();
+    assert_eq!(response_2.status(), StatusCode::PAYMENT_REQUIRED);
+    let bytes = to_bytes(response_2.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        value["error"]["code"].as_str().unwrap_or_default(),
+        "budget_exceeded"
+    );
+
+    mock.assert_calls(1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_streams_text_event_stream() {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return;

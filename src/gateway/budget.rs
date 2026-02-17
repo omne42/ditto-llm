@@ -43,6 +43,19 @@ impl BudgetTracker {
         *entry = entry.saturating_add(tokens);
     }
 
+    pub fn refund(&mut self, key_id: &str, budget: &BudgetConfig, tokens: u64) {
+        if budget.total_tokens.is_none() || tokens == 0 {
+            return;
+        }
+        let Some(entry) = self.spent_tokens.get_mut(key_id) else {
+            return;
+        };
+        *entry = entry.saturating_sub(tokens);
+        if *entry == 0 {
+            self.spent_tokens.remove(key_id);
+        }
+    }
+
     pub fn can_spend_cost_usd_micros(
         &self,
         key_id: &str,
