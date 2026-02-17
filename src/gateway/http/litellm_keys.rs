@@ -418,7 +418,7 @@ async fn litellm_key_update(
             key.enabled = !blocked;
         }
 
-        let old_id = existing.id.clone();
+        let old_id = &existing.id;
         if let Some(new_id) = new_alias.as_deref() {
             if new_id != old_id {
                 if keys.iter().any(|candidate| candidate.id == new_id) {
@@ -428,7 +428,7 @@ async fn litellm_key_update(
                         "key_alias already exists",
                     ));
                 }
-                gateway.remove_virtual_key(&old_id);
+                gateway.remove_virtual_key(old_id);
                 key.id = new_id.to_string();
             }
         }

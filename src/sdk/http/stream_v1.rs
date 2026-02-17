@@ -1,13 +1,13 @@
 use std::collections::VecDeque;
 use std::io::{self, Result as IoResult};
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use futures_util::stream::{self, BoxStream};
 
 use crate::{DittoError, StreamResult};
 
-use super::protocol::{StreamEventV1, encode_line_v1, encode_v1};
+use super::protocol::{StreamEventV1, encode_v1_bytes};
 
 #[derive(Clone, Copy)]
 enum HttpStreamFormat {
@@ -18,10 +18,20 @@ enum HttpStreamFormat {
 impl HttpStreamFormat {
     fn encode(self, event: &StreamEventV1) -> IoResult<Bytes> {
         match self {
-            Self::Ndjson => Ok(Bytes::from(encode_line_v1(event).map_err(to_io_error)?)),
+            Self::Ndjson => {
+                let json = encode_v1_bytes(event).map_err(to_io_error)?;
+                let mut out = BytesMut::with_capacity(json.len() + 1);
+                out.extend_from_slice(&json);
+                out.extend_from_slice(b"\n");
+                Ok(out.freeze())
+            }
             Self::Sse => {
-                let json = encode_v1(event).map_err(to_io_error)?;
-                Ok(Bytes::from(format!("data: {json}\n\n")))
+                let json = encode_v1_bytes(event).map_err(to_io_error)?;
+                let mut out = BytesMut::with_capacity(6 + json.len() + 2);
+                out.extend_from_slice(b"data: ");
+                out.extend_from_slice(&json);
+                out.extend_from_slice(b"\n\n");
+                Ok(out.freeze())
             }
         }
     }

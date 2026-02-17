@@ -9,6 +9,7 @@ async fn handle_openai_models_list(
 
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
+    #[cfg(feature = "gateway-translation")]
     let created = now_epoch_seconds();
 
     let (strip_authorization, key_route) = {
@@ -25,10 +26,8 @@ async fn handle_openai_models_list(
                 )
             })?;
             let key = gateway
-                .config
-                .virtual_keys
-                .iter()
-                .find(|key| key.enabled && key.token == token)
+                .virtual_key_by_token(&token)
+                .filter(|key| key.enabled)
                 .cloned()
                 .ok_or_else(|| {
                     openai_error(

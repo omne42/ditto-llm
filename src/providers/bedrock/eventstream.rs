@@ -35,6 +35,7 @@ impl EventStreamDecoder {
         }
         let total_len = u32::from_be_bytes(self.buffer[0..4].try_into().ok()?) as usize;
         if total_len < 16 {
+            self.buffer.clear();
             return Some(Err(DittoError::InvalidResponse(
                 "eventstream total_len too small".to_string(),
             )));
@@ -48,27 +49,30 @@ impl EventStreamDecoder {
         if self.buffer.len() < total_len {
             return None;
         }
-        let message = self.buffer.drain(0..total_len).collect::<Vec<u8>>();
-        let headers_len = u32::from_be_bytes(message[4..8].try_into().ok()?) as usize;
+        let headers_len = u32::from_be_bytes(self.buffer[4..8].try_into().ok()?) as usize;
         let headers_start = 12usize;
         let headers_end = headers_start.saturating_add(headers_len);
-        if headers_end > message.len() {
+        if headers_end > total_len {
+            self.buffer.clear();
             return Some(Err(DittoError::InvalidResponse(
                 "eventstream invalid headers length".to_string(),
             )));
         }
         let payload_end = total_len.saturating_sub(4);
         if headers_end > payload_end {
+            self.buffer.clear();
             return Some(Err(DittoError::InvalidResponse(
                 "eventstream invalid payload length".to_string(),
             )));
         }
 
-        let headers = match parse_eventstream_headers(&message[headers_start..headers_end]) {
+        let headers_result = parse_eventstream_headers(&self.buffer[headers_start..headers_end]);
+        let payload = self.buffer[headers_end..payload_end].to_vec();
+        self.buffer.drain(0..total_len);
+        let headers = match headers_result {
             Ok(headers) => headers,
             Err(err) => return Some(Err(err)),
         };
-        let payload = message[headers_end..payload_end].to_vec();
         Some(Ok(EventStreamMessage { headers, payload }))
     }
 }
@@ -182,7 +186,10 @@ fn bedrock_event_stream_from_response(
                                     Ok(None) => {}
                                     Err(err) => buffer.push_back(Err(err)),
                                 },
-                                Err(err) => buffer.push_back(Err(err)),
+                                Err(err) => {
+                                    buffer.push_back(Err(err));
+                                    break;
+                                }
                             }
                         }
                     }

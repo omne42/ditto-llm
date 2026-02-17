@@ -76,7 +76,10 @@ pub(crate) fn parse_gateway_cli_args(
     let mut redis_url: Option<String> = None;
     let mut redis_url_env: Option<String> = None;
     let mut redis_prefix: Option<String> = None;
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     let mut audit_retention_secs: Option<u64> = None;
+    #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+    let audit_retention_secs: Option<u64> = None;
     let mut backend_specs: Vec<String> = Vec::new();
     let mut upstream_specs: Vec<String> = Vec::new();
     let mut json_logs = false;

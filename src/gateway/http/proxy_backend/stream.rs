@@ -1,4 +1,9 @@
         {
+        const SSE_USAGE_TRACKER_MAX_BUFFER_BYTES: usize = 512 * 1024;
+        const SSE_USAGE_TRACKER_TAIL_BYTES: usize = 128 * 1024;
+        const PROXY_SSE_ABORT_FINALIZER_WORKERS: usize = 2;
+        const PROXY_SSE_ABORT_FINALIZER_QUEUE_CAPACITY: usize = 1024;
+
         #[derive(Default)]
         struct SseUsageTracker {
             buffer: bytes::BytesMut,
@@ -32,6 +37,14 @@
                             self.observed_usage = Some(usage);
                         }
                     }
+                }
+
+                if self.buffer.len() > SSE_USAGE_TRACKER_MAX_BUFFER_BYTES {
+                    let keep_from = self
+                        .buffer
+                        .len()
+                        .saturating_sub(SSE_USAGE_TRACKER_TAIL_BYTES);
+                    self.buffer = self.buffer.split_off(keep_from);
                 }
             }
 
@@ -130,6 +143,9 @@
                 end: StreamEnd,
                 stream_bytes: u64,
             ) {
+                #[cfg(not(feature = "gateway-metrics-prometheus"))]
+                let _ = (&end, stream_bytes);
+
                 #[cfg(feature = "gateway-metrics-prometheus")]
                 if let Some(metrics) = self.state.prometheus_metrics.as_ref() {
                     let mut metrics = metrics.lock().await;
@@ -429,6 +445,93 @@
             }
         }
 
+        struct ProxySseAbortFinalizeJob {
+            finalizer: ProxySseFinalizer,
+            observed: Option<ObservedUsage>,
+            bytes_sent: u64,
+        }
+
+        struct ProxySseAbortFinalizerPool {
+            senders: Vec<std::sync::mpsc::SyncSender<ProxySseAbortFinalizeJob>>,
+            next_sender: std::sync::atomic::AtomicUsize,
+        }
+
+        fn proxy_sse_abort_finalizer_pool() -> &'static ProxySseAbortFinalizerPool {
+            static POOL: std::sync::OnceLock<ProxySseAbortFinalizerPool> = std::sync::OnceLock::new();
+            POOL.get_or_init(|| {
+                let workers = PROXY_SSE_ABORT_FINALIZER_WORKERS.max(1);
+                let capacity = PROXY_SSE_ABORT_FINALIZER_QUEUE_CAPACITY.max(1);
+                let mut senders = Vec::with_capacity(workers);
+
+                for worker in 0..workers {
+                    let (tx, rx) =
+                        std::sync::mpsc::sync_channel::<ProxySseAbortFinalizeJob>(capacity);
+                    let thread_name = format!("ditto-proxy-sse-finalizer-{worker}");
+                    let spawn_result = std::thread::Builder::new()
+                        .name(thread_name)
+                        .spawn(move || {
+                            let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                            else {
+                                return;
+                            };
+                            while let Ok(job) = rx.recv() {
+                                runtime.block_on(async move {
+                                    job.finalizer
+                                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
+                                        .await;
+                                });
+                            }
+                        });
+
+                    if spawn_result.is_ok() {
+                        senders.push(tx);
+                    }
+                }
+
+                ProxySseAbortFinalizerPool {
+                    senders,
+                    next_sender: std::sync::atomic::AtomicUsize::new(0),
+                }
+            })
+        }
+
+        fn enqueue_proxy_sse_abort_finalize(
+            finalizer: ProxySseFinalizer,
+            observed: Option<ObservedUsage>,
+            bytes_sent: u64,
+        ) {
+            let job = ProxySseAbortFinalizeJob {
+                finalizer,
+                observed,
+                bytes_sent,
+            };
+
+            let pool = proxy_sse_abort_finalizer_pool();
+            if pool.senders.is_empty() {
+                tokio::spawn(async move {
+                    job.finalizer
+                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
+                        .await;
+                });
+                return;
+            }
+
+            let idx = pool.next_sender.fetch_add(1, Ordering::Relaxed) % pool.senders.len();
+            if let Err(err) = pool.senders[idx].try_send(job) {
+                let job = match err {
+                    std::sync::mpsc::TrySendError::Full(job) => job,
+                    std::sync::mpsc::TrySendError::Disconnected(job) => job,
+                };
+                tokio::spawn(async move {
+                    job.finalizer
+                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
+                        .await;
+                });
+            }
+        }
+
         struct ProxySseStreamState {
             upstream: ProxyBodyStream,
             tracker: SseUsageTracker,
@@ -444,11 +547,7 @@
                 };
                 let observed = self.tracker.observed_usage();
                 let bytes_sent = self.bytes_sent;
-                tokio::spawn(async move {
-                    finalizer
-                        .finalize(observed, StreamEnd::Aborted, bytes_sent)
-                        .await;
-                });
+                enqueue_proxy_sse_abort_finalize(finalizer, observed, bytes_sent);
             }
         }
 

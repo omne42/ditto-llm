@@ -1,3 +1,7 @@
+const MCP_AUTO_EXEC_MAX_TOOL_CALLS_PER_ROUND: usize = 32;
+const MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES: usize = 64 * 1024;
+const MCP_AUTO_EXEC_MAX_ADDED_MESSAGES_BYTES: usize = 512 * 1024;
+
 async fn maybe_handle_mcp_tools_chat_completions(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
@@ -122,6 +126,8 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         ));
     };
     let mut messages = messages;
+    let mut messages_bytes = estimate_messages_bytes(&messages);
+    let max_messages_bytes = messages_bytes.saturating_add(MCP_AUTO_EXEC_MAX_ADDED_MESSAGES_BYTES);
 
     let mut tool_rounds_executed: usize = 0;
     loop {
@@ -144,19 +150,55 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
 
         // Non-stream call to extract tool calls.
         let step_request_id = format!("{request_id}-mcp{tool_rounds_executed}");
-        let mut step_req_json = request_json.clone();
-        set_json_tools(&mut step_req_json, tools_for_llm.clone());
-        if let Some(obj) = step_req_json.as_object_mut() {
-            obj.insert("messages".to_string(), Value::Array(messages.clone()));
-        }
-        let step_response = call_openai_compat_proxy_with_body(
-            state,
-            parts,
-            &step_request_id,
-            &step_req_json,
-            false,
-        )
-        .await?;
+        let step_response = {
+            let mut step_req_json = request_json.clone();
+            set_json_tools(&mut step_req_json, tools_for_llm.clone());
+            {
+                let Some(obj) = step_req_json.as_object_mut() else {
+                    return Err(openai_error(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request_error",
+                        Some("invalid_mcp_request"),
+                        "invalid chat/completions request",
+                    ));
+                };
+                obj.insert(
+                    "messages".to_string(),
+                    Value::Array(std::mem::take(&mut messages)),
+                );
+            }
+            let response = call_openai_compat_proxy_with_body(
+                state,
+                parts,
+                &step_request_id,
+                &step_req_json,
+                false,
+            )
+            .await?;
+            let restored_messages = {
+                let Some(obj) = step_req_json.as_object_mut() else {
+                    return Err(openai_error(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request_error",
+                        Some("invalid_mcp_request"),
+                        "invalid chat/completions request",
+                    ));
+                };
+                match obj.remove("messages") {
+                    Some(Value::Array(restored_messages)) => restored_messages,
+                    _ => {
+                        return Err(openai_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request_error",
+                            Some("invalid_mcp_request"),
+                            "invalid chat/completions request",
+                        ));
+                    }
+                }
+            };
+            messages = restored_messages;
+            response
+        };
 
         let (step_status, step_headers, step_body) =
             split_response(step_response, 8 * 1024 * 1024).await?;
@@ -187,11 +229,28 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
             }
             return Ok(Some(rebuild_response(step_status, step_headers, step_body)));
         }
+        if tool_calls.len() > MCP_AUTO_EXEC_MAX_TOOL_CALLS_PER_ROUND {
+            return Err(openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("mcp_auto_exec_limit_exceeded"),
+                format!(
+                    "tool call count {} exceeded per-round limit {}",
+                    tool_calls.len(),
+                    MCP_AUTO_EXEC_MAX_TOOL_CALLS_PER_ROUND
+                ),
+            ));
+        }
 
         if let Some(message) =
             assistant_message.or_else(|| build_chat_assistant_message_from_tool_calls(&tool_calls))
         {
-            messages.push(message);
+            push_message_with_limit(
+                &mut messages,
+                &mut messages_bytes,
+                max_messages_bytes,
+                message,
+            )?;
         }
 
         for call in &tool_calls {
@@ -199,11 +258,16 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
                 .await
                 .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
             let content = mcp_tool_result_to_text(&result);
-            messages.push(serde_json::json!({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": content,
-            }));
+            push_message_with_limit(
+                &mut messages,
+                &mut messages_bytes,
+                max_messages_bytes,
+                serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": call.id.clone(),
+                    "content": content,
+                }),
+            )?;
         }
 
         tool_rounds_executed = tool_rounds_executed.saturating_add(1);
@@ -620,8 +684,12 @@ fn tool_name_allowed(tool: &Value, allowed: &std::collections::BTreeSet<String>)
     if allowed.contains(name) {
         return true;
     }
-    let unprefixed = name.split_once('-').map(|(_, rest)| rest).unwrap_or(name);
-    allowed.contains(unprefixed)
+    allowed.iter().any(|candidate| {
+        !candidate.is_empty()
+            && name.len() > candidate.len() + 1
+            && name.ends_with(candidate)
+            && name.as_bytes()[name.len() - candidate.len() - 1] == b'-'
+    })
 }
 
 fn resolve_mcp_servers_from_tool_cfgs(cfgs: &[McpToolConfig]) -> Option<Vec<String>> {
@@ -920,7 +988,7 @@ fn build_chat_assistant_message_from_tool_calls(tool_calls: &[ChatToolCall]) -> 
 
 fn mcp_tool_result_to_text(result: &Value) -> String {
     if let Some(text) = result.as_str() {
-        return text.to_string();
+        return truncate_utf8_with_suffix(text, MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES);
     }
 
     if let Some(content) = result.get("content").and_then(|v| v.as_array()) {
@@ -933,9 +1001,128 @@ fn mcp_tool_result_to_text(result: &Value) -> String {
             }
         }
         if !texts.is_empty() {
-            return texts.join("\n");
+            return truncate_utf8_with_suffix(
+                &texts.join("\n"),
+                MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES,
+            );
         }
     }
 
-    serde_json::to_string(result).unwrap_or_else(|_| "tool executed".to_string())
+    let serialized = serde_json::to_string(result).unwrap_or_else(|_| "tool executed".to_string());
+    truncate_utf8_with_suffix(&serialized, MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES)
+}
+
+fn estimate_messages_bytes(messages: &[Value]) -> usize {
+    messages.iter().map(json_encoded_size).sum()
+}
+
+fn json_encoded_size(value: &Value) -> usize {
+    serde_json::to_vec(value)
+        .map(|bytes| bytes.len())
+        .unwrap_or_else(|_| value.to_string().len())
+}
+
+fn push_message_with_limit(
+    messages: &mut Vec<Value>,
+    current_bytes: &mut usize,
+    max_bytes: usize,
+    message: Value,
+) -> OpenAiCompatProxyResult<()> {
+    let message_bytes = json_encoded_size(&message);
+    let next = current_bytes.saturating_add(message_bytes);
+    if next > max_bytes {
+        return Err(openai_error(
+            StatusCode::BAD_GATEWAY,
+            "api_error",
+            Some("mcp_auto_exec_limit_exceeded"),
+            format!(
+                "MCP auto-exec context exceeded byte budget (max={}, next={next})",
+                max_bytes
+            ),
+        ));
+    }
+    messages.push(message);
+    *current_bytes = next;
+    Ok(())
+}
+
+fn truncate_utf8_with_suffix(input: &str, max_bytes: usize) -> String {
+    const SUFFIX: &str = "...[truncated]";
+    if input.len() <= max_bytes {
+        return input.to_string();
+    }
+    if max_bytes == 0 {
+        return String::new();
+    }
+    if max_bytes <= SUFFIX.len() {
+        let mut end = max_bytes;
+        while end > 0 && !input.is_char_boundary(end) {
+            end = end.saturating_sub(1);
+        }
+        return input[..end].to_string();
+    }
+
+    let mut end = max_bytes - SUFFIX.len();
+    while end > 0 && !input.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    let mut out = String::with_capacity(end.saturating_add(SUFFIX.len()));
+    out.push_str(&input[..end]);
+    out.push_str(SUFFIX);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use serde_json::json;
+
+    use super::{
+        MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES, estimate_messages_bytes, mcp_tool_result_to_text,
+        tool_name_allowed, truncate_utf8_with_suffix,
+    };
+
+    #[test]
+    fn tool_name_allowed_accepts_hyphenated_server_prefix() {
+        let allowed = BTreeSet::from(["hello".to_string()]);
+        assert!(tool_name_allowed(&json!({"name": "alpha-1-hello"}), &allowed));
+    }
+
+    #[test]
+    fn tool_name_allowed_accepts_hyphenated_tool_name() {
+        let allowed = BTreeSet::from(["tool-a".to_string()]);
+        assert!(tool_name_allowed(&json!({"name": "alpha-1-tool-a"}), &allowed));
+    }
+
+    #[test]
+    fn tool_name_allowed_rejects_non_matching_suffix() {
+        let allowed = BTreeSet::from(["hello".to_string()]);
+        assert!(!tool_name_allowed(&json!({"name": "alpha-1-world"}), &allowed));
+    }
+
+    #[test]
+    fn mcp_tool_result_to_text_truncates_large_text() {
+        let source = "a".repeat(MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES.saturating_add(64));
+        let out = mcp_tool_result_to_text(&json!(source));
+        assert!(out.len() <= MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES);
+        assert!(out.ends_with("...[truncated]"));
+    }
+
+    #[test]
+    fn truncate_utf8_with_suffix_preserves_char_boundaries() {
+        let source = "你好世界".repeat(32);
+        let out = truncate_utf8_with_suffix(&source, 17);
+        assert!(out.is_char_boundary(out.len()));
+    }
+
+    #[test]
+    fn estimate_messages_bytes_counts_serialized_size() {
+        let messages = vec![
+            json!({"role": "user", "content": "hello"}),
+            json!({"role": "assistant", "content": "world"}),
+        ];
+        let size = estimate_messages_bytes(&messages);
+        assert!(size > 0);
+    }
 }

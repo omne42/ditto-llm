@@ -15,18 +15,23 @@ mod ui_message_stream_v1_tests {
         Done,
     }
 
-    async fn collect_sse_payloads(stream: StreamResult) -> Vec<Frame> {
-        let mut out = super::ui_message_stream_v1_sse_with_options(
-            stream,
-            super::UiMessageStreamV1Options {
-                message_id: Some("msg_test".to_string()),
-                text_id: Some("text_test".to_string()),
-                reasoning_id: Some("reasoning_test".to_string()),
-                max_tool_input_bytes: 1024,
-                include_usage: true,
-                include_warnings: true,
-            },
-        );
+    fn test_options() -> super::UiMessageStreamV1Options {
+        super::UiMessageStreamV1Options {
+            message_id: Some("msg_test".to_string()),
+            text_id: Some("text_test".to_string()),
+            reasoning_id: Some("reasoning_test".to_string()),
+            max_tool_input_bytes: 1024,
+            max_tool_calls: 128,
+            include_usage: true,
+            include_warnings: true,
+        }
+    }
+
+    async fn collect_sse_payloads_with_options(
+        stream: StreamResult,
+        options: super::UiMessageStreamV1Options,
+    ) -> Vec<Frame> {
+        let mut out = super::ui_message_stream_v1_sse_with_options(stream, options);
 
         let mut payloads = Vec::<Frame>::new();
         while let Some(item) = out.next().await {
@@ -44,6 +49,10 @@ mod ui_message_stream_v1_tests {
             payloads.push(Frame::Json(value));
         }
         payloads
+    }
+
+    async fn collect_sse_payloads(stream: StreamResult) -> Vec<Frame> {
+        collect_sse_payloads_with_options(stream, test_options()).await
     }
 
     #[tokio::test]
@@ -236,6 +245,51 @@ mod ui_message_stream_v1_tests {
                 })),
                 Frame::Done,
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn ui_message_stream_limits_tracked_tool_calls() {
+        let chunks = vec![
+            Ok(StreamChunk::ToolCallStart {
+                id: "call_1".to_string(),
+                name: "first".to_string(),
+            }),
+            Ok(StreamChunk::ToolCallDelta {
+                id: "call_1".to_string(),
+                arguments_delta: "{\"a\":1}".to_string(),
+            }),
+            Ok(StreamChunk::ToolCallStart {
+                id: "call_2".to_string(),
+                name: "second".to_string(),
+            }),
+            Ok(StreamChunk::ToolCallDelta {
+                id: "call_2".to_string(),
+                arguments_delta: "{\"b\":2}".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::ToolCalls)),
+        ];
+        let stream: StreamResult = stream::iter(chunks).boxed();
+        let options = super::UiMessageStreamV1Options {
+            max_tool_calls: 1,
+            ..test_options()
+        };
+
+        let payloads = collect_sse_payloads_with_options(stream, options).await;
+        let json_frames: Vec<_> = payloads
+            .into_iter()
+            .filter_map(|frame| match frame {
+                Frame::Json(value) => Some(value),
+                Frame::Done => None,
+            })
+            .collect();
+        assert!(json_frames.iter().any(
+            |frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_1")
+        ));
+        assert!(
+            !json_frames.iter().any(
+                |frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_2")
+            )
         );
     }
 }

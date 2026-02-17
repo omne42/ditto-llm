@@ -37,6 +37,24 @@ mod tests {
         })
     }
 
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn eventstream_decoder_invalid_total_len_is_consumed() {
+        let mut decoder = EventStreamDecoder::default();
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&(15u32).to_be_bytes());
+        frame.extend_from_slice(&0u32.to_be_bytes());
+        frame.extend_from_slice(&0u32.to_be_bytes());
+        decoder.push(&frame).expect("push frame");
+
+        let first = decoder.next_message().expect("invalid frame should produce error");
+        assert!(first.is_err());
+        assert!(
+            decoder.next_message().is_none(),
+            "decoder must advance after invalid frame"
+        );
+    }
+
     #[tokio::test]
     async fn bedrock_generate_maps_anthropic_body() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

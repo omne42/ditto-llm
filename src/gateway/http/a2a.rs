@@ -100,20 +100,14 @@ async fn require_virtual_key_if_configured(
             .into_response()
     })?;
 
-    let key = gateway
-        .config
-        .virtual_keys
-        .iter()
-        .find(|key| key.token == token)
-        .cloned()
-        .ok_or_else(|| {
-            error_response(
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                "unauthorized virtual key",
-            )
-            .into_response()
-        })?;
+    let key = gateway.virtual_key_by_token(&token).cloned().ok_or_else(|| {
+        error_response(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "unauthorized virtual key",
+        )
+        .into_response()
+    })?;
 
     if !key.enabled {
         return Err(
@@ -140,24 +134,32 @@ async fn proxy_a2a_request(
     body: Bytes,
     method: &str,
 ) -> Result<reqwest::Response, GatewayError> {
-    let mut response = agent
-        .backend
-        .request(reqwest::Method::POST, "", outgoing_headers.clone(), Some(body.clone()))
-        .await;
-
     let retry_path = match method {
         "message/send" => Some("/message/send"),
         "message/stream" => Some("/message/stream"),
         _ => None,
     };
 
-    if let (Ok(resp), Some(path)) = (&response, retry_path) {
+    let (first_headers, first_body, retry_payload) = if retry_path.is_some() {
+        (
+            outgoing_headers.clone(),
+            body.clone(),
+            Some((outgoing_headers, body)),
+        )
+    } else {
+        (outgoing_headers, body, None)
+    };
+    let mut response = agent
+        .backend
+        .request(reqwest::Method::POST, "", first_headers, Some(first_body))
+        .await;
+
+    if let (Ok(resp), Some(path), Some((retry_headers, retry_body))) = (&response, retry_path, retry_payload) {
         let status = resp.status();
-        if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::METHOD_NOT_ALLOWED
-        {
+        if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::METHOD_NOT_ALLOWED {
             response = agent
                 .backend
-                .request(reqwest::Method::POST, path, outgoing_headers, Some(body))
+                .request(reqwest::Method::POST, path, retry_headers, Some(retry_body))
                 .await;
         }
     }
@@ -192,8 +194,7 @@ async fn handle_a2a_agent_card(
         format!("/a2a/{agent_id}")
     };
 
-    let value = agent.agent_card_params.clone();
-    let mut obj = match value {
+    let mut obj = match agent.agent_card_params {
         Value::Object(obj) => obj,
         _ => Map::new(),
     };

@@ -23,6 +23,31 @@ impl Clock for FixedClock {
     }
 }
 
+struct ScriptedClock {
+    times: Vec<u64>,
+    idx: AtomicUsize,
+}
+
+impl ScriptedClock {
+    fn new(times: Vec<u64>) -> Self {
+        Self {
+            times,
+            idx: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl Clock for ScriptedClock {
+    fn now_epoch_seconds(&self) -> u64 {
+        let idx = self.idx.fetch_add(1, Ordering::SeqCst);
+        self.times
+            .get(idx)
+            .copied()
+            .or_else(|| self.times.last().copied())
+            .unwrap_or(0)
+    }
+}
+
 struct StaticBackend {
     content: String,
     calls: Arc<AtomicUsize>,
@@ -226,6 +251,66 @@ async fn cache_hit_skips_backend() {
     assert!(!first.cached);
     assert!(second.cached);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn cache_ttl_starts_from_response_write_time() {
+    let mut key = base_key();
+    key.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(60),
+        ..CacheConfig::default()
+    };
+    let config = base_config(key);
+    let clock = Box::new(ScriptedClock::new(vec![0, 120, 120]));
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, calls) = StaticBackend::new("cached");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    gateway.handle(request.clone()).await.unwrap();
+    gateway.handle(request).await.unwrap();
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn upsert_virtual_key_cache_config_change_clears_stale_scope_cache() {
+    let mut key = base_key();
+    key.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(60),
+        ..CacheConfig::default()
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 300 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, calls) = StaticBackend::new("cached");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let first = gateway.handle(request.clone()).await.unwrap();
+    let second = gateway.handle(request.clone()).await.unwrap();
+    assert!(!first.cached);
+    assert!(second.cached);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    let mut updated = base_key();
+    updated.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(5),
+        max_entries: 1,
+        ..CacheConfig::default()
+    };
+    assert!(!gateway.upsert_virtual_key(updated));
+
+    let third = gateway.handle(request.clone()).await.unwrap();
+    let fourth = gateway.handle(request).await.unwrap();
+    assert!(!third.cached);
+    assert!(fourth.cached);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]

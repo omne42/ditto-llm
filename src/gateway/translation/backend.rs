@@ -49,10 +49,22 @@ impl<V> Default for ModelCache<V> {
 }
 
 impl<V: Clone> ModelCache<V> {
+    fn move_key_to_back(&mut self, key: &str) {
+        if self.order.back().is_some_and(|candidate| candidate == key) {
+            return;
+        }
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            if let Some(existing) = self.order.remove(index) {
+                self.order.push_back(existing);
+            }
+            return;
+        }
+        self.order.push_back(key.to_string());
+    }
+
     fn get(&mut self, key: &str) -> Option<V> {
         let value = self.entries.get(key).cloned()?;
-        self.order.retain(|candidate| candidate != key);
-        self.order.push_back(key.to_string());
+        self.move_key_to_back(key);
         Some(value)
     }
 
@@ -62,8 +74,7 @@ impl<V: Clone> ModelCache<V> {
         }
 
         self.entries.insert(key.clone(), value);
-        self.order.retain(|candidate| candidate != &key);
-        self.order.push_back(key);
+        self.move_key_to_back(&key);
 
         while self.entries.len() > max_entries {
             let Some(candidate) = self.order.pop_front() else {
@@ -71,6 +82,38 @@ impl<V: Clone> ModelCache<V> {
             };
             self.entries.remove(&candidate);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ModelCache;
+
+    #[test]
+    fn model_cache_get_promotes_recency() {
+        let mut cache = ModelCache::default();
+        cache.insert("a".to_string(), 1, 2);
+        cache.insert("b".to_string(), 2, 2);
+
+        assert_eq!(cache.get("a"), Some(1));
+        cache.insert("c".to_string(), 3, 2);
+
+        assert_eq!(cache.get("a"), Some(1));
+        assert_eq!(cache.get("b"), None);
+        assert_eq!(cache.get("c"), Some(3));
+    }
+
+    #[test]
+    fn model_cache_hot_get_does_not_grow_order() {
+        let mut cache = ModelCache::default();
+        cache.insert("a".to_string(), 1, 10);
+
+        for _ in 0..5 {
+            assert_eq!(cache.get("a"), Some(1));
+        }
+
+        assert_eq!(cache.order.len(), 1);
+        assert_eq!(cache.order.front().map(String::as_str), Some("a"));
     }
 }
 
@@ -255,7 +298,8 @@ impl TranslationBackend {
             && self.model_cache_max_entries > 0;
 
         if cacheable {
-            if let Some(model_impl) = self.embedding_cache.lock().await.get(model) {
+            let cached = { self.embedding_cache.lock().await.get(model) };
+            if let Some(model_impl) = cached {
                 return model_impl.embed(texts).await;
             }
         }
@@ -369,7 +413,8 @@ impl TranslationBackend {
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
             && self.model_cache_max_entries > 0;
         if cacheable {
-            if let Some(model_impl) = self.audio_transcription_cache.lock().await.get(model) {
+            let cached = { self.audio_transcription_cache.lock().await.get(model) };
+            if let Some(model_impl) = cached {
                 request.model = Some(model.to_string());
                 return model_impl.transcribe(request).await;
             }
@@ -426,7 +471,8 @@ impl TranslationBackend {
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
             && self.model_cache_max_entries > 0;
         if cacheable {
-            if let Some(model_impl) = self.speech_cache.lock().await.get(model) {
+            let cached = { self.speech_cache.lock().await.get(model) };
+            if let Some(model_impl) = cached {
                 request.model = Some(model.to_string());
                 return model_impl.speak(request).await;
             }
@@ -483,7 +529,8 @@ impl TranslationBackend {
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
             && self.model_cache_max_entries > 0;
         if cacheable {
-            if let Some(model_impl) = self.rerank_cache.lock().await.get(model) {
+            let cached = { self.rerank_cache.lock().await.get(model) };
+            if let Some(model_impl) = cached {
                 request.model = Some(model.to_string());
                 return model_impl.rerank(request).await;
             }

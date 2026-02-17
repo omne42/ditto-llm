@@ -20,6 +20,12 @@
             let spend_tokens = true;
             let spent_tokens = spend.tokens;
             let spent_cost_usd_micros = spend.cost_usd_micros;
+            #[cfg(not(any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-redis",
+                feature = "gateway-costing",
+            )))]
+            let _ = spent_cost_usd_micros;
 
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {

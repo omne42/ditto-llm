@@ -89,20 +89,23 @@ impl CacheLayer {
     async fn get_generate(&self, key: CacheKey) -> Option<GenerateResponse> {
         let mut state = self.state.lock().await;
         state.prune_expired(self.ttl);
-        let expired = state
-            .entries
-            .get(&key)
-            .map(|entry| entry.is_expired(self.ttl))
-            .unwrap_or(true);
+        let Some(entry) = state.entries.get(&key) else {
+            return None;
+        };
+        let (expired, value) = if entry.is_expired(self.ttl) {
+            (true, None)
+        } else {
+            let value = match &entry.value {
+                CacheValue::Generate(resp) => Some(resp.clone()),
+                CacheValue::Stream(_) => None,
+            };
+            (false, value)
+        };
         if expired {
             state.remove_key(&key);
             return None;
         }
-
-        let value = match state.entries.get(&key)?.value.clone() {
-            CacheValue::Generate(resp) => Some(resp),
-            CacheValue::Stream(_) => None,
-        }?;
+        let value = value?;
         state.touch_key(&key);
         Some(value)
     }
@@ -110,20 +113,23 @@ impl CacheLayer {
     async fn get_stream(&self, key: CacheKey) -> Option<Arc<Vec<StreamChunk>>> {
         let mut state = self.state.lock().await;
         state.prune_expired(self.ttl);
-        let expired = state
-            .entries
-            .get(&key)
-            .map(|entry| entry.is_expired(self.ttl))
-            .unwrap_or(true);
+        let Some(entry) = state.entries.get(&key) else {
+            return None;
+        };
+        let (expired, value) = if entry.is_expired(self.ttl) {
+            (true, None)
+        } else {
+            let value = match &entry.value {
+                CacheValue::Stream(chunks) => Some(chunks.clone()),
+                CacheValue::Generate(_) => None,
+            };
+            (false, value)
+        };
         if expired {
             state.remove_key(&key);
             return None;
         }
-
-        let value = match state.entries.get(&key)?.value.clone() {
-            CacheValue::Stream(chunks) => Some(chunks),
-            CacheValue::Generate(_) => None,
-        }?;
+        let value = value?;
         state.touch_key(&key);
         Some(value)
     }
@@ -175,8 +181,7 @@ impl Default for CacheLayer {
 
 impl CacheState {
     fn insert(&mut self, key: CacheKey, entry: CacheEntry, max_entries: usize) {
-        if let Some(existing) = self.entries.insert(key, entry) {
-            let _ = existing;
+        if self.entries.insert(key, entry).is_some() {
             self.remove_key_from_lru(&key);
         }
         self.lru.push_back(key);
@@ -184,6 +189,9 @@ impl CacheState {
     }
 
     fn touch_key(&mut self, key: &CacheKey) {
+        if self.lru.back().is_some_and(|existing| existing == key) {
+            return;
+        }
         self.remove_key_from_lru(key);
         self.lru.push_back(*key);
     }
@@ -197,7 +205,9 @@ impl CacheState {
         if self.lru.is_empty() {
             return;
         }
-        self.lru.retain(|k| k != key);
+        if let Some(index) = self.lru.iter().position(|candidate| candidate == key) {
+            self.lru.remove(index);
+        }
     }
 
     fn evict_to_capacity(&mut self, max_entries: usize) {
@@ -213,21 +223,24 @@ impl CacheState {
         let Some(ttl) = ttl else {
             return;
         };
-
-        loop {
-            let Some(front) = self.lru.front().copied() else {
-                break;
-            };
-            let Some(entry) = self.entries.get(&front) else {
-                self.lru.pop_front();
-                continue;
-            };
-            if entry.inserted_at.elapsed() < ttl {
-                break;
-            }
-            self.lru.pop_front();
-            self.entries.remove(&front);
+        if self.lru.is_empty() {
+            return;
         }
+
+        let mut keep = VecDeque::with_capacity(self.lru.len());
+        while let Some(key) = self.lru.pop_front() {
+            let expired = self
+                .entries
+                .get(&key)
+                .map(|entry| entry.inserted_at.elapsed() >= ttl)
+                .unwrap_or(true);
+            if expired {
+                self.entries.remove(&key);
+            } else {
+                keep.push_back(key);
+            }
+        }
+        self.lru = keep;
     }
 }
 
@@ -267,8 +280,12 @@ impl LanguageModelLayer for CacheLayer {
             hash: fingerprint_request(inner, &request)?,
         };
         if let Some(hit) = self.get_stream(key).await {
-            let chunks = hit.as_ref().clone();
-            return Ok(stream::iter(chunks.into_iter().map(Ok)).boxed());
+            let replay = stream::unfold((hit, 0usize), |(chunks, idx)| async move {
+                let chunk = chunks.get(idx).cloned()?;
+                Some((Ok(chunk), (chunks, idx + 1)))
+            })
+            .boxed();
+            return Ok(replay);
         }
 
         let inner_stream = inner.stream(request).await?;
@@ -409,7 +426,9 @@ impl ApproxBytes for crate::types::ContentPart {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, VecDeque};
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
     use futures_util::StreamExt;
     use futures_util::stream;
@@ -515,5 +534,88 @@ mod tests {
         assert_eq!(a_chunks, b_chunks);
         assert_eq!(stream_calls.load(Ordering::SeqCst), 1);
         Ok(())
+    }
+
+    #[test]
+    fn prune_expired_removes_non_front_expired_entries() {
+        let fresh_key = CacheKey {
+            kind: CacheKind::Generate,
+            hash: 1,
+        };
+        let expired_key = CacheKey {
+            kind: CacheKind::Generate,
+            hash: 2,
+        };
+
+        let response = GenerateResponse {
+            content: vec![ContentPart::Text {
+                text: "ok".to_string(),
+            }],
+            finish_reason: FinishReason::Stop,
+            usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        };
+        let now = Instant::now();
+
+        let mut state = CacheState {
+            entries: HashMap::from([
+                (
+                    fresh_key,
+                    CacheEntry {
+                        inserted_at: now,
+                        value: CacheValue::Generate(response.clone()),
+                    },
+                ),
+                (
+                    expired_key,
+                    CacheEntry {
+                        inserted_at: now - Duration::from_secs(10),
+                        value: CacheValue::Generate(response),
+                    },
+                ),
+            ]),
+            lru: VecDeque::from([fresh_key, expired_key]),
+        };
+
+        state.prune_expired(Some(Duration::from_secs(5)));
+
+        assert!(state.entries.contains_key(&fresh_key));
+        assert!(!state.entries.contains_key(&expired_key));
+        assert_eq!(state.lru, VecDeque::from([fresh_key]));
+    }
+
+    #[test]
+    fn touch_key_hot_entry_avoids_duplicate_lru_nodes() {
+        let key = CacheKey {
+            kind: CacheKind::Generate,
+            hash: 1,
+        };
+        let response = GenerateResponse {
+            content: vec![ContentPart::Text {
+                text: "ok".to_string(),
+            }],
+            finish_reason: FinishReason::Stop,
+            usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        };
+        let now = Instant::now();
+        let mut state = CacheState {
+            entries: HashMap::from([(
+                key,
+                CacheEntry {
+                    inserted_at: now,
+                    value: CacheValue::Generate(response),
+                },
+            )]),
+            lru: VecDeque::from([key]),
+        };
+
+        for _ in 0..5 {
+            state.touch_key(&key);
+        }
+
+        assert_eq!(state.lru, VecDeque::from([key]));
     }
 }

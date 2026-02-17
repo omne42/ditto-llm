@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use axum::http::{Method, StatusCode};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use futures_util::stream;
 use serde::Deserialize;
@@ -632,6 +632,10 @@ fn finalize_stream(
 }
 
 fn sse_event_bytes(value: Value) -> Bytes {
-    let json = value.to_string();
-    Bytes::from(format!("data: {json}\n\n"))
+    let json = serde_json::to_vec(&value).unwrap_or_else(|_| value.to_string().into_bytes());
+    let mut out = BytesMut::with_capacity(6 + json.len() + 2);
+    out.extend_from_slice(b"data: ");
+    out.extend_from_slice(&json);
+    out.extend_from_slice(b"\n\n");
+    out.freeze()
 }

@@ -182,6 +182,9 @@
             if spend_tokens {
                 let mut gateway = state.gateway.lock().await;
                 gateway.budget.spend(&virtual_key_id, &budget, spent_tokens);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    gateway.budget.spend(scope, budget, spent_tokens);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     gateway.budget.spend(scope, budget, spent_tokens);
                 }
@@ -197,6 +200,13 @@
                             &budget,
                             spent_cost_usd_micros,
                         );
+                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                            gateway.budget.spend_cost_usd_micros(
+                                scope,
+                                budget,
+                                spent_cost_usd_micros,
+                            );
+                        }
                         if let Some((scope, budget)) = project_budget_scope.as_ref() {
                             gateway.budget.spend_cost_usd_micros(
                                 scope,
@@ -220,6 +230,9 @@
             if spend_tokens {
                 let mut gateway = state.gateway.lock().await;
                 gateway.budget.spend(&virtual_key_id, &budget, spent_tokens);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    gateway.budget.spend(scope, budget, spent_tokens);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     gateway.budget.spend(scope, budget, spent_tokens);
                 }
@@ -234,6 +247,11 @@
                         &budget,
                         spent_cost_usd_micros,
                     );
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        gateway
+                            .budget
+                            .spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                    }
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
                         gateway
                             .budget

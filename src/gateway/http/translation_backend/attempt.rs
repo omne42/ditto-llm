@@ -10,13 +10,18 @@ async fn attempt_translation_backend(
     let body = params.body;
     let parsed_json = params.parsed_json;
     let model = params.model;
+    #[cfg(feature = "gateway-costing")]
     let service_tier = params.service_tier;
+    #[cfg(not(feature = "gateway-costing"))]
+    let _service_tier = params.service_tier;
     let request_id = params.request_id;
     let path_and_query = params.path_and_query;
     let _now_epoch_seconds = params.now_epoch_seconds;
     let charge_tokens = params.charge_tokens;
     let _stream_requested = params.stream_requested;
     let use_persistent_budget = params.use_persistent_budget;
+    #[cfg(not(feature = "gateway-costing"))]
+    let _ = use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
     let budget = params.budget;
     let project_budget_scope = params.project_budget_scope;
@@ -120,7 +125,8 @@ async fn attempt_translation_backend(
                 gateway.observability.record_backend_call();
             }
 
-            let backend_timer_start = Instant::now();
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            let backend_timer_start = std::time::Instant::now();
 
             #[cfg(feature = "gateway-metrics-prometheus")]
             if let Some(metrics) = state.prometheus_metrics.as_ref() {

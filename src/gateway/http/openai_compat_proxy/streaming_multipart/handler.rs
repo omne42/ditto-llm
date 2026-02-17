@@ -31,7 +31,10 @@ async fn handle_openai_compat_proxy_streaming_multipart(
 
     let use_persistent_budget = use_sqlite_budget || use_redis_budget;
 
+    #[cfg(feature = "gateway-costing")]
     let mut charge_cost_usd_micros: Option<u64> = None;
+    #[cfg(not(feature = "gateway-costing"))]
+    let charge_cost_usd_micros: Option<u64> = None;
 
     let now_epoch_seconds = now_epoch_seconds();
     let minute = now_epoch_seconds / 60;
@@ -66,20 +69,14 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     "missing virtual key",
                 )
             })?;
-            let key = gateway
-                .config
-                .virtual_keys
-                .iter()
-                .find(|key| key.token == token)
-                .cloned()
-                .ok_or_else(|| {
-                    openai_error(
-                        StatusCode::UNAUTHORIZED,
-                        "authentication_error",
-                        Some("invalid_api_key"),
-                        "unauthorized virtual key",
-                    )
-                })?;
+            let key = gateway.virtual_key_by_token(&token).cloned().ok_or_else(|| {
+                openai_error(
+                    StatusCode::UNAUTHORIZED,
+                    "authentication_error",
+                    Some("invalid_api_key"),
+                    "unauthorized virtual key",
+                )
+            })?;
             if !key.enabled {
                 return Err(openai_error(
                     StatusCode::UNAUTHORIZED,
@@ -212,6 +209,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), None, &metrics_path);
                         metrics.record_proxy_rate_limited(Some(&key.id), None, &metrics_path);
@@ -233,6 +231,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),
@@ -262,6 +261,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),
@@ -291,6 +291,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),
@@ -322,6 +323,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), None, &metrics_path);
                         metrics.record_proxy_budget_exceeded(Some(&key.id), None, &metrics_path);
@@ -342,6 +344,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),
@@ -370,6 +373,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),
@@ -398,6 +402,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
+                        drop(gateway);
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(
                             virtual_key_id.as_deref(),

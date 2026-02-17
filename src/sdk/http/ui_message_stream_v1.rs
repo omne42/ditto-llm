@@ -38,6 +38,7 @@ pub struct UiMessageStreamV1Options {
     pub text_id: Option<String>,
     pub reasoning_id: Option<String>,
     pub max_tool_input_bytes: usize,
+    pub max_tool_calls: usize,
     pub include_usage: bool,
     pub include_warnings: bool,
 }
@@ -49,6 +50,7 @@ impl Default for UiMessageStreamV1Options {
             text_id: None,
             reasoning_id: None,
             max_tool_input_bytes: 256 * 1024,
+            max_tool_calls: 128,
             include_usage: true,
             include_warnings: true,
         }
@@ -76,6 +78,7 @@ struct UiStreamState {
     finish_reason: FinishReason,
     tool_calls: HashMap<String, ToolState>,
     max_tool_input_bytes: usize,
+    max_tool_calls: usize,
     include_usage: bool,
     include_warnings: bool,
     buffer: std::collections::VecDeque<UiStreamItem>,
@@ -86,8 +89,12 @@ fn to_io_error_other(msg: impl std::fmt::Display) -> std::io::Error {
 }
 
 fn encode_sse_json(value: serde_json::Value) -> UiStreamItem {
-    let json = serde_json::to_string(&value).map_err(to_io_error_other)?;
-    Ok(bytes::Bytes::from(format!("data: {json}\n\n")))
+    let json = serde_json::to_vec(&value).map_err(to_io_error_other)?;
+    let mut out = bytes::BytesMut::with_capacity(6 + json.len() + 2);
+    out.extend_from_slice(b"data: ");
+    out.extend_from_slice(&json);
+    out.extend_from_slice(b"\n\n");
+    Ok(out.freeze())
 }
 
 fn encode_sse_done() -> bytes::Bytes {
@@ -127,10 +134,15 @@ impl UiStreamState {
             finish_reason: FinishReason::Unknown,
             tool_calls: HashMap::new(),
             max_tool_input_bytes: options.max_tool_input_bytes,
+            max_tool_calls: options.max_tool_calls.max(1),
             include_usage: options.include_usage,
             include_warnings: options.include_warnings,
             buffer: std::collections::VecDeque::new(),
         }
+    }
+
+    fn should_track_tool_call(&self, id: &str) -> bool {
+        self.tool_calls.contains_key(id) || self.tool_calls.len() < self.max_tool_calls
     }
 
     fn push_json(&mut self, value: serde_json::Value) {
@@ -189,6 +201,9 @@ impl UiStreamState {
     }
 
     fn ensure_tool_started(&mut self, id: &str) {
+        if !self.should_track_tool_call(id) {
+            return;
+        }
         let tool_name = {
             let entry = self.tool_calls.entry(id.to_string()).or_default();
             if entry.started {
@@ -211,6 +226,9 @@ impl UiStreamState {
     }
 
     fn append_tool_input(&mut self, id: &str, delta: &str) {
+        if !self.should_track_tool_call(id) {
+            return;
+        }
         let entry = self.tool_calls.entry(id.to_string()).or_default();
         if entry.truncated {
             return;
@@ -251,6 +269,9 @@ impl UiStreamState {
                 }));
             }
             StreamChunk::ToolCallStart { id, name } => {
+                if !self.should_track_tool_call(&id) {
+                    return;
+                }
                 let entry = self.tool_calls.entry(id.clone()).or_default();
                 entry.name = name.clone();
                 if !entry.started {
@@ -266,6 +287,9 @@ impl UiStreamState {
                 id,
                 arguments_delta,
             } => {
+                if !self.should_track_tool_call(&id) {
+                    return;
+                }
                 self.ensure_tool_started(&id);
                 self.append_tool_input(&id, &arguments_delta);
                 self.push_json(serde_json::json!({

@@ -23,13 +23,14 @@ pub(crate) fn attach_devtools(
 }
 
 #[cfg(feature = "gateway")]
+const DEFAULT_PROXY_MAX_IN_FLIGHT: usize = 256;
+
+#[cfg(feature = "gateway")]
 pub(crate) fn attach_proxy_backpressure(
     state: ditto_llm::gateway::GatewayHttpState,
     max_in_flight: Option<usize>,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    let Some(max) = max_in_flight else {
-        return Ok(state);
-    };
+    let max = max_in_flight.unwrap_or(DEFAULT_PROXY_MAX_IN_FLIGHT);
     if max == 0 {
         return Err("--proxy-max-in-flight must be > 0".into());
     }

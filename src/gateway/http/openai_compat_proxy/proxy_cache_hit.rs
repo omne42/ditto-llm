@@ -16,8 +16,15 @@ async fn maybe_handle_proxy_cache_hit(
         metrics.lock().await.record_proxy_cache_lookup(metrics_path);
     }
 
+    #[cfg(feature = "gateway-store-redis")]
     let mut cache_source = "memory";
+    #[cfg(not(feature = "gateway-store-redis"))]
+    let cache_source = "memory";
+
+    #[cfg(feature = "gateway-store-redis")]
     let mut cached = { cache.lock().await.get(cache_key, now_epoch_seconds) };
+    #[cfg(not(feature = "gateway-store-redis"))]
+    let cached = { cache.lock().await.get(cache_key, now_epoch_seconds) };
 
     #[cfg(feature = "gateway-store-redis")]
     if cached.is_none() {

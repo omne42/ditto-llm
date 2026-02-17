@@ -448,6 +448,220 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected() -> dit
 }
 
 #[tokio::test]
+async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix() -> ditto_llm::Result<()>
+{
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream_alpha = MockServer::start();
+    let upstream_alpha_1 = MockServer::start();
+    let call_alpha_1 = upstream_alpha_1.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "hello",
+                "arguments": { "who": "world" }
+            },
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": { "server": "alpha-1" }
+                })
+                .to_string(),
+            );
+    });
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "alpha".to_string(),
+        ditto_llm::gateway::http::McpServerState::new(
+            "alpha".to_string(),
+            upstream_alpha.url("/mcp"),
+        )
+        .expect("mcp state alpha"),
+    );
+    mcp_servers.insert(
+        "alpha-1".to_string(),
+        ditto_llm::gateway::http::McpServerState::new(
+            "alpha-1".to_string(),
+            upstream_alpha_1.url("/mcp"),
+        )
+        .expect("mcp state alpha-1"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("x-mcp-servers", "alpha,alpha-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "alpha-1-hello",
+                    "arguments": { "who": "world" }
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("result")
+            .and_then(|v| v.get("server"))
+            .and_then(|v| v.as_str()),
+        Some("alpha-1")
+    );
+
+    call_alpha_1.assert();
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream_alpha = MockServer::start();
+    let upstream_alpha_1 = MockServer::start();
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "alpha".to_string(),
+        ditto_llm::gateway::http::McpServerState::new(
+            "alpha".to_string(),
+            upstream_alpha.url("/mcp"),
+        )
+        .expect("mcp state alpha"),
+    );
+    mcp_servers.insert(
+        "alpha-1".to_string(),
+        ditto_llm::gateway::http::McpServerState::new(
+            "alpha-1".to_string(),
+            upstream_alpha_1.url("/mcp"),
+        )
+        .expect("mcp state alpha-1"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("x-mcp-servers", "alpha,alpha-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "alpha-1-",
+                    "arguments": {}
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32602)
+    );
+    let message = payload
+        .get("error")
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    assert!(
+        message.contains("ambiguous tool name; expected <server_id>-<tool_name>"),
+        "{message}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server() -> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_llm::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+            .expect("mcp state"),
+    );
+
+    let gateway = Gateway::new(base_config());
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "   ",
+                    "arguments": {}
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        payload
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_i64()),
+        Some(-32602)
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_llm::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());

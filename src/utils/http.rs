@@ -13,7 +13,10 @@ pub(crate) async fn response_text_truncated(
     response: reqwest::Response,
     max_bytes: usize,
 ) -> String {
-    let (bytes, truncated) = response_bytes_truncated(response, max_bytes).await;
+    let (bytes, truncated) = match response_bytes_truncated(response, max_bytes).await {
+        Ok((bytes, truncated)) => (bytes, truncated),
+        Err(err) => return format!("failed to read response body: {err}"),
+    };
     let mut body = String::from_utf8_lossy(&bytes).to_string();
     if truncated {
         if !body.is_empty() {
@@ -27,16 +30,19 @@ pub(crate) async fn response_text_truncated(
 async fn response_bytes_truncated(
     response: reqwest::Response,
     max_bytes: usize,
-) -> (Vec<u8>, bool) {
+) -> Result<(Vec<u8>, bool)> {
     let max_bytes = max_bytes.max(1);
-    let mut out = Vec::<u8>::new();
+    let initial_capacity = response
+        .content_length()
+        .and_then(|len| usize::try_from(len).ok())
+        .map(|len| len.min(max_bytes))
+        .unwrap_or(0);
+    let mut out = Vec::<u8>::with_capacity(initial_capacity);
     let mut truncated = false;
 
     let mut stream = response.bytes_stream();
     while let Some(next) = stream.next().await {
-        let Ok(chunk) = next else {
-            break;
-        };
+        let chunk = next?;
         let remaining = max_bytes.saturating_sub(out.len());
         if remaining == 0 {
             truncated = true;
@@ -50,7 +56,7 @@ async fn response_bytes_truncated(
             break;
         }
     }
-    (out, truncated)
+    Ok((out, truncated))
 }
 
 #[cfg(any(feature = "gateway", feature = "openai", feature = "openai-compatible"))]
@@ -72,8 +78,9 @@ pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
         )));
     }
 
+    let initial_capacity = content_length.map(|len| len.min(max_bytes)).unwrap_or(0);
     let mut stream = response.bytes_stream();
-    let mut buffered = bytes::BytesMut::new();
+    let mut buffered = bytes::BytesMut::with_capacity(initial_capacity);
     while let Some(next) = stream.next().await {
         let chunk = next?;
         if buffered.len().saturating_add(chunk.len()) > max_bytes {
@@ -108,7 +115,7 @@ pub(crate) async fn send_checked_json<T: DeserializeOwned>(
 pub(crate) async fn send_checked_bytes(req: reqwest::RequestBuilder) -> Result<Bytes> {
     let response = req.send().await?;
     let status = response.status();
-    let (bytes, truncated) = response_bytes_truncated(response, MAX_RESPONSE_BODY_BYTES).await;
+    let (bytes, truncated) = response_bytes_truncated(response, MAX_RESPONSE_BODY_BYTES).await?;
     let bytes = Bytes::from(bytes);
     if !status.is_success() {
         let body = String::from_utf8_lossy(&bytes).to_string();
@@ -126,4 +133,34 @@ pub(crate) async fn send_checked_bytes(req: reqwest::RequestBuilder) -> Result<B
         )));
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn send_checked_bytes_errors_on_truncated_http_body() {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return;
+        }
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut req_buf = [0u8; 1024];
+            let _ = socket.read(&mut req_buf).await;
+            let response = b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: 100\r\nConnection: close\r\n\r\nabc";
+            socket.write_all(response).await.expect("write response");
+            socket.shutdown().await.expect("shutdown");
+        });
+
+        let client = reqwest::Client::new();
+        let result = super::send_checked_bytes(client.get(format!("http://{addr}/"))).await;
+        assert!(result.is_err(), "truncated body should return error");
+        let _ = server.await;
+    }
 }

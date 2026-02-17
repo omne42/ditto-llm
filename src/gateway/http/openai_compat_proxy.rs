@@ -60,9 +60,23 @@ async fn handle_openai_compat_proxy(
         )
         .await;
     }
-    let body = to_bytes(incoming_body, max_body_bytes)
-        .await
-        .map_err(|err| openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err))?;
+    let body = {
+        let _buffering_permit = if let Some(limit) = state.proxy_backpressure.as_ref() {
+            Some(limit.clone().try_acquire_owned().map_err(|_| {
+                openai_error(
+                    StatusCode::TOO_MANY_REQUESTS,
+                    "rate_limit_error",
+                    Some("inflight_limit"),
+                    "too many in-flight proxy requests",
+                )
+            })?)
+        } else {
+            None
+        };
+        to_bytes(incoming_body, max_body_bytes).await.map_err(|err| {
+            openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err)
+        })?
+    };
 
     let content_type_is_json = parts
         .headers
@@ -407,6 +421,7 @@ async fn handle_openai_compat_proxy(
             path_and_query,
             &body,
             &scope,
+            &parts.headers,
         ))
     } else {
         None

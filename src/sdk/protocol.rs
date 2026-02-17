@@ -20,6 +20,13 @@ pub struct StreamEnvelopeV1 {
     pub event: StreamEventV1,
 }
 
+#[derive(Serialize)]
+struct StreamEnvelopeV1Ref<'a> {
+    v: u8,
+    #[serde(flatten)]
+    event: &'a StreamEventV1,
+}
+
 impl StreamEnvelopeV1 {
     pub fn new(event: StreamEventV1) -> Self {
         Self {
@@ -30,8 +37,19 @@ impl StreamEnvelopeV1 {
 }
 
 pub fn encode_v1(event: &StreamEventV1) -> Result<String> {
-    let envelope = StreamEnvelopeV1::new(event.clone());
+    let envelope = StreamEnvelopeV1Ref {
+        v: STREAM_PROTOCOL_VERSION,
+        event,
+    };
     Ok(serde_json::to_string(&envelope)?)
+}
+
+pub fn encode_v1_bytes(event: &StreamEventV1) -> Result<Vec<u8>> {
+    let envelope = StreamEnvelopeV1Ref {
+        v: STREAM_PROTOCOL_VERSION,
+        event,
+    };
+    Ok(serde_json::to_vec(&envelope)?)
 }
 
 pub fn encode_line_v1(event: &StreamEventV1) -> Result<String> {

@@ -124,6 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: preserve MCP tool-call execution order during auto-exec loops for both chat-completions and responses flows, avoiding reordering in side-effectful tool chains.
+- Security: ensure secret-command subprocesses are terminated on task cancellation (`kill_on_drop(true)`) and harden the Linux cancellation regression test without force-killing arbitrary PIDs.
+- Tests: skip truncated HTTP-body localhost-bind regression in sandboxed environments that forbid local listen sockets, preventing environment-induced false negatives.
 - Gateway: reserve `/v1/gateway` control-plane token budgets at request-prepare time and refund on backend failure, preventing concurrent in-flight requests from overspending shared budgets.
 - Gateway: when proxy cache is enabled, only pre-buffer/cache non-stream responses with a known `content-length` within cap; unknown-length bodies now stay on the streaming passthrough path instead of returning `502` on cache buffering overflow.
 - Gateway: proxy stream abort metrics finalization now falls back to async execution when the abort-finalizer queue is full (prevents dropped aborted-stream metrics).

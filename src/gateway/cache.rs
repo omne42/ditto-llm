@@ -16,7 +16,7 @@ fn default_cache_max_total_body_bytes() -> usize {
     64 * 1024 * 1024
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CacheConfig {
     pub enabled: bool,
     pub ttl_seconds: Option<u64>,
@@ -54,30 +54,93 @@ struct ScopedCache {
     total_body_bytes: usize,
 }
 
+impl ScopedCache {
+    fn remove_key_from_order(&mut self, key: &str) {
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            self.order.remove(index);
+        }
+    }
+
+    fn move_key_to_back(&mut self, key: &str) {
+        if self.order.back().is_some_and(|candidate| candidate == key) {
+            return;
+        }
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            if let Some(existing) = self.order.remove(index) {
+                self.order.push_back(existing);
+            }
+            return;
+        }
+        self.order.push_back(key.to_string());
+    }
+
+    fn prune_expired(&mut self, now: u64) {
+        if self.order.is_empty() {
+            return;
+        }
+
+        let mut keep = VecDeque::with_capacity(self.order.len());
+        while let Some(candidate) = self.order.pop_front() {
+            match self.entries.get(&candidate) {
+                Some(entry) if entry.expires_at.is_some_and(|expires_at| now >= expires_at) => {
+                    if let Some(entry) = self.entries.remove(&candidate) {
+                        self.total_body_bytes =
+                            self.total_body_bytes.saturating_sub(entry.body_bytes);
+                    }
+                }
+                Some(_) => keep.push_back(candidate),
+                None => {}
+            }
+        }
+        self.order = keep;
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ResponseCache {
     scopes: HashMap<String, ScopedCache>,
+    last_prune_at: Option<u64>,
 }
 
 impl ResponseCache {
-    pub fn get(&mut self, scope: &str, key: &str, now: u64) -> Option<GatewayResponse> {
-        let cache = self.scopes.get_mut(scope)?;
-        let expires_at = cache.entries.get(key)?.expires_at;
+    fn maybe_prune_expired_on_read(&mut self, now: u64) {
+        // Read-heavy traffic can keep expired entries resident for a long time.
+        // Prune at most once per second to bound overhead while reclaiming memory.
+        if self.last_prune_at == Some(now) {
+            return;
+        }
+        self.scopes.retain(|_, cache| {
+            cache.prune_expired(now);
+            !cache.entries.is_empty()
+        });
+        self.last_prune_at = Some(now);
+    }
 
-        if expires_at.is_some_and(|expires_at| now >= expires_at) {
+    pub fn get(&mut self, scope: &str, key: &str, now: u64) -> Option<GatewayResponse> {
+        self.maybe_prune_expired_on_read(now);
+
+        let cache = self.scopes.get_mut(scope)?;
+        let (expired, response) = {
+            let entry = cache.entries.get(key)?;
+            if entry.expires_at.is_some_and(|expires_at| now >= expires_at) {
+                (true, None)
+            } else {
+                (false, Some(entry.response.clone()))
+            }
+        };
+        if expired {
             if let Some(entry) = cache.entries.remove(key) {
                 cache.total_body_bytes = cache.total_body_bytes.saturating_sub(entry.body_bytes);
             }
-            cache.order.retain(|candidate| candidate != key);
+            cache.remove_key_from_order(key);
             if cache.entries.is_empty() {
                 self.scopes.remove(scope);
             }
             return None;
         }
 
-        let response = cache.entries.get(key)?.response.clone();
-        cache.order.retain(|candidate| candidate != key);
-        cache.order.push_back(key.to_string());
+        let response = response?;
+        cache.move_key_to_back(key);
         Some(response)
     }
 
@@ -105,7 +168,7 @@ impl ResponseCache {
                     cache.total_body_bytes =
                         cache.total_body_bytes.saturating_sub(entry.body_bytes);
                 }
-                cache.order.retain(|candidate| candidate != &key);
+                cache.remove_key_from_order(&key);
                 if cache.entries.is_empty() {
                     self.scopes.remove(scope);
                 }
@@ -123,42 +186,26 @@ impl ResponseCache {
         let cache = self.scopes.entry(scope.to_string()).or_default();
         use std::collections::hash_map::Entry;
 
-        match cache.entries.entry(key.clone()) {
+        let old_body_bytes = match cache.entries.entry(key.clone()) {
             Entry::Occupied(mut occupied) => {
                 let old_body_bytes = occupied.get().body_bytes;
-                cache.total_body_bytes = cache.total_body_bytes.saturating_sub(old_body_bytes);
                 occupied.insert(entry);
-                cache.total_body_bytes = cache.total_body_bytes.saturating_add(body_bytes);
-                cache.order.retain(|candidate| candidate != &key);
-                cache.order.push_back(key);
-                return;
+                Some(old_body_bytes)
             }
             Entry::Vacant(vacant) => {
                 vacant.insert(entry);
+                None
             }
+        };
+
+        if let Some(old_body_bytes) = old_body_bytes {
+            cache.total_body_bytes = cache.total_body_bytes.saturating_sub(old_body_bytes);
         }
 
         cache.total_body_bytes = cache.total_body_bytes.saturating_add(body_bytes);
-        cache.order.retain(|candidate| candidate != &key);
-        cache.order.push_back(key);
+        cache.move_key_to_back(&key);
 
-        while let Some(candidate) = cache.order.front().cloned() {
-            let expired = match cache
-                .entries
-                .get(&candidate)
-                .and_then(|entry| entry.expires_at)
-            {
-                Some(expires_at) => now >= expires_at,
-                None => false,
-            };
-            if !expired {
-                break;
-            }
-            cache.order.pop_front();
-            if let Some(entry) = cache.entries.remove(&candidate) {
-                cache.total_body_bytes = cache.total_body_bytes.saturating_sub(entry.body_bytes);
-            }
-        }
+        cache.prune_expired(now);
 
         while cache.entries.len() > config.max_entries
             || cache.total_body_bytes > config.max_total_body_bytes
@@ -178,6 +225,10 @@ impl ResponseCache {
 
     pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
         self.scopes.retain(|scope, _| scopes.contains(scope));
+    }
+
+    pub fn remove_scope(&mut self, scope: &str) {
+        self.scopes.remove(scope);
     }
 }
 
@@ -332,5 +383,245 @@ mod tests {
         );
 
         assert!(cache.get("scope", "k2", 1).is_some());
+    }
+
+    #[test]
+    fn insert_prunes_expired_entries_before_capacity_eviction() {
+        let mut cache = ResponseCache::default();
+        let long_ttl = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 2,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+        let short_ttl = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(1),
+            max_entries: 2,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+
+        cache.insert(
+            "scope",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &long_ttl,
+            0,
+        );
+        cache.insert(
+            "scope",
+            "b".to_string(),
+            GatewayResponse {
+                content: "bb".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &short_ttl,
+            0,
+        );
+        cache.insert(
+            "scope",
+            "c".to_string(),
+            GatewayResponse {
+                content: "cc".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &long_ttl,
+            2,
+        );
+
+        assert!(cache.get("scope", "a", 2).is_some());
+        assert!(cache.get("scope", "b", 2).is_none());
+        assert!(cache.get("scope", "c", 2).is_some());
+    }
+
+    #[test]
+    fn get_prunes_expired_entries_even_on_miss() {
+        let mut cache = ResponseCache::default();
+        let short_ttl = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(1),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+        let long_ttl = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+
+        cache.insert(
+            "scope",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &short_ttl,
+            0,
+        );
+        cache.insert(
+            "scope",
+            "b".to_string(),
+            GatewayResponse {
+                content: "bb".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &long_ttl,
+            1,
+        );
+
+        assert!(cache.get("scope", "missing", 1).is_none());
+
+        let scoped = cache.scopes.get("scope").expect("scope");
+        assert!(!scoped.entries.contains_key("a"));
+        assert!(scoped.entries.contains_key("b"));
+        assert_eq!(scoped.order.len(), 1);
+        assert_eq!(scoped.order.front().map(String::as_str), Some("b"));
+        assert_eq!(scoped.total_body_bytes, 2);
+    }
+
+    #[test]
+    fn replacing_entry_still_enforces_total_body_budget() {
+        let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 4,
+        };
+
+        cache.insert(
+            "scope",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+        cache.insert(
+            "scope",
+            "b".to_string(),
+            GatewayResponse {
+                content: "bb".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+        cache.insert(
+            "scope",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aaa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+
+        assert!(cache.get("scope", "a", 0).is_some());
+        assert!(cache.get("scope", "b", 0).is_none());
+    }
+
+    #[test]
+    fn repeated_hot_get_does_not_grow_lru_queue() {
+        let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+
+        cache.insert(
+            "scope",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+
+        for _ in 0..5 {
+            assert!(cache.get("scope", "a", 0).is_some());
+        }
+
+        let scoped = cache.scopes.get("scope").expect("scope");
+        assert_eq!(scoped.order.len(), 1);
+        assert_eq!(scoped.order.front().map(String::as_str), Some("a"));
+    }
+
+    #[test]
+    fn remove_scope_drops_all_entries_for_scope() {
+        let mut cache = ResponseCache::default();
+        let config = CacheConfig {
+            enabled: true,
+            ttl_seconds: Some(60),
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        };
+
+        cache.insert(
+            "scope-a",
+            "a".to_string(),
+            GatewayResponse {
+                content: "aa".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+        cache.insert(
+            "scope-b",
+            "b".to_string(),
+            GatewayResponse {
+                content: "bb".to_string(),
+                output_tokens: 0,
+                backend: "b".to_string(),
+                cached: false,
+            },
+            &config,
+            0,
+        );
+
+        cache.remove_scope("scope-a");
+
+        assert!(cache.get("scope-a", "a", 0).is_none());
+        assert!(cache.get("scope-b", "b", 0).is_some());
     }
 }

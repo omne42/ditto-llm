@@ -712,7 +712,7 @@
                         let mut response = axum::response::Response::new(body);
                         *response.status_mut() = StatusCode::OK;
                         *response.headers_mut() = headers;
-                        let mut usage = generated.usage.clone();
+                        let mut usage = generated.usage;
                         usage.merge_total();
                         let tokens = usage.total_tokens.unwrap_or(u64::from(charge_tokens));
                         #[cfg(feature = "gateway-costing")]

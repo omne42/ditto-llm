@@ -238,7 +238,7 @@ impl McpServerState {
 
         {
             let mut cache = self.tools_list_cache.lock().await;
-            cache.entries.retain(|key, entry| key.is_none() && entry.expires_at > now);
+            cache.entries.clear();
             cache.entries.insert(
                 cursor,
                 McpToolsListCacheEntry {
@@ -639,10 +639,7 @@ async fn enforce_mcp_auth(
     }
     let token = extract_virtual_key(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
     let key = gateway
-        .config
-        .virtual_keys
-        .iter()
-        .find(|key| key.token == token)
+        .virtual_key_by_token(&token)
         .cloned()
         .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
     if !key.enabled {
@@ -862,20 +859,39 @@ async fn mcp_call_tool(
 ) -> Result<Value, GatewayError> {
     let (server_id, tool_name) = if server_ids.len() == 1 {
         (server_ids[0].as_str(), name)
-    } else if let Some((prefix, rest)) = name.split_once('-') {
-        let prefix = prefix.trim();
-        if server_ids.iter().any(|id| id == prefix) {
-            (prefix, rest)
-        } else {
+    } else {
+        let mut best_match: Option<(&str, &str, usize)> = None;
+        for server_id in server_ids {
+            let Some(tool_name) = name
+                .strip_prefix(server_id.as_str())
+                .and_then(|tail| tail.strip_prefix('-'))
+            else {
+                continue;
+            };
+            let candidate_len = server_id.len();
+            match best_match {
+                Some((_, _, best_len)) if candidate_len <= best_len => {}
+                _ => best_match = Some((server_id.as_str(), tool_name, candidate_len)),
+            }
+        }
+
+        let Some((server_id, tool_name, _)) = best_match else {
+            return Err(GatewayError::InvalidRequest {
+                reason: "ambiguous tool name; expected <server_id>-<tool_name>".to_string(),
+            });
+        };
+        if tool_name.is_empty() {
             return Err(GatewayError::InvalidRequest {
                 reason: "ambiguous tool name; expected <server_id>-<tool_name>".to_string(),
             });
         }
-    } else {
-        return Err(GatewayError::InvalidRequest {
-            reason: "ambiguous tool name; expected <server_id>-<tool_name>".to_string(),
-        });
+        (server_id, tool_name)
     };
+    if tool_name.trim().is_empty() {
+        return Err(GatewayError::InvalidRequest {
+            reason: "invalid tool name; expected non-empty name".to_string(),
+        });
+    }
 
     let server = state.mcp_servers.get(server_id).ok_or_else(|| GatewayError::InvalidRequest {
         reason: format!("unknown MCP server: {server_id}"),

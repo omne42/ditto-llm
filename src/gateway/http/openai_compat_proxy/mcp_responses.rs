@@ -116,6 +116,8 @@ async fn follow_up_via_chat_completions_to_responses(
     };
 
     let mut messages = messages;
+    let mut messages_bytes = estimate_messages_bytes(&messages);
+    let max_messages_bytes = messages_bytes.saturating_add(MCP_AUTO_EXEC_MAX_ADDED_MESSAGES_BYTES);
 
     let tool_calls_value = params
         .initial_tool_calls
@@ -133,22 +135,32 @@ async fn follow_up_via_chat_completions_to_responses(
         })
         .collect::<Vec<_>>();
 
-    messages.push(serde_json::json!({
-        "role": "assistant",
-        "content": "",
-        "tool_calls": tool_calls_value,
-    }));
+    push_message_with_limit(
+        &mut messages,
+        &mut messages_bytes,
+        max_messages_bytes,
+        serde_json::json!({
+            "role": "assistant",
+            "content": "",
+            "tool_calls": tool_calls_value,
+        }),
+    )?;
 
     for (call, output) in params
         .initial_tool_calls
         .iter()
         .zip(params.initial_tool_results.iter())
     {
-        messages.push(serde_json::json!({
-            "role": "tool",
-            "tool_call_id": call.call_id.clone(),
-            "content": output,
-        }));
+        push_message_with_limit(
+            &mut messages,
+            &mut messages_bytes,
+            max_messages_bytes,
+            serde_json::json!({
+                "role": "tool",
+                "tool_call_id": call.call_id.clone(),
+                "content": output,
+            }),
+        )?;
     }
 
     let mut tool_rounds_executed: usize = 1;
@@ -180,6 +192,31 @@ async fn follow_up_via_chat_completions_to_responses(
         }
 
         let step_request_id = format!("{}-mcp{tool_rounds_executed}", params.request_id);
+        let step_response = {
+            let Some(obj) = chat_req.as_object_mut() else {
+                return Err(openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_mcp_request"),
+                    "invalid /responses request",
+                ));
+            };
+            obj.insert(
+                "messages".to_string(),
+                Value::Array(std::mem::take(&mut messages)),
+            );
+            obj.insert("stream".to_string(), Value::Bool(false));
+
+            call_openai_compat_proxy_with_body_and_path(
+                state,
+                parts,
+                &step_request_id,
+                &chat_req,
+                false,
+                "/v1/chat/completions",
+            )
+            .await?
+        };
         let Some(obj) = chat_req.as_object_mut() else {
             return Err(openai_error(
                 StatusCode::BAD_REQUEST,
@@ -188,18 +225,23 @@ async fn follow_up_via_chat_completions_to_responses(
                 "invalid /responses request",
             ));
         };
-        obj.insert("messages".to_string(), Value::Array(messages.clone()));
-        obj.insert("stream".to_string(), Value::Bool(false));
-
-        let step_response = call_openai_compat_proxy_with_body_and_path(
-            state,
-            parts,
-            &step_request_id,
-            &chat_req,
-            false,
-            "/v1/chat/completions",
-        )
-        .await?;
+        let restored = obj.remove("messages").ok_or_else(|| {
+            openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_mcp_request"),
+                "invalid /responses request",
+            )
+        })?;
+        let Value::Array(restored_messages) = restored else {
+            return Err(openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_mcp_request"),
+                "invalid /responses request",
+            ));
+        };
+        messages = restored_messages;
 
         let (step_status, step_headers, step_body) =
             split_response(step_response, 8 * 1024 * 1024).await?;
@@ -265,28 +307,45 @@ async fn follow_up_via_chat_completions_to_responses(
 
             return Ok(rebuild_response(step_status, headers, bytes));
         }
+        if tool_calls.len() > MCP_AUTO_EXEC_MAX_TOOL_CALLS_PER_ROUND {
+            return Err(openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("mcp_auto_exec_limit_exceeded"),
+                format!(
+                    "tool call count {} exceeded per-round limit {}",
+                    tool_calls.len(),
+                    MCP_AUTO_EXEC_MAX_TOOL_CALLS_PER_ROUND
+                ),
+            ));
+        }
 
         if let Some(message) =
             assistant_message.or_else(|| build_chat_assistant_message_from_tool_calls(&tool_calls))
         {
-            messages.push(message);
+            push_message_with_limit(
+                &mut messages,
+                &mut messages_bytes,
+                max_messages_bytes,
+                message,
+            )?;
         }
 
         for call in &tool_calls {
-            let result = mcp_call_tool(
-                state,
-                params.server_ids,
-                &call.name,
-                call.arguments.clone(),
-            )
+            let result = mcp_call_tool(state, params.server_ids, &call.name, call.arguments.clone())
                 .await
                 .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
             let content = mcp_tool_result_to_text(&result);
-            messages.push(serde_json::json!({
-                "role": "tool",
-                "tool_call_id": call.id,
-                "content": content,
-            }));
+            push_message_with_limit(
+                &mut messages,
+                &mut messages_bytes,
+                max_messages_bytes,
+                serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": call.id.clone(),
+                    "content": content,
+                }),
+            )?;
         }
 
         tool_rounds_executed = tool_rounds_executed.saturating_add(1);

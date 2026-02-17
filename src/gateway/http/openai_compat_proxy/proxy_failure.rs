@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 struct ProxyFailureContext<'a> {
     request_id: &'a str,
     method: &'a axum::http::Method,

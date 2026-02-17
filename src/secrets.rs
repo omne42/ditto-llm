@@ -361,6 +361,7 @@ async fn run_secret_command(cmd: &SecretCommand, env: &Env) -> Result<String> {
 
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
+    command.kill_on_drop(true);
 
     let mut child = command
         .spawn()
@@ -584,6 +585,69 @@ mod tests {
         let err = run_secret_command(&cmd, &env).await.unwrap_err();
         assert!(matches!(err, DittoError::AuthCommand(_)));
         assert!(err.to_string().contains("timed out"));
+        Ok(())
+    }
+
+    #[cfg(all(unix, target_os = "linux"))]
+    #[tokio::test]
+    async fn secret_command_runner_cancellation_kills_child_process() -> Result<()> {
+        fn process_terminated_or_zombie(pid: u32) -> bool {
+            let status_path = format!("/proc/{pid}/status");
+            match std::fs::read_to_string(status_path) {
+                Ok(status) => status
+                    .lines()
+                    .find(|line| line.starts_with("State:"))
+                    .map(|line| line.contains("\tZ") || line.contains(" zombie"))
+                    .unwrap_or(false),
+                Err(err) => err.kind() == std::io::ErrorKind::NotFound,
+            }
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pid_file = dir.path().join("secret-command.pid");
+        let script = format!("echo $$ > '{}'; exec sleep 30", pid_file.display());
+        let cmd = SecretCommand {
+            program: "sh".to_string(),
+            args: vec!["-c".to_string(), script],
+            env: BTreeMap::new(),
+            json_key: None,
+        };
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+
+        let handle = tokio::spawn(async move {
+            let _ = run_secret_command(&cmd, &env).await;
+        });
+
+        let mut pid: Option<u32> = None;
+        for _ in 0..100 {
+            if let Ok(raw) = tokio::fs::read_to_string(&pid_file).await {
+                let parsed = raw.trim().parse::<u32>().ok();
+                if parsed.is_some() {
+                    pid = parsed;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let pid = pid.expect("pid file should be written");
+
+        handle.abort();
+        let _ = handle.await;
+
+        let mut gone = false;
+        for _ in 0..300 {
+            if process_terminated_or_zombie(pid) {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(
+            gone,
+            "secret command child process should be killed on cancellation"
+        );
         Ok(())
     }
 }

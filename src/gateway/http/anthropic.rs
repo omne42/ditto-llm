@@ -300,10 +300,8 @@ async fn handle_anthropic_count_tokens(
         })?;
         let gateway = state.gateway.lock().await;
         let authorized = gateway
-            .config
-            .virtual_keys
-            .iter()
-            .any(|key| key.enabled && key.token == token);
+            .virtual_key_by_token(&token)
+            .is_some_and(|key| key.enabled);
         if !authorized {
             return Err(anthropic_error(
                 StatusCode::UNAUTHORIZED,
