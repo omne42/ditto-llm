@@ -37,7 +37,7 @@ struct CacheEntry {
 #[derive(Debug, Clone)]
 enum CacheValue {
     Generate(GenerateResponse),
-    Stream(Arc<Vec<StreamChunk>>),
+    Stream(Arc<[StreamChunk]>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -107,10 +107,11 @@ impl CacheLayer {
         }
         let value = value?;
         state.touch_key(&key);
+        drop(state);
         Some(value)
     }
 
-    async fn get_stream(&self, key: CacheKey) -> Option<Arc<Vec<StreamChunk>>> {
+    async fn get_stream(&self, key: CacheKey) -> Option<Arc<[StreamChunk]>> {
         let mut state = self.state.lock().await;
         state.prune_expired(self.ttl);
         let Some(entry) = state.entries.get(&key) else {
@@ -131,6 +132,7 @@ impl CacheLayer {
         }
         let value = value?;
         state.touch_key(&key);
+        drop(state);
         Some(value)
     }
 
@@ -166,7 +168,7 @@ impl CacheLayer {
             key,
             CacheEntry {
                 inserted_at: Instant::now(),
-                value: CacheValue::Stream(Arc::new(chunks)),
+                value: CacheValue::Stream(Arc::from(chunks)),
             },
             self.max_entries,
         );
@@ -281,8 +283,11 @@ impl LanguageModelLayer for CacheLayer {
         };
         if let Some(hit) = self.get_stream(key).await {
             let replay = stream::unfold((hit, 0usize), |(chunks, idx)| async move {
-                let chunk = chunks.get(idx).cloned()?;
-                Some((Ok(chunk), (chunks, idx + 1)))
+                if idx >= chunks.len() {
+                    return None;
+                }
+                let chunk = chunks[idx].clone();
+                Some((Ok(chunk), (chunks, idx.saturating_add(1))))
             })
             .boxed();
             return Ok(replay);

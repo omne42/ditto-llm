@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Utils: truncate non-2xx error bodies (default 64KiB) to avoid OOM in error paths.
 - SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
+- SDK: `CacheLayer` now stores cached stream chunks as `Arc<[StreamChunk]>`, replays hits without cloning an entire `Vec`, and releases cache mutexes earlier on hit paths (lower memory/lock overhead under concurrent reads).
 - SDK: UI message stream SSE adapter now emits `start-step` / `finish-step` boundaries and synthesizes `tool-input-start` when tool deltas arrive before tool starts.
 - SDK: add max-bytes caps for `StreamCollector` and `stream_object` internal buffers (emit warnings + truncate to reduce OOM risk on extremely large streams).
 - Dev: pre-commit blocks `partNN.*` filenames in staged changes.
