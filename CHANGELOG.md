@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_text` now avoids cloning `TextDelta` payloads when only the text stream is enabled (reduces per-chunk allocations on text-only consumers).
 - SDK: `stream_object` now consumes stream chunks by value and releases internal state locks earlier in the hot path (reduces lock contention and redundant cloning under streaming load).
+- SDK: `stream_object` now skips partial-JSON reparsing for non-content chunks (`Warnings`/`Usage`/`FinishReason`/etc.) and only reparses when text/tool buffers change (reduces streaming CPU overhead under event-heavy outputs).
 - SDK: `CacheLayer` now stores cached stream chunks as `Arc<[StreamChunk]>`, replays hits without cloning an entire `Vec`, and releases cache mutexes earlier on hit paths (lower memory/lock overhead under concurrent reads).
 - SDK: UI message stream SSE adapter now emits `start-step` / `finish-step` boundaries and synthesizes `tool-input-start` when tool deltas arrive before tool starts.
 - SDK: add max-bytes caps for `StreamCollector` and `stream_object` internal buffers (emit warnings + truncate to reduce OOM risk on extremely large streams).

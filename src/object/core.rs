@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use futures_util::stream;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{Notify, mpsc};
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::types::{
@@ -100,7 +100,10 @@ impl StreamObjectResult {
 
     pub fn into_partial_stream(
         self,
-    ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+    ) -> (
+        StreamObjectHandle,
+        stream::BoxStream<'static, Result<Value>>,
+    ) {
         self.partial_enabled.store(true, Ordering::Relaxed);
         self.element_enabled.store(false, Ordering::Relaxed);
         self.ready.notify_one();
@@ -109,7 +112,10 @@ impl StreamObjectResult {
 
     pub fn into_element_stream(
         self,
-    ) -> (StreamObjectHandle, stream::BoxStream<'static, Result<Value>>) {
+    ) -> (
+        StreamObjectHandle,
+        stream::BoxStream<'static, Result<Value>>,
+    ) {
         self.partial_enabled.store(false, Ordering::Relaxed);
         self.element_enabled.store(true, Ordering::Relaxed);
         self.ready.notify_one();
@@ -322,7 +328,11 @@ fn stream_object_from_stream_with_config(
     stream: StreamResult,
     config: StreamObjectConfig,
 ) -> StreamObjectResult {
-    stream_object_from_stream_with_config_and_limits(stream, config, StreamObjectBufferLimits::default())
+    stream_object_from_stream_with_config_and_limits(
+        stream,
+        config,
+        StreamObjectBufferLimits::default(),
+    )
 }
 
 fn stream_object_from_stream_with_config_and_limits(
@@ -384,6 +394,8 @@ fn stream_object_from_stream_with_config_and_limits(
                             }
                         };
 
+                        let mut buffer_changed = false;
+
                         match chunk {
                             StreamChunk::Warnings { warnings } => {
                                 state.warnings.extend(warnings);
@@ -400,10 +412,7 @@ fn stream_object_from_stream_with_config_and_limits(
                             StreamChunk::TextDelta { text } => {
                                 if !text.is_empty() {
                                     if state.text_truncated
-                                        || state
-                                            .text_buffer
-                                            .len()
-                                            .saturating_add(text.len())
+                                        || state.text_buffer.len().saturating_add(text.len())
                                             > buffer_limits.max_text_bytes
                                     {
                                         if !state.text_truncated {
@@ -419,6 +428,7 @@ fn stream_object_from_stream_with_config_and_limits(
                                         }
                                     } else {
                                         state.text_buffer.push_str(&text);
+                                        buffer_changed = true;
                                     }
                                 }
                             }
@@ -471,6 +481,7 @@ fn stream_object_from_stream_with_config_and_limits(
                                             }
                                         } else {
                                             state.tool_buffer.push_str(&arguments_delta);
+                                            buffer_changed = true;
                                         }
                                     }
                                 }
@@ -478,23 +489,26 @@ fn stream_object_from_stream_with_config_and_limits(
                             StreamChunk::ReasoningDelta { .. } => {}
                         }
 
-                        let mut parsed = parse_partial_object_value(&state, &config);
-                        if let Some(value) = parsed.as_ref() {
-                            if state.last_emitted.as_ref() == Some(value) {
-                                parsed = None;
-                            } else {
-                                state.last_emitted = Some(value.clone());
-                            }
-                        }
-
+                        let mut parsed = None;
                         let mut new_elements = Vec::<Value>::new();
-                        if state.output == ObjectOutput::Array {
-                            if let Some(arr) = parsed.as_ref().and_then(|v| v.as_array()) {
-                                let complete_len = arr.len().saturating_sub(1);
-                                while state.last_emitted_element < complete_len {
-                                    new_elements.push(arr[state.last_emitted_element].clone());
-                                    state.last_emitted_element =
-                                        state.last_emitted_element.saturating_add(1);
+                        if buffer_changed {
+                            parsed = parse_partial_object_value(&state, &config);
+                            if let Some(value) = parsed.as_ref() {
+                                if state.last_emitted.as_ref() == Some(value) {
+                                    parsed = None;
+                                } else {
+                                    state.last_emitted = Some(value.clone());
+                                }
+                            }
+
+                            if state.output == ObjectOutput::Array {
+                                if let Some(arr) = parsed.as_ref().and_then(|v| v.as_array()) {
+                                    let complete_len = arr.len().saturating_sub(1);
+                                    while state.last_emitted_element < complete_len {
+                                        new_elements.push(arr[state.last_emitted_element].clone());
+                                        state.last_emitted_element =
+                                            state.last_emitted_element.saturating_add(1);
+                                    }
                                 }
                             }
                         }
@@ -614,7 +628,12 @@ fn stream_object_from_stream_with_config_and_limits(
     let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let partial_object_stream = stream::unfold(
-        (partial_rx, aborter.clone(), partial_enabled.clone(), ready.clone()),
+        (
+            partial_rx,
+            aborter.clone(),
+            partial_enabled.clone(),
+            ready.clone(),
+        ),
         |(mut rx, aborter, enabled, ready)| async move {
             if !enabled.swap(true, Ordering::AcqRel) {
                 ready.notify_one();
