@@ -933,7 +933,7 @@ async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> 
         },
     })
     .to_string();
-    let sse_body = format!("data: {chunk_1}\n\ndata: {chunk_2}\n\ndata: [DONE]\n\n");
+    let sse_body = format!("data: {chunk_1}\n\ndata: {chunk_2}\r\n\r\ndata: [DONE]\n\n");
 
     let mock = upstream.mock(|when, then| {
         when.method(POST)

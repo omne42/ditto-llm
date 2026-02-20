@@ -53,16 +53,28 @@
         }
 
         fn find_sse_delimiter(buf: &[u8]) -> Option<(usize, usize)> {
-            if buf.len() >= 4 {
-                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                    return Some((pos, 4));
-                }
+            if buf.len() < 2 {
+                return None;
             }
-            if buf.len() >= 2 {
-                if let Some(pos) = buf.windows(2).position(|w| w == b"\n\n") {
-                    return Some((pos, 2));
+
+            // Use a single forward scan so mixed newline styles still split at the earliest
+            // event boundary instead of whichever delimiter pattern we searched first.
+            let mut idx = 0usize;
+            while idx + 1 < buf.len() {
+                if buf[idx] == b'\n' && buf[idx + 1] == b'\n' {
+                    return Some((idx, 2));
                 }
+                if idx + 3 < buf.len()
+                    && buf[idx] == b'\r'
+                    && buf[idx + 1] == b'\n'
+                    && buf[idx + 2] == b'\r'
+                    && buf[idx + 3] == b'\n'
+                {
+                    return Some((idx, 4));
+                }
+                idx += 1;
             }
+
             None
         }
 

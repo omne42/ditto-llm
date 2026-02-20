@@ -140,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.
 - Utils: fix SSE `max_event_bytes` boundary accounting so events exactly at the configured byte limit are accepted (previously rejected by an off-by-one check).
 - SDK: `CacheLayer` generate-entry byte estimation now includes tool-call JSON arguments, image/file payload sizes, warning text, and provider metadata; oversized responses are no longer misclassified as cacheable under `max_value_bytes`.
 - SDK: deduplicate `stream::StreamCollector` warnings for empty `tool_call.id` chunks so malformed streams cannot grow warning buffers via repeated identical entries.
