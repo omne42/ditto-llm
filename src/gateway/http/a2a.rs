@@ -85,31 +85,39 @@ async fn require_virtual_key_if_configured(
     state: &GatewayHttpState,
     headers: &HeaderMap,
 ) -> Result<bool, axum::response::Response> {
-    let gateway = state.gateway.lock().await;
-    let strip_authorization = !gateway.config.virtual_keys.is_empty();
-    if !strip_authorization {
-        return Ok(false);
-    }
+    let key_enabled = {
+        let gateway = state.gateway.lock().await;
+        let strip_authorization = !gateway.config.virtual_keys.is_empty();
+        if !strip_authorization {
+            return Ok(false);
+        }
 
-    let token = extract_virtual_key(headers).ok_or_else(|| {
+        let token = extract_virtual_key(headers).ok_or_else(|| {
             error_response(
                 StatusCode::UNAUTHORIZED,
                 "unauthorized",
                 "missing virtual key",
             )
             .into_response()
-    })?;
+        })?;
 
-    let key = gateway.virtual_key_by_token(&token).cloned().ok_or_else(|| {
-        error_response(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "unauthorized virtual key",
-        )
-        .into_response()
-    })?;
+        let key_enabled = gateway
+            .virtual_key_by_token(&token)
+            .cloned()
+            .ok_or_else(|| {
+                error_response(
+                    StatusCode::UNAUTHORIZED,
+                    "unauthorized",
+                    "unauthorized virtual key",
+                )
+                .into_response()
+            })?
+            .enabled;
+        drop(gateway);
+        key_enabled
+    };
 
-    if !key.enabled {
+    if !key_enabled {
         return Err(
             error_response(StatusCode::UNAUTHORIZED, "unauthorized", "virtual key disabled")
                 .into_response(),

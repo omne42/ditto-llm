@@ -22,7 +22,7 @@ fn usage_to_chat_usage(usage: &Usage) -> Option<Value> {
     let completion = usage.output_tokens?;
     let total = usage
         .total_tokens
-        .or(Some(prompt.saturating_add(completion)))?;
+        .or_else(|| Some(prompt.saturating_add(completion)))?;
     Some(serde_json::json!({
         "prompt_tokens": prompt,
         "completion_tokens": completion,

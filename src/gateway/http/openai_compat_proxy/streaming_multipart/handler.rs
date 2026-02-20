@@ -428,6 +428,7 @@ async fn handle_openai_compat_proxy_streaming_multipart(
             .select_backends_for_model_seeded("", key.as_ref(), Some(&request_id))
             .map_err(map_openai_gateway_error)?;
 
+        drop(gateway);
         (
             virtual_key_id,
             limits,

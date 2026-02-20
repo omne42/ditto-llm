@@ -728,13 +728,11 @@ impl Gateway {
             }
         }
 
-        let backend =
-            self.backends
-                .get(&backend_name)
-                .cloned()
-                .ok_or(GatewayError::BackendNotFound {
-                    name: backend_name.clone(),
-                })?;
+        let backend = self.backends.get(&backend_name).cloned().ok_or_else(|| {
+            GatewayError::BackendNotFound {
+                name: backend_name.clone(),
+            }
+        })?;
 
         self.observability.record_backend_call();
 

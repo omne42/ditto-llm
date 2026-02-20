@@ -687,6 +687,7 @@ async fn record_proxy_backend_failure(
     let mut health = health.lock().await;
     let entry = health.entry(backend.to_string()).or_default();
     entry.record_failure(now_epoch_seconds, &config.circuit_breaker, kind, message);
+    drop(health);
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
@@ -760,6 +761,7 @@ fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop
                     }
                     Err(err) => entry.record_health_check_failure(err.to_string()),
                 }
+                drop(health);
             }
 
             tokio::time::sleep(interval).await;

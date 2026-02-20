@@ -14,7 +14,7 @@ async fn handle_openai_models_list(
 
     let (strip_authorization, key_route) = {
         let gateway = state.gateway.lock().await;
-        if gateway.config.virtual_keys.is_empty() {
+        let resolved = if gateway.config.virtual_keys.is_empty() {
             (false, None)
         } else {
             let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
@@ -38,7 +38,9 @@ async fn handle_openai_models_list(
                     )
                 })?;
             (true, key.route)
-        }
+        };
+        drop(gateway);
+        resolved
     };
 
     let mut base_headers = parts.headers.clone();

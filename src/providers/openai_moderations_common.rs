@@ -75,7 +75,7 @@ pub(super) async fn moderate(
 
     Ok(ModerationResponse {
         id: parsed.id,
-        model: parsed.model.or(Some(model.clone())),
+        model: parsed.model.or_else(|| Some(model.clone())),
         results,
         warnings,
         provider_metadata: Some(serde_json::json!({ "model": model })),

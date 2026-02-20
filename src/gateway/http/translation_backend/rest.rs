@@ -420,7 +420,9 @@
                     *response.status_mut() = StatusCode::OK;
                     *response.headers_mut() = headers;
 
-                    let tokens = usage.total_tokens.unwrap_or(u64::from(charge_tokens));
+                    let tokens = usage
+                        .total_tokens
+                        .unwrap_or_else(|| u64::from(charge_tokens));
                     #[cfg(feature = "gateway-costing")]
                     let cost_usd_micros = model.as_deref().and_then(|model| {
                         state.pricing.as_ref().and_then(|pricing| {
@@ -714,7 +716,9 @@
                         *response.headers_mut() = headers;
                         let mut usage = generated.usage;
                         usage.merge_total();
-                        let tokens = usage.total_tokens.unwrap_or(u64::from(charge_tokens));
+                        let tokens = usage
+                            .total_tokens
+                            .unwrap_or_else(|| u64::from(charge_tokens));
                         #[cfg(feature = "gateway-costing")]
                         let cost_usd_micros = model.as_deref().and_then(|model| {
                             state.pricing.as_ref().and_then(|pricing| {

@@ -126,7 +126,7 @@
         let spent_tokens = if spend_tokens {
             observed_usage
                 .and_then(|usage| usage.total_tokens)
-                .unwrap_or(u64::from(charge_tokens))
+                .unwrap_or_else(|| u64::from(charge_tokens))
         } else {
             0
         };

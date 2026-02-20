@@ -62,7 +62,8 @@ pub(crate) fn openai_chat_completions_response_to_google_generate_content(
                 .get("arguments")
                 .and_then(Value::as_str)
                 .unwrap_or("{}");
-            let args = serde_json::from_str::<Value>(args_raw).unwrap_or(Value::Object(Map::new()));
+            let args = serde_json::from_str::<Value>(args_raw)
+                .unwrap_or_else(|_| Value::Object(Map::new()));
             parts.push(serde_json::json!({
                 "functionCall": { "name": name, "args": args }
             }));

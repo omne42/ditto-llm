@@ -646,6 +646,7 @@ async fn enforce_mcp_auth(
         return Err(StatusCode::UNAUTHORIZED.into_response());
     }
     gateway.observability.record_request();
+    drop(gateway);
     Ok(())
 }
 

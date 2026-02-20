@@ -857,6 +857,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
+            drop(gateway);
             (
                 virtual_key_id,
                 limits,
@@ -894,6 +895,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
+            drop(gateway);
             (
                 None,
                 None,

@@ -152,7 +152,7 @@ return { "OK" }
                 let attempted = result
                     .get(2)
                     .and_then(|raw| raw.parse::<u64>().ok())
-                    .unwrap_or(limit.saturating_add(tokens));
+                    .unwrap_or_else(|| limit.saturating_add(tokens));
                 Err(RedisStoreError::BudgetExceeded { limit, attempted })
             }
             _ => Err(redis::RedisError::from((
@@ -230,7 +230,7 @@ return { "OK" }
                 let attempted = result
                     .get(2)
                     .and_then(|raw| raw.parse::<u64>().ok())
-                    .unwrap_or(limit_usd_micros.saturating_add(usd_micros));
+                    .unwrap_or_else(|| limit_usd_micros.saturating_add(usd_micros));
                 Err(RedisStoreError::CostBudgetExceeded {
                     limit_usd_micros,
                     attempted_usd_micros: attempted,

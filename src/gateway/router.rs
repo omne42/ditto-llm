@@ -141,7 +141,7 @@ impl Router {
                 backends
                     .into_iter()
                     .next()
-                    .ok_or(GatewayError::BackendNotFound {
+                    .ok_or_else(|| GatewayError::BackendNotFound {
                         name: "default".to_string(),
                     })
             })
@@ -157,7 +157,7 @@ impl Router {
                 backends
                     .into_iter()
                     .next()
-                    .ok_or(GatewayError::BackendNotFound {
+                    .ok_or_else(|| GatewayError::BackendNotFound {
                         name: "default".to_string(),
                     })
             })

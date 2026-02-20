@@ -225,6 +225,7 @@ async fn litellm_key_regenerate_inner(
 
         gateway.upsert_virtual_key(key.clone());
         let persisted_keys = gateway.list_virtual_keys();
+        drop(gateway);
         (key, persisted_keys)
     };
 

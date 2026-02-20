@@ -435,6 +435,7 @@ async fn litellm_key_update(
 
         gateway.upsert_virtual_key(key.clone());
         let persisted_keys = gateway.list_virtual_keys();
+        drop(gateway);
         (key, persisted_keys)
     };
 
@@ -625,18 +626,20 @@ async fn litellm_key_info(
         (None, token)
     };
 
-    let gateway = state.gateway.lock().await;
-    let key = gateway
-        .list_virtual_keys()
-        .into_iter()
-        .find(|key| key.token == token)
-        .ok_or_else(|| {
-            error_response(
-                StatusCode::NOT_FOUND,
-                "not_found",
-                "virtual key not found",
-            )
-        })?;
+    let key = {
+        let gateway = state.gateway.lock().await;
+        gateway
+            .list_virtual_keys()
+            .into_iter()
+            .find(|key| key.token == token)
+            .ok_or_else(|| {
+                error_response(
+                    StatusCode::NOT_FOUND,
+                    "not_found",
+                    "virtual key not found",
+                )
+            })?
+    };
 
     if let Some(admin) = admin {
         if let Some(admin_tenant) = admin.tenant_id.as_deref() {

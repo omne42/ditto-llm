@@ -292,16 +292,18 @@ async fn handle_anthropic_count_tokens(
     let (parts, body) = req.into_parts();
     if gateway_uses_virtual_keys(&state).await {
         let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
-                anthropic_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    "missing api key",
-                )
+            anthropic_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                "missing api key",
+            )
         })?;
-        let gateway = state.gateway.lock().await;
-        let authorized = gateway
-            .virtual_key_by_token(&token)
-            .is_some_and(|key| key.enabled);
+        let authorized = {
+            let gateway = state.gateway.lock().await;
+            gateway
+                .virtual_key_by_token(&token)
+                .is_some_and(|key| key.enabled)
+        };
         if !authorized {
             return Err(anthropic_error(
                 StatusCode::UNAUTHORIZED,

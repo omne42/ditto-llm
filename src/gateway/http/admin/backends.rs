@@ -24,13 +24,16 @@ async fn list_backends(
     names.sort();
 
     let mut out = Vec::with_capacity(names.len());
-    let health = health.lock().await;
-    for name in names {
-        let snapshot = health
-            .get(name.as_str())
-            .map(|entry| entry.snapshot(&name))
-            .unwrap_or_else(|| BackendHealth::default().snapshot(&name));
-        out.push(snapshot);
+    {
+        let health = health.lock().await;
+        for name in names {
+            let snapshot = health
+                .get(name.as_str())
+                .map(|entry| entry.snapshot(&name))
+                .unwrap_or_else(|| BackendHealth::default().snapshot(&name));
+            out.push(snapshot);
+        }
+        drop(health);
     }
 
     Ok(Json(out))
@@ -61,6 +64,7 @@ async fn reset_backend(
 
     let mut health = health.lock().await;
     health.remove(name.as_str());
+    drop(health);
 
     #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
     append_admin_audit_log(
