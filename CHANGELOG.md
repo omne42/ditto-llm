@@ -154,6 +154,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: when cost budgets (`total_usd_micros`) are enabled, treat non-token endpoints as unsupported (`cost_budget_unsupported_endpoint`) to avoid mis-accounting or bypass.
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
 - Security: harden `ProviderAuth::*_command` by adding timeouts and a 64KiB output cap (configurable via `DITTO_AUTH_COMMAND_TIMEOUT_MS/SECS`); command stdout may now be plain text, a JSON string, or a JSON object (`api_key`/`token`/`access_token`).
+- Security: on auth/secret command timeout, explicitly abort and join stdout/stderr reader tasks before returning (prevents detached task buildup under repeated timeouts).
 - Gateway: harden admin auth by rejecting `/admin/*` when admin tokens are not configured (returns `not_configured`; avoids default-allow).
 - Gateway: strip `proxy-authorization`/`x-forwarded-authorization` and hop-by-hop headers when proxying requests upstream.
 - Gateway: avoid leaking raw virtual keys/prompts and reduce allocations by making `GatewayRequest::cache_key` return a hex digest, and using hashed route seeds for weighted backend selection.

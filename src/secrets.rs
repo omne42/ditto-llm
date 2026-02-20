@@ -378,18 +378,31 @@ async fn run_secret_command(cmd: &SecretCommand, env: &Env) -> Result<String> {
     let stdout_task = tokio::spawn(read_limited(stdout, MAX_SECRET_COMMAND_OUTPUT_BYTES));
     let stderr_task = tokio::spawn(read_limited(stderr, MAX_SECRET_COMMAND_OUTPUT_BYTES));
 
-    let status = match tokio::time::timeout(timeout, child.wait()).await {
+    let timeout_error = match tokio::time::timeout(timeout, child.wait()).await {
         Ok(status) => {
-            status.map_err(|err| DittoError::AuthCommand(format!("wait {}: {err}", cmd.program)))?
+            let status = status
+                .map_err(|err| DittoError::AuthCommand(format!("wait {}: {err}", cmd.program)))?;
+            Ok(status)
         }
         Err(_) => {
             let _ = child.kill().await;
             let _ = child.wait().await;
-            return Err(DittoError::AuthCommand(format!(
+            Err(DittoError::AuthCommand(format!(
                 "command {} timed out after {}ms",
                 cmd.program,
                 timeout.as_millis()
-            )));
+            )))
+        }
+    };
+
+    let status = match timeout_error {
+        Ok(status) => status,
+        Err(err) => {
+            stdout_task.abort();
+            stderr_task.abort();
+            let _ = stdout_task.await;
+            let _ = stderr_task.await;
+            return Err(err);
         }
     };
 
