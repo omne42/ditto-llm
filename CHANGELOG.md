@@ -120,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: routing rules now support optional exact matching (`rules[].exact=true`) which takes precedence over prefix rules, plus an optional `*` suffix for LiteLLM-style prefix patterns (e.g. `anthropic/*`).
 - Gateway: config env expansion now supports LiteLLM-style `os.environ/ENV_KEY` strings (in addition to `${ENV_KEY}` placeholders).
 - Bedrock: bound eventstream decoder message/buffer bytes to avoid OOM on malformed streams.
+- Bedrock: optimize eventstream frame consumption by switching decoder buffer slicing to zero-copy `BytesMut::split_to` (avoids per-frame front-drain memmove on long streams).
 - Docs: remove legacy external repo references.
 - Docs: expand the gap analysis and streaming docs with additional enterprise/DX gaps and memory-safety notes.
 - Gateway: enrich proxy response logs with `provider`/`upstream_model` and detailed `usage` token breakdown (input/cache/output/reasoning/total).

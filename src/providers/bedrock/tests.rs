@@ -55,6 +55,33 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "streaming")]
+    #[test]
+    fn eventstream_decoder_parses_fragmented_back_to_back_frames() {
+        let first = bedrock_event(json!({ "type": "content_block_delta" }));
+        let second = bedrock_event(json!({ "type": "message_stop" }));
+        let frame_a = build_event_stream_message(&first);
+        let frame_b = build_event_stream_message(&second);
+        let mut joined = Vec::new();
+        joined.extend_from_slice(&frame_a);
+        joined.extend_from_slice(&frame_b);
+
+        let mut decoder = EventStreamDecoder::default();
+        let mut parsed = Vec::new();
+
+        for chunk in joined.chunks(3) {
+            decoder.push(chunk).expect("push chunk");
+            while let Some(message) = decoder.next_message() {
+                let message = message.expect("decode message");
+                let payload: Value = serde_json::from_slice(message.payload.as_ref())
+                    .expect("payload is json");
+                parsed.push(payload);
+            }
+        }
+
+        assert_eq!(parsed, vec![first, second]);
+    }
+
     #[tokio::test]
     async fn bedrock_generate_maps_anthropic_body() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

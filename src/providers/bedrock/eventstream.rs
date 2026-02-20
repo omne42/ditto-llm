@@ -1,12 +1,12 @@
 #[derive(Debug)]
 struct EventStreamMessage {
     headers: HashMap<String, String>,
-    payload: Vec<u8>,
+    payload: bytes::Bytes,
 }
 
 #[derive(Debug, Default)]
 struct EventStreamDecoder {
-    buffer: Vec<u8>,
+    buffer: bytes::BytesMut,
 }
 
 const MAX_EVENTSTREAM_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
@@ -66,9 +66,10 @@ impl EventStreamDecoder {
             )));
         }
 
-        let headers_result = parse_eventstream_headers(&self.buffer[headers_start..headers_end]);
-        let payload = self.buffer[headers_end..payload_end].to_vec();
-        self.buffer.drain(0..total_len);
+        // split_to keeps remaining bytes in-place without front-drain memmove.
+        let frame = self.buffer.split_to(total_len).freeze();
+        let headers_result = parse_eventstream_headers(&frame[headers_start..headers_end]);
+        let payload = frame.slice(headers_end..payload_end);
         let headers = match headers_result {
             Ok(headers) => headers,
             Err(err) => return Some(Err(err)),
