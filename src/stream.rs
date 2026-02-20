@@ -68,9 +68,34 @@ pub(crate) struct StreamCollector {
     warned_max_total_bytes: bool,
     warned_max_parts: bool,
     warned_max_tool_calls: bool,
+    warned_empty_tool_call_id_start: bool,
+    warned_empty_tool_call_id_delta: bool,
 }
 
 impl StreamCollector {
+    fn warn_empty_tool_call_id_start(&mut self) {
+        if self.warned_empty_tool_call_id_start {
+            return;
+        }
+        self.warned_empty_tool_call_id_start = true;
+        self.warnings.push(Warning::Compatibility {
+            feature: "tool_call.id".to_string(),
+            details: "stream emitted an empty tool_call id; dropping tool call".to_string(),
+        });
+    }
+
+    fn warn_empty_tool_call_id_delta(&mut self) {
+        if self.warned_empty_tool_call_id_delta {
+            return;
+        }
+        self.warned_empty_tool_call_id_delta = true;
+        self.warnings.push(Warning::Compatibility {
+            feature: "tool_call.id".to_string(),
+            details: "stream emitted an empty tool_call id for arguments; dropping tool call delta"
+                .to_string(),
+        });
+    }
+
     fn try_add_bytes(&mut self, bytes: usize) -> bool {
         if self.bytes_truncated {
             return false;
@@ -162,11 +187,7 @@ impl StreamCollector {
             }
             StreamChunk::ToolCallStart { id, name } => {
                 if id.trim().is_empty() {
-                    self.warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id; dropping tool call"
-                            .to_string(),
-                    });
+                    self.warn_empty_tool_call_id_start();
                     return;
                 }
 
@@ -200,10 +221,7 @@ impl StreamCollector {
                 arguments_delta,
             } => {
                 if id.trim().is_empty() {
-                    self.warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id for arguments; dropping tool call delta".to_string(),
-                    });
+                    self.warn_empty_tool_call_id_delta();
                     return;
                 }
 
@@ -309,11 +327,7 @@ impl StreamCollector {
             }
             StreamChunk::ToolCallStart { id, name } => {
                 if id.trim().is_empty() {
-                    self.warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id; dropping tool call"
-                            .to_string(),
-                    });
+                    self.warn_empty_tool_call_id_start();
                     return;
                 }
 
@@ -346,11 +360,7 @@ impl StreamCollector {
                 arguments_delta,
             } => {
                 if id.trim().is_empty() {
-                    self.warnings.push(Warning::Compatibility {
-                        feature: "tool_call.id".to_string(),
-                        details: "stream emitted an empty tool_call id for arguments; dropping tool call delta"
-                            .to_string(),
-                    });
+                    self.warn_empty_tool_call_id_delta();
                     return;
                 }
 
@@ -740,6 +750,57 @@ mod tests {
         )));
 
         Ok(())
+    }
+
+    #[test]
+    fn empty_tool_call_id_warnings_are_deduplicated_in_observe_owned() {
+        let mut collector = StreamCollector::default();
+
+        for _ in 0..3 {
+            collector.observe_owned(StreamChunk::ToolCallStart {
+                id: "   ".to_string(),
+                name: "ignored".to_string(),
+            });
+            collector.observe_owned(StreamChunk::ToolCallDelta {
+                id: "".to_string(),
+                arguments_delta: "{}".to_string(),
+            });
+        }
+
+        let response = collector.finish();
+        let id_warnings = response
+            .warnings
+            .iter()
+            .filter(|warning| matches!(warning, Warning::Compatibility { feature, .. } if feature == "tool_call.id"))
+            .count();
+        assert_eq!(id_warnings, 2);
+    }
+
+    #[test]
+    fn empty_tool_call_id_warnings_are_deduplicated_in_observe() {
+        let mut collector = StreamCollector::default();
+
+        let start = StreamChunk::ToolCallStart {
+            id: "  ".to_string(),
+            name: "ignored".to_string(),
+        };
+        let delta = StreamChunk::ToolCallDelta {
+            id: "".to_string(),
+            arguments_delta: "{}".to_string(),
+        };
+
+        for _ in 0..3 {
+            collector.observe(&start);
+            collector.observe(&delta);
+        }
+
+        let response = collector.finish();
+        let id_warnings = response
+            .warnings
+            .iter()
+            .filter(|warning| matches!(warning, Warning::Compatibility { feature, .. } if feature == "tool_call.id"))
+            .count();
+        assert_eq!(id_warnings, 2);
     }
 
     #[tokio::test]

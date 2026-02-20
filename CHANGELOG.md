@@ -131,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- SDK: deduplicate `stream::StreamCollector` warnings for empty `tool_call.id` chunks so malformed streams cannot grow warning buffers via repeated identical entries.
 - Gateway: preserve MCP tool-call execution order during auto-exec loops for both chat-completions and responses flows, avoiding reordering in side-effectful tool chains.
 - Gateway: fix proxy health-check task compilation on newer Rust toolchains by removing a non-generalized async-closure lifetime in backend iteration.
 - Build: restore `cargo +1.92.0 {clippy,test} --all-features` compatibility by tightening `sdk::cache` option handling and fixing a missing `Message` import in gateway-translation tests.
