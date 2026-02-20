@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_text`/`stream_object` background collectors now start consuming upstream immediately instead of waiting for fan-out stream activation, reducing first-chunk synchronization overhead.
 - SDK: `stream_text` now avoids cloning `TextDelta` payloads when only the text stream is enabled (reduces per-chunk allocations on text-only consumers).
+- SDK: `stream_text` now avoids clone-heavy collector paths when `full_stream` is disabled and stops fan-out attempts after receiver drop, reducing per-chunk overhead in text-only and handle-only usage.
 - SDK: `stream_object` now consumes stream chunks by value and releases internal state locks earlier in the hot path (reduces lock contention and redundant cloning under streaming load).
 - SDK: `stream_object` now skips partial-JSON reparsing for non-content chunks (`Warnings`/`Usage`/`FinishReason`/etc.) and only reparses when text/tool buffers change (reduces streaming CPU overhead under event-heavy outputs).
 - SDK: `CacheLayer` now stores cached stream chunks as `Arc<[StreamChunk]>`, replays hits without cloning an entire `Vec`, and releases cache mutexes earlier on hit paths (lower memory/lock overhead under concurrent reads).
@@ -107,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
 - Gateway: throttle in-memory control-plane/proxy cache write-path expiry scans to once per second (per-scope for control-plane, global for proxy) to reduce repeated O(n) prune work under insert-heavy traffic.
+- Gateway: reduce control-plane cache insert hot-path hash lookups for existing scopes (fewer map probes per write under steady-state traffic).
 - Gateway: Redis budget/cost reservation hashes no longer expire; stale reservations can be recovered via `POST /admin/reservations/reap` instead of silently wedging ledgers.
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Gateway: in-memory rate limiter now keeps only the active minute bucket during GC and drops per-scope counters when limits are disabled, reducing stale state retention under clock rollback or policy changes.

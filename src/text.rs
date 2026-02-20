@@ -192,24 +192,42 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                 Ok(chunk) => {
                     let text_enabled = text_enabled_task.load(Ordering::Relaxed);
                     let full_enabled = full_enabled_task.load(Ordering::Relaxed);
-                    collector.observe(&chunk);
-
                     match chunk {
                         StreamChunk::TextDelta { text } => {
-                            if text_enabled && !text.is_empty() {
-                                if full_enabled {
-                                    let _ = text_tx.send(Ok(text.clone())).await;
-                                    let _ = full_tx.send(Ok(StreamChunk::TextDelta { text })).await;
-                                } else {
-                                    let _ = text_tx.send(Ok(text)).await;
+                            if full_enabled {
+                                collector.observe(&StreamChunk::TextDelta { text: text.clone() });
+
+                                if text_enabled
+                                    && !text.is_empty()
+                                    && text_tx.send(Ok(text.clone())).await.is_err()
+                                {
+                                    text_enabled_task.store(false, Ordering::Relaxed);
                                 }
-                            } else if full_enabled {
-                                let _ = full_tx.send(Ok(StreamChunk::TextDelta { text })).await;
+                                if full_tx
+                                    .send(Ok(StreamChunk::TextDelta { text }))
+                                    .await
+                                    .is_err()
+                                {
+                                    full_enabled_task.store(false, Ordering::Relaxed);
+                                }
+                            } else {
+                                if text_enabled
+                                    && !text.is_empty()
+                                    && text_tx.send(Ok(text.clone())).await.is_err()
+                                {
+                                    text_enabled_task.store(false, Ordering::Relaxed);
+                                }
+                                collector.observe_owned(StreamChunk::TextDelta { text });
                             }
                         }
                         other => {
                             if full_enabled {
-                                let _ = full_tx.send(Ok(other)).await;
+                                collector.observe(&other);
+                                if full_tx.send(Ok(other)).await.is_err() {
+                                    full_enabled_task.store(false, Ordering::Relaxed);
+                                }
+                            } else {
+                                collector.observe_owned(other);
                             }
                         }
                     }
@@ -220,13 +238,18 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                         state.done = true;
                         state.final_error = Some(format!("stream failed: {err_string}"));
                     }
-                    if text_enabled_task.load(Ordering::Relaxed) {
-                        let _ = text_tx
+                    if text_enabled_task.load(Ordering::Relaxed)
+                        && text_tx
                             .send(Err(DittoError::InvalidResponse(err_string)))
-                            .await;
+                            .await
+                            .is_err()
+                    {
+                        text_enabled_task.store(false, Ordering::Relaxed);
                     }
-                    if full_enabled_task.load(Ordering::Relaxed) {
-                        let _ = full_tx.send(Err(err)).await;
+                    if full_enabled_task.load(Ordering::Relaxed)
+                        && full_tx.send(Err(err)).await.is_err()
+                    {
+                        full_enabled_task.store(false, Ordering::Relaxed);
                     }
                     return;
                 }
@@ -456,6 +479,40 @@ mod tests {
         }
 
         assert_eq!(deltas, "hello world".to_string());
+        let response = handle.final_response()?.unwrap();
+        assert_eq!(response.text(), "hello world".to_string());
+        assert_eq!(response.finish_reason, FinishReason::Stop);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dropping_text_stream_keeps_full_stream_and_final_response_working() -> Result<()> {
+        let chunks = vec![
+            Ok(StreamChunk::TextDelta {
+                text: "hello".to_string(),
+            }),
+            Ok(StreamChunk::TextDelta {
+                text: " world".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+        ];
+
+        let inner: StreamResult = stream::iter(chunks).boxed();
+        let (handle, text_stream, mut full_stream) = stream_text_from_stream(inner).into_streams();
+        drop(text_stream);
+
+        let mut full_text = String::new();
+        let mut saw_finish = false;
+        while let Some(chunk) = full_stream.next().await {
+            match chunk? {
+                StreamChunk::TextDelta { text } => full_text.push_str(&text),
+                StreamChunk::FinishReason(FinishReason::Stop) => saw_finish = true,
+                _ => {}
+            }
+        }
+
+        assert_eq!(full_text, "hello world");
+        assert!(saw_finish);
         let response = handle.final_response()?.unwrap();
         assert_eq!(response.text(), "hello world".to_string());
         assert_eq!(response.finish_reason, FinishReason::Stop);

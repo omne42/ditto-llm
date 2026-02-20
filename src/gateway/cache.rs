@@ -202,14 +202,16 @@ impl ResponseCache {
             body_bytes,
         };
 
-        if !self.scopes.contains_key(scope) {
-            self.scopes
-                .insert(scope.to_string(), ScopedCache::default());
-        }
-        let cache = self
-            .scopes
-            .get_mut(scope)
-            .expect("scope cache must exist after insert");
+        let cache = match self.scopes.get_mut(scope) {
+            Some(cache) => cache,
+            None => {
+                self.scopes
+                    .insert(scope.to_string(), ScopedCache::default());
+                self.scopes
+                    .get_mut(scope)
+                    .expect("scope cache must exist after insert")
+            }
+        };
 
         let old_body_bytes = if let Some(existing) = cache.entries.get_mut(&key) {
             let old_body_bytes = existing.body_bytes;
