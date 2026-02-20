@@ -52,6 +52,7 @@ struct ScopedCache {
     entries: HashMap<String, CacheEntry>,
     order: VecDeque<String>,
     total_body_bytes: usize,
+    last_write_prune_at: Option<u64>,
 }
 
 impl ScopedCache {
@@ -93,6 +94,16 @@ impl ScopedCache {
             }
         }
         self.order = keep;
+    }
+
+    fn maybe_prune_expired_on_write(&mut self, now: u64) {
+        // Insert-heavy traffic can repeatedly touch the same scope in one second.
+        // Throttle full-scope prune scans to once per second per scope.
+        if self.last_write_prune_at == Some(now) {
+            return;
+        }
+        self.prune_expired(now);
+        self.last_write_prune_at = Some(now);
     }
 }
 
@@ -205,7 +216,7 @@ impl ResponseCache {
         cache.total_body_bytes = cache.total_body_bytes.saturating_add(body_bytes);
         cache.move_key_to_back(&key);
 
-        cache.prune_expired(now);
+        cache.maybe_prune_expired_on_write(now);
 
         while cache.entries.len() > config.max_entries
             || cache.total_body_bytes > config.max_total_body_bytes

@@ -101,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI: parse raw Responses SSE via bounded SSE data parsing and truncate invalid event payloads in errors.
 - Profile: reuse `utils::http::send_checked_json` for `/models` discovery errors (include non-2xx body).
 - Gateway: proxy cache size caps now also apply when storing L2 responses into Redis.
+- Gateway: throttle in-memory control-plane/proxy cache write-path expiry scans to once per second (per-scope for control-plane, global for proxy) to reduce repeated O(n) prune work under insert-heavy traffic.
 - Gateway: Redis budget/cost reservation hashes no longer expire; stale reservations can be recovered via `POST /admin/reservations/reap` instead of silently wedging ledgers.
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).

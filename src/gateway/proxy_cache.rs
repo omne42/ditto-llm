@@ -43,6 +43,7 @@ pub struct ProxyResponseCache {
     order: VecDeque<String>,
     total_body_bytes: usize,
     last_prune_at: Option<u64>,
+    last_write_prune_at: Option<u64>,
 }
 
 impl ProxyResponseCache {
@@ -94,6 +95,7 @@ impl ProxyResponseCache {
             order: VecDeque::new(),
             total_body_bytes: 0,
             last_prune_at: None,
+            last_write_prune_at: None,
         }
     }
 
@@ -105,6 +107,15 @@ impl ProxyResponseCache {
         }
         self.prune_expired(now);
         self.last_prune_at = Some(now);
+    }
+
+    fn maybe_prune_expired_on_write(&mut self, now: u64) {
+        // Insert-heavy traffic can trigger repeated full-cache prune scans in the same second.
+        if self.last_write_prune_at == Some(now) {
+            return;
+        }
+        self.prune_expired(now);
+        self.last_write_prune_at = Some(now);
     }
 
     pub fn get(&mut self, key: &str, now: u64) -> Option<CachedProxyResponse> {
@@ -178,7 +189,7 @@ impl ProxyResponseCache {
 
         self.total_body_bytes = self.total_body_bytes.saturating_add(body_len);
         self.move_key_to_back(&key);
-        self.prune_expired(now);
+        self.maybe_prune_expired_on_write(now);
 
         while self.entries.len() > self.config.max_entries
             || self.total_body_bytes > self.config.max_total_body_bytes
@@ -214,6 +225,7 @@ impl ProxyResponseCache {
         self.order.clear();
         self.total_body_bytes = 0;
         self.last_prune_at = None;
+        self.last_write_prune_at = None;
     }
 }
 
@@ -546,5 +558,40 @@ mod tests {
         assert!(cache.entries.is_empty());
         assert!(cache.order.is_empty());
         assert_eq!(cache.total_body_bytes, 0);
+    }
+
+    #[test]
+    fn cache_get_miss_still_prunes_when_write_happened_same_second() {
+        let mut cache = ProxyResponseCache::new(ProxyCacheConfig {
+            ttl_seconds: 1,
+            max_entries: 10,
+            max_body_bytes: 10,
+            max_total_body_bytes: 100,
+        });
+
+        cache.insert(
+            "a".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"aa"),
+                backend: "b".to_string(),
+            },
+            0,
+        );
+        cache.insert(
+            "b".to_string(),
+            CachedProxyResponse {
+                status: 200,
+                headers: HeaderMap::new(),
+                body: Bytes::from_static(b"bb"),
+                backend: "b".to_string(),
+            },
+            1,
+        );
+
+        assert!(cache.get("missing", 1).is_none());
+        assert!(!cache.entries.contains_key("a"));
+        assert!(cache.entries.contains_key("b"));
     }
 }
