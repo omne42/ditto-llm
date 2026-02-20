@@ -99,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: proxy non-stream handler now uses bounded pre-buffering to enable usage parsing and proxy caching even when the upstream response omits `content-length` (falls back to streaming when the cap is exceeded).
 - Gateway: proxy non-stream pre-buffering no longer trusts `content-length` and falls back to streaming when the actual body exceeds the cap.
 - Gateway: bounded proxy pre-buffering now accumulates into a single buffer (avoids per-chunk allocations on chunked responses; reduces memory/CPU overhead).
+- Gateway: reduce proxy hot-path allocations by parsing `usage` from typed/slice-based JSON (including SSE usage chunks) instead of building intermediate `serde_json::Value` trees and temporary `Bytes`.
+- Gateway: preallocate proxy buffering from `content-length` when available and normalize bounded-body max-byte handling, reducing reallocations and fixing edge-case cap inconsistency.
 - Gateway: Redis proxy-cache purge-all now deletes keys in SCAN batches (avoids building a huge in-memory key list).
 - Gateway: cap non-streaming `/v1/responses` shim buffering (chat/completions → responses) to avoid OOM on large upstream bodies.
 - Gateway: prune in-memory cache/budget scopes when virtual keys are updated/removed (avoids unbounded growth when keys churn).

@@ -1,10 +1,11 @@
 async fn read_reqwest_body_bytes_bounded(
     response: reqwest::Response,
     max_bytes: usize,
+    initial_capacity: usize,
 ) -> Result<Bytes, std::io::Error> {
     let max_bytes = max_bytes.max(1);
     let mut stream = response.bytes_stream();
-    let mut buffered = bytes::BytesMut::new();
+    let mut buffered = bytes::BytesMut::with_capacity(initial_capacity.min(max_bytes));
 
     while let Some(next) = stream.next().await {
         match next {
@@ -30,6 +31,7 @@ async fn read_reqwest_body_bytes_bounded_with_content_length(
     headers: &HeaderMap,
     max_bytes: usize,
 ) -> Result<Bytes, std::io::Error> {
+    let max_bytes = max_bytes.max(1);
     let content_length = headers
         .get("content-length")
         .and_then(|value| value.to_str().ok())
@@ -40,5 +42,6 @@ async fn read_reqwest_body_bytes_bounded_with_content_length(
             content_length
         )));
     }
-    read_reqwest_body_bytes_bounded(response, max_bytes).await
+    let initial_capacity = content_length.map(|len| len.min(max_bytes)).unwrap_or(0);
+    read_reqwest_body_bytes_bounded(response, max_bytes, initial_capacity).await
 }

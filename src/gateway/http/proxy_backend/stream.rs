@@ -32,8 +32,7 @@
                     }
 
                     if trimmed.starts_with(b"{") {
-                        let bytes = Bytes::copy_from_slice(trimmed);
-                        if let Some(usage) = extract_openai_usage_from_bytes(&bytes) {
+                        if let Some(usage) = extract_openai_usage_from_slice(trimmed) {
                             self.observed_usage = Some(usage);
                         }
                     }

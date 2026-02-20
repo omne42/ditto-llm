@@ -47,7 +47,10 @@
 
         let response_body = if should_try_buffer {
             let mut upstream_stream = upstream_response.bytes_stream();
-            let mut buffered = bytes::BytesMut::new();
+            let initial_capacity = content_length
+                .map(|len| len.min(max_buffer_bytes))
+                .unwrap_or(0);
+            let mut buffered = bytes::BytesMut::with_capacity(initial_capacity);
             let mut first_unbuffered: Option<Bytes> = None;
             let mut stream_error: Option<std::io::Error> = None;
 

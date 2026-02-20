@@ -325,45 +325,81 @@ struct ObservedUsage {
     total_tokens: Option<u64>,
 }
 
+#[derive(serde::Deserialize)]
+struct OpenAiUsageEnvelope {
+    usage: Option<OpenAiUsagePayload>,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenAiUsagePayload {
+    #[serde(default)]
+    total_tokens: Option<u64>,
+    #[serde(default, alias = "prompt_tokens")]
+    input_tokens: Option<u64>,
+    #[serde(default, alias = "completion_tokens")]
+    output_tokens: Option<u64>,
+    #[serde(default)]
+    reasoning_tokens: Option<u64>,
+    #[serde(default, alias = "prompt_tokens_details")]
+    input_tokens_details: Option<OpenAiInputTokenDetails>,
+    #[serde(default)]
+    output_tokens_details: Option<OpenAiOutputTokenDetails>,
+    #[serde(default)]
+    completion_tokens_details: Option<OpenAiOutputTokenDetails>,
+    #[serde(default)]
+    cache_creation_input_tokens: Option<u64>,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenAiInputTokenDetails {
+    #[serde(default)]
+    cached_tokens: Option<u64>,
+    #[serde(default, alias = "cache_creation_tokens")]
+    cache_creation_tokens: Option<u64>,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenAiOutputTokenDetails {
+    #[serde(default)]
+    reasoning_tokens: Option<u64>,
+}
+
 fn extract_openai_usage_from_bytes(bytes: &Bytes) -> Option<ObservedUsage> {
-    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
-    let usage = value.get("usage")?.as_object()?;
-    let total_tokens = usage.get("total_tokens").and_then(|v| v.as_u64());
-    let input_tokens = usage
-        .get("input_tokens")
-        .or_else(|| usage.get("prompt_tokens"))
-        .and_then(|v| v.as_u64());
-    let output_tokens = usage
-        .get("output_tokens")
-        .or_else(|| usage.get("completion_tokens"))
-        .and_then(|v| v.as_u64());
-    let reasoning_tokens = usage
-        .get("reasoning_tokens")
-        .and_then(|v| v.as_u64())
-        .or_else(|| {
-            usage.get("output_tokens_details")
-                .or_else(|| usage.get("completion_tokens_details"))
-                .and_then(|details| details.get("reasoning_tokens"))
-                .and_then(|v| v.as_u64())
-        });
-    let total_tokens = total_tokens.or_else(|| {
+    extract_openai_usage_from_slice(bytes.as_ref())
+}
+
+fn extract_openai_usage_from_slice(bytes: &[u8]) -> Option<ObservedUsage> {
+    let usage = serde_json::from_slice::<OpenAiUsageEnvelope>(bytes)
+        .ok()?
+        .usage?;
+
+    let input_tokens = usage.input_tokens;
+    let output_tokens = usage.output_tokens;
+    let reasoning_tokens = usage.reasoning_tokens.or_else(|| {
+        usage
+            .output_tokens_details
+            .as_ref()
+            .and_then(|details| details.reasoning_tokens)
+            .or_else(|| {
+                usage
+                    .completion_tokens_details
+                    .as_ref()
+                    .and_then(|details| details.reasoning_tokens)
+            })
+    });
+    let total_tokens = usage.total_tokens.or_else(|| {
         input_tokens.and_then(|input| output_tokens.map(|output| input.saturating_add(output)))
     });
-
-    let prompt_token_details = usage
-        .get("input_tokens_details")
-        .or_else(|| usage.get("prompt_tokens_details"));
-    let cache_input_tokens = prompt_token_details
-        .and_then(|details| details.get("cached_tokens"))
-        .and_then(|v| v.as_u64());
-    let cache_creation_input_tokens = usage
-        .get("cache_creation_input_tokens")
-        .and_then(|v| v.as_u64())
-        .or_else(|| {
-            prompt_token_details
-                .and_then(|details| details.get("cache_creation_tokens"))
-                .and_then(|v| v.as_u64())
-        });
+    let cache_input_tokens = usage
+        .input_tokens_details
+        .as_ref()
+        .and_then(|details| details.cached_tokens);
+    let cache_creation_input_tokens = usage.cache_creation_input_tokens.or_else(|| {
+        usage
+            .input_tokens_details
+            .as_ref()
+            .and_then(|details| details.cache_creation_tokens)
+    });
 
     Some(ObservedUsage {
         input_tokens,
