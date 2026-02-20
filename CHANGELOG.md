@@ -116,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: allow Anthropic/Google shims to forward provider-style API keys (e.g. `x-api-key`, `x-goog-api-key`, `?key=`) as upstream `Authorization: Bearer ...` when virtual keys are disabled.
 - Gateway: aggregate `/models` and `/v1/models` across all configured proxy backends (dedup by model id).
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
+- Gateway translation: switch lazy singleton client caches (files/batches/moderations/images) to `tokio::sync::OnceCell` to avoid duplicate concurrent initialization and reduce lock contention.
 - CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
 - CI: extend the `--no-default-features` clippy matrix to cover provider-only builds for each provider feature (`openai`, `openai-compatible`, `anthropic`, `google`, `cohere`, `bedrock`, `vertex`) across all targets.
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.

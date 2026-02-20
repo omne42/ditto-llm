@@ -5,26 +5,21 @@ impl TranslationBackend {
             return Ok(client.clone());
         }
 
-        let cached = self.file_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return Ok(client);
-        }
+        let client = self
+            .file_cache
+            .get_or_try_init(|| async {
+                build_file_client(self.provider.as_str(), &self.provider_config, &self.env)
+                    .await?
+                    .ok_or_else(|| {
+                        DittoError::InvalidResponse(format!(
+                            "provider backend does not support files: {}",
+                            self.provider
+                        ))
+                    })
+            })
+            .await?;
 
-        let client = build_file_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support files: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.file_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
-        Ok(client)
+        Ok(client.clone())
     }
 
     pub async fn list_files(&self) -> crate::Result<Vec<crate::file::FileObject>> {
@@ -53,4 +48,3 @@ impl TranslationBackend {
         client.download_file_content(file_id).await
     }
 }
-

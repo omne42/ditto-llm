@@ -6,7 +6,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use futures_util::stream;
 use serde_json::{Map, Value};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::audio::{AudioTranscriptionModel, SpeechModel};
 use crate::batch::BatchClient;
@@ -134,13 +134,13 @@ pub struct TranslationBackend {
     env: Env,
     provider_config: ProviderConfig,
     embedding_cache: Arc<Mutex<ModelCache<Arc<dyn EmbeddingModel>>>>,
-    moderation_cache: Arc<Mutex<Option<Arc<dyn ModerationModel>>>>,
-    image_generation_cache: Arc<Mutex<Option<Arc<dyn ImageGenerationModel>>>>,
+    moderation_cache: Arc<OnceCell<Arc<dyn ModerationModel>>>,
+    image_generation_cache: Arc<OnceCell<Arc<dyn ImageGenerationModel>>>,
     audio_transcription_cache: Arc<Mutex<ModelCache<Arc<dyn AudioTranscriptionModel>>>>,
     speech_cache: Arc<Mutex<ModelCache<Arc<dyn SpeechModel>>>>,
     rerank_cache: Arc<Mutex<ModelCache<Arc<dyn RerankModel>>>>,
-    batch_cache: Arc<Mutex<Option<Arc<dyn BatchClient>>>>,
-    file_cache: Arc<Mutex<Option<Arc<dyn FileClient>>>>,
+    batch_cache: Arc<OnceCell<Arc<dyn BatchClient>>>,
+    file_cache: Arc<OnceCell<Arc<dyn FileClient>>>,
 }
 
 impl TranslationBackend {
@@ -161,13 +161,13 @@ impl TranslationBackend {
             env: Env::default(),
             provider_config: ProviderConfig::default(),
             embedding_cache: Arc::new(Mutex::new(ModelCache::default())),
-            moderation_cache: Arc::new(Mutex::new(None)),
-            image_generation_cache: Arc::new(Mutex::new(None)),
+            moderation_cache: Arc::new(OnceCell::new()),
+            image_generation_cache: Arc::new(OnceCell::new()),
             audio_transcription_cache: Arc::new(Mutex::new(ModelCache::default())),
             speech_cache: Arc::new(Mutex::new(ModelCache::default())),
             rerank_cache: Arc::new(Mutex::new(ModelCache::default())),
-            batch_cache: Arc::new(Mutex::new(None)),
-            file_cache: Arc::new(Mutex::new(None)),
+            batch_cache: Arc::new(OnceCell::new()),
+            file_cache: Arc::new(OnceCell::new()),
         }
     }
 
@@ -260,25 +260,7 @@ impl TranslationBackend {
             return client.upload_file_with_purpose(request).await;
         }
 
-        let cached = self.file_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return client.upload_file_with_purpose(request).await;
-        }
-
-        let client = build_file_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support files: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.file_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
+        let client = self.resolve_file_client().await?;
         client.upload_file_with_purpose(request).await
     }
 
@@ -333,25 +315,20 @@ impl TranslationBackend {
             return model_impl.moderate(request).await;
         }
 
-        let cached = self.moderation_cache.lock().await.clone();
-        if let Some(model_impl) = cached {
-            return model_impl.moderate(request).await;
-        }
-
-        let model_impl =
-            build_moderation_model(self.provider.as_str(), &self.provider_config, &self.env)
-                .await?
-                .ok_or_else(|| {
-                    DittoError::InvalidResponse(format!(
-                        "provider backend does not support moderations: {}",
-                        self.provider
-                    ))
-                })?;
-
-        {
-            let mut cache = self.moderation_cache.lock().await;
-            *cache = Some(model_impl.clone());
-        }
+        let model_impl = self
+            .moderation_cache
+            .get_or_try_init(|| async {
+                build_moderation_model(self.provider.as_str(), &self.provider_config, &self.env)
+                    .await?
+                    .ok_or_else(|| {
+                        DittoError::InvalidResponse(format!(
+                            "provider backend does not support moderations: {}",
+                            self.provider
+                        ))
+                    })
+            })
+            .await?
+            .clone();
 
         model_impl.moderate(request).await
     }
@@ -364,25 +341,20 @@ impl TranslationBackend {
             return model_impl.generate(request).await;
         }
 
-        let cached = self.image_generation_cache.lock().await.clone();
-        if let Some(model_impl) = cached {
-            return model_impl.generate(request).await;
-        }
-
-        let model_impl =
-            build_image_generation_model(self.provider.as_str(), &self.provider_config, &self.env)
+        let model_impl = self
+            .image_generation_cache
+            .get_or_try_init(|| async {
+                build_image_generation_model(self.provider.as_str(), &self.provider_config, &self.env)
                 .await?
                 .ok_or_else(|| {
                     DittoError::InvalidResponse(format!(
                         "provider backend does not support images: {}",
                         self.provider
                     ))
-                })?;
-
-        {
-            let mut cache = self.image_generation_cache.lock().await;
-            *cache = Some(model_impl.clone());
-        }
+                })
+            })
+            .await?
+            .clone();
 
         model_impl.generate(request).await
     }
@@ -562,83 +534,17 @@ impl TranslationBackend {
     }
 
     pub async fn create_batch(&self, request: BatchCreateRequest) -> crate::Result<BatchResponse> {
-        if let Some(client) = self.batch_client.as_ref() {
-            return client.create(request).await;
-        }
-
-        let cached = self.batch_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return client.create(request).await;
-        }
-
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support batches: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.batch_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
+        let client = self.resolve_batch_client().await?;
         client.create(request).await
     }
 
     pub async fn retrieve_batch(&self, batch_id: &str) -> crate::Result<BatchResponse> {
-        if let Some(client) = self.batch_client.as_ref() {
-            return client.retrieve(batch_id).await;
-        }
-
-        let cached = self.batch_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return client.retrieve(batch_id).await;
-        }
-
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support batches: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.batch_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
+        let client = self.resolve_batch_client().await?;
         client.retrieve(batch_id).await
     }
 
     pub async fn cancel_batch(&self, batch_id: &str) -> crate::Result<BatchResponse> {
-        if let Some(client) = self.batch_client.as_ref() {
-            return client.cancel(batch_id).await;
-        }
-
-        let cached = self.batch_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return client.cancel(batch_id).await;
-        }
-
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support batches: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.batch_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
+        let client = self.resolve_batch_client().await?;
         client.cancel(batch_id).await
     }
 
@@ -647,30 +553,30 @@ impl TranslationBackend {
         limit: Option<u32>,
         after: Option<String>,
     ) -> crate::Result<BatchListResponse> {
-        if let Some(client) = self.batch_client.as_ref() {
-            return client.list(limit, after).await;
-        }
-
-        let cached = self.batch_cache.lock().await.clone();
-        if let Some(client) = cached {
-            return client.list(limit, after).await;
-        }
-
-        let client = build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
-            .await?
-            .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
-                    "provider backend does not support batches: {}",
-                    self.provider
-                ))
-            })?;
-
-        {
-            let mut cache = self.batch_cache.lock().await;
-            *cache = Some(client.clone());
-        }
-
+        let client = self.resolve_batch_client().await?;
         client.list(limit, after).await
+    }
+
+    async fn resolve_batch_client(&self) -> crate::Result<Arc<dyn BatchClient>> {
+        if let Some(client) = self.batch_client.as_ref() {
+            return Ok(client.clone());
+        }
+
+        let client = self
+            .batch_cache
+            .get_or_try_init(|| async {
+                build_batch_client(self.provider.as_str(), &self.provider_config, &self.env)
+                    .await?
+                    .ok_or_else(|| {
+                        DittoError::InvalidResponse(format!(
+                            "provider backend does not support batches: {}",
+                            self.provider
+                        ))
+                    })
+            })
+            .await?;
+
+        Ok(client.clone())
     }
 
     pub async fn compact_responses_history(
