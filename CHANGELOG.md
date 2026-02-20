@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gateway MCP: build a single `request_with_tools` base payload per request and reuse it across auto-exec rounds, reducing repeated `tools` JSON cloning in chat-completions/responses MCP loops.
+- Gateway MCP: bound `content[].text` tool-result aggregation with incremental UTF-8-safe truncation, avoiding full `Vec<String> + join` allocation spikes on large tool outputs.
 - SDK: `CacheLayer` now counts streamed `Warnings` payload bytes using real warning content sizes, so `max_value_bytes` correctly blocks oversized warning-heavy streams from being cached.
 - Gateway MCP: reduce `tools/list` parse overhead by consuming owned JSON payloads directly instead of cloning tool arrays from `serde_json::Value`.
 - Deps: update Rust dependency lockfile (`cargo update`).
@@ -160,6 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway MCP: tighten `server_url` parsing so only exact `litellm_proxy` / `litellm_proxy/...` forms trigger LiteLLM shortcut parsing (prevents accidental matches like `litellm_proxyabc/...`).
 - Gateway: avoid abort-path panics in proxy stream finalizers by using a runtime-safe fallback when `tokio::spawn` is unavailable during shutdown/drop.
 - Gateway/Prometheus: make response-status counters use saturating increments (global/path/backend/model), preventing overflow panics in debug builds and wraparound in long-running processes.
 - Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.

@@ -98,15 +98,15 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         .cloned()
         .chain(other_tools.into_iter())
         .collect();
+    let mut request_with_tools = request_json.clone();
+    set_json_tools(&mut request_with_tools, tools_for_llm.clone());
 
     if !auto_execute {
-        let mut req_json = request_json.clone();
-        set_json_tools(&mut req_json, tools_for_llm.clone());
         let response = call_openai_compat_proxy_with_body(
             state,
             parts,
             request_id,
-            &req_json,
+            &request_with_tools,
             original_stream,
         )
         .await?;
@@ -132,8 +132,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
     let mut tool_rounds_executed: usize = 0;
     loop {
         if tool_rounds_executed >= max_steps {
-            let mut req_json = request_json.clone();
-            set_json_tools(&mut req_json, tools_for_llm.clone());
+            let mut req_json = request_with_tools.clone();
             if let Some(obj) = req_json.as_object_mut() {
                 obj.insert("messages".to_string(), Value::Array(messages));
             }
@@ -151,8 +150,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         // Non-stream call to extract tool calls.
         let step_request_id = format!("{request_id}-mcp{tool_rounds_executed}");
         let step_response = {
-            let mut step_req_json = request_json.clone();
-            set_json_tools(&mut step_req_json, tools_for_llm.clone());
+            let mut step_req_json = request_with_tools.clone();
             {
                 let Some(obj) = step_req_json.as_object_mut() else {
                     return Err(openai_error(
@@ -217,8 +215,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
 
         if tool_calls.is_empty() {
             if original_stream {
-                let mut req_json = request_json.clone();
-                set_json_tools(&mut req_json, tools_for_llm.clone());
+                let mut req_json = request_with_tools.clone();
                 if let Some(obj) = req_json.as_object_mut() {
                     obj.insert("messages".to_string(), Value::Array(messages));
                 }
@@ -345,15 +342,15 @@ async fn maybe_handle_mcp_tools_responses(
         .cloned()
         .chain(other_tools.into_iter())
         .collect();
+    let mut request_with_tools = request_json.clone();
+    set_json_tools(&mut request_with_tools, tools_for_llm.clone());
 
     if !auto_execute {
-        let mut req_json = request_json.clone();
-        set_json_tools(&mut req_json, tools_for_llm.clone());
         let response = call_openai_compat_proxy_with_body(
             state,
             parts,
             request_id,
-            &req_json,
+            &request_with_tools,
             original_stream,
         )
         .await?;
@@ -362,8 +359,7 @@ async fn maybe_handle_mcp_tools_responses(
 
     // 1) Initial non-stream call to extract tool calls.
     let initial_request_id = format!("{request_id}-mcp0");
-    let mut initial_req_json = request_json.clone();
-    set_json_tools(&mut initial_req_json, tools_for_llm.clone());
+    let initial_req_json = request_with_tools.clone();
     let initial_response = call_openai_compat_proxy_with_body(
         state,
         parts,
@@ -384,10 +380,8 @@ async fn maybe_handle_mcp_tools_responses(
 
     if tool_calls.is_empty() {
         if original_stream {
-            let mut req_json = request_json.clone();
-            set_json_tools(&mut req_json, tools_for_llm.clone());
             let response =
-                call_openai_compat_proxy_with_body(state, parts, request_id, &req_json, true)
+                call_openai_compat_proxy_with_body(state, parts, request_id, &request_with_tools, true)
                     .await?;
             return Ok(Some(response));
         }
@@ -417,7 +411,7 @@ async fn maybe_handle_mcp_tools_responses(
                 request_id,
                 request_json,
                 server_ids: &server_ids,
-                tools_for_llm,
+                tools_for_llm: tools_for_llm.clone(),
                 initial_tool_calls: &tool_calls,
                 initial_tool_results: &tool_results,
                 max_steps,
@@ -432,8 +426,7 @@ async fn maybe_handle_mcp_tools_responses(
     // Native /responses: multi-step tool loop is safe only for non-stream.
     if original_stream {
         // 2) Follow-up call with tool results via native /responses.
-        let mut follow_up = request_json.clone();
-        set_json_tools(&mut follow_up, tools_for_llm);
+        let mut follow_up = request_with_tools.clone();
         if let Some(obj) = follow_up.as_object_mut() {
             obj.insert(
                 "previous_response_id".to_string(),
@@ -466,8 +459,7 @@ async fn maybe_handle_mcp_tools_responses(
     let mut tool_results = tool_results;
     loop {
         if tool_rounds_executed >= max_steps {
-            let mut follow_up = request_json.clone();
-            set_json_tools(&mut follow_up, tools_for_llm.clone());
+            let mut follow_up = request_with_tools.clone();
             if let Some(obj) = follow_up.as_object_mut() {
                 obj.insert(
                     "previous_response_id".to_string(),
@@ -501,8 +493,7 @@ async fn maybe_handle_mcp_tools_responses(
         }
 
         let step_request_id = format!("{request_id}-mcp{tool_rounds_executed}");
-        let mut follow_up = request_json.clone();
-        set_json_tools(&mut follow_up, tools_for_llm.clone());
+        let mut follow_up = request_with_tools.clone();
         if let Some(obj) = follow_up.as_object_mut() {
             obj.insert(
                 "previous_response_id".to_string(),
@@ -729,7 +720,8 @@ fn parse_mcp_server_selector(server_url: &str) -> Option<Vec<String>> {
     }
 
     // LiteLLM tool shortcut: litellm_proxy/mcp/<servers>
-    if let Some(rest) = trimmed.strip_prefix("litellm_proxy") {
+    if trimmed == "litellm_proxy" || trimmed.starts_with("litellm_proxy/") {
+        let rest = trimmed.trim_start_matches("litellm_proxy");
         let rest = rest.trim_start_matches('/');
         if rest.is_empty() || rest == "mcp" {
             return None;
@@ -992,17 +984,26 @@ fn mcp_tool_result_to_text(result: &Value) -> String {
     }
 
     if let Some(content) = result.get("content").and_then(|v| v.as_array()) {
-        let mut texts = Vec::new();
+        let mut assembled = String::new();
+        let raw_limit = MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES.saturating_add(TRUNCATE_SUFFIX.len());
+        let mut has_text = false;
         for item in content {
             if item.get("type").and_then(|v| v.as_str()) == Some("text") {
                 if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                    texts.push(text.to_string());
+                    has_text = true;
+                    if !assembled.is_empty() {
+                        append_with_utf8_limit(&mut assembled, "\n", raw_limit);
+                    }
+                    append_with_utf8_limit(&mut assembled, text, raw_limit);
+                    if assembled.len() >= raw_limit {
+                        break;
+                    }
                 }
             }
         }
-        if !texts.is_empty() {
+        if has_text {
             return truncate_utf8_with_suffix(
-                &texts.join("\n"),
+                &assembled,
                 MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES,
             );
         }
@@ -1046,15 +1047,16 @@ fn push_message_with_limit(
     Ok(())
 }
 
+const TRUNCATE_SUFFIX: &str = "...[truncated]";
+
 fn truncate_utf8_with_suffix(input: &str, max_bytes: usize) -> String {
-    const SUFFIX: &str = "...[truncated]";
     if input.len() <= max_bytes {
         return input.to_string();
     }
     if max_bytes == 0 {
         return String::new();
     }
-    if max_bytes <= SUFFIX.len() {
+    if max_bytes <= TRUNCATE_SUFFIX.len() {
         let mut end = max_bytes;
         while end > 0 && !input.is_char_boundary(end) {
             end = end.saturating_sub(1);
@@ -1062,14 +1064,31 @@ fn truncate_utf8_with_suffix(input: &str, max_bytes: usize) -> String {
         return input[..end].to_string();
     }
 
-    let mut end = max_bytes - SUFFIX.len();
+    let mut end = max_bytes - TRUNCATE_SUFFIX.len();
     while end > 0 && !input.is_char_boundary(end) {
         end = end.saturating_sub(1);
     }
-    let mut out = String::with_capacity(end.saturating_add(SUFFIX.len()));
+    let mut out = String::with_capacity(end.saturating_add(TRUNCATE_SUFFIX.len()));
     out.push_str(&input[..end]);
-    out.push_str(SUFFIX);
+    out.push_str(TRUNCATE_SUFFIX);
     out
+}
+
+fn append_with_utf8_limit(out: &mut String, chunk: &str, max_bytes: usize) {
+    if out.len() >= max_bytes {
+        return;
+    }
+    let remaining = max_bytes - out.len();
+    if chunk.len() <= remaining {
+        out.push_str(chunk);
+        return;
+    }
+
+    let mut end = remaining;
+    while end > 0 && !chunk.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    out.push_str(&chunk[..end]);
 }
 
 #[cfg(test)]
@@ -1080,7 +1099,7 @@ mod tests {
 
     use super::{
         MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES, estimate_messages_bytes, mcp_tool_result_to_text,
-        tool_name_allowed, truncate_utf8_with_suffix,
+        parse_mcp_server_selector, tool_name_allowed, truncate_utf8_with_suffix,
     };
 
     #[test]
@@ -1124,5 +1143,32 @@ mod tests {
         ];
         let size = estimate_messages_bytes(&messages);
         assert!(size > 0);
+    }
+
+    #[test]
+    fn parse_mcp_server_selector_requires_litellm_proxy_boundary() {
+        assert_eq!(
+            parse_mcp_server_selector("litellm_proxy/mcp/server-a"),
+            Some(vec!["server-a".to_string()])
+        );
+        assert_eq!(
+            parse_mcp_server_selector("litellm_proxyabc/mcp/server-a"),
+            None
+        );
+    }
+
+    #[test]
+    fn mcp_tool_result_to_text_truncates_large_content_array_without_joining_all() {
+        let large = "a".repeat(MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES);
+        let result = json!({
+            "content": [
+                { "type": "text", "text": large },
+                { "type": "text", "text": large },
+                { "type": "text", "text": large }
+            ]
+        });
+        let out = mcp_tool_result_to_text(&result);
+        assert!(out.len() <= MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES);
+        assert!(out.ends_with("...[truncated]"));
     }
 }
