@@ -283,67 +283,68 @@ impl AnthropicSseEncoder {
             }
         }
 
-        let delta = choice
-            .get("delta")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_else(Map::<String, Value>::new);
-
-        if let Some(text) = delta.get("content").and_then(Value::as_str) {
-            if !text.is_empty() {
-                self.ensure_text_start(&mut out);
-                out.push(anthropic_sse_bytes(
-                    "content_block_delta",
-                    serde_json::json!({
-                        "type": "content_block_delta",
-                        "index": 0,
-                        "delta": { "type": "text_delta", "text": text }
-                    }),
-                ));
+        if let Some(delta) = choice.get("delta").and_then(Value::as_object) {
+            if let Some(text) = delta.get("content").and_then(Value::as_str) {
+                if !text.is_empty() {
+                    self.ensure_text_start(&mut out);
+                    out.push(anthropic_sse_bytes(
+                        "content_block_delta",
+                        serde_json::json!({
+                            "type": "content_block_delta",
+                            "index": 0,
+                            "delta": { "type": "text_delta", "text": text }
+                        }),
+                    ));
+                }
             }
-        }
 
-        if let Some(tool_calls) = delta.get("tool_calls").and_then(Value::as_array) {
-            for tool_call in tool_calls {
-                let Some(obj) = tool_call.as_object() else {
-                    continue;
-                };
-                let index = obj.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-                let entry = self.tool_calls.entry(index).or_default();
-                if let Some(id) = obj.get("id").and_then(Value::as_str).map(str::trim) {
-                    if !id.is_empty() {
-                        entry.id = Some(id.to_string());
-                    }
-                }
-                if let Some(function) = obj.get("function").and_then(Value::as_object) {
-                    if let Some(name) = function.get("name").and_then(Value::as_str).map(str::trim)
-                    {
-                        if !name.is_empty() {
-                            entry.name = Some(name.to_string());
+            if let Some(tool_calls) = delta.get("tool_calls").and_then(Value::as_array) {
+                for tool_call in tool_calls {
+                    let Some(obj) = tool_call.as_object() else {
+                        continue;
+                    };
+                    let index = obj
+                        .get("index")
+                        .and_then(Value::as_u64)
+                        .and_then(|value| usize::try_from(value).ok())
+                        .unwrap_or(0);
+                    let entry = self.tool_calls.entry(index).or_default();
+                    if let Some(id) = obj.get("id").and_then(Value::as_str).map(str::trim) {
+                        if !id.is_empty() {
+                            entry.id = Some(id.to_string());
                         }
                     }
-                    if let Some(args) = function
-                        .get("arguments")
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                    {
-                        if entry.started {
-                            let block_index = index.saturating_add(1);
-                            out.push(anthropic_sse_bytes(
-                                "content_block_delta",
-                                serde_json::json!({
-                                    "type": "content_block_delta",
-                                    "index": block_index,
-                                    "delta": { "type": "input_json_delta", "partial_json": args }
-                                }),
-                            ));
-                        } else {
-                            entry.pending_arguments.push_str(args);
+                    if let Some(function) = obj.get("function").and_then(Value::as_object) {
+                        if let Some(name) =
+                            function.get("name").and_then(Value::as_str).map(str::trim)
+                        {
+                            if !name.is_empty() {
+                                entry.name = Some(name.to_string());
+                            }
+                        }
+                        if let Some(args) = function
+                            .get("arguments")
+                            .and_then(Value::as_str)
+                            .filter(|s| !s.is_empty())
+                        {
+                            if entry.started {
+                                let block_index = index.saturating_add(1);
+                                out.push(anthropic_sse_bytes(
+                                    "content_block_delta",
+                                    serde_json::json!({
+                                        "type": "content_block_delta",
+                                        "index": block_index,
+                                        "delta": { "type": "input_json_delta", "partial_json": args }
+                                    }),
+                                ));
+                            } else {
+                                entry.pending_arguments.push_str(args);
+                            }
                         }
                     }
-                }
 
-                self.ensure_tool_start(index, &mut out);
+                    self.ensure_tool_start(index, &mut out);
+                }
             }
         }
 

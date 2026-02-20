@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAI: raw Responses SSE event processor now exits immediately when the downstream receiver is dropped, avoiding wasted stream parsing/work after cancellation.
 - Performance: replace implicit `String` cloning via `to_string()` with direct `clone()` in stream collection, secret command building, and object tool-call fallback paths to trim hot-path overhead.
 - Performance: tighten lock/permit lifetimes across gateway auth/admin/proxy hot paths (A2A, MCP, OpenAI models, LiteLLM key flows, backend health/state handling, OpenAI-compatible context resolution) and replace eager fallback construction with lazy `*_or_else` variants to reduce avoidable contention/allocation overhead.
+- Gateway interop: reduce allocation/copy overhead in Anthropic/Google request translation by avoiding full-array cloning for message/tool blocks and replacing `collect::<Vec<_>>().join("")` text assembly with direct `String` collection.
+- Gateway interop: remove per-chunk `delta` object cloning in OpenAI->Anthropic SSE conversion and harden tool-call index parsing with checked `u64 -> usize` conversion.
 - Gateway/Prometheus: reduce hot-path allocations in label series accounting by avoiding per-update `String` construction for existing labels, and treat `max_*_series = 0` as fully disabling labelled series (no implicit `__overflow__` bucket writes).
 - Build: depend on `safe-fs-tools` via the external repo checkout (`../safe-fs-tools`) instead of a vendored copy.
 - Gateway: cap responses-shim streaming `tool_calls[].index` fan-out to a fixed slot limit (DoS hardening against oversized indexes) and remove per-event fallback-id cloning in SSE translation to reduce hot-path allocations.
@@ -142,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.
+- Gateway interop: fix Anthropic tool-use mapping fallback IDs so multiple OpenAI tool calls without IDs now get stable unique IDs (`call_0`, `call_1`, ...) instead of repeating `call_0`.
 - Utils: fix SSE `max_event_bytes` boundary accounting so events exactly at the configured byte limit are accepted (previously rejected by an off-by-one check).
 - SDK: `CacheLayer` generate-entry byte estimation now includes tool-call JSON arguments, image/file payload sizes, warning text, and provider metadata; oversized responses are no longer misclassified as cacheable under `max_value_bytes`.
 - SDK: deduplicate `stream::StreamCollector` warnings for empty `tool_call.id` chunks so malformed streams cannot grow warning buffers via repeated identical entries.

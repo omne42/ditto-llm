@@ -39,19 +39,15 @@ fn number_from_f64(value: f64) -> Option<Value> {
 
 fn extract_text_from_blocks(value: &Value) -> String {
     match value {
-        Value::String(text) => text.to_string(),
+        Value::String(text) => text.clone(),
         Value::Array(items) => items
             .iter()
             .filter_map(|item| item.as_object())
             .filter_map(|obj| match obj.get("type").and_then(Value::as_str) {
-                Some("text") => obj
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .map(|s| s.to_string()),
+                Some("text") => obj.get("text").and_then(Value::as_str),
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join(""),
+            .collect(),
         _ => String::new(),
     }
 }
@@ -190,13 +186,14 @@ pub(crate) fn anthropic_messages_request_to_openai_chat_completions(
         match role.as_str() {
             "user" => {
                 let mut parts = Vec::<Value>::new();
-
-                let blocks: Vec<Value> = match content {
+                let synthesized_block;
+                let blocks: &[Value] = match content {
                     Value::String(text) => {
-                        vec![serde_json::json!({ "type": "text", "text": text })]
+                        synthesized_block = serde_json::json!({ "type": "text", "text": text });
+                        std::slice::from_ref(&synthesized_block)
                     }
-                    Value::Array(items) => items.clone(),
-                    other => vec![other.clone()],
+                    Value::Array(items) => items.as_slice(),
+                    other => std::slice::from_ref(other),
                 };
 
                 for block in blocks {
@@ -285,17 +282,19 @@ pub(crate) fn anthropic_messages_request_to_openai_chat_completions(
                 push_openai_user_message(&mut messages, &mut parts);
             }
             "assistant" => {
-                let blocks: Vec<Value> = match content {
+                let synthesized_block;
+                let blocks: &[Value] = match content {
                     Value::String(text) => {
-                        vec![serde_json::json!({ "type": "text", "text": text })]
+                        synthesized_block = serde_json::json!({ "type": "text", "text": text });
+                        std::slice::from_ref(&synthesized_block)
                     }
-                    Value::Array(items) => items.clone(),
-                    other => vec![other.clone()],
+                    Value::Array(items) => items.as_slice(),
+                    other => std::slice::from_ref(other),
                 };
 
                 let mut text = String::new();
                 let mut tool_calls = Vec::<Value>::new();
-                for (idx, block) in blocks.into_iter().enumerate() {
+                for (idx, block) in blocks.iter().enumerate() {
                     let Some(block) = block.as_object() else {
                         continue;
                     };
@@ -449,15 +448,15 @@ pub(crate) fn openai_chat_completions_response_to_anthropic_message(
     }
 
     if let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) {
-        for call in tool_calls {
+        for (idx, call) in tool_calls.iter().enumerate() {
             let Some(call) = call.as_object() else {
                 continue;
             };
             let call_id = call.get("id").and_then(Value::as_str).unwrap_or("").trim();
             let call_id = if call_id.is_empty() {
-                "call_0"
+                format!("call_{idx}")
             } else {
-                call_id
+                call_id.to_string()
             };
 
             let function = call
@@ -558,11 +557,9 @@ fn google_tools_to_openai(value: &Value) -> Result<Vec<Value>, String> {
         let Some(obj) = item.as_object() else {
             continue;
         };
-        let decls = obj
-            .get("functionDeclarations")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let Some(decls) = obj.get("functionDeclarations").and_then(Value::as_array) else {
+            continue;
+        };
         for decl in decls {
             let Some(decl) = decl.as_object() else {
                 continue;
@@ -614,8 +611,7 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
             let text = parts
                 .iter()
                 .filter_map(|p| p.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
             if !text.trim().is_empty() {
                 messages.push(serde_json::json!({
                     "role": "system",
@@ -639,16 +635,13 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
                 "model" => "assistant",
                 _ => continue,
             };
-            let parts = content
-                .get("parts")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
+            let Some(parts) = content.get("parts").and_then(Value::as_array) else {
+                continue;
+            };
             let text = parts
                 .iter()
                 .filter_map(|p| p.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
             if text.trim().is_empty() {
                 continue;
             }
@@ -703,3 +696,47 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
     Ok(Value::Object(out))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extract_text_from_blocks_joins_text_parts_only() {
+        let value = json!([
+            {"type": "text", "text": "hello"},
+            {"type": "image", "source": {"type": "url", "url": "https://example.com/a.png"}},
+            {"type": "text", "text": " world"}
+        ]);
+        assert_eq!(extract_text_from_blocks(&value), "hello world");
+    }
+
+    #[test]
+    fn anthropic_response_assigns_unique_fallback_tool_use_ids() {
+        let response = json!({
+            "id": "chatcmpl_123",
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"function": {"name": "tool_a", "arguments": "{\"a\":1}"}},
+                        {"function": {"name": "tool_b", "arguments": "{\"b\":2}"}}
+                    ]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2}
+        });
+
+        let mapped =
+            openai_chat_completions_response_to_anthropic_message(&response).expect("map response");
+        let blocks = mapped
+            .get("content")
+            .and_then(Value::as_array)
+            .expect("content blocks");
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].get("id").and_then(Value::as_str), Some("call_0"));
+        assert_eq!(blocks[1].get("id").and_then(Value::as_str), Some("call_1"));
+    }
+}
