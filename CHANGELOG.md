@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- release: bump crate version to `1.0.0`.
 - Gateway: optimize proxy backend URL joining (`join_base_url`) to avoid intermediate `String` allocations on request hot paths.
 - Gateway MCP: build a single `request_with_tools` base payload per request and reuse it across auto-exec rounds, reducing repeated `tools` JSON cloning in chat-completions/responses MCP loops.
 - Gateway MCP: bound `content[].text` tool-result aggregation with incremental UTF-8-safe truncation, avoiding full `Vec<String> + join` allocation spikes on large tool outputs.
