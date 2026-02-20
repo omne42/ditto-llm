@@ -110,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: Redis budget/cost reservation hashes no longer expire; stale reservations can be recovered via `POST /admin/reservations/reap` instead of silently wedging ledgers.
 - Gateway: in-memory rate limiter now GC's per-minute usage to avoid unbounded key growth.
 - Gateway: in-memory rate limiter now keeps only the active minute bucket during GC and drops per-scope counters when limits are disabled, reducing stale state retention under clock rollback or policy changes.
+- Gateway: reduce hot-path allocations in in-memory rate limiting and cache updates by only allocating `String` keys on map misses (instead of every hit-path update).
+- Gateway: skip zero-value token/cost `spend` writes in in-memory budget tracking, preventing long-lived zero counters from accumulating across scopes.
 - Gateway: Anthropic/Google streaming adapters now parse SSE via bounded reader-based parsing (avoid deprecated line-based parsing).
 - Gateway: passthrough proxy now avoids buffering large non-SSE responses (streams them) and only buffers when a response is small enough for usage accounting or proxy caching (reduces OOM risk on large downloads).
 - Gateway: proxy non-stream handler now uses bounded pre-buffering to enable usage parsing and proxy caching even when the upstream response omits `content-length` (falls back to streaming when the cap is exceeded).

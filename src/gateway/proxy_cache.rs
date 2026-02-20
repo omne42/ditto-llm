@@ -171,24 +171,19 @@ impl ProxyResponseCache {
             return;
         }
 
-        use std::collections::hash_map::Entry;
-
         let expires_at = now.saturating_add(self.config.ttl_seconds);
         let entry = CacheEntry {
             response,
             expires_at,
         };
 
-        let old_body_len = match self.entries.entry(key.clone()) {
-            Entry::Occupied(mut occupied) => {
-                let old_body_len = occupied.get().response.body.len();
-                occupied.insert(entry);
-                Some(old_body_len)
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(entry);
-                None
-            }
+        let old_body_len = if let Some(existing) = self.entries.get_mut(&key) {
+            let old_body_len = existing.response.body.len();
+            *existing = entry;
+            Some(old_body_len)
+        } else {
+            self.entries.insert(key.clone(), entry);
+            None
         };
 
         if let Some(old_body_len) = old_body_len {

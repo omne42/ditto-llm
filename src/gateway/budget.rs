@@ -36,11 +36,14 @@ impl BudgetTracker {
     }
 
     pub fn spend(&mut self, key_id: &str, budget: &BudgetConfig, tokens: u64) {
-        if budget.total_tokens.is_none() {
+        if budget.total_tokens.is_none() || tokens == 0 {
             return;
         }
-        let entry = self.spent_tokens.entry(key_id.to_string()).or_insert(0);
-        *entry = entry.saturating_add(tokens);
+        if let Some(entry) = self.spent_tokens.get_mut(key_id) {
+            *entry = entry.saturating_add(tokens);
+            return;
+        }
+        self.spent_tokens.insert(key_id.to_string(), tokens);
     }
 
     pub fn refund(&mut self, key_id: &str, budget: &BudgetConfig, tokens: u64) {
@@ -77,16 +80,56 @@ impl BudgetTracker {
     }
 
     pub fn spend_cost_usd_micros(&mut self, key_id: &str, budget: &BudgetConfig, usd_micros: u64) {
-        if budget.total_usd_micros.is_none() {
+        if budget.total_usd_micros.is_none() || usd_micros == 0 {
             return;
         }
-        let entry = self.spent_usd_micros.entry(key_id.to_string()).or_insert(0);
-        *entry = entry.saturating_add(usd_micros);
+        if let Some(entry) = self.spent_usd_micros.get_mut(key_id) {
+            *entry = entry.saturating_add(usd_micros);
+            return;
+        }
+        self.spent_usd_micros.insert(key_id.to_string(), usd_micros);
     }
 
     pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
         self.spent_tokens.retain(|scope, _| scopes.contains(scope));
         self.spent_usd_micros
             .retain(|scope, _| scopes.contains(scope));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_spend_does_not_create_tracking_entries() {
+        let mut tracker = BudgetTracker::default();
+        let budget = BudgetConfig {
+            total_tokens: Some(100),
+            total_usd_micros: Some(1_000),
+        };
+
+        tracker.spend("vk_1", &budget, 0);
+        tracker.spend_cost_usd_micros("vk_1", &budget, 0);
+
+        assert!(!tracker.spent_tokens.contains_key("vk_1"));
+        assert!(!tracker.spent_usd_micros.contains_key("vk_1"));
+    }
+
+    #[test]
+    fn non_zero_spend_still_accumulates() {
+        let mut tracker = BudgetTracker::default();
+        let budget = BudgetConfig {
+            total_tokens: Some(100),
+            total_usd_micros: Some(1_000),
+        };
+
+        tracker.spend("vk_1", &budget, 10);
+        tracker.spend("vk_1", &budget, 5);
+        tracker.spend_cost_usd_micros("vk_1", &budget, 12);
+        tracker.spend_cost_usd_micros("vk_1", &budget, 3);
+
+        assert_eq!(tracker.spent_tokens.get("vk_1"), Some(&15));
+        assert_eq!(tracker.spent_usd_micros.get("vk_1"), Some(&15));
     }
 }

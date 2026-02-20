@@ -43,11 +43,22 @@ impl RateLimiter {
             self.last_gc_minute = minute;
         }
 
-        let usage = self.usage.entry(key_id.to_string()).or_insert(MinuteUsage {
-            minute,
-            requests: 0,
-            tokens: 0,
-        });
+        let usage = match self.usage.get_mut(key_id) {
+            Some(usage) => usage,
+            None => {
+                self.usage.insert(
+                    key_id.to_string(),
+                    MinuteUsage {
+                        minute,
+                        requests: 0,
+                        tokens: 0,
+                    },
+                );
+                self.usage
+                    .get_mut(key_id)
+                    .expect("usage entry must exist immediately after insert")
+            }
+        };
 
         if usage.minute != minute {
             usage.minute = minute;

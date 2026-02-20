@@ -202,19 +202,22 @@ impl ResponseCache {
             body_bytes,
         };
 
-        let cache = self.scopes.entry(scope.to_string()).or_default();
-        use std::collections::hash_map::Entry;
+        if !self.scopes.contains_key(scope) {
+            self.scopes
+                .insert(scope.to_string(), ScopedCache::default());
+        }
+        let cache = self
+            .scopes
+            .get_mut(scope)
+            .expect("scope cache must exist after insert");
 
-        let old_body_bytes = match cache.entries.entry(key.clone()) {
-            Entry::Occupied(mut occupied) => {
-                let old_body_bytes = occupied.get().body_bytes;
-                occupied.insert(entry);
-                Some(old_body_bytes)
-            }
-            Entry::Vacant(vacant) => {
-                vacant.insert(entry);
-                None
-            }
+        let old_body_bytes = if let Some(existing) = cache.entries.get_mut(&key) {
+            let old_body_bytes = existing.body_bytes;
+            *existing = entry;
+            Some(old_body_bytes)
+        } else {
+            cache.entries.insert(key.clone(), entry);
+            None
         };
 
         if let Some(old_body_bytes) = old_body_bytes {
