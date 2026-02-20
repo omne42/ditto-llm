@@ -115,6 +115,14 @@ pub(crate) async fn send_checked_json<T: DeserializeOwned>(
 pub(crate) async fn send_checked_bytes(req: reqwest::RequestBuilder) -> Result<Bytes> {
     let response = req.send().await?;
     let status = response.status();
+    let content_length = response
+        .content_length()
+        .and_then(|len| usize::try_from(len).ok());
+    if status.is_success() && content_length.is_some_and(|len| len > MAX_RESPONSE_BODY_BYTES) {
+        return Err(DittoError::InvalidResponse(format!(
+            "content-length={content_length:?} exceeds max bytes ({MAX_RESPONSE_BODY_BYTES})"
+        )));
+    }
     let (bytes, truncated) = response_bytes_truncated(response, MAX_RESPONSE_BODY_BYTES).await?;
     let bytes = Bytes::from(bytes);
     if !status.is_success() {
@@ -161,6 +169,42 @@ mod tests {
         let client = reqwest::Client::new();
         let result = super::send_checked_bytes(client.get(format!("http://{addr}/"))).await;
         assert!(result.is_err(), "truncated body should return error");
+        let _ = server.await;
+    }
+
+    #[tokio::test]
+    async fn send_checked_bytes_rejects_success_content_length_over_limit() {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return;
+        }
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind listener");
+        let addr = listener.local_addr().expect("local addr");
+        let oversized = super::MAX_RESPONSE_BODY_BYTES + 1;
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut req_buf = [0u8; 1024];
+            let _ = socket.read(&mut req_buf).await;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {oversized}\r\nConnection: close\r\n\r\nabc"
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write response");
+            socket.shutdown().await.expect("shutdown");
+        });
+
+        let client = reqwest::Client::new();
+        let result = super::send_checked_bytes(client.get(format!("http://{addr}/"))).await;
+        match result {
+            Err(crate::DittoError::InvalidResponse(message)) => {
+                assert!(message.contains("content-length"));
+                assert!(message.contains("exceeds max bytes"));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
         let _ = server.await;
     }
 }

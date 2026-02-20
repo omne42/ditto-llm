@@ -109,14 +109,20 @@ where
 
         if let Some(rest) = line.strip_prefix("data:") {
             let rest = rest.trim_start();
-            if !buffer.is_empty() {
-                buffer.push('\n');
-            }
-            if buffer.len().saturating_add(rest.len()).saturating_add(1) > limits.max_event_bytes {
+            let separator_bytes = usize::from(!buffer.is_empty());
+            if buffer
+                .len()
+                .saturating_add(separator_bytes)
+                .saturating_add(rest.len())
+                > limits.max_event_bytes
+            {
                 return Err(crate::DittoError::InvalidResponse(format!(
                     "SSE event exceeds max_event_bytes={}",
                     limits.max_event_bytes
                 )));
+            }
+            if separator_bytes == 1 {
+                buffer.push('\n');
             }
             buffer.push_str(rest);
         }
@@ -190,16 +196,20 @@ where
 
                 if let Some(rest) = line.strip_prefix("data:") {
                     let rest = rest.trim_start();
-                    if !buffer.is_empty() {
-                        buffer.push('\n');
-                    }
-                    if buffer.len().saturating_add(rest.len()).saturating_add(1)
+                    let separator_bytes = usize::from(!buffer.is_empty());
+                    if buffer
+                        .len()
+                        .saturating_add(separator_bytes)
+                        .saturating_add(rest.len())
                         > limits.max_event_bytes
                     {
                         return Err(crate::DittoError::InvalidResponse(format!(
                             "SSE event exceeds max_event_bytes={}",
                             limits.max_event_bytes
                         )));
+                    }
+                    if separator_bytes == 1 {
+                        buffer.push('\n');
                     }
                     buffer.push_str(rest);
                 }
@@ -284,6 +294,26 @@ mod tests {
 
         let err = data_stream.next().await.unwrap().unwrap_err();
         assert!(err.to_string().contains("max_event_bytes"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn accepts_sse_event_exactly_at_max_event_bytes() -> crate::Result<()> {
+        let sse = "data: abcde\n\n";
+        let stream = stream::iter([Ok::<_, std::io::Error>(Bytes::from(sse))]);
+        let reader = StreamReader::new(stream);
+
+        let mut data_stream = sse_data_stream_from_reader_with_limits(
+            tokio::io::BufReader::new(reader),
+            SseLimits {
+                max_line_bytes: 4096,
+                max_event_bytes: 5,
+            },
+        );
+
+        let first = data_stream.next().await.unwrap()?;
+        assert_eq!(first, "abcde");
+        assert!(data_stream.next().await.is_none());
         Ok(())
     }
 }
