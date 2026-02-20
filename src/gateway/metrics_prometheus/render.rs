@@ -504,30 +504,41 @@ pub(crate) fn normalize_proxy_path_label(path_and_query: &str) -> String {
     }
 }
 
+const OVERFLOW_SERIES_LABEL: &str = "__overflow__";
+
+fn entry_limited<'a, T: Default>(
+    map: &'a mut HashMap<String, T>,
+    key: &str,
+    max_series: usize,
+) -> Option<&'a mut T> {
+    if max_series == 0 {
+        return None;
+    }
+
+    if map.contains_key(key) {
+        return map.get_mut(key);
+    }
+
+    if map.len() < max_series {
+        return Some(map.entry(key.to_string()).or_default());
+    }
+
+    if map.contains_key(OVERFLOW_SERIES_LABEL) {
+        return map.get_mut(OVERFLOW_SERIES_LABEL);
+    }
+
+    Some(map.entry(OVERFLOW_SERIES_LABEL.to_string()).or_default())
+}
+
 fn bump_limited(map: &mut HashMap<String, u64>, key: &str, max_series: usize) {
-    let key = if map.contains_key(key) || map.len() < max_series {
-        key.to_string()
-    } else {
-        "__overflow__".to_string()
-    };
-    *map.entry(key).or_default() += 1;
+    if let Some(entry) = entry_limited(map, key, max_series) {
+        *entry = entry.saturating_add(1);
+    }
 }
 
 fn add_limited(map: &mut HashMap<String, u64>, key: &str, max_series: usize, delta: u64) {
-    let key = if map.contains_key(key) || map.len() < max_series {
-        key.to_string()
-    } else {
-        "__overflow__".to_string()
-    };
-    let entry = map.entry(key).or_default();
-    *entry = entry.saturating_add(delta);
-}
-
-fn limit_label<T>(key: &str, map: &mut HashMap<String, T>, max_series: usize) -> String {
-    if map.contains_key(key) || map.len() < max_series {
-        key.to_string()
-    } else {
-        "__overflow__".to_string()
+    if let Some(entry) = entry_limited(map, key, max_series) {
+        *entry = entry.saturating_add(delta);
     }
 }
 
@@ -660,6 +671,7 @@ fn write_histogram_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn escapes_label_values() {
@@ -667,5 +679,105 @@ mod tests {
         assert_eq!(escape_label_value("a\"b"), "a\\\"b");
         assert_eq!(escape_label_value("a\\b"), "a\\\\b");
         assert_eq!(escape_label_value("a\nb"), "a\\nb");
+    }
+
+    #[test]
+    fn zero_series_limits_disable_labelled_metrics() {
+        let mut metrics = PrometheusMetrics::new(PrometheusMetricsConfig {
+            max_key_series: 0,
+            max_model_series: 0,
+            max_backend_series: 0,
+            max_path_series: 0,
+        });
+
+        metrics.record_proxy_request(Some("vk-1"), Some("model-1"), "/v1/chat/completions");
+        metrics.record_proxy_rate_limited(Some("vk-1"), Some("model-1"), "/v1/chat/completions");
+        metrics.record_proxy_guardrail_blocked(
+            Some("vk-1"),
+            Some("model-1"),
+            "/v1/chat/completions",
+        );
+        metrics.record_proxy_budget_exceeded(Some("vk-1"), Some("model-1"), "/v1/chat/completions");
+        metrics.record_proxy_cache_lookup("/v1/chat/completions");
+        metrics.record_proxy_cache_hit_by_source("memory");
+        metrics.record_proxy_cache_hit_by_path("/v1/chat/completions");
+        metrics.record_proxy_cache_miss("/v1/chat/completions");
+        metrics.record_proxy_backend_attempt("backend-a");
+        metrics.record_proxy_backend_success("backend-a");
+        metrics.record_proxy_backend_failure("backend-a");
+        metrics.record_proxy_backend_in_flight_inc("backend-a");
+        metrics.record_proxy_backend_in_flight_dec("backend-a");
+        metrics.observe_proxy_backend_request_duration("backend-a", Duration::from_millis(10));
+        metrics.observe_proxy_request_duration("/v1/chat/completions", Duration::from_millis(10));
+        metrics.observe_proxy_request_duration_by_model("model-1", Duration::from_millis(10));
+        metrics.record_proxy_stream_open("backend-a", "/v1/chat/completions");
+        metrics.record_proxy_stream_bytes("backend-a", "/v1/chat/completions", 128);
+        metrics.record_proxy_stream_close("backend-a", "/v1/chat/completions");
+        metrics.record_proxy_stream_completed("backend-a", "/v1/chat/completions");
+        metrics.record_proxy_stream_error("backend-a", "/v1/chat/completions");
+        metrics.record_proxy_stream_aborted("backend-a", "/v1/chat/completions");
+        metrics.record_proxy_response_status_by_path("/v1/chat/completions", 200);
+        metrics.record_proxy_response_status_by_backend("backend-a", 200);
+        metrics.record_proxy_response_status_by_model("model-1", 200);
+
+        assert_eq!(metrics.proxy_requests_total, 1);
+        assert_eq!(metrics.proxy_rate_limited_total, 1);
+        assert_eq!(metrics.proxy_guardrail_blocked_total, 1);
+        assert_eq!(metrics.proxy_budget_exceeded_total, 1);
+        assert_eq!(metrics.proxy_cache_lookups_total, 1);
+        assert_eq!(metrics.proxy_stream_bytes_total, 128);
+        assert_eq!(metrics.proxy_stream_connections, 0);
+        assert_eq!(metrics.proxy_stream_completed_total, 1);
+        assert_eq!(metrics.proxy_stream_errors_total, 1);
+        assert_eq!(metrics.proxy_stream_aborted_total, 1);
+
+        assert!(metrics.proxy_requests_by_key.is_empty());
+        assert!(metrics.proxy_requests_by_model.is_empty());
+        assert!(metrics.proxy_requests_by_path.is_empty());
+        assert!(metrics.proxy_rate_limited_by_key.is_empty());
+        assert!(metrics.proxy_rate_limited_by_model.is_empty());
+        assert!(metrics.proxy_rate_limited_by_path.is_empty());
+        assert!(metrics.proxy_guardrail_blocked_by_key.is_empty());
+        assert!(metrics.proxy_guardrail_blocked_by_model.is_empty());
+        assert!(metrics.proxy_guardrail_blocked_by_path.is_empty());
+        assert!(metrics.proxy_budget_exceeded_by_key.is_empty());
+        assert!(metrics.proxy_budget_exceeded_by_model.is_empty());
+        assert!(metrics.proxy_budget_exceeded_by_path.is_empty());
+        assert!(metrics.proxy_cache_lookups_by_path.is_empty());
+        assert_eq!(metrics.proxy_cache_hits_by_source.get("memory"), Some(&1));
+        assert!(metrics.proxy_cache_hits_by_path.is_empty());
+        assert!(metrics.proxy_cache_misses_by_path.is_empty());
+        assert!(metrics.proxy_backend_attempts_total.is_empty());
+        assert!(metrics.proxy_backend_success_total.is_empty());
+        assert!(metrics.proxy_backend_failures_total.is_empty());
+        assert!(metrics.proxy_backend_in_flight.is_empty());
+        assert!(metrics.proxy_backend_request_duration_seconds.is_empty());
+        assert!(metrics.proxy_request_duration_seconds.is_empty());
+        assert!(metrics.proxy_request_duration_seconds_by_model.is_empty());
+        assert!(metrics.proxy_stream_connections_by_backend.is_empty());
+        assert!(metrics.proxy_stream_connections_by_path.is_empty());
+        assert!(metrics.proxy_stream_bytes_by_backend.is_empty());
+        assert!(metrics.proxy_stream_bytes_by_path.is_empty());
+        assert!(metrics.proxy_stream_completed_by_backend.is_empty());
+        assert!(metrics.proxy_stream_completed_by_path.is_empty());
+        assert!(metrics.proxy_stream_errors_by_backend.is_empty());
+        assert!(metrics.proxy_stream_errors_by_path.is_empty());
+        assert!(metrics.proxy_stream_aborted_by_backend.is_empty());
+        assert!(metrics.proxy_stream_aborted_by_path.is_empty());
+        assert!(metrics.proxy_responses_by_path_status.is_empty());
+        assert!(metrics.proxy_responses_by_backend_status.is_empty());
+        assert!(metrics.proxy_responses_by_model_status.is_empty());
+    }
+
+    #[test]
+    fn overflow_series_is_reused_without_expanding_cardinality() {
+        let mut map = HashMap::<String, u64>::new();
+        bump_limited(&mut map, "first", 1);
+        bump_limited(&mut map, "second", 1);
+        bump_limited(&mut map, "third", 1);
+
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("first"), Some(&1));
+        assert_eq!(map.get(OVERFLOW_SERIES_LABEL), Some(&2));
     }
 }

@@ -326,108 +326,93 @@ impl PrometheusMetrics {
     }
 
     pub fn record_proxy_backend_in_flight_inc(&mut self, backend: &str) {
-        let backend = limit_label(
-            backend,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_backend_in_flight,
+            backend,
             self.config.max_backend_series,
-        );
-        *self.proxy_backend_in_flight.entry(backend).or_default() += 1;
+        ) {
+            *entry = entry.saturating_add(1);
+        }
     }
 
     pub fn record_proxy_backend_in_flight_dec(&mut self, backend: &str) {
-        let backend = limit_label(
-            backend,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_backend_in_flight,
+            backend,
             self.config.max_backend_series,
-        );
-        let entry = self.proxy_backend_in_flight.entry(backend).or_default();
-        *entry = entry.saturating_sub(1);
+        ) {
+            *entry = entry.saturating_sub(1);
+        }
     }
 
     pub fn observe_proxy_backend_request_duration(&mut self, backend: &str, duration: Duration) {
-        let backend = limit_label(
-            backend,
+        if let Some(histogram) = entry_limited(
             &mut self.proxy_backend_request_duration_seconds,
+            backend,
             self.config.max_backend_series,
-        );
-        self.proxy_backend_request_duration_seconds
-            .entry(backend)
-            .or_default()
-            .observe(duration);
+        ) {
+            histogram.observe(duration);
+        }
     }
 
     pub fn observe_proxy_request_duration(&mut self, path: &str, duration: Duration) {
-        let path = limit_label(
-            path,
+        if let Some(histogram) = entry_limited(
             &mut self.proxy_request_duration_seconds,
+            path,
             self.config.max_path_series,
-        );
-        self.proxy_request_duration_seconds
-            .entry(path)
-            .or_default()
-            .observe(duration);
+        ) {
+            histogram.observe(duration);
+        }
     }
 
     pub fn observe_proxy_request_duration_by_model(&mut self, model: &str, duration: Duration) {
-        let model = limit_label(
-            model,
+        if let Some(histogram) = entry_limited(
             &mut self.proxy_request_duration_seconds_by_model,
+            model,
             self.config.max_model_series,
-        );
-        self.proxy_request_duration_seconds_by_model
-            .entry(model)
-            .or_default()
-            .observe(duration);
+        ) {
+            histogram.observe(duration);
+        }
     }
 
     pub fn record_proxy_stream_open(&mut self, backend: &str, path: &str) {
         self.proxy_stream_connections = self.proxy_stream_connections.saturating_add(1);
 
-        let backend = limit_label(
-            backend,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_stream_connections_by_backend,
+            backend,
             self.config.max_backend_series,
-        );
-        *self
-            .proxy_stream_connections_by_backend
-            .entry(backend)
-            .or_default() += 1;
+        ) {
+            *entry = entry.saturating_add(1);
+        }
 
-        let path = limit_label(
-            path,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_stream_connections_by_path,
+            path,
             self.config.max_path_series,
-        );
-        *self
-            .proxy_stream_connections_by_path
-            .entry(path)
-            .or_default() += 1;
+        ) {
+            *entry = entry.saturating_add(1);
+        }
     }
 
     pub fn record_proxy_stream_close(&mut self, backend: &str, path: &str) {
         self.proxy_stream_connections = self.proxy_stream_connections.saturating_sub(1);
 
-        let backend = limit_label(
-            backend,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_stream_connections_by_backend,
+            backend,
             self.config.max_backend_series,
-        );
-        let entry = self
-            .proxy_stream_connections_by_backend
-            .entry(backend)
-            .or_default();
-        *entry = entry.saturating_sub(1);
+        ) {
+            *entry = entry.saturating_sub(1);
+        }
 
-        let path = limit_label(
-            path,
+        if let Some(entry) = entry_limited(
             &mut self.proxy_stream_connections_by_path,
+            path,
             self.config.max_path_series,
-        );
-        let entry = self
-            .proxy_stream_connections_by_path
-            .entry(path)
-            .or_default();
-        *entry = entry.saturating_sub(1);
+        ) {
+            *entry = entry.saturating_sub(1);
+        }
     }
 
     pub fn record_proxy_stream_bytes(&mut self, backend: &str, path: &str, bytes: u64) {
@@ -494,45 +479,33 @@ impl PrometheusMetrics {
 
     pub fn record_proxy_response_status_by_path(&mut self, path: &str, status: u16) {
         self.record_proxy_response_status(status);
-        let path = limit_label(
-            path,
+        if let Some(statuses) = entry_limited(
             &mut self.proxy_responses_by_path_status,
+            path,
             self.config.max_path_series,
-        );
-        *self
-            .proxy_responses_by_path_status
-            .entry(path)
-            .or_default()
-            .entry(status)
-            .or_default() += 1;
+        ) {
+            *statuses.entry(status).or_default() += 1;
+        }
     }
 
     pub fn record_proxy_response_status_by_backend(&mut self, backend: &str, status: u16) {
-        let backend = limit_label(
-            backend,
+        if let Some(statuses) = entry_limited(
             &mut self.proxy_responses_by_backend_status,
+            backend,
             self.config.max_backend_series,
-        );
-        *self
-            .proxy_responses_by_backend_status
-            .entry(backend)
-            .or_default()
-            .entry(status)
-            .or_default() += 1;
+        ) {
+            *statuses.entry(status).or_default() += 1;
+        }
     }
 
     pub fn record_proxy_response_status_by_model(&mut self, model: &str, status: u16) {
-        let model = limit_label(
-            model,
+        if let Some(statuses) = entry_limited(
             &mut self.proxy_responses_by_model_status,
+            model,
             self.config.max_model_series,
-        );
-        *self
-            .proxy_responses_by_model_status
-            .entry(model)
-            .or_default()
-            .entry(status)
-            .or_default() += 1;
+        ) {
+            *statuses.entry(status).or_default() += 1;
+        }
     }
 
 }
