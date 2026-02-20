@@ -354,7 +354,6 @@ fn stream_object_from_stream_with_config_and_limits(
     let partial_enabled = Arc::new(AtomicBool::new(false));
     let element_enabled = Arc::new(AtomicBool::new(false));
 
-    let ready_task = ready.clone();
     let partial_enabled_task = partial_enabled.clone();
     let element_enabled_task = element_enabled.clone();
 
@@ -363,15 +362,6 @@ fn stream_object_from_stream_with_config_and_limits(
 
     let task = tokio::spawn(async move {
         let mut inner = stream;
-
-        loop {
-            if partial_enabled_task.load(Ordering::Acquire)
-                || element_enabled_task.load(Ordering::Acquire)
-            {
-                break;
-            }
-            ready_task.notified().await;
-        }
 
         while let Some(next) = inner.next().await {
             match next {

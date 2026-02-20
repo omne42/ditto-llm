@@ -215,6 +215,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_only_mode_collects_final_object() -> Result<()> {
+        let chunks = vec![
+            Ok(StreamChunk::TextDelta {
+                text: "{\"a\":".to_string(),
+            }),
+            Ok(StreamChunk::TextDelta {
+                text: "1}".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+        ];
+
+        let inner: StreamResult = stream::iter(chunks).boxed();
+        let result = stream_object_from_stream(inner);
+        let handle = result.handle();
+
+        for _ in 0..16 {
+            if handle.is_done() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        let summary = handle.final_summary()?.unwrap();
+        assert_eq!(summary.object, json!({"a": 1}));
+        assert_eq!(summary.finish_reason, FinishReason::Stop);
+        drop(result);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dropping_streams_aborts_background_task() -> Result<()> {
         let dropped = Arc::new(AtomicBool::new(false));
         let inner: StreamResult = Box::pin(DropFlagStream {

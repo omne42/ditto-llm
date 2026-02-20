@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Utils: truncate non-2xx error bodies (default 64KiB) to avoid OOM in error paths.
 - SDK: `stream_text` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
 - SDK: `stream_object` now uses bounded fan-out and only forwards to enabled streams (prevents unbounded buffering when one stream is not consumed).
+- SDK: `stream_text`/`stream_object` background collectors now start consuming upstream immediately instead of waiting for fan-out stream activation, reducing first-chunk synchronization overhead.
 - SDK: `stream_text` now avoids cloning `TextDelta` payloads when only the text stream is enabled (reduces per-chunk allocations on text-only consumers).
 - SDK: `stream_object` now consumes stream chunks by value and releases internal state locks earlier in the hot path (reduces lock contention and redundant cloning under streaming load).
 - SDK: `stream_object` now skips partial-JSON reparsing for non-content chunks (`Warnings`/`Usage`/`FinishReason`/etc.) and only reparses when text/tool buffers change (reduces streaming CPU overhead under event-heavy outputs).
@@ -146,6 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.
+- SDK: fix handle-only streaming helpers so `StreamTextHandle::final_*` / `StreamObjectHandle::final_*` can complete even when no fan-out stream is enabled.
 - Gateway interop: fix Anthropic tool-use mapping fallback IDs so multiple OpenAI tool calls without IDs now get stable unique IDs (`call_0`, `call_1`, ...) instead of repeating `call_0`.
 - Utils: fix SSE `max_event_bytes` boundary accounting so events exactly at the configured byte limit are accepted (previously rejected by an off-by-one check).
 - SDK: `CacheLayer` generate-entry byte estimation now includes tool-call JSON arguments, image/file payload sizes, warning text, and provider metadata; oversized responses are no longer misclassified as cacheable under `max_value_bytes`.

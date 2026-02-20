@@ -176,7 +176,6 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let text_enabled = Arc::new(AtomicBool::new(false));
     let full_enabled = Arc::new(AtomicBool::new(false));
 
-    let ready_task = ready.clone();
     let text_enabled_task = text_enabled.clone();
     let full_enabled_task = full_enabled.clone();
 
@@ -185,15 +184,6 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
 
     let task = tokio::spawn(async move {
         let mut inner = stream;
-
-        loop {
-            if text_enabled_task.load(Ordering::Acquire)
-                || full_enabled_task.load(Ordering::Acquire)
-            {
-                break;
-            }
-            ready_task.notified().await;
-        }
 
         let mut collector = StreamCollector::default();
 
@@ -469,6 +459,36 @@ mod tests {
         let response = handle.final_response()?.unwrap();
         assert_eq!(response.text(), "hello world".to_string());
         assert_eq!(response.finish_reason, FinishReason::Stop);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_only_mode_collects_final_response() -> Result<()> {
+        let chunks = vec![
+            Ok(StreamChunk::TextDelta {
+                text: "hello".to_string(),
+            }),
+            Ok(StreamChunk::TextDelta {
+                text: " world".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+        ];
+
+        let inner: StreamResult = stream::iter(chunks).boxed();
+        let result = stream_text_from_stream(inner);
+        let handle = result.handle();
+
+        for _ in 0..16 {
+            if handle.is_done() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+
+        let response = handle.final_response()?.unwrap();
+        assert_eq!(response.text(), "hello world".to_string());
+        assert_eq!(response.finish_reason, FinishReason::Stop);
+        drop(result);
         Ok(())
     }
 
