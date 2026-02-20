@@ -214,7 +214,13 @@ async fn process_raw_responses_sse<R>(
     }
 
     let mut data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
-    while let Some(next) = data_stream.next().await {
+    loop {
+        if tx_event.is_closed() {
+            break;
+        }
+        let Some(next) = data_stream.next().await else {
+            break;
+        };
         match next {
             Ok(data) => {
                 let event =
@@ -226,11 +232,15 @@ async fn process_raw_responses_sse<R>(
                     });
                 match event.and_then(parse_raw_responses_event) {
                     Ok(Some(parsed)) => {
-                        let _ = tx_event.send(Ok(parsed)).await;
+                        if tx_event.send(Ok(parsed)).await.is_err() {
+                            break;
+                        }
                     }
                     Ok(None) => {}
                     Err(err) => {
-                        let _ = tx_event.send(Err(err)).await;
+                        if tx_event.send(Err(err)).await.is_err() {
+                            break;
+                        }
                     }
                 }
             }
@@ -249,7 +259,11 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
     #[cfg(feature = "streaming")]
+    use tokio::io::AsyncWriteExt;
+    #[cfg(feature = "streaming")]
     use tokio::sync::mpsc;
+    #[cfg(feature = "streaming")]
+    use tokio::time::{Duration, timeout};
 
     #[tokio::test]
     async fn from_config_resolves_api_key_and_model() -> crate::Result<()> {
@@ -450,6 +464,36 @@ mod tests {
                 })),
             }
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "streaming")]
+    async fn raw_responses_sse_stops_when_receiver_is_dropped() -> crate::Result<()> {
+        let (reader, mut writer) = tokio::io::duplex(1024);
+        let reader = tokio::io::BufReader::new(reader);
+        let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(1);
+        drop(rx_event);
+
+        let task = tokio::spawn(process_raw_responses_sse(reader, tx_event));
+        writer
+            .write_all(
+                b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ignored\"}\n\n",
+            )
+            .await?;
+        writer.flush().await?;
+
+        timeout(Duration::from_millis(500), task)
+            .await
+            .map_err(|_| {
+                DittoError::InvalidResponse(
+                    "raw responses SSE processor did not stop after receiver drop".to_string(),
+                )
+            })?
+            .map_err(|err| {
+                DittoError::InvalidResponse(format!("raw responses SSE processor task failed: {err}"))
+            })?;
+
         Ok(())
     }
 

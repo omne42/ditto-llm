@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Deps: update Rust dependency lockfile (`cargo update`).
+- OpenAI: raw Responses SSE event processor now exits immediately when the downstream receiver is dropped, avoiding wasted stream parsing/work after cancellation.
+- Performance: replace implicit `String` cloning via `to_string()` with direct `clone()` in stream collection, secret command building, and object tool-call fallback paths to trim hot-path overhead.
 - Performance: tighten lock/permit lifetimes across gateway auth/admin/proxy hot paths (A2A, MCP, OpenAI models, LiteLLM key flows, backend health/state handling, OpenAI-compatible context resolution) and replace eager fallback construction with lazy `*_or_else` variants to reduce avoidable contention/allocation overhead.
 - Build: depend on `safe-fs-tools` via the external repo checkout (`../safe-fs-tools`) instead of a vendored copy.
 - Gateway: cap responses-shim streaming `tool_calls[].index` fan-out to a fixed slot limit (DoS hardening against oversized indexes) and remove per-event fallback-id cloning in SSE translation to reduce hot-path allocations.

@@ -140,7 +140,7 @@ impl StreamCollector {
             StreamChunk::Warnings { warnings } => self.warnings.extend(warnings.clone()),
             StreamChunk::ResponseId { id } => {
                 if self.response_id.is_none() && !id.trim().is_empty() {
-                    self.response_id = Some(id.to_string());
+                    self.response_id = Some(id.clone());
                 }
             }
             StreamChunk::TextDelta { text } => {
@@ -161,7 +161,7 @@ impl StreamCollector {
                     return;
                 }
                 if self.try_add_bytes(text.len()) {
-                    self.parts.push(CollectedPart::Text(text.to_string()));
+                    self.parts.push(CollectedPart::Text(text.clone()));
                 }
             }
             StreamChunk::ReasoningDelta { text } => {
@@ -182,7 +182,7 @@ impl StreamCollector {
                     return;
                 }
                 if self.try_add_bytes(text.len()) {
-                    self.parts.push(CollectedPart::Reasoning(text.to_string()));
+                    self.parts.push(CollectedPart::Reasoning(text.clone()));
                 }
             }
             StreamChunk::ToolCallStart { id, name } => {
@@ -207,13 +207,12 @@ impl StreamCollector {
                     return;
                 }
 
-                let slot = self.tool_calls.entry(id.to_string()).or_default();
+                let slot = self.tool_calls.entry(id.clone()).or_default();
                 if slot.name.is_none() && !name.trim().is_empty() {
-                    slot.name = Some(name.to_string());
+                    slot.name = Some(name.clone());
                 }
-                if self.seen_tool_call_ids.insert(id.to_string()) && self.can_push_part() {
-                    self.parts
-                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    self.parts.push(CollectedPart::ToolCall { id: id.clone() });
                 }
             }
             StreamChunk::ToolCallDelta {
@@ -242,7 +241,7 @@ impl StreamCollector {
                 }
 
                 {
-                    let slot = self.tool_calls.entry(id.to_string()).or_default();
+                    let slot = self.tool_calls.entry(id.clone()).or_default();
                     if slot.truncated {
                         return;
                     }
@@ -265,9 +264,8 @@ impl StreamCollector {
                         slot.arguments.push_str(arguments_delta);
                     }
                 }
-                if self.seen_tool_call_ids.insert(id.to_string()) && self.can_push_part() {
-                    self.parts
-                        .push(CollectedPart::ToolCall { id: id.to_string() });
+                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    self.parts.push(CollectedPart::ToolCall { id: id.clone() });
                 }
             }
             StreamChunk::FinishReason(reason) => self.finish_reason = *reason,

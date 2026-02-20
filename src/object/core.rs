@@ -874,7 +874,7 @@ fn extract_object_from_tool_calls(
                                 "failed to parse tool_call arguments as JSON for name={tool_name}: {err}; preserving raw string"
                             ),
                         });
-                        Value::String(raw.to_string())
+                        Value::String(raw.clone())
                     })
                 }
             }
