@@ -129,6 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: preserve MCP tool-call execution order during auto-exec loops for both chat-completions and responses flows, avoiding reordering in side-effectful tool chains.
+- Gateway: fix proxy health-check task compilation on newer Rust toolchains by removing a non-generalized async-closure lifetime in backend iteration.
+- Build: restore `cargo +1.92.0 {clippy,test} --all-features` compatibility by tightening `sdk::cache` option handling and fixing a missing `Message` import in gateway-translation tests.
 - Security: ensure secret-command subprocesses are terminated on task cancellation (`kill_on_drop(true)`) and harden the Linux cancellation regression test without force-killing arbitrary PIDs.
 - Tests: skip truncated HTTP-body localhost-bind regression in sandboxed environments that forbid local listen sockets, preventing environment-induced false negatives.
 - Gateway: reserve `/v1/gateway` control-plane token budgets at request-prepare time and refund on backend failure, preventing concurrent in-flight requests from overspending shared budgets.

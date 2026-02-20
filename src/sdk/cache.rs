@@ -89,9 +89,7 @@ impl CacheLayer {
     async fn get_generate(&self, key: CacheKey) -> Option<GenerateResponse> {
         let mut state = self.state.lock().await;
         state.prune_expired(self.ttl);
-        let Some(entry) = state.entries.get(&key) else {
-            return None;
-        };
+        let entry = state.entries.get(&key)?;
         let (expired, value) = if entry.is_expired(self.ttl) {
             (true, None)
         } else {
@@ -114,9 +112,7 @@ impl CacheLayer {
     async fn get_stream(&self, key: CacheKey) -> Option<Arc<[StreamChunk]>> {
         let mut state = self.state.lock().await;
         state.prune_expired(self.ttl);
-        let Some(entry) = state.entries.get(&key) else {
-            return None;
-        };
+        let entry = state.entries.get(&key)?;
         let (expired, value) = if entry.is_expired(self.ttl) {
             (true, None)
         } else {

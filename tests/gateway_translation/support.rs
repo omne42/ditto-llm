@@ -18,7 +18,7 @@ use ditto_llm::rerank::RerankModel;
 use ditto_llm::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, BatchStatus, ContentPart, FinishReason, GenerateRequest,
-    GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource,
+    GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message,
     ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
     RerankResponse, RerankResult, SpeechRequest, SpeechResponse, StreamChunk, Usage,
 };

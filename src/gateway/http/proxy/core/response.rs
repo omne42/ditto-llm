@@ -712,7 +712,11 @@ fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop
     }
     let health = state.proxy_backend_health.as_ref()?;
 
-    let backends = state.proxy_backends.clone();
+    let backend_entries = state
+        .proxy_backends
+        .iter()
+        .map(|(backend_name, backend)| (backend_name.clone(), backend.clone()))
+        .collect::<Vec<_>>();
     let health = health.clone();
     let path = config.health_check.path.clone();
     let interval = Duration::from_secs(config.health_check.interval_seconds.max(1));
@@ -720,10 +724,8 @@ fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop
 
     let task = tokio::spawn(async move {
         loop {
-            let check_stream = stream::iter(backends.iter())
+            let check_stream = stream::iter(backend_entries.iter().cloned())
                 .map(|(backend_name, backend)| {
-                    let backend_name = backend_name.clone();
-                    let backend = backend.clone();
                     let path = path.clone();
                     async move {
                         let mut headers = HeaderMap::new();
