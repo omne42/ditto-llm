@@ -419,7 +419,9 @@ fn approx_generate_response_bytes(resp: &GenerateResponse) -> usize {
 
 fn approx_stream_chunk_bytes(chunk: &StreamChunk) -> usize {
     match chunk {
-        StreamChunk::Warnings { warnings } => warnings.len().saturating_mul(64),
+        StreamChunk::Warnings { warnings } => warnings.iter().fold(0usize, |total, warning| {
+            total.saturating_add(approx_warning_bytes(warning))
+        }),
         StreamChunk::ResponseId { id } => id.len(),
         StreamChunk::TextDelta { text } => text.len(),
         StreamChunk::ToolCallStart { id, name } => id.len().saturating_add(name.len()),
@@ -725,6 +727,83 @@ mod tests {
 
         assert_eq!(a_chunks, b_chunks);
         assert_eq!(stream_calls.load(Ordering::SeqCst), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_with_large_warning_is_not_cached_when_over_budget() -> Result<()> {
+        #[derive(Clone)]
+        struct LargeWarningModel {
+            stream_calls: Arc<AtomicUsize>,
+        }
+
+        #[async_trait]
+        impl LanguageModel for LargeWarningModel {
+            fn provider(&self) -> &str {
+                "fake"
+            }
+
+            fn model_id(&self) -> &str {
+                "fake-model"
+            }
+
+            async fn generate(&self, _request: GenerateRequest) -> Result<GenerateResponse> {
+                Ok(GenerateResponse {
+                    content: vec![ContentPart::Text {
+                        text: "unused".to_string(),
+                    }],
+                    finish_reason: FinishReason::Stop,
+                    usage: Usage::default(),
+                    warnings: Vec::new(),
+                    provider_metadata: None,
+                })
+            }
+
+            async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
+                let n = self.stream_calls.fetch_add(1, Ordering::SeqCst);
+                let chunks = vec![
+                    Ok(StreamChunk::Warnings {
+                        warnings: vec![Warning::Other {
+                            message: format!("warn-{n}-{}", "x".repeat(2_048)),
+                        }],
+                    }),
+                    Ok(StreamChunk::TextDelta {
+                        text: "ok".to_string(),
+                    }),
+                    Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+                ];
+                Ok(stream::iter(chunks).boxed())
+            }
+        }
+
+        let stream_calls = Arc::new(AtomicUsize::new(0));
+        let model = LargeWarningModel {
+            stream_calls: Arc::clone(&stream_calls),
+        };
+
+        let cached = crate::LayeredLanguageModel::new(
+            Arc::new(model),
+            CacheLayer::new().with_max_value_bytes(256),
+        );
+        let req: GenerateRequest = vec![Message::user("hi")].into();
+
+        let _first: Vec<StreamChunk> = cached
+            .stream(req.clone())
+            .await?
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
+
+        let _second: Vec<StreamChunk> = cached
+            .stream(req)
+            .await?
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
+
+        assert_eq!(stream_calls.load(Ordering::SeqCst), 2);
         Ok(())
     }
 

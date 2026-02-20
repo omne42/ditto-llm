@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- SDK: `CacheLayer` now counts streamed `Warnings` payload bytes using real warning content sizes, so `max_value_bytes` correctly blocks oversized warning-heavy streams from being cached.
 - Gateway MCP: reduce `tools/list` parse overhead by consuming owned JSON payloads directly instead of cloning tool arrays from `serde_json::Value`.
 - Deps: update Rust dependency lockfile (`cargo update`).
 - SDK: `stream_object` now skips partial JSON parsing work when neither fan-out stream is enabled, and no longer advances partial/array dedupe cursors for disabled outputs (fixes late-subscription final-object loss and trims handle-only CPU overhead).
