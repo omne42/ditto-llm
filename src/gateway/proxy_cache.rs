@@ -48,6 +48,14 @@ pub struct ProxyResponseCache {
 
 impl ProxyResponseCache {
     fn remove_key_from_order(&mut self, key: &str) {
+        if self.order.front().is_some_and(|candidate| candidate == key) {
+            self.order.pop_front();
+            return;
+        }
+        if self.order.back().is_some_and(|candidate| candidate == key) {
+            self.order.pop_back();
+            return;
+        }
         if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
             self.order.remove(index);
         }

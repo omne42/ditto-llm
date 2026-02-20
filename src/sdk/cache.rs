@@ -226,6 +226,14 @@ impl CacheState {
         if self.lru.is_empty() {
             return;
         }
+        if self.lru.front().is_some_and(|candidate| candidate == key) {
+            self.lru.pop_front();
+            return;
+        }
+        if self.lru.back().is_some_and(|candidate| candidate == key) {
+            self.lru.pop_back();
+            return;
+        }
         if let Some(index) = self.lru.iter().position(|candidate| candidate == key) {
             self.lru.remove(index);
         }

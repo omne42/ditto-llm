@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,6 +32,7 @@ struct ToolCallBuffer {
     name: Option<String>,
     arguments: String,
     truncated: bool,
+    emitted_part: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,7 +62,6 @@ pub(crate) struct StreamCollector {
     usage: Usage,
     parts: Vec<CollectedPart>,
     tool_calls: HashMap<String, ToolCallBuffer>,
-    seen_tool_call_ids: HashSet<String>,
     limits: StreamCollectorLimits,
     total_bytes: usize,
     bytes_truncated: bool,
@@ -135,6 +135,20 @@ impl StreamCollector {
         true
     }
 
+    fn warn_max_tool_calls(&mut self) {
+        if self.warned_max_tool_calls {
+            return;
+        }
+        self.warned_max_tool_calls = true;
+        self.warnings.push(Warning::Compatibility {
+            feature: "stream.collector.max_tool_calls".to_string(),
+            details: format!(
+                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
+                self.limits.max_tool_calls
+            ),
+        });
+    }
+
     pub(crate) fn observe(&mut self, chunk: &StreamChunk) {
         match chunk {
             StreamChunk::Warnings { warnings } => self.warnings.extend(warnings.clone()),
@@ -191,27 +205,28 @@ impl StreamCollector {
                     return;
                 }
 
-                if !self.tool_calls.contains_key(id)
-                    && self.tool_calls.len() >= self.limits.max_tool_calls
-                {
-                    if !self.warned_max_tool_calls {
-                        self.warned_max_tool_calls = true;
-                        self.warnings.push(Warning::Compatibility {
-                            feature: "stream.collector.max_tool_calls".to_string(),
-                            details: format!(
-                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
-                                self.limits.max_tool_calls
-                            ),
-                        });
+                use std::collections::hash_map::Entry;
+                let at_capacity = self.tool_calls.len() >= self.limits.max_tool_calls;
+                let should_emit_part = {
+                    let slot = match self.tool_calls.entry(id.clone()) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => {
+                            if at_capacity {
+                                self.warn_max_tool_calls();
+                                return;
+                            }
+                            entry.insert(ToolCallBuffer::default())
+                        }
+                    };
+                    if slot.name.is_none() && !name.trim().is_empty() {
+                        slot.name = Some(name.clone());
                     }
-                    return;
-                }
-
-                let slot = self.tool_calls.entry(id.clone()).or_default();
-                if slot.name.is_none() && !name.trim().is_empty() {
-                    slot.name = Some(name.clone());
-                }
-                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    !slot.emitted_part
+                };
+                if should_emit_part && self.can_push_part() {
+                    if let Some(slot) = self.tool_calls.get_mut(id) {
+                        slot.emitted_part = true;
+                    }
                     self.parts.push(CollectedPart::ToolCall { id: id.clone() });
                 }
             }
@@ -224,24 +239,21 @@ impl StreamCollector {
                     return;
                 }
 
-                if !self.tool_calls.contains_key(id)
-                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                use std::collections::hash_map::Entry;
+                let at_capacity = self.tool_calls.len() >= self.limits.max_tool_calls;
+                let mut should_push_part = false;
                 {
-                    if !self.warned_max_tool_calls {
-                        self.warned_max_tool_calls = true;
-                        self.warnings.push(Warning::Compatibility {
-                            feature: "stream.collector.max_tool_calls".to_string(),
-                            details: format!(
-                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
-                                self.limits.max_tool_calls
-                            ),
-                        });
-                    }
-                    return;
-                }
+                    let slot = match self.tool_calls.entry(id.clone()) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => {
+                            if at_capacity {
+                                self.warn_max_tool_calls();
+                                return;
+                            }
+                            entry.insert(ToolCallBuffer::default())
+                        }
+                    };
 
-                {
-                    let slot = self.tool_calls.entry(id.clone()).or_default();
                     if slot.truncated {
                         return;
                     }
@@ -258,13 +270,20 @@ impl StreamCollector {
                         });
                         return;
                     }
+                    if !slot.emitted_part {
+                        should_push_part = true;
+                    }
                 }
+
                 if self.try_add_bytes(arguments_delta.len()) {
                     if let Some(slot) = self.tool_calls.get_mut(id) {
                         slot.arguments.push_str(arguments_delta);
                     }
                 }
-                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                if should_push_part && self.can_push_part() {
+                    if let Some(slot) = self.tool_calls.get_mut(id) {
+                        slot.emitted_part = true;
+                    }
                     self.parts.push(CollectedPart::ToolCall { id: id.clone() });
                 }
             }
@@ -329,27 +348,28 @@ impl StreamCollector {
                     return;
                 }
 
-                if !self.tool_calls.contains_key(&id)
-                    && self.tool_calls.len() >= self.limits.max_tool_calls
-                {
-                    if !self.warned_max_tool_calls {
-                        self.warned_max_tool_calls = true;
-                        self.warnings.push(Warning::Compatibility {
-                            feature: "stream.collector.max_tool_calls".to_string(),
-                            details: format!(
-                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
-                                self.limits.max_tool_calls
-                            ),
-                        });
+                use std::collections::hash_map::Entry;
+                let at_capacity = self.tool_calls.len() >= self.limits.max_tool_calls;
+                let should_emit_part = {
+                    let slot = match self.tool_calls.entry(id.clone()) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => {
+                            if at_capacity {
+                                self.warn_max_tool_calls();
+                                return;
+                            }
+                            entry.insert(ToolCallBuffer::default())
+                        }
+                    };
+                    if slot.name.is_none() && !name.trim().is_empty() {
+                        slot.name = Some(name);
                     }
-                    return;
-                }
-
-                let slot = self.tool_calls.entry(id.clone()).or_default();
-                if slot.name.is_none() && !name.trim().is_empty() {
-                    slot.name = Some(name);
-                }
-                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                    !slot.emitted_part
+                };
+                if should_emit_part && self.can_push_part() {
+                    if let Some(slot) = self.tool_calls.get_mut(&id) {
+                        slot.emitted_part = true;
+                    }
                     self.parts.push(CollectedPart::ToolCall { id });
                 }
             }
@@ -362,24 +382,21 @@ impl StreamCollector {
                     return;
                 }
 
-                if !self.tool_calls.contains_key(&id)
-                    && self.tool_calls.len() >= self.limits.max_tool_calls
+                use std::collections::hash_map::Entry;
+                let at_capacity = self.tool_calls.len() >= self.limits.max_tool_calls;
+                let mut should_push_part = false;
                 {
-                    if !self.warned_max_tool_calls {
-                        self.warned_max_tool_calls = true;
-                        self.warnings.push(Warning::Compatibility {
-                            feature: "stream.collector.max_tool_calls".to_string(),
-                            details: format!(
-                                "stream collector reached max_tool_calls={}; additional tool calls will be dropped",
-                                self.limits.max_tool_calls
-                            ),
-                        });
-                    }
-                    return;
-                }
+                    let slot = match self.tool_calls.entry(id.clone()) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => {
+                            if at_capacity {
+                                self.warn_max_tool_calls();
+                                return;
+                            }
+                            entry.insert(ToolCallBuffer::default())
+                        }
+                    };
 
-                {
-                    let slot = self.tool_calls.entry(id.clone()).or_default();
                     if slot.truncated {
                         return;
                     }
@@ -396,13 +413,20 @@ impl StreamCollector {
                         });
                         return;
                     }
+                    if !slot.emitted_part {
+                        should_push_part = true;
+                    }
                 }
+
                 if self.try_add_bytes(arguments_delta.len()) {
                     if let Some(slot) = self.tool_calls.get_mut(&id) {
                         slot.arguments.push_str(&arguments_delta);
                     }
                 }
-                if self.seen_tool_call_ids.insert(id.clone()) && self.can_push_part() {
+                if should_push_part && self.can_push_part() {
+                    if let Some(slot) = self.tool_calls.get_mut(&id) {
+                        slot.emitted_part = true;
+                    }
                     self.parts.push(CollectedPart::ToolCall { id });
                 }
             }
