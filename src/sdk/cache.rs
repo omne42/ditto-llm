@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
+use std::io;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -382,11 +383,10 @@ impl LanguageModelLayer for CacheLayer {
 }
 
 fn fingerprint_request(inner: &dyn LanguageModel, request: &GenerateRequest) -> Result<u64> {
-    let serialized = serde_json::to_vec(request)?;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     inner.provider().hash(&mut hasher);
     inner.model_id().hash(&mut hasher);
-    serialized.hash(&mut hasher);
+    serde_json::to_writer(HasherWriter(&mut hasher), request)?;
     Ok(hasher.finish())
 }
 
@@ -395,8 +395,16 @@ fn approx_generate_response_bytes(resp: &GenerateResponse) -> usize {
     for part in &resp.content {
         total = total.saturating_add(part.approx_bytes());
     }
-    total = total.saturating_add(resp.warnings.len().saturating_mul(64));
-    total = total.saturating_add(128);
+    for warning in &resp.warnings {
+        total = total.saturating_add(approx_warning_bytes(warning));
+    }
+    total = total.saturating_add(
+        resp.provider_metadata
+            .as_ref()
+            .map(approx_json_value_bytes)
+            .unwrap_or(0),
+    );
+    total = total.saturating_add(64);
     total
 }
 
@@ -420,28 +428,106 @@ trait ApproxBytes {
     fn approx_bytes(&self) -> usize;
 }
 
+struct HasherWriter<'a, H>(&'a mut H);
+
+impl<H: Hasher> io::Write for HasherWriter<'_, H> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.write(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 impl ApproxBytes for crate::types::ContentPart {
     fn approx_bytes(&self) -> usize {
         match self {
             crate::types::ContentPart::Text { text } => text.len(),
             crate::types::ContentPart::Reasoning { text } => text.len(),
-            crate::types::ContentPart::Image { .. } => 256,
+            crate::types::ContentPart::Image { source } => match source {
+                crate::types::ImageSource::Url { url } => url.len(),
+                crate::types::ImageSource::Base64 { media_type, data } => {
+                    media_type.len().saturating_add(data.len())
+                }
+            },
             crate::types::ContentPart::File {
                 filename,
                 media_type,
-                ..
-            } => media_type
-                .len()
-                .saturating_add(filename.as_deref().map(str::len).unwrap_or(0))
-                .saturating_add(256),
-            crate::types::ContentPart::ToolCall { id, name, .. } => {
-                id.len().saturating_add(name.len()).saturating_add(256)
+                source,
+            } => {
+                let source_bytes = match source {
+                    crate::types::FileSource::Url { url } => url.len(),
+                    crate::types::FileSource::Base64 { data } => data.len(),
+                    crate::types::FileSource::FileId { file_id } => file_id.len(),
+                };
+                media_type
+                    .len()
+                    .saturating_add(filename.as_deref().map(str::len).unwrap_or(0))
+                    .saturating_add(source_bytes)
             }
+            crate::types::ContentPart::ToolCall {
+                id,
+                name,
+                arguments,
+            } => id
+                .len()
+                .saturating_add(name.len())
+                .saturating_add(approx_json_value_bytes(arguments)),
             crate::types::ContentPart::ToolResult {
                 tool_call_id,
                 content,
-                ..
-            } => tool_call_id.len().saturating_add(content.len()),
+                is_error,
+            } => tool_call_id
+                .len()
+                .saturating_add(content.len())
+                .saturating_add(usize::from(is_error.is_some())),
+        }
+    }
+}
+
+fn approx_warning_bytes(warning: &crate::types::Warning) -> usize {
+    match warning {
+        crate::types::Warning::Unsupported { feature, details } => feature
+            .len()
+            .saturating_add(details.as_deref().map(str::len).unwrap_or(0)),
+        crate::types::Warning::Clamped {
+            parameter,
+            original: _,
+            clamped_to: _,
+        } => parameter.len().saturating_add(16),
+        crate::types::Warning::Compatibility { feature, details } => {
+            feature.len().saturating_add(details.len())
+        }
+        crate::types::Warning::Other { message } => message.len(),
+    }
+}
+
+fn approx_json_value_bytes(value: &serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::Null => 0,
+        serde_json::Value::Bool(_) => 1,
+        serde_json::Value::Number(number) => number.to_string().len(),
+        serde_json::Value::String(text) => text.len(),
+        serde_json::Value::Array(items) => {
+            let mut total = 2usize;
+            for item in items {
+                total = total
+                    .saturating_add(1)
+                    .saturating_add(approx_json_value_bytes(item));
+            }
+            total
+        }
+        serde_json::Value::Object(items) => {
+            let mut total = 2usize;
+            for (key, item) in items {
+                total = total
+                    .saturating_add(key.len())
+                    .saturating_add(3)
+                    .saturating_add(approx_json_value_bytes(item));
+            }
+            total
         }
     }
 }
@@ -523,6 +609,81 @@ mod tests {
 
         assert_eq!(a.text(), "hello-0");
         assert_eq!(b.text(), "hello-0");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn generate_with_large_tool_arguments_is_not_cached_when_over_budget() -> Result<()> {
+        #[derive(Clone)]
+        struct LargeToolArgsModel {
+            calls: Arc<AtomicUsize>,
+        }
+
+        #[async_trait]
+        impl LanguageModel for LargeToolArgsModel {
+            fn provider(&self) -> &str {
+                "fake"
+            }
+
+            fn model_id(&self) -> &str {
+                "fake-model"
+            }
+
+            async fn generate(&self, _request: GenerateRequest) -> Result<GenerateResponse> {
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(GenerateResponse {
+                    content: vec![ContentPart::ToolCall {
+                        id: "call_1".to_string(),
+                        name: "tool".to_string(),
+                        arguments: serde_json::json!({
+                            "payload": "x".repeat(2_048),
+                            "n": n,
+                        }),
+                    }],
+                    finish_reason: FinishReason::ToolCalls,
+                    usage: Usage::default(),
+                    warnings: Vec::new(),
+                    provider_metadata: None,
+                })
+            }
+
+            async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
+                Ok(stream::empty().boxed())
+            }
+        }
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let model = LargeToolArgsModel {
+            calls: Arc::clone(&calls),
+        };
+        let cached = crate::LayeredLanguageModel::new(
+            Arc::new(model),
+            CacheLayer::new().with_max_value_bytes(512),
+        );
+        let req: GenerateRequest = vec![Message::user("hi")].into();
+
+        let first = cached.generate(req.clone()).await?;
+        let second = cached.generate(req).await?;
+
+        let first_n = first
+            .content
+            .first()
+            .and_then(|part| match part {
+                ContentPart::ToolCall { arguments, .. } => arguments.get("n"),
+                _ => None,
+            })
+            .and_then(serde_json::Value::as_u64);
+        let second_n = second
+            .content
+            .first()
+            .and_then(|part| match part {
+                ContentPart::ToolCall { arguments, .. } => arguments.get("n"),
+                _ => None,
+            })
+            .and_then(serde_json::Value::as_u64);
+
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_ne!(first_n, second_n);
         Ok(())
     }
 

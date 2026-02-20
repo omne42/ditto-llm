@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Deps: update Rust dependency lockfile (`cargo update`).
+- SDK: `CacheLayer` now hashes requests by streaming JSON directly into the hasher (removes per-request temporary `Vec<u8>` allocations on cache-key generation).
 - Utils: `send_checked_bytes` now rejects successful responses with oversized `Content-Length` before body reads, avoiding unnecessary network/body buffering work on guaranteed-over-limit payloads.
 - OpenAI: raw Responses SSE event processor now exits immediately when the downstream receiver is dropped, avoiding wasted stream parsing/work after cancellation.
 - Performance: replace implicit `String` cloning via `to_string()` with direct `clone()` in stream collection, secret command building, and object tool-call fallback paths to trim hot-path overhead.
@@ -140,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Utils: fix SSE `max_event_bytes` boundary accounting so events exactly at the configured byte limit are accepted (previously rejected by an off-by-one check).
+- SDK: `CacheLayer` generate-entry byte estimation now includes tool-call JSON arguments, image/file payload sizes, warning text, and provider metadata; oversized responses are no longer misclassified as cacheable under `max_value_bytes`.
 - SDK: deduplicate `stream::StreamCollector` warnings for empty `tool_call.id` chunks so malformed streams cannot grow warning buffers via repeated identical entries.
 - Gateway: preserve MCP tool-call execution order during auto-exec loops for both chat-completions and responses flows, avoiding reordering in side-effectful tool chains.
 - Gateway: fix proxy health-check task compilation on newer Rust toolchains by removing a non-generalized async-closure lifetime in backend iteration.
