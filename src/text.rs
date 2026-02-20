@@ -200,15 +200,28 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
         while let Some(next) = inner.next().await {
             match next {
                 Ok(chunk) => {
-                    if let StreamChunk::TextDelta { text } = &chunk {
-                        if !text.is_empty() && text_enabled_task.load(Ordering::Relaxed) {
-                            let _ = text_tx.send(Ok(text.to_string())).await;
-                        }
-                    }
-
+                    let text_enabled = text_enabled_task.load(Ordering::Relaxed);
+                    let full_enabled = full_enabled_task.load(Ordering::Relaxed);
                     collector.observe(&chunk);
-                    if full_enabled_task.load(Ordering::Relaxed) {
-                        let _ = full_tx.send(Ok(chunk)).await;
+
+                    match chunk {
+                        StreamChunk::TextDelta { text } => {
+                            if text_enabled && !text.is_empty() {
+                                if full_enabled {
+                                    let _ = text_tx.send(Ok(text.clone())).await;
+                                    let _ = full_tx.send(Ok(StreamChunk::TextDelta { text })).await;
+                                } else {
+                                    let _ = text_tx.send(Ok(text)).await;
+                                }
+                            } else if full_enabled {
+                                let _ = full_tx.send(Ok(StreamChunk::TextDelta { text })).await;
+                            }
+                        }
+                        other => {
+                            if full_enabled {
+                                let _ = full_tx.send(Ok(other)).await;
+                            }
+                        }
                     }
                 }
                 Err(err) => {
@@ -429,6 +442,33 @@ mod tests {
             part,
             ContentPart::ToolCall { id, name, arguments } if id == "call_1" && name == "add" && arguments == &json!({"a":1})
         )));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn stream_text_only_mode_collects_deltas_and_final_response() -> Result<()> {
+        let chunks = vec![
+            Ok(StreamChunk::TextDelta {
+                text: "hello".to_string(),
+            }),
+            Ok(StreamChunk::TextDelta {
+                text: " world".to_string(),
+            }),
+            Ok(StreamChunk::FinishReason(FinishReason::Stop)),
+        ];
+
+        let inner: StreamResult = stream::iter(chunks).boxed();
+        let (handle, mut text_stream) = stream_text_from_stream(inner).into_text_stream();
+
+        let mut deltas = String::new();
+        while let Some(delta) = text_stream.next().await {
+            deltas.push_str(&delta?);
+        }
+
+        assert_eq!(deltas, "hello world".to_string());
+        let response = handle.final_response()?.unwrap();
+        assert_eq!(response.text(), "hello world".to_string());
+        assert_eq!(response.finish_reason, FinishReason::Stop);
         Ok(())
     }
 

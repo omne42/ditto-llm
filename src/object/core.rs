@@ -384,18 +384,18 @@ fn stream_object_from_stream_with_config_and_limits(
                             }
                         };
 
-                        match &chunk {
+                        match chunk {
                             StreamChunk::Warnings { warnings } => {
-                                state.warnings.extend(warnings.clone());
+                                state.warnings.extend(warnings);
                             }
                             StreamChunk::ResponseId { id } => {
                                 if state.response_id.is_none() && !id.trim().is_empty() {
-                                    state.response_id = Some(id.to_string());
+                                    state.response_id = Some(id);
                                 }
                             }
-                            StreamChunk::Usage(usage) => state.usage = usage.clone(),
+                            StreamChunk::Usage(usage) => state.usage = usage,
                             StreamChunk::FinishReason(reason) => {
-                                state.finish_reason = *reason;
+                                state.finish_reason = reason;
                             }
                             StreamChunk::TextDelta { text } => {
                                 if !text.is_empty() {
@@ -418,14 +418,14 @@ fn stream_object_from_stream_with_config_and_limits(
                                             });
                                         }
                                     } else {
-                                        state.text_buffer.push_str(text);
+                                        state.text_buffer.push_str(&text);
                                     }
                                 }
                             }
                             StreamChunk::ToolCallStart { id, name } => {
                                 if state.tool_call_id.is_none() {
-                                    if name == &config.tool_name {
-                                        state.tool_call_id = Some(id.to_string());
+                                    if name == config.tool_name {
+                                        state.tool_call_id = Some(id);
                                     } else if state.strategy == ObjectStrategy::ToolCall {
                                         state.warnings.push(Warning::Compatibility {
                                             feature: "object.tool_call.name".to_string(),
@@ -435,7 +435,7 @@ fn stream_object_from_stream_with_config_and_limits(
                                                 got = name
                                             ),
                                         });
-                                        state.tool_call_id = Some(id.to_string());
+                                        state.tool_call_id = Some(id);
                                     }
                                 }
                             }
@@ -448,7 +448,7 @@ fn stream_object_from_stream_with_config_and_limits(
                                         && state.strategy == ObjectStrategy::ToolCall)
                                 {
                                     if state.tool_call_id.is_none() {
-                                        state.tool_call_id = Some(id.to_string());
+                                        state.tool_call_id = Some(id);
                                     }
                                     if !arguments_delta.is_empty() {
                                         if state.tool_truncated
@@ -470,12 +470,12 @@ fn stream_object_from_stream_with_config_and_limits(
                                                 });
                                             }
                                         } else {
-                                            state.tool_buffer.push_str(arguments_delta);
+                                            state.tool_buffer.push_str(&arguments_delta);
                                         }
                                     }
                                 }
                             }
-                            _ => {}
+                            StreamChunk::ReasoningDelta { .. } => {}
                         }
 
                         let mut parsed = parse_partial_object_value(&state, &config);
@@ -499,6 +499,7 @@ fn stream_object_from_stream_with_config_and_limits(
                             }
                         }
 
+                        drop(state);
                         (parsed, new_elements)
                     };
 
