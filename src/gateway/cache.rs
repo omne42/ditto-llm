@@ -213,13 +213,13 @@ impl ResponseCache {
             }
         };
 
-        let old_body_bytes = if let Some(existing) = cache.entries.get_mut(&key) {
+        let (was_present, old_body_bytes) = if let Some(existing) = cache.entries.get_mut(&key) {
             let old_body_bytes = existing.body_bytes;
             *existing = entry;
-            Some(old_body_bytes)
+            (true, Some(old_body_bytes))
         } else {
             cache.entries.insert(key.clone(), entry);
-            None
+            (false, None)
         };
 
         if let Some(old_body_bytes) = old_body_bytes {
@@ -227,7 +227,11 @@ impl ResponseCache {
         }
 
         cache.total_body_bytes = cache.total_body_bytes.saturating_add(body_bytes);
-        cache.move_key_to_back(&key);
+        if was_present {
+            cache.move_key_to_back(&key);
+        } else {
+            cache.order.push_back(key);
+        }
 
         cache.maybe_prune_expired_on_write(now);
 

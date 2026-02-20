@@ -38,7 +38,7 @@ struct CacheEntry {
 
 #[derive(Debug, Clone)]
 enum CacheValue {
-    Generate(GenerateResponse),
+    Generate(Arc<GenerateResponse>),
     Stream(Arc<[StreamChunk]>),
 }
 
@@ -99,7 +99,7 @@ impl CacheLayer {
             (true, None)
         } else {
             let value = match &entry.value {
-                CacheValue::Generate(resp) => Some(resp.clone()),
+                CacheValue::Generate(resp) => Some(Arc::clone(resp)),
                 CacheValue::Stream(_) => None,
             };
             (false, value)
@@ -111,7 +111,7 @@ impl CacheLayer {
         let value = value?;
         state.touch_key(&key);
         drop(state);
-        Some(value)
+        Some((*value).clone())
     }
 
     async fn get_stream(&self, key: CacheKey) -> Option<Arc<[StreamChunk]>> {
@@ -137,12 +137,13 @@ impl CacheLayer {
         Some(value)
     }
 
-    async fn insert_generate(&self, key: CacheKey, value: GenerateResponse) {
-        let approx_bytes = approx_generate_response_bytes(&value);
+    async fn insert_generate(&self, key: CacheKey, value: &GenerateResponse) {
+        let approx_bytes = approx_generate_response_bytes(value);
         if approx_bytes > self.max_value_bytes {
             return;
         }
 
+        let value = Arc::new(value.clone());
         let mut state = self.state.lock().await;
         if let Some(ttl) = self.ttl {
             state.prune_expired(ttl, Instant::now());
@@ -294,7 +295,7 @@ impl LanguageModelLayer for CacheLayer {
             return Ok(hit);
         }
         let response = inner.generate(request).await?;
-        self.insert_generate(key, response.clone()).await;
+        self.insert_generate(key, &response).await;
         Ok(response)
     }
 
@@ -755,14 +756,14 @@ mod tests {
                     fresh_key,
                     CacheEntry {
                         inserted_at: now,
-                        value: CacheValue::Generate(response.clone()),
+                        value: CacheValue::Generate(Arc::new(response.clone())),
                     },
                 ),
                 (
                     expired_key,
                     CacheEntry {
                         inserted_at: now - Duration::from_secs(10),
-                        value: CacheValue::Generate(response),
+                        value: CacheValue::Generate(Arc::new(response)),
                     },
                 ),
             ]),
@@ -798,7 +799,7 @@ mod tests {
                 key,
                 CacheEntry {
                     inserted_at: now,
-                    value: CacheValue::Generate(response),
+                    value: CacheValue::Generate(Arc::new(response)),
                 },
             )]),
             lru: VecDeque::from([key]),
@@ -835,7 +836,7 @@ mod tests {
                 key,
                 CacheEntry {
                     inserted_at: Instant::now() - Duration::from_secs(10),
-                    value: CacheValue::Generate(response),
+                    value: CacheValue::Generate(Arc::new(response)),
                 },
             );
             state.lru.push_back(key);

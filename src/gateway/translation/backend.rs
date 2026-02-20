@@ -73,8 +73,12 @@ impl<V: Clone> ModelCache<V> {
             return;
         }
 
-        self.entries.insert(key.clone(), value);
-        self.move_key_to_back(&key);
+        let replaced = self.entries.insert(key.clone(), value).is_some();
+        if replaced {
+            self.move_key_to_back(&key);
+        } else {
+            self.order.push_back(key);
+        }
 
         while self.entries.len() > max_entries {
             let Some(candidate) = self.order.pop_front() else {

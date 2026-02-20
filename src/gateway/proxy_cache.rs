@@ -177,13 +177,13 @@ impl ProxyResponseCache {
             expires_at,
         };
 
-        let old_body_len = if let Some(existing) = self.entries.get_mut(&key) {
+        let (was_present, old_body_len) = if let Some(existing) = self.entries.get_mut(&key) {
             let old_body_len = existing.response.body.len();
             *existing = entry;
-            Some(old_body_len)
+            (true, Some(old_body_len))
         } else {
             self.entries.insert(key.clone(), entry);
-            None
+            (false, None)
         };
 
         if let Some(old_body_len) = old_body_len {
@@ -191,7 +191,11 @@ impl ProxyResponseCache {
         }
 
         self.total_body_bytes = self.total_body_bytes.saturating_add(body_len);
-        self.move_key_to_back(&key);
+        if was_present {
+            self.move_key_to_back(&key);
+        } else {
+            self.order.push_back(key);
+        }
         self.maybe_prune_expired_on_write(now);
 
         while self.entries.len() > self.config.max_entries

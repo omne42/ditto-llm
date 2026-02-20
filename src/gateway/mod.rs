@@ -349,6 +349,66 @@ mod tests {
         let third = gateway.prepare_handle_request(&request);
         assert!(matches!(third, Ok(GatewayPreparedRequest::Call(_))));
     }
+
+    #[test]
+    fn in_flight_request_does_not_repopulate_cache_after_cache_disable() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.cache.enabled = true;
+        key.cache.ttl_seconds = Some(60);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key.clone()],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", TestBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let prepared = match gateway
+            .prepare_handle_request(&request)
+            .expect("request should pass")
+        {
+            GatewayPreparedRequest::Call(prepared) => prepared,
+            GatewayPreparedRequest::Cached { .. } => panic!("expected backend call"),
+        };
+        let cache_key = prepared
+            .cache_key
+            .clone()
+            .expect("cache should be enabled for prepared call");
+
+        let mut updated = key;
+        updated.cache.enabled = false;
+        gateway.upsert_virtual_key(updated);
+
+        let response = GatewayResponse {
+            content: "ok".to_string(),
+            output_tokens: 1,
+            backend: "primary".to_string(),
+            cached: false,
+        };
+        gateway.complete_handle_success(&prepared, &response);
+
+        let now = gateway.clock.now_epoch_seconds();
+        assert!(gateway.cache.get("key-1", &cache_key, now).is_none());
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -427,7 +487,6 @@ pub(crate) struct GatewayPreparedCall {
     project_budget_scope: Option<(String, BudgetConfig)>,
     user_budget_scope: Option<(String, BudgetConfig)>,
     cache_key: Option<String>,
-    cache_config: CacheConfig,
 }
 
 pub(crate) enum GatewayPreparedRequest {
@@ -791,7 +850,6 @@ impl Gateway {
                 project_budget_scope,
                 user_budget_scope,
                 cache_key,
-                cache_config: key.cache,
             },
         )))
     }
@@ -802,12 +860,25 @@ impl Gateway {
         response: &GatewayResponse,
     ) {
         if let Some(cache_key) = prepared.cache_key.as_ref() {
+            // Use the latest key config so in-flight requests do not re-populate
+            // cache entries after cache has been disabled or key has been removed.
+            let Some(key) = self
+                .config
+                .virtual_keys
+                .iter()
+                .find(|k| k.id == prepared.key_id)
+            else {
+                return;
+            };
+            if !key.enabled || !key.cache.enabled {
+                return;
+            }
             let now = self.clock.now_epoch_seconds();
             self.cache.insert(
                 &prepared.key_id,
                 cache_key.clone(),
                 response.clone(),
-                &prepared.cache_config,
+                &key.cache,
                 now,
             );
         }

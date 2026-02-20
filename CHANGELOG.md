@@ -142,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: aggregate `/models` and `/v1/models` across all configured proxy backends (dedup by model id).
 - Gateway: extract proxy-cache hit handling and proxy failure finalization helpers to keep the OpenAI-compatible passthrough handler under the pre-commit 1000-line cap (no behavior change).
 - Gateway translation: switch lazy singleton client caches (files/batches/moderations/images) to `tokio::sync::OnceCell` to avoid duplicate concurrent initialization and reduce lock contention.
+- Performance: avoid unnecessary LRU `VecDeque` scans on insert-miss paths in gateway in-memory caches (`ResponseCache`, `ProxyResponseCache`, and translation `ModelCache`), reducing write-path overhead under high-cardinality traffic.
+- SDK: `CacheLayer` now only clones generate responses when an entry is actually cacheable, and stores generate cache values behind `Arc` so hit-path mutex hold time stays low under concurrent reads.
 - CI: add a GitHub Actions workflow to run Rust gates (`fmt`/`clippy`/`test`) plus a small feature matrix (including `--no-default-features`).
 - CI: extend the `--no-default-features` clippy matrix to cover provider-only builds for each provider feature (`openai`, `openai-compatible`, `anthropic`, `google`, `cohere`, `bedrock`, `vertex`) across all targets.
 - CI: run JS/TS typecheck + build (pnpm workspaces) for `packages/*` and `apps/admin-ui`.
@@ -169,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: remove panic-prone `expect/unwrap` from the HTTP proxy non-stream path and header construction (no behavior change).
 - Gateway: reject invalid JSON request bodies early when `Content-Type: application/json` (returns `invalid_json`) to prevent guardrails bypass.
 - Gateway: fix streaming multipart passthrough (/v1/files and /v1/audio/* uploads) spending so in-memory budgets are decremented even when store features are disabled.
+- Gateway: prevent in-flight requests from repopulating control-plane cache entries after a virtual key's cache has been disabled or the key has been removed (avoids stale-state memory retention).
 - Gateway: fix `cargo check --all-features` for `gateway-translation` after proxy attempt param cleanup (no behavior change).
 - Gateway: fix clippy lint in LiteLLM key regeneration handler (no behavior change).
 - Gateway: include translation-backed models in `GET /v1/models` when `gateway-translation` backends are configured (returns `200` even when no proxy backends are configured).
