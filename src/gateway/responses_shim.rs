@@ -131,6 +131,8 @@ struct StreamState {
     usage: Option<Value>,
 }
 
+const MAX_STREAM_TOOL_CALL_SLOTS: usize = 256;
+
 pub fn is_responses_create_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -236,12 +238,26 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
         return None;
     }
 
-    let default_choice = ChatChoice::default();
-    let choice = parsed.choices.first().unwrap_or(&default_choice);
-    let finish = choice.finish_reason.as_deref().unwrap_or("stop");
+    let ChatCompletionsResponse {
+        id,
+        model,
+        choices,
+        usage,
+    } = parsed;
+
+    let ChatChoice {
+        message,
+        finish_reason,
+    } = choices.into_iter().next().unwrap_or_default();
+    let finish = finish_reason.as_deref().unwrap_or("stop");
     let (status, incomplete_details) = map_finish_reason_to_status(finish);
 
-    let content = choice.message.content.clone().unwrap_or_default();
+    let ChatMessage {
+        content,
+        tool_calls,
+        function_call,
+    } = message;
+    let content = content.unwrap_or_default();
     let output_text = content.clone();
 
     let mut output_items = Vec::<Value>::new();
@@ -253,9 +269,9 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
         }));
     }
 
-    let mut tool_calls = choice.message.tool_calls.clone().unwrap_or_default();
+    let mut tool_calls = tool_calls.unwrap_or_default();
     if tool_calls.is_empty() {
-        if let Some(call) = choice.message.function_call.clone() {
+        if let Some(call) = function_call {
             if !call.name.trim().is_empty() {
                 tool_calls.push(ChatToolCall {
                     id: String::new(),
@@ -268,7 +284,7 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
         }
     }
 
-    for (idx, call) in tool_calls.iter().enumerate() {
+    for (idx, call) in tool_calls.into_iter().enumerate() {
         let call_id = match call.id.trim() {
             "" => format!("call_{idx}"),
             value => value.to_string(),
@@ -292,7 +308,7 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
     }
 
     let mut out = Map::<String, Value>::new();
-    out.insert("id".to_string(), Value::String(parsed.id));
+    out.insert("id".to_string(), Value::String(id));
     out.insert("object".to_string(), Value::String("response".to_string()));
     out.insert("status".to_string(), Value::String(status.to_string()));
     out.insert("output".to_string(), Value::Array(output_items));
@@ -300,14 +316,10 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
     if let Some(incomplete_details) = incomplete_details {
         out.insert("incomplete_details".to_string(), incomplete_details);
     }
-    if let Some(model) = parsed.model {
+    if let Some(model) = model {
         out.insert("model".to_string(), Value::String(model));
     }
-    if let Some(usage) = parsed
-        .usage
-        .as_ref()
-        .and_then(map_chat_usage_to_responses_usage)
-    {
+    if let Some(usage) = usage.as_ref().and_then(map_chat_usage_to_responses_usage) {
         out.insert("usage".to_string(), usage);
     }
 
@@ -322,113 +334,111 @@ pub fn chat_completions_sse_to_responses_sse(
     let buffer = VecDeque::<Result<Bytes, std::io::Error>>::new();
 
     stream::unfold(
-        (data_stream, buffer, state, false),
-        move |(mut data_stream, mut buffer, mut state, mut done)| {
-            let fallback_response_id = fallback_response_id.clone();
-            async move {
-                loop {
-                    if let Some(item) = buffer.pop_front() {
-                        return Some((item, (data_stream, buffer, state, done)));
-                    }
+        (data_stream, buffer, state, false, fallback_response_id),
+        |(mut data_stream, mut buffer, mut state, mut done, fallback_response_id)| async move {
+            loop {
+                if let Some(item) = buffer.pop_front() {
+                    return Some((
+                        item,
+                        (data_stream, buffer, state, done, fallback_response_id),
+                    ));
+                }
 
-                    if done {
-                        return None;
-                    }
+                if done {
+                    return None;
+                }
 
-                    match data_stream.next().await {
-                        Some(Ok(data)) => {
-                            if let Ok(chunk) = serde_json::from_str::<ChatCompletionsChunk>(&data) {
-                                if state.response_id.is_none() {
-                                    state.response_id = chunk
-                                        .id
-                                        .as_deref()
-                                        .map(str::trim)
-                                        .filter(|id| !id.is_empty())
-                                        .map(|id| id.to_string());
+                match data_stream.next().await {
+                    Some(Ok(data)) => {
+                        if let Ok(chunk) = serde_json::from_str::<ChatCompletionsChunk>(&data) {
+                            if state.response_id.is_none() {
+                                state.response_id = chunk
+                                    .id
+                                    .as_deref()
+                                    .map(str::trim)
+                                    .filter(|id| !id.is_empty())
+                                    .map(|id| id.to_string());
+                            }
+                            if !state.created_sent {
+                                if let Some(id) = state
+                                    .response_id
+                                    .as_deref()
+                                    .filter(|id| !id.trim().is_empty())
+                                {
+                                    buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                        "type": "response.created",
+                                        "response": { "id": id }
+                                    }))));
+                                    state.created_sent = true;
                                 }
-                                if !state.created_sent {
-                                    if let Some(id) = state
-                                        .response_id
-                                        .as_deref()
-                                        .filter(|id| !id.trim().is_empty())
-                                    {
-                                        buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                            "type": "response.created",
-                                            "response": { "id": id }
-                                        }))));
-                                        state.created_sent = true;
-                                    }
-                                }
-
-                                if let Some(usage) = chunk.usage {
-                                    state.usage = Some(usage);
-                                }
-
-                                for choice in chunk.choices {
-                                    let ChatDelta {
-                                        content,
-                                        tool_calls,
-                                        function_call,
-                                    } = choice.delta;
-                                    if let Some(delta) = content {
-                                        if !delta.is_empty() {
-                                            buffer.push_back(Ok(sse_event_bytes(
-                                                serde_json::json!({
-                                                    "type": "response.output_text.delta",
-                                                    "delta": delta,
-                                                }),
-                                            )));
-                                        }
-                                    }
-
-                                    if let Some(tool_calls) = tool_calls {
-                                        for delta in tool_calls {
-                                            apply_tool_call_delta(&mut state, &delta);
-                                        }
-                                    } else if let Some(function_call) = function_call {
-                                        let tool_call = ChatToolCallDelta {
-                                            index: 0,
-                                            id: None,
-                                            function: Some(ChatToolFunctionDelta {
-                                                name: function_call.name,
-                                                arguments: function_call.arguments,
-                                            }),
-                                        };
-                                        apply_tool_call_delta(&mut state, &tool_call);
-                                    }
-
-                                    if let Some(reason) = choice.finish_reason {
-                                        state.finish_reason = Some(reason);
-                                    }
-                                }
-                                continue;
                             }
 
-                            if let Ok(value) = serde_json::from_str::<Value>(&data) {
-                                if value.get("error").is_some() {
-                                    let response_id = state
-                                        .response_id
-                                        .clone()
-                                        .unwrap_or_else(|| fallback_response_id.clone());
-                                    buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                            if let Some(usage) = chunk.usage {
+                                state.usage = Some(usage);
+                            }
+
+                            for choice in chunk.choices {
+                                let ChatDelta {
+                                    content,
+                                    tool_calls,
+                                    function_call,
+                                } = choice.delta;
+                                if let Some(delta) = content {
+                                    if !delta.is_empty() {
+                                        buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                            "type": "response.output_text.delta",
+                                            "delta": delta,
+                                        }))));
+                                    }
+                                }
+
+                                if let Some(tool_calls) = tool_calls {
+                                    for delta in tool_calls {
+                                        apply_tool_call_delta(&mut state, &delta);
+                                    }
+                                } else if let Some(function_call) = function_call {
+                                    let tool_call = ChatToolCallDelta {
+                                        index: 0,
+                                        id: None,
+                                        function: Some(ChatToolFunctionDelta {
+                                            name: function_call.name,
+                                            arguments: function_call.arguments,
+                                        }),
+                                    };
+                                    apply_tool_call_delta(&mut state, &tool_call);
+                                }
+
+                                if let Some(reason) = choice.finish_reason {
+                                    state.finish_reason = Some(reason);
+                                }
+                            }
+                            continue;
+                        }
+
+                        if let Ok(value) = serde_json::from_str::<Value>(&data) {
+                            if value.get("error").is_some() {
+                                let response_id = state
+                                    .response_id
+                                    .clone()
+                                    .unwrap_or_else(|| fallback_response_id.clone());
+                                buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
                                         "type": "response.failed",
                                         "response": { "id": response_id, "error": value.get("error").cloned().unwrap_or(Value::Null) }
                                     }))));
-                                    done = true;
-                                    continue;
-                                }
+                                done = true;
+                                continue;
                             }
                         }
-                        Some(Err(err)) => {
-                            buffer.push_back(Err(std::io::Error::other(err.to_string())));
-                            done = true;
-                            continue;
-                        }
-                        None => {
-                            finalize_stream(&mut buffer, &mut state, &fallback_response_id);
-                            done = true;
-                            continue;
-                        }
+                    }
+                    Some(Err(err)) => {
+                        buffer.push_back(Err(std::io::Error::other(err.to_string())));
+                        done = true;
+                        continue;
+                    }
+                    None => {
+                        finalize_stream(&mut buffer, &mut state, fallback_response_id.as_str());
+                        done = true;
+                        continue;
                     }
                 }
             }
@@ -519,10 +529,14 @@ fn map_chat_usage_to_responses_usage(usage: &Value) -> Option<Value> {
 }
 
 fn apply_tool_call_delta(state: &mut StreamState, delta: &ChatToolCallDelta) {
+    // Bound tool call slot growth from untrusted streaming indexes.
+    if delta.index >= MAX_STREAM_TOOL_CALL_SLOTS {
+        return;
+    }
     if state.tool_calls.len() <= delta.index {
         state
             .tool_calls
-            .resize_with(delta.index.saturating_add(1), ToolCallState::default);
+            .resize_with(delta.index + 1, ToolCallState::default);
     }
     let slot = &mut state.tool_calls[delta.index];
     if let Some(id) = delta.id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {

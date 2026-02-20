@@ -372,3 +372,73 @@ async fn responses_shim_translates_tool_calls_streaming() {
     assert!(text.contains("\"type\":\"response.completed\""));
     chat_mock.assert();
 }
+
+#[tokio::test]
+async fn responses_shim_streaming_ignores_out_of_range_tool_call_index() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(POST).path("/v1/responses");
+        then.status(404).body("not found");
+    });
+    let chat_mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "text/event-stream")
+            .body(concat!(
+                "data: {\"id\":\"chatcmpl-4\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":100000,\"id\":\"call_big\",\"function\":{\"name\":\"foo\",\"arguments\":\"{\\\"a\\\":1}\"}}]}}]}\n\n",
+                "data: {\"id\":\"chatcmpl-4\",\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}\n\n",
+                "data: [DONE]\n\n",
+            ));
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("\"type\":\"response.created\""));
+    assert!(text.contains("\"type\":\"response.completed\""));
+    assert!(!text.contains("\"type\":\"response.output_item.done\""));
+    assert!(!text.contains("\"call_id\":\"call_100000\""));
+    chat_mock.assert();
+}
