@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -112,7 +113,7 @@ fn collect_docs_paths_from_summary(summary_path: impl AsRef<Path>) -> Result<Vec
         }
 
         let target = target.strip_prefix("./").unwrap_or(target);
-        if !target.ends_with(".md") {
+        if !is_markdown_target(target) {
             continue;
         }
 
@@ -140,7 +141,7 @@ fn render_files(paths: &[PathBuf]) -> Result<String, String> {
         out.push_str(
             "================================================================================\n",
         );
-        out.push_str(&format!("FILE: {}\n", path.display()));
+        writeln!(&mut out, "FILE: {}", path.display()).expect("writing to string cannot fail");
         out.push_str(
             "================================================================================\n\n",
         );
@@ -182,6 +183,12 @@ fn normalize_newlines(input: &str) -> String {
     input.replace("\r\n", "\n")
 }
 
+fn is_markdown_target(target: &str) -> bool {
+    Path::new(target)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+}
+
 fn regen_hint(out_paths: &[PathBuf]) -> String {
     if out_paths
         == [
@@ -193,9 +200,22 @@ fn regen_hint(out_paths: &[PathBuf]) -> String {
     } else {
         let mut cmd = "cargo run --bin ditto-llms-txt --".to_string();
         for path in out_paths {
-            cmd.push_str(" --out ");
-            cmd.push_str(&path.display().to_string());
+            write!(&mut cmd, " --out {}", path.display()).expect("writing to string cannot fail");
         }
         cmd
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_markdown_target;
+
+    #[test]
+    fn recognizes_markdown_extension_case_insensitively() {
+        assert!(is_markdown_target("README.md"));
+        assert!(is_markdown_target("README.MD"));
+        assert!(is_markdown_target("docs/src/Guide.Md"));
+        assert!(!is_markdown_target("README.mdx"));
+        assert!(!is_markdown_target("README"));
     }
 }

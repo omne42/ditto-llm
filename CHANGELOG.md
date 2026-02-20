@@ -149,6 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build: fix `cargo clippy --no-default-features -- -D warnings` by tightening cfg gating for provider/gateway-only HTTP helpers.
 - Docs: fix parity notes to reflect MCP tools integration support for `POST /v1/responses`.
 - Docs: fix MCP gateway docs drift for `/v1/responses` and refresh `llms.txt`.
+- Docs: make `ditto-llms-txt` accept case-insensitive markdown links from `docs/src/SUMMARY.md` and refresh generated `llms.txt` outputs.
 - Docs: update admin UI setup instructions to use pnpm (workspaces).
 - Gateway: when cost budgets (`total_usd_micros`) are enabled, treat non-token endpoints as unsupported (`cost_budget_unsupported_endpoint`) to avoid mis-accounting or bypass.
 - Security: add timeouts and a 64KiB output cap when resolving `secret://...` via external CLIs (configurable via `DITTO_SECRET_COMMAND_TIMEOUT_MS/SECS`).
