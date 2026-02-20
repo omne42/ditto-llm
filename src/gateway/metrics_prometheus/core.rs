@@ -474,7 +474,8 @@ impl PrometheusMetrics {
     }
 
     pub fn record_proxy_response_status(&mut self, status: u16) {
-        *self.proxy_responses_by_status.entry(status).or_default() += 1;
+        let entry = self.proxy_responses_by_status.entry(status).or_default();
+        *entry = entry.saturating_add(1);
     }
 
     pub fn record_proxy_response_status_by_path(&mut self, path: &str, status: u16) {
@@ -484,7 +485,8 @@ impl PrometheusMetrics {
             path,
             self.config.max_path_series,
         ) {
-            *statuses.entry(status).or_default() += 1;
+            let entry = statuses.entry(status).or_default();
+            *entry = entry.saturating_add(1);
         }
     }
 
@@ -494,7 +496,8 @@ impl PrometheusMetrics {
             backend,
             self.config.max_backend_series,
         ) {
-            *statuses.entry(status).or_default() += 1;
+            let entry = statuses.entry(status).or_default();
+            *entry = entry.saturating_add(1);
         }
     }
 
@@ -504,7 +507,8 @@ impl PrometheusMetrics {
             model,
             self.config.max_model_series,
         ) {
-            *statuses.entry(status).or_default() += 1;
+            let entry = statuses.entry(status).or_default();
+            *entry = entry.saturating_add(1);
         }
     }
 

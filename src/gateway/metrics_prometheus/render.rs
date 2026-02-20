@@ -552,6 +552,19 @@ fn write_counter_map(
     out.push_str(&format!("# HELP {metric} {help}\n"));
     out.push_str(&format!("# TYPE {metric} counter\n"));
 
+    if map.is_empty() {
+        return;
+    }
+    if map.len() == 1 {
+        if let Some((value, count)) = map.iter().next() {
+            out.push_str(&format!(
+                "{metric}{{{label}=\"{}\"}} {count}\n",
+                escape_label_value(value)
+            ));
+        }
+        return;
+    }
+
     let mut entries: Vec<(&String, &u64)> = map.iter().collect();
     entries.sort_by(|(a, _), (b, _)| a.cmp(b));
     for (value, count) in entries {
@@ -571,6 +584,19 @@ fn write_gauge_map(
 ) {
     out.push_str(&format!("# HELP {metric} {help}\n"));
     out.push_str(&format!("# TYPE {metric} gauge\n"));
+
+    if map.is_empty() {
+        return;
+    }
+    if map.len() == 1 {
+        if let Some((value, count)) = map.iter().next() {
+            out.push_str(&format!(
+                "{metric}{{{label}=\"{}\"}} {count}\n",
+                escape_label_value(value)
+            ));
+        }
+        return;
+    }
 
     let mut entries: Vec<(&String, &u64)> = map.iter().collect();
     entries.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -643,6 +669,34 @@ fn write_histogram_map(
     out.push_str(&format!("# HELP {metric} {help}\n"));
     out.push_str(&format!("# TYPE {metric} histogram\n"));
 
+    if map.is_empty() {
+        return;
+    }
+    if map.len() == 1 {
+        if let Some((value, hist)) = map.iter().next() {
+            let value = escape_label_value(value);
+            for (idx, bound) in hist.buckets.iter().enumerate() {
+                out.push_str(&format!(
+                    "{metric}_bucket{{{label}=\"{value}\",le=\"{bound}\"}} {}\n",
+                    hist.bucket_counts[idx]
+                ));
+            }
+            out.push_str(&format!(
+                "{metric}_bucket{{{label}=\"{value}\",le=\"+Inf\"}} {}\n",
+                hist.count
+            ));
+            out.push_str(&format!(
+                "{metric}_sum{{{label}=\"{value}\"}} {}\n",
+                hist.sum_seconds
+            ));
+            out.push_str(&format!(
+                "{metric}_count{{{label}=\"{value}\"}} {}\n",
+                hist.count
+            ));
+        }
+        return;
+    }
+
     let mut entries: Vec<(&String, &DurationHistogram)> = map.iter().collect();
     entries.sort_by(|(a, _), (b, _)| a.cmp(b));
     for (value, hist) in entries {
@@ -671,6 +725,7 @@ fn write_histogram_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::time::Duration;
 
     #[test]
@@ -779,5 +834,50 @@ mod tests {
         assert_eq!(map.len(), 2);
         assert_eq!(map.get("first"), Some(&1));
         assert_eq!(map.get(OVERFLOW_SERIES_LABEL), Some(&2));
+    }
+
+    #[test]
+    fn response_status_counters_saturate_at_u64_max() {
+        let mut metrics = PrometheusMetrics::new(PrometheusMetricsConfig::default());
+        metrics.proxy_responses_by_status.insert(200, u64::MAX);
+        metrics.proxy_responses_by_path_status.insert(
+            "/v1/chat/completions".to_string(),
+            HashMap::from([(200, u64::MAX)]),
+        );
+        metrics.proxy_responses_by_backend_status.insert(
+            "backend-a".to_string(),
+            HashMap::from([(200, u64::MAX)]),
+        );
+        metrics.proxy_responses_by_model_status.insert(
+            "model-a".to_string(),
+            HashMap::from([(200, u64::MAX)]),
+        );
+
+        metrics.record_proxy_response_status_by_path("/v1/chat/completions", 200);
+        metrics.record_proxy_response_status_by_backend("backend-a", 200);
+        metrics.record_proxy_response_status_by_model("model-a", 200);
+
+        assert_eq!(metrics.proxy_responses_by_status.get(&200), Some(&u64::MAX));
+        assert_eq!(
+            metrics
+                .proxy_responses_by_path_status
+                .get("/v1/chat/completions")
+                .and_then(|statuses| statuses.get(&200)),
+            Some(&u64::MAX)
+        );
+        assert_eq!(
+            metrics
+                .proxy_responses_by_backend_status
+                .get("backend-a")
+                .and_then(|statuses| statuses.get(&200)),
+            Some(&u64::MAX)
+        );
+        assert_eq!(
+            metrics
+                .proxy_responses_by_model_status
+                .get("model-a")
+                .and_then(|statuses| statuses.get(&200)),
+            Some(&u64::MAX)
+        );
     }
 }

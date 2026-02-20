@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway interop: reduce allocation/copy overhead in Anthropic/Google request translation by avoiding full-array cloning for message/tool blocks and replacing `collect::<Vec<_>>().join("")` text assembly with direct `String` collection.
 - Gateway interop: remove per-chunk `delta` object cloning in OpenAI->Anthropic SSE conversion and harden tool-call index parsing with checked `u64 -> usize` conversion.
 - Gateway/Prometheus: reduce hot-path allocations in label series accounting by avoiding per-update `String` construction for existing labels, and treat `max_*_series = 0` as fully disabling labelled series (no implicit `__overflow__` bucket writes).
+- Gateway/Prometheus: speed up metrics render on low-cardinality series by skipping temporary vec/sort work when labelled maps have 0 or 1 entry.
 - Build: depend on `safe-fs-tools` via the external repo checkout (`../safe-fs-tools`) instead of a vendored copy.
 - Gateway: cap responses-shim streaming `tool_calls[].index` fan-out to a fixed slot limit (DoS hardening against oversized indexes) and remove per-event fallback-id cloning in SSE translation to reduce hot-path allocations.
 - Gateway: remove `router.default_backend` in favor of `router.default_backends` (weighted float `weight`).
@@ -160,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Gateway: avoid abort-path panics in proxy stream finalizers by using a runtime-safe fallback when `tokio::spawn` is unavailable during shutdown/drop.
+- Gateway/Prometheus: make response-status counters use saturating increments (global/path/backend/model), preventing overflow panics in debug builds and wraparound in long-running processes.
 - Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.
 - SDK: fix handle-only streaming helpers so `StreamTextHandle::final_*` / `StreamObjectHandle::final_*` can complete even when no fan-out stream is enabled.
 - Gateway interop: fix Anthropic tool-use mapping fallback IDs so multiple OpenAI tool calls without IDs now get stable unique IDs (`call_0`, `call_1`, ...) instead of repeating `call_0`.
