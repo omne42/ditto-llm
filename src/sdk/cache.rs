@@ -26,6 +26,7 @@ pub struct CacheLayer {
 struct CacheState {
     entries: HashMap<CacheKey, CacheEntry>,
     lru: VecDeque<CacheKey>,
+    last_prune_at: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -53,11 +54,14 @@ enum CacheKind {
 }
 
 impl CacheLayer {
+    const READ_PRUNE_INTERVAL: Duration = Duration::from_secs(1);
+
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(CacheState {
                 entries: HashMap::new(),
                 lru: VecDeque::new(),
+                last_prune_at: None,
             })),
             ttl: None,
             max_entries: 256,
@@ -88,7 +92,7 @@ impl CacheLayer {
 
     async fn get_generate(&self, key: CacheKey) -> Option<GenerateResponse> {
         let mut state = self.state.lock().await;
-        state.prune_expired(self.ttl);
+        state.maybe_prune_expired_on_read(self.ttl, Self::READ_PRUNE_INTERVAL);
         let entry = state.entries.get(&key)?;
         let (expired, value) = if entry.is_expired(self.ttl) {
             (true, None)
@@ -111,7 +115,7 @@ impl CacheLayer {
 
     async fn get_stream(&self, key: CacheKey) -> Option<Arc<[StreamChunk]>> {
         let mut state = self.state.lock().await;
-        state.prune_expired(self.ttl);
+        state.maybe_prune_expired_on_read(self.ttl, Self::READ_PRUNE_INTERVAL);
         let entry = state.entries.get(&key)?;
         let (expired, value) = if entry.is_expired(self.ttl) {
             (true, None)
@@ -139,7 +143,9 @@ impl CacheLayer {
         }
 
         let mut state = self.state.lock().await;
-        state.prune_expired(self.ttl);
+        if let Some(ttl) = self.ttl {
+            state.prune_expired(ttl, Instant::now());
+        }
         state.insert(
             key,
             CacheEntry {
@@ -159,7 +165,9 @@ impl CacheLayer {
         }
 
         let mut state = self.state.lock().await;
-        state.prune_expired(self.ttl);
+        if let Some(ttl) = self.ttl {
+            state.prune_expired(ttl, Instant::now());
+        }
         state.insert(
             key,
             CacheEntry {
@@ -178,6 +186,20 @@ impl Default for CacheLayer {
 }
 
 impl CacheState {
+    fn maybe_prune_expired_on_read(&mut self, ttl: Option<Duration>, interval: Duration) {
+        let Some(ttl) = ttl else {
+            return;
+        };
+        let now = Instant::now();
+        if self
+            .last_prune_at
+            .is_some_and(|last| now.saturating_duration_since(last) < interval)
+        {
+            return;
+        }
+        self.prune_expired(ttl, now);
+    }
+
     fn insert(&mut self, key: CacheKey, entry: CacheEntry, max_entries: usize) {
         if self.entries.insert(key, entry).is_some() {
             self.remove_key_from_lru(&key);
@@ -217,11 +239,9 @@ impl CacheState {
         }
     }
 
-    fn prune_expired(&mut self, ttl: Option<Duration>) {
-        let Some(ttl) = ttl else {
-            return;
-        };
+    fn prune_expired(&mut self, ttl: Duration, now: Instant) {
         if self.lru.is_empty() {
+            self.last_prune_at = Some(now);
             return;
         }
 
@@ -230,7 +250,7 @@ impl CacheState {
             let expired = self
                 .entries
                 .get(&key)
-                .map(|entry| entry.inserted_at.elapsed() >= ttl)
+                .map(|entry| now.saturating_duration_since(entry.inserted_at) >= ttl)
                 .unwrap_or(true);
             if expired {
                 self.entries.remove(&key);
@@ -239,6 +259,7 @@ impl CacheState {
             }
         }
         self.lru = keep;
+        self.last_prune_at = Some(now);
     }
 }
 
@@ -577,9 +598,10 @@ mod tests {
                 ),
             ]),
             lru: VecDeque::from([fresh_key, expired_key]),
+            last_prune_at: None,
         };
 
-        state.prune_expired(Some(Duration::from_secs(5)));
+        state.prune_expired(Duration::from_secs(5), now);
 
         assert!(state.entries.contains_key(&fresh_key));
         assert!(!state.entries.contains_key(&expired_key));
@@ -611,6 +633,7 @@ mod tests {
                 },
             )]),
             lru: VecDeque::from([key]),
+            last_prune_at: None,
         };
 
         for _ in 0..5 {
@@ -618,5 +641,42 @@ mod tests {
         }
 
         assert_eq!(state.lru, VecDeque::from([key]));
+    }
+
+    #[tokio::test]
+    async fn get_generate_still_rejects_expired_entry_when_read_prune_is_throttled() {
+        let key = CacheKey {
+            kind: CacheKind::Generate,
+            hash: 42,
+        };
+        let response = GenerateResponse {
+            content: vec![ContentPart::Text {
+                text: "stale".to_string(),
+            }],
+            finish_reason: FinishReason::Stop,
+            usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        };
+
+        let layer = CacheLayer::new().with_ttl(Duration::from_secs(5));
+        {
+            let mut state = layer.state.lock().await;
+            state.entries.insert(
+                key,
+                CacheEntry {
+                    inserted_at: Instant::now() - Duration::from_secs(10),
+                    value: CacheValue::Generate(response),
+                },
+            );
+            state.lru.push_back(key);
+            state.last_prune_at = Some(Instant::now());
+        }
+
+        assert!(layer.get_generate(key).await.is_none());
+
+        let state = layer.state.lock().await;
+        assert!(!state.entries.contains_key(&key));
+        assert!(!state.lru.contains(&key));
     }
 }
