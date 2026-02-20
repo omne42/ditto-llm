@@ -95,6 +95,36 @@ fn proxy_stream_abort_finalizer_pool() -> &'static ProxyStreamAbortFinalizerPool
 }
 
 #[cfg(feature = "gateway-metrics-prometheus")]
+fn spawn_proxy_stream_abort_finalize(job: ProxyStreamAbortFinalizeJob) {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            handle.spawn(async move {
+                job.finalizer
+                    .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
+                    .await;
+            });
+        }
+        Err(_) => {
+            let _ = std::thread::Builder::new()
+                .name("ditto-proxy-stream-finalizer-fallback".to_string())
+                .spawn(move || {
+                    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        return;
+                    };
+                    runtime.block_on(async move {
+                        job.finalizer
+                            .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
+                            .await;
+                    });
+                });
+        }
+    }
+}
+
+#[cfg(feature = "gateway-metrics-prometheus")]
 fn enqueue_proxy_stream_abort_finalize(finalizer: ProxyStreamFinalizer, bytes_sent: u64) {
     let job = ProxyStreamAbortFinalizeJob {
         finalizer,
@@ -103,11 +133,7 @@ fn enqueue_proxy_stream_abort_finalize(finalizer: ProxyStreamFinalizer, bytes_se
     let pool = proxy_stream_abort_finalizer_pool();
 
     if pool.senders.is_empty() {
-        tokio::spawn(async move {
-            job.finalizer
-                .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
-                .await;
-        });
+        spawn_proxy_stream_abort_finalize(job);
         return;
     }
 
@@ -120,11 +146,7 @@ fn enqueue_proxy_stream_abort_finalize(finalizer: ProxyStreamFinalizer, bytes_se
             std::sync::mpsc::TrySendError::Full(job) => job,
             std::sync::mpsc::TrySendError::Disconnected(job) => job,
         };
-        tokio::spawn(async move {
-            job.finalizer
-                .finalize(ProxyStreamEnd::Aborted, job.bytes_sent)
-                .await;
-        });
+        spawn_proxy_stream_abort_finalize(job);
     }
 }
 

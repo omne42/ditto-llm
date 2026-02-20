@@ -104,33 +104,45 @@ impl McpServerState {
         &self,
         result: Value,
     ) -> Result<McpToolsListResult, GatewayError> {
-        if let Some(tools) = result.as_array() {
-            return Ok(McpToolsListResult {
-                tools: tools.clone(),
+        match result {
+            Value::Array(tools) => Ok(McpToolsListResult {
+                tools,
                 next_cursor: None,
-            });
-        }
-        let Some(obj) = result.as_object() else {
-            return Err(GatewayError::Backend {
-                message: format!("mcp tools/list invalid result for server {}", self.server_id),
-            });
-        };
-        let tools = obj
-            .get("tools")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .ok_or_else(|| GatewayError::Backend {
-                message: format!("mcp tools/list invalid result for server {}", self.server_id),
-            })?;
-        let next_cursor = obj
-            .get("nextCursor")
-            .and_then(|v| v.as_str())
-            .or_else(|| obj.get("next_cursor").and_then(|v| v.as_str()))
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(|value| value.to_string());
+            }),
+            Value::Object(mut obj) => {
+                let tools = obj
+                    .remove("tools")
+                    .and_then(|value| match value {
+                        Value::Array(tools) => Some(tools),
+                        _ => None,
+                    })
+                    .ok_or_else(|| GatewayError::Backend {
+                        message: format!(
+                            "mcp tools/list invalid result for server {}",
+                            self.server_id
+                        ),
+                    })?;
+                let next_cursor = obj
+                    .remove("nextCursor")
+                    .and_then(|value| match value {
+                        Value::String(value) => Some(value),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        obj.remove("next_cursor").and_then(|value| match value {
+                            Value::String(value) => Some(value),
+                            _ => None,
+                        })
+                    })
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty());
 
-        Ok(McpToolsListResult { tools, next_cursor })
+                Ok(McpToolsListResult { tools, next_cursor })
+            }
+            _ => Err(GatewayError::Backend {
+                message: format!("mcp tools/list invalid result for server {}", self.server_id),
+            }),
+        }
     }
 
     async fn list_tools_page_uncached(

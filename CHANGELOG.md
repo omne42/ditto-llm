@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gateway MCP: reduce `tools/list` parse overhead by consuming owned JSON payloads directly instead of cloning tool arrays from `serde_json::Value`.
 - Deps: update Rust dependency lockfile (`cargo update`).
 - SDK: `stream_object` now skips partial JSON parsing work when neither fan-out stream is enabled, and no longer advances partial/array dedupe cursors for disabled outputs (fixes late-subscription final-object loss and trims handle-only CPU overhead).
 - SDK: `stream_object` now disables fan-out branches after channel send failure, avoiding repeated failed sends/work once a receiver is dropped.
@@ -157,6 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: avoid abort-path panics in proxy stream finalizers by using a runtime-safe fallback when `tokio::spawn` is unavailable during shutdown/drop.
 - Gateway: fix SSE usage-chunk parsing in proxy streaming paths when upstream mixes `\n\n` and `\r\n\r\n` event delimiters, and switch delimiter detection to a single-pass earliest-match scan to reduce per-chunk parsing overhead.
 - SDK: fix handle-only streaming helpers so `StreamTextHandle::final_*` / `StreamObjectHandle::final_*` can complete even when no fan-out stream is enabled.
 - Gateway interop: fix Anthropic tool-use mapping fallback IDs so multiple OpenAI tool calls without IDs now get stable unique IDs (`call_0`, `call_1`, ...) instead of repeating `call_0`.

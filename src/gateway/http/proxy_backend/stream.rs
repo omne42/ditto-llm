@@ -513,6 +513,35 @@
             observed: Option<ObservedUsage>,
             bytes_sent: u64,
         ) {
+            fn spawn_proxy_sse_abort_finalize(job: ProxySseAbortFinalizeJob) {
+                match tokio::runtime::Handle::try_current() {
+                    Ok(handle) => {
+                        handle.spawn(async move {
+                            job.finalizer
+                                .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
+                                .await;
+                        });
+                    }
+                    Err(_) => {
+                        let _ = std::thread::Builder::new()
+                            .name("ditto-proxy-sse-finalizer-fallback".to_string())
+                            .spawn(move || {
+                                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                                    .enable_all()
+                                    .build()
+                                else {
+                                    return;
+                                };
+                                runtime.block_on(async move {
+                                    job.finalizer
+                                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
+                                        .await;
+                                });
+                            });
+                    }
+                }
+            }
+
             let job = ProxySseAbortFinalizeJob {
                 finalizer,
                 observed,
@@ -521,11 +550,7 @@
 
             let pool = proxy_sse_abort_finalizer_pool();
             if pool.senders.is_empty() {
-                tokio::spawn(async move {
-                    job.finalizer
-                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
-                        .await;
-                });
+                spawn_proxy_sse_abort_finalize(job);
                 return;
             }
 
@@ -535,11 +560,7 @@
                     std::sync::mpsc::TrySendError::Full(job) => job,
                     std::sync::mpsc::TrySendError::Disconnected(job) => job,
                 };
-                tokio::spawn(async move {
-                    job.finalizer
-                        .finalize(job.observed, StreamEnd::Aborted, job.bytes_sent)
-                        .await;
-                });
+                spawn_proxy_sse_abort_finalize(job);
             }
         }
 
