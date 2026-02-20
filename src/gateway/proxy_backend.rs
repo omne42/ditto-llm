@@ -116,18 +116,34 @@ impl ProxyBackend {
 
 fn join_base_url(base_url: &str, path: &str) -> String {
     let base = base_url.trim_end_matches('/');
-    let mut suffix = if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("/{path}")
-    };
+    let path_no_leading_slash = path.strip_prefix('/').unwrap_or(path);
 
-    // Common ergonomics: allow base_url to include /v1 and still accept /v1/* paths.
-    if base.ends_with("/v1") && suffix.starts_with("/v1/") {
-        suffix = suffix.trim_start_matches("/v1").to_string();
+    // Common ergonomics: allow base_url to include /v1 and still accept /v1* paths.
+    if base.ends_with("/v1") {
+        if path_no_leading_slash == "v1" {
+            return base.to_string();
+        }
+        if let Some(rest) = path_no_leading_slash.strip_prefix("v1/") {
+            let mut out = String::with_capacity(base.len() + 1 + rest.len());
+            out.push_str(base);
+            out.push('/');
+            out.push_str(rest);
+            return out;
+        }
     }
 
-    format!("{base}{suffix}")
+    if path.starts_with('/') {
+        let mut out = String::with_capacity(base.len() + path.len());
+        out.push_str(base);
+        out.push_str(path);
+        out
+    } else {
+        let mut out = String::with_capacity(base.len() + 1 + path.len());
+        out.push_str(base);
+        out.push('/');
+        out.push_str(path);
+        out
+    }
 }
 
 fn parse_headers(headers: &BTreeMap<String, String>) -> Result<HeaderMap, GatewayError> {
@@ -174,6 +190,14 @@ mod tests {
         assert_eq!(
             join_base_url("http://localhost:8080/v1/", "v1/chat/completions"),
             "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            join_base_url("http://localhost:8080/v1", "/v1"),
+            "http://localhost:8080/v1"
+        );
+        assert_eq!(
+            join_base_url("http://localhost:8080/v1/", "v1"),
+            "http://localhost:8080/v1"
         );
     }
 }
