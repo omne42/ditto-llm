@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use futures_util::stream;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::types::{
@@ -86,7 +86,6 @@ struct StreamObjectState {
 
 pub struct StreamObjectResult {
     handle: StreamObjectHandle,
-    ready: Arc<Notify>,
     partial_enabled: Arc<AtomicBool>,
     element_enabled: Arc<AtomicBool>,
     pub partial_object_stream: stream::BoxStream<'static, Result<Value>>,
@@ -106,7 +105,6 @@ impl StreamObjectResult {
     ) {
         self.partial_enabled.store(true, Ordering::Relaxed);
         self.element_enabled.store(false, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.partial_object_stream)
     }
 
@@ -118,7 +116,6 @@ impl StreamObjectResult {
     ) {
         self.partial_enabled.store(false, Ordering::Relaxed);
         self.element_enabled.store(true, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.element_stream)
     }
 
@@ -131,7 +128,6 @@ impl StreamObjectResult {
     ) {
         self.partial_enabled.store(true, Ordering::Relaxed);
         self.element_enabled.store(true, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.partial_object_stream, self.element_stream)
     }
 
@@ -350,7 +346,6 @@ fn stream_object_from_stream_with_config_and_limits(
     let state_task = state.clone();
     let handle = StreamObjectHandle { state };
 
-    let ready = Arc::new(Notify::new());
     let partial_enabled = Arc::new(AtomicBool::new(false));
     let element_enabled = Arc::new(AtomicBool::new(false));
 
@@ -366,6 +361,8 @@ fn stream_object_from_stream_with_config_and_limits(
         while let Some(next) = inner.next().await {
             match next {
                 Ok(chunk) => {
+                    let partial_enabled_now = partial_enabled_task.load(Ordering::Relaxed);
+                    let element_enabled_now = element_enabled_task.load(Ordering::Relaxed);
                     let (parsed, new_elements) = {
                         let mut state = match state_task.lock() {
                             Ok(guard) => guard,
@@ -481,23 +478,27 @@ fn stream_object_from_stream_with_config_and_limits(
 
                         let mut parsed = None;
                         let mut new_elements = Vec::<Value>::new();
-                        if buffer_changed {
-                            parsed = parse_partial_object_value(&state, &config);
-                            if let Some(value) = parsed.as_ref() {
-                                if state.last_emitted.as_ref() == Some(value) {
-                                    parsed = None;
-                                } else {
-                                    state.last_emitted = Some(value.clone());
+                        if buffer_changed && (partial_enabled_now || element_enabled_now) {
+                            if let Some(value) = parse_partial_object_value(&state, &config) {
+                                if partial_enabled_now {
+                                    if state.last_emitted.as_ref() == Some(&value) {
+                                        parsed = None;
+                                    } else {
+                                        state.last_emitted = Some(value.clone());
+                                        parsed = Some(value.clone());
+                                    }
                                 }
-                            }
 
-                            if state.output == ObjectOutput::Array {
-                                if let Some(arr) = parsed.as_ref().and_then(|v| v.as_array()) {
-                                    let complete_len = arr.len().saturating_sub(1);
-                                    while state.last_emitted_element < complete_len {
-                                        new_elements.push(arr[state.last_emitted_element].clone());
-                                        state.last_emitted_element =
-                                            state.last_emitted_element.saturating_add(1);
+                                if element_enabled_now && state.output == ObjectOutput::Array {
+                                    if let Some(arr) = value.as_array() {
+                                        let complete_len = arr.len().saturating_sub(1);
+                                        while state.last_emitted_element < complete_len {
+                                            new_elements.push(
+                                                arr[state.last_emitted_element].clone(),
+                                            );
+                                            state.last_emitted_element =
+                                                state.last_emitted_element.saturating_add(1);
+                                        }
                                     }
                                 }
                             }
@@ -507,14 +508,19 @@ fn stream_object_from_stream_with_config_and_limits(
                         (parsed, new_elements)
                     };
 
-                    if let Some(value) = parsed {
-                        if partial_enabled_task.load(Ordering::Relaxed) {
-                            let _ = partial_tx.send(Ok(value)).await;
+                    if partial_enabled_now {
+                        if let Some(value) = parsed {
+                            if partial_tx.send(Ok(value)).await.is_err() {
+                                partial_enabled_task.store(false, Ordering::Relaxed);
+                            }
                         }
                     }
-                    if element_enabled_task.load(Ordering::Relaxed) {
+                    if element_enabled_now {
                         for element in new_elements {
-                            let _ = element_tx.send(Ok(element)).await;
+                            if element_tx.send(Ok(element)).await.is_err() {
+                                element_enabled_task.store(false, Ordering::Relaxed);
+                                break;
+                            }
                         }
                     }
                 }
@@ -524,13 +530,18 @@ fn stream_object_from_stream_with_config_and_limits(
                         state.done = true;
                         state.final_error = Some(format!("stream failed: {err_string}"));
                     }
-                    if partial_enabled_task.load(Ordering::Relaxed) {
-                        let _ = partial_tx.send(Err(err)).await;
+                    if partial_enabled_task.load(Ordering::Relaxed)
+                        && partial_tx.send(Err(err)).await.is_err()
+                    {
+                        partial_enabled_task.store(false, Ordering::Relaxed);
                     }
-                    if element_enabled_task.load(Ordering::Relaxed) {
-                        let _ = element_tx
+                    if element_enabled_task.load(Ordering::Relaxed)
+                        && element_tx
                             .send(Err(DittoError::InvalidResponse(err_string)))
-                            .await;
+                            .await
+                            .is_err()
+                    {
+                        element_enabled_task.store(false, Ordering::Relaxed);
                     }
                     return;
                 }
@@ -564,6 +575,8 @@ fn stream_object_from_stream_with_config_and_limits(
 
         match parse_final_object(&text, &tool, &config) {
             Ok((value, extra_warnings)) => {
+                let partial_enabled_now = partial_enabled_task.load(Ordering::Relaxed);
+                let element_enabled_now = element_enabled_task.load(Ordering::Relaxed);
                 let mut should_emit_final = false;
                 let mut remaining_elements = Vec::<Value>::new();
                 {
@@ -571,12 +584,12 @@ fn stream_object_from_stream_with_config_and_limits(
                         state.warnings.extend(extra_warnings);
                         state.final_object = Some(value.clone());
 
-                        if state.last_emitted.as_ref() != Some(&value) {
+                        if partial_enabled_now && state.last_emitted.as_ref() != Some(&value) {
                             state.last_emitted = Some(value.clone());
                             should_emit_final = true;
                         }
 
-                        if output == ObjectOutput::Array {
+                        if element_enabled_now && output == ObjectOutput::Array {
                             if let Some(arr) = value.as_array() {
                                 while state.last_emitted_element < arr.len() {
                                     remaining_elements
@@ -589,12 +602,16 @@ fn stream_object_from_stream_with_config_and_limits(
                     }
                 }
 
-                if should_emit_final && partial_enabled_task.load(Ordering::Relaxed) {
-                    let _ = partial_tx.send(Ok(value)).await;
+                if should_emit_final && partial_enabled_now && partial_tx.send(Ok(value)).await.is_err()
+                {
+                    partial_enabled_task.store(false, Ordering::Relaxed);
                 }
-                if element_enabled_task.load(Ordering::Relaxed) {
+                if element_enabled_now {
                     for element in remaining_elements {
-                        let _ = element_tx.send(Ok(element)).await;
+                        if element_tx.send(Ok(element)).await.is_err() {
+                            element_enabled_task.store(false, Ordering::Relaxed);
+                            break;
+                        }
                     }
                 }
             }
@@ -603,13 +620,18 @@ fn stream_object_from_stream_with_config_and_limits(
                 if let Ok(mut state) = state_task.lock() {
                     state.final_error = Some(err_string.clone());
                 }
-                if partial_enabled_task.load(Ordering::Relaxed) {
-                    let _ = partial_tx.send(Err(err)).await;
+                if partial_enabled_task.load(Ordering::Relaxed)
+                    && partial_tx.send(Err(err)).await.is_err()
+                {
+                    partial_enabled_task.store(false, Ordering::Relaxed);
                 }
-                if element_enabled_task.load(Ordering::Relaxed) {
-                    let _ = element_tx
+                if element_enabled_task.load(Ordering::Relaxed)
+                    && element_tx
                         .send(Err(DittoError::InvalidResponse(err_string)))
-                        .await;
+                        .await
+                        .is_err()
+                {
+                    element_enabled_task.store(false, Ordering::Relaxed);
                 }
             }
         }
@@ -618,39 +640,29 @@ fn stream_object_from_stream_with_config_and_limits(
     let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let partial_object_stream = stream::unfold(
-        (
-            partial_rx,
-            aborter.clone(),
-            partial_enabled.clone(),
-            ready.clone(),
-        ),
-        |(mut rx, aborter, enabled, ready)| async move {
-            if !enabled.swap(true, Ordering::AcqRel) {
-                ready.notify_one();
-            }
+        (partial_rx, aborter.clone(), partial_enabled.clone()),
+        |(mut rx, aborter, enabled)| async move {
+            enabled.store(true, Ordering::Release);
             rx.recv()
                 .await
-                .map(|item| (item, (rx, aborter, enabled, ready)))
+                .map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
 
     let element_stream = stream::unfold(
-        (element_rx, aborter, element_enabled.clone(), ready.clone()),
-        |(mut rx, aborter, enabled, ready)| async move {
-            if !enabled.swap(true, Ordering::AcqRel) {
-                ready.notify_one();
-            }
+        (element_rx, aborter, element_enabled.clone()),
+        |(mut rx, aborter, enabled)| async move {
+            enabled.store(true, Ordering::Release);
             rx.recv()
                 .await
-                .map(|item| (item, (rx, aborter, enabled, ready)))
+                .map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
 
     StreamObjectResult {
         handle,
-        ready,
         partial_enabled,
         element_enabled,
         partial_object_stream,

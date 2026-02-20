@@ -195,19 +195,19 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                     match chunk {
                         StreamChunk::TextDelta { text } => {
                             if full_enabled {
-                                collector.observe(&StreamChunk::TextDelta { text: text.clone() });
-
-                                if text_enabled
-                                    && !text.is_empty()
-                                    && text_tx.send(Ok(text.clone())).await.is_err()
-                                {
-                                    text_enabled_task.store(false, Ordering::Relaxed);
+                                let text_for_text_stream = if text_enabled && !text.is_empty() {
+                                    Some(text.clone())
+                                } else {
+                                    None
+                                };
+                                let full_chunk = StreamChunk::TextDelta { text };
+                                collector.observe(&full_chunk);
+                                if let Some(text_delta) = text_for_text_stream {
+                                    if text_tx.send(Ok(text_delta)).await.is_err() {
+                                        text_enabled_task.store(false, Ordering::Relaxed);
+                                    }
                                 }
-                                if full_tx
-                                    .send(Ok(StreamChunk::TextDelta { text }))
-                                    .await
-                                    .is_err()
-                                {
+                                if full_tx.send(Ok(full_chunk)).await.is_err() {
                                     full_enabled_task.store(false, Ordering::Relaxed);
                                 }
                             } else {

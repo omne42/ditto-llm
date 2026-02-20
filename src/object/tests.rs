@@ -7,6 +7,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::task::{Context, Poll};
+    use tokio::time::{Duration, sleep};
 
     struct DropFlagStream {
         dropped: Arc<AtomicBool>,
@@ -241,6 +242,38 @@ mod tests {
         assert_eq!(summary.object, json!({"a": 1}));
         assert_eq!(summary.finish_reason, FinishReason::Stop);
         drop(result);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn late_partial_subscription_receives_final_object() -> Result<()> {
+        let inner: StreamResult = stream::unfold(0u8, |step| async move {
+            match step {
+                0 => Some((
+                    Ok(StreamChunk::TextDelta {
+                        text: "{\"a\":1}".to_string(),
+                    }),
+                    1,
+                )),
+                1 => {
+                    sleep(Duration::from_millis(20)).await;
+                    Some((Ok(StreamChunk::FinishReason(FinishReason::Stop)), 2))
+                }
+                _ => None,
+            }
+        })
+        .boxed();
+
+        let result = stream_object_from_stream(inner);
+        sleep(Duration::from_millis(5)).await;
+
+        let (_handle, mut partial_object_stream) = result.into_partial_stream();
+        let mut partials = Vec::new();
+        while let Some(next) = partial_object_stream.next().await {
+            partials.push(next?);
+        }
+
+        assert_eq!(partials.last(), Some(&json!({"a": 1})));
         Ok(())
     }
 

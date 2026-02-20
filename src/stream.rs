@@ -438,7 +438,7 @@ impl StreamCollector {
     pub(crate) fn finish(mut self) -> GenerateResponse {
         self.usage.merge_total();
 
-        let mut content = Vec::<ContentPart>::new();
+        let mut content = Vec::<ContentPart>::with_capacity(self.parts.len());
 
         for part in self.parts {
             match part {

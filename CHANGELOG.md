@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Deps: update Rust dependency lockfile (`cargo update`).
+- SDK: `stream_object` now skips partial JSON parsing work when neither fan-out stream is enabled, and no longer advances partial/array dedupe cursors for disabled outputs (fixes late-subscription final-object loss and trims handle-only CPU overhead).
+- SDK: `stream_object` now disables fan-out branches after channel send failure, avoiding repeated failed sends/work once a receiver is dropped.
+- SDK: `stream_text` now avoids an extra `TextDelta` clone when `full_stream` fan-out is enabled.
+- SDK: preallocate `StreamCollector` response content with the known part count to reduce reallocations on large streamed responses.
 - SDK: `CacheLayer` now hashes requests by streaming JSON directly into the hasher (removes per-request temporary `Vec<u8>` allocations on cache-key generation).
 - Utils: `send_checked_bytes` now rejects successful responses with oversized `Content-Length` before body reads, avoiding unnecessary network/body buffering work on guaranteed-over-limit payloads.
 - OpenAI: raw Responses SSE event processor now exits immediately when the downstream receiver is dropped, avoiding wasted stream parsing/work after cancellation.
