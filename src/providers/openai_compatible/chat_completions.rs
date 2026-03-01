@@ -77,6 +77,10 @@ struct ChatDelta {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<ChatToolCallDelta>>,
     #[serde(default)]
     function_call: Option<ChatFunctionCallDelta>,
@@ -125,6 +129,7 @@ struct StreamToolCallState {
 struct StreamState {
     response_id: Option<String>,
     tool_calls: Vec<StreamToolCallState>,
+    finish_reason: Option<String>,
 }
 
 #[cfg(feature = "streaming")]
@@ -213,6 +218,19 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     let Some(choice) = chunk.choices.first() else {
         return Ok((out, done));
     };
+
+    if let Some(reasoning) = choice
+        .delta
+        .reasoning_content
+        .as_deref()
+        .or_else(|| choice.delta.reasoning.as_deref())
+    {
+        if !reasoning.is_empty() {
+            out.push(StreamChunk::ReasoningDelta {
+                text: reasoning.to_string(),
+            });
+        }
+    }
 
     if let Some(content) = choice.delta.content.as_deref() {
         if !content.is_empty() {
@@ -329,6 +347,9 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     }
 
     if let Some(reason) = choice.finish_reason.as_deref() {
+        if state.finish_reason.is_none() && !reason.trim().is_empty() {
+            state.finish_reason = Some(reason.to_string());
+        }
         out.extend(finalize_stream_state(state));
         done = true;
         out.push(StreamChunk::FinishReason(
@@ -502,12 +523,9 @@ impl LanguageModel for OpenAICompatible {
                         let next = data_stream.next().await;
                         match next {
                             Some(Ok(data)) => match parse_stream_data(&mut state, &data) {
-                                Ok((chunks, is_done)) => {
+                                Ok((chunks, _is_done)) => {
                                     for chunk in chunks {
                                         buffer.push_back(Ok(chunk));
-                                    }
-                                    if is_done {
-                                        done = true;
                                     }
                                 }
                                 Err(err) => {
@@ -526,13 +544,15 @@ impl LanguageModel for OpenAICompatible {
                                 }
                                 let has_tool_calls =
                                     state.tool_calls.iter().any(|slot| slot.started);
-                                buffer.push_back(Ok(StreamChunk::FinishReason(
-                                    if has_tool_calls {
-                                        FinishReason::ToolCalls
-                                    } else {
-                                        FinishReason::Stop
-                                    },
-                                )));
+                                if state.finish_reason.is_none() {
+                                    buffer.push_back(Ok(StreamChunk::FinishReason(
+                                        if has_tool_calls {
+                                            FinishReason::ToolCalls
+                                        } else {
+                                            FinishReason::Stop
+                                        },
+                                    )));
+                                }
                             }
                         }
                     }
@@ -541,5 +561,51 @@ impl LanguageModel for OpenAICompatible {
 
             Ok(Box::pin(stream))
         }
+    }
+}
+
+#[cfg(all(test, feature = "streaming"))]
+mod chat_completions_tests {
+    use super::*;
+
+    #[test]
+    fn streaming_finish_reason_can_arrive_before_text() {
+        let mut state = StreamState::default();
+
+        let data1 = r#"{
+            "id": "resp_1",
+            "choices": [{"delta": {}, "finish_reason": "stop"}]
+        }"#;
+        let (chunks1, done1) = parse_stream_data(&mut state, data1).unwrap();
+        assert!(done1);
+        assert!(chunks1
+            .iter()
+            .any(|c| matches!(c, StreamChunk::FinishReason(FinishReason::Stop))));
+        assert_eq!(state.finish_reason.as_deref(), Some("stop"));
+
+        let data2 = r#"{
+            "id": "resp_1",
+            "choices": [{"delta": {"content": "OK"}}]
+        }"#;
+        let (chunks2, done2) = parse_stream_data(&mut state, data2).unwrap();
+        assert!(!done2);
+        assert!(chunks2
+            .iter()
+            .any(|c| matches!(c, StreamChunk::TextDelta { text } if text == "OK")));
+    }
+
+    #[test]
+    fn streaming_reasoning_content_emits_reasoning_delta() {
+        let mut state = StreamState::default();
+
+        let data = r#"{
+            "id": "resp_1",
+            "choices": [{"delta": {"reasoning_content": "thinking..."}}]
+        }"#;
+        let (chunks, done) = parse_stream_data(&mut state, data).unwrap();
+        assert!(!done);
+        assert!(chunks
+            .iter()
+            .any(|c| matches!(c, StreamChunk::ReasoningDelta { text } if text == "thinking...")));
     }
 }
