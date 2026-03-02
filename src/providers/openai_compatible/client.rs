@@ -627,4 +627,35 @@ mod client_tests {
 
         Ok(())
     }
+
+    #[test]
+    fn build_body_includes_prompt_cache_key_for_non_streaming() -> Result<()> {
+        let request = GenerateRequest::from(vec![Message::user("hi")]);
+        let provider_options = crate::types::ProviderOptions {
+            prompt_cache_key: Some("thread-123".to_string()),
+            ..Default::default()
+        };
+        let selected = serde_json::to_value(&provider_options)?;
+
+        let (body, _warnings) = OpenAICompatible::build_chat_completions_body(
+            &request,
+            "gpt-4.1",
+            &provider_options,
+            Some(&selected),
+            false,
+            "test.provider_options",
+        )?;
+
+        assert_eq!(
+            body.get("prompt_cache_key").and_then(Value::as_str),
+            Some("thread-123")
+        );
+        assert_eq!(body.get("stream").and_then(Value::as_bool), Some(false));
+        assert!(
+            body.get("stream_options").is_none(),
+            "non-streaming request should not include stream_options"
+        );
+
+        Ok(())
+    }
 }
