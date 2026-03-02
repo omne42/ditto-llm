@@ -758,6 +758,7 @@ mod tests {
                 },
             }),
             parallel_tool_calls: Some(false),
+            prompt_cache_key: None,
         };
 
         apply_provider_options(&mut body, &options)?;

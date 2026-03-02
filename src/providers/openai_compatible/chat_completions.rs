@@ -22,6 +22,10 @@ struct ChatMessage {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<ChatToolCall>>,
     #[serde(default)]
     function_call: Option<ChatFunctionCall>,
@@ -223,7 +227,7 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
         .delta
         .reasoning_content
         .as_deref()
-        .or_else(|| choice.delta.reasoning.as_deref())
+        .or(choice.delta.reasoning.as_deref())
     {
         if !reasoning.is_empty() {
             out.push(StreamChunk::ReasoningDelta {
@@ -398,6 +402,17 @@ impl LanguageModel for OpenAICompatible {
         })?;
 
         let mut content = Vec::<ContentPart>::new();
+        if let Some(reasoning) = choice
+            .message
+            .reasoning_content
+            .as_deref()
+            .or(choice.message.reasoning.as_deref())
+            .filter(|t| !t.is_empty())
+        {
+            content.push(ContentPart::Reasoning {
+                text: reasoning.to_string(),
+            });
+        }
         if let Some(text) = choice.message.content.as_deref().filter(|t| !t.is_empty()) {
             content.push(ContentPart::Text {
                 text: text.to_string(),
@@ -607,5 +622,52 @@ mod chat_completions_tests {
         assert!(chunks
             .iter()
             .any(|c| matches!(c, StreamChunk::ReasoningDelta { text } if text == "thinking...")));
+    }
+}
+
+#[cfg(test)]
+mod chat_completions_generate_tests {
+    use super::*;
+
+    #[test]
+    fn message_reasoning_content_parses_into_reasoning_part() {
+        let raw = r#"{
+            "id": "resp_1",
+            "choices": [{
+                "message": {
+                    "reasoning_content": "thinking...",
+                    "content": "OK"
+                }
+            }]
+        }"#;
+        let parsed = serde_json::from_str::<ChatCompletionsResponse>(raw).unwrap();
+        let choice = parsed.choices.first().unwrap();
+
+        let mut parts = Vec::<ContentPart>::new();
+        if let Some(reasoning) = choice
+            .message
+            .reasoning_content
+            .as_deref()
+            .or(choice.message.reasoning.as_deref())
+            .filter(|t| !t.is_empty())
+        {
+            parts.push(ContentPart::Reasoning {
+                text: reasoning.to_string(),
+            });
+        }
+        if let Some(text) = choice.message.content.as_deref().filter(|t| !t.is_empty()) {
+            parts.push(ContentPart::Text {
+                text: text.to_string(),
+            });
+        }
+
+        assert!(matches!(
+            parts.first(),
+            Some(ContentPart::Reasoning { text }) if text == "thinking..."
+        ));
+        assert!(matches!(
+            parts.get(1),
+            Some(ContentPart::Text { text }) if text == "OK"
+        ));
     }
 }

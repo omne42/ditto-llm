@@ -377,6 +377,12 @@ impl OpenAICompatible {
         body.insert("model".to_string(), Value::String(model.to_string()));
         body.insert("messages".to_string(), Value::Array(messages));
         body.insert("stream".to_string(), Value::Bool(stream));
+        if stream {
+            body.insert(
+                "stream_options".to_string(),
+                serde_json::json!({ "include_usage": true }),
+            );
+        }
 
         if let Some(temperature) = request.temperature {
             if let Some(value) = crate::utils::params::clamped_number_from_f32(
@@ -544,9 +550,13 @@ impl OpenAICompatible {
         if let Some(obj) = value.as_object() {
             usage.input_tokens = obj.get("prompt_tokens").and_then(Value::as_u64);
             usage.cache_input_tokens = obj
-                .get("prompt_tokens_details")
-                .and_then(|details| details.get("cached_tokens"))
-                .and_then(Value::as_u64);
+                .get("cached_tokens")
+                .and_then(Value::as_u64)
+                .or_else(|| {
+                    obj.get("prompt_tokens_details")
+                        .and_then(|details| details.get("cached_tokens"))
+                        .and_then(Value::as_u64)
+                });
             usage.cache_creation_input_tokens = obj
                 .get("cache_creation_input_tokens")
                 .and_then(Value::as_u64);
@@ -555,5 +565,66 @@ impl OpenAICompatible {
         }
         usage.merge_total();
         usage
+    }
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_usage_reads_cached_tokens_top_level() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "cached_tokens": 7,
+        }));
+        assert_eq!(usage.cache_input_tokens, Some(7));
+    }
+
+    #[test]
+    fn parse_usage_reads_cached_tokens_nested_prompt_tokens_details() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "prompt_tokens_details": { "cached_tokens": 5 },
+        }));
+        assert_eq!(usage.cache_input_tokens, Some(5));
+    }
+
+    #[test]
+    fn build_body_includes_prompt_cache_key_and_stream_usage() -> Result<()> {
+        let request = GenerateRequest::from(vec![Message::user("hi")]);
+        let provider_options = crate::types::ProviderOptions {
+            prompt_cache_key: Some("thread-123".to_string()),
+            ..Default::default()
+        };
+        let selected = serde_json::to_value(&provider_options)?;
+
+        let (body, _warnings) = OpenAICompatible::build_chat_completions_body(
+            &request,
+            "gpt-4.1",
+            &provider_options,
+            Some(&selected),
+            true,
+            "test.provider_options",
+        )?;
+
+        assert_eq!(
+            body.get("prompt_cache_key").and_then(Value::as_str),
+            Some("thread-123")
+        );
+        assert_eq!(
+            body.get("stream_options")
+                .and_then(Value::as_object)
+                .and_then(|opts| opts.get("include_usage"))
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+
+        Ok(())
     }
 }

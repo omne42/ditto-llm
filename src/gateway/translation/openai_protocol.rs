@@ -6,10 +6,12 @@ pub fn generate_response_to_chat_completions(
     created: u64,
 ) -> Value {
     let mut content = String::new();
+    let mut reasoning_content = String::new();
     let mut tool_calls = Vec::<Value>::new();
     for (idx, part) in response.content.iter().enumerate() {
         match part {
             ContentPart::Text { text } => content.push_str(text),
+            ContentPart::Reasoning { text } => reasoning_content.push_str(text),
             ContentPart::ToolCall {
                 id: call_id,
                 name,
@@ -38,6 +40,12 @@ pub fn generate_response_to_chat_completions(
         message.insert("content".to_string(), Value::String(content));
     } else {
         message.insert("content".to_string(), Value::Null);
+    }
+    if !reasoning_content.is_empty() {
+        message.insert(
+            "reasoning_content".to_string(),
+            Value::String(reasoning_content),
+        );
     }
     if !tool_calls.is_empty() {
         message.insert("tool_calls".to_string(), Value::Array(tool_calls));
@@ -311,7 +319,18 @@ pub fn stream_to_chat_completions_sse(
                                         )));
                                     }
                                 }
-                                crate::types::StreamChunk::ReasoningDelta { .. } => {}
+                                crate::types::StreamChunk::ReasoningDelta { text } => {
+                                    if !text.is_empty() {
+                                        buffer.push_back(Ok(chat_chunk_bytes(
+                                            &state.response_id,
+                                            &model,
+                                            created,
+                                            serde_json::json!({"reasoning_content": text}),
+                                            None,
+                                            None,
+                                        )));
+                                    }
+                                }
                                 crate::types::StreamChunk::FinishReason(reason) => {
                                     state.finish_reason = Some(reason);
                                 }
@@ -554,7 +573,14 @@ pub fn stream_to_responses_sse(
                                 }
                                 slot.pending_arguments.push_str(&arguments_delta);
                             }
-                            crate::types::StreamChunk::ReasoningDelta { .. } => {}
+                            crate::types::StreamChunk::ReasoningDelta { text } => {
+                                if !text.is_empty() {
+                                    buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                        "type": "response.reasoning_text.delta",
+                                        "delta": text,
+                                    }))));
+                                }
+                            }
                             crate::types::StreamChunk::FinishReason(reason) => {
                                 state.finish_reason = Some(reason);
                             }
@@ -640,6 +666,68 @@ pub fn stream_to_responses_sse(
         },
     )
     .boxed()
+}
+
+#[cfg(test)]
+mod openai_protocol_reasoning_tests {
+    use super::*;
+    use futures_util::StreamExt;
+
+    #[tokio::test]
+    async fn chat_completions_sse_emits_reasoning_content_delta(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let inner: StreamResult = Box::pin(futures_util::stream::iter(vec![
+            Ok(crate::types::StreamChunk::ResponseId {
+                id: "resp_1".to_string(),
+            }),
+            Ok(crate::types::StreamChunk::ReasoningDelta {
+                text: "thinking...".to_string(),
+            }),
+            Ok(crate::types::StreamChunk::TextDelta {
+                text: "OK".to_string(),
+            }),
+            Ok(crate::types::StreamChunk::FinishReason(FinishReason::Stop)),
+        ]));
+
+        let mut out = Vec::<u8>::new();
+        let mut s = stream_to_chat_completions_sse(
+            inner,
+            "fallback".to_string(),
+            "stub".to_string(),
+            0,
+            false,
+        );
+        while let Some(item) = s.next().await {
+            out.extend_from_slice(&item?);
+        }
+        let text = String::from_utf8(out)?;
+        assert!(text.contains("\"reasoning_content\":\"thinking...\""));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn responses_sse_emits_reasoning_text_delta_event(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let inner: StreamResult = Box::pin(futures_util::stream::iter(vec![
+            Ok(crate::types::StreamChunk::ResponseId {
+                id: "resp_1".to_string(),
+            }),
+            Ok(crate::types::StreamChunk::ReasoningDelta {
+                text: "thinking...".to_string(),
+            }),
+            Ok(crate::types::StreamChunk::FinishReason(FinishReason::Stop)),
+        ]));
+
+        let mut out = Vec::<u8>::new();
+        let mut s = stream_to_responses_sse(inner, "fallback".to_string());
+        while let Some(item) = s.next().await {
+            out.extend_from_slice(&item?);
+        }
+        let text = String::from_utf8(out)?;
+        assert!(text.contains("\"type\":\"response.reasoning_text.delta\""));
+        assert!(text.contains("\"delta\":\"thinking...\""));
+        Ok(())
+    }
 }
 
 pub fn provider_response_id(response: &GenerateResponse, fallback: &str) -> String {

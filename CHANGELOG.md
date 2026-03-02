@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gateway: add LiteLLM-compatible key management endpoints (`/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`) gated by Ditto admin auth.
 - Gateway: accept LiteLLM-style OpenAI-compatible endpoints without the `/v1` prefix (e.g. `/chat/completions`, `/embeddings`, `/moderations`, `/files/*`, `/batches/*`, `/models/*`, `/responses/*`).
 - Gateway: accept LiteLLM virtual key header `x-litellm-api-key` (optionally `Bearer ...`) across gateway endpoints and strip it before proxying upstream when virtual keys are enabled.
+- Gateway: preserve model reasoning output in OpenAI-compatible translations (`reasoning_content` for Chat Completions SSE + non-stream responses; `response.reasoning_text.delta` for Responses SSE).
 - Gateway: add Anthropic Messages endpoint aliases without the `/v1` prefix (`POST /messages` and `POST /messages/count_tokens`).
 - Gateway: add LiteLLM-like A2A agent gateway proxy endpoints (`/a2a/*` and `/v1/a2a/*`) backed by a new `a2a_agents` registry in `gateway.json`/`gateway.yaml`.
 - Gateway: add LiteLLM-like MCP gateway endpoints (`/mcp`, `/mcp/tools/list`, `/mcp/tools/call`) backed by a new `mcp_servers` registry in `gateway.json`/`gateway.yaml`.

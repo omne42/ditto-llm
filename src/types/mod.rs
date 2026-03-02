@@ -262,6 +262,8 @@ pub struct ProviderOptions {
     pub response_format: Option<ResponseFormat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parallel_tool_calls: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_key: Option<String>,
 }
 
 impl ProviderOptions {
@@ -902,6 +904,7 @@ mod tests {
                 },
             }),
             parallel_tool_calls: Some(false),
+            prompt_cache_key: Some("cache_key".to_string()),
         };
 
         let raw = serde_json::to_value(&options)?;
