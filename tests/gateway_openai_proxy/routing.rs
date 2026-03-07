@@ -30,7 +30,10 @@ async fn openai_compat_proxy_routes_by_model_prefix() {
         ],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "secondary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "secondary".to_string(),
+                weight: 1.0,
+            }],
             rules: vec![RouteRule {
                 model_prefix: "gpt-".to_string(),
                 exact: false,
@@ -130,6 +133,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
             retry: ditto_llm::gateway::ProxyRetryConfig {
                 enabled: true,
                 retry_status_codes: vec![500],
+                fallback_status_codes: Vec::new(),
                 max_attempts: Some(2),
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
@@ -225,6 +229,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
             retry: ditto_llm::gateway::ProxyRetryConfig {
                 enabled: true,
                 retry_status_codes: vec![500],
+                fallback_status_codes: Vec::new(),
                 max_attempts: Some(2),
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig {
@@ -265,6 +270,198 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
 
     primary_mock.assert_calls(1);
     secondary_mock.assert_calls(2);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_fallbacks_on_configured_status_when_retry_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let primary = MockServer::start();
+    let secondary = MockServer::start();
+
+    let primary_mock = primary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-primary")
+            .header("x-request-id", "req-fallback-status");
+        then.status(503)
+            .header("content-type", "application/json")
+            .body(r#"{"error":{"message":"temporarily unavailable","type":"server_error"}}"#);
+    });
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-fallback-status");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok-secondary"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary.base_url(), "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                ditto_llm::gateway::RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                ditto_llm::gateway::RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                enabled: false,
+                retry_status_codes: vec![500],
+                fallback_status_codes: vec![503],
+                max_attempts: Some(2),
+            },
+            circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-fallback-status")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-backend")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "secondary"
+    );
+
+    primary_mock.assert_calls(1);
+    secondary_mock.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_does_not_fallback_on_non_configured_status_when_retry_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let primary = MockServer::start();
+    let secondary = MockServer::start();
+
+    let primary_mock = primary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-primary")
+            .header("x-request-id", "req-no-fallback-status");
+        then.status(503)
+            .header("content-type", "application/json")
+            .body(r#"{"error":{"message":"temporarily unavailable","type":"server_error"}}"#);
+    });
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-no-fallback-status");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"should-not-be-used"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary.base_url(), "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                ditto_llm::gateway::RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                ditto_llm::gateway::RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                enabled: false,
+                retry_status_codes: vec![500],
+                fallback_status_codes: vec![429],
+                max_attempts: Some(2),
+            },
+            circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-no-fallback-status")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-backend")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "primary"
+    );
+
+    primary_mock.assert_calls(1);
+    secondary_mock.assert_calls(0);
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
@@ -397,7 +594,10 @@ async fn openai_compat_proxy_rejects_missing_virtual_key() {
         )],
         virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -450,7 +650,10 @@ async fn openai_compat_proxy_rejects_denied_model() {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -519,7 +722,10 @@ async fn openai_compat_proxy_rejects_banned_regex() {
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -591,7 +797,10 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -661,7 +870,10 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_images_generation
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),
@@ -727,7 +939,10 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_speech_requ
         )],
         virtual_keys: vec![key],
         router: RouterConfig {
-            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
             rules: Vec::new(),
         },
         a2a_agents: Vec::new(),

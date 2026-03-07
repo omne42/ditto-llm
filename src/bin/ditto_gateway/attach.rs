@@ -107,6 +107,7 @@ pub(crate) fn attach_proxy_cache(
 pub(crate) struct ProxyRoutingCliOptions {
     pub(crate) retry_enabled: bool,
     pub(crate) retry_status_codes: Option<Vec<u16>>,
+    pub(crate) fallback_status_codes: Option<Vec<u16>>,
     pub(crate) retry_max_attempts: Option<usize>,
     pub(crate) circuit_breaker_enabled: bool,
     pub(crate) cb_failure_threshold: Option<u32>,
@@ -122,6 +123,7 @@ impl ProxyRoutingCliOptions {
     fn any_set(&self) -> bool {
         self.retry_enabled
             || self.retry_status_codes.is_some()
+            || self.fallback_status_codes.is_some()
             || self.retry_max_attempts.is_some()
             || self.circuit_breaker_enabled
             || self.cb_failure_threshold.is_some()
@@ -148,6 +150,9 @@ pub(crate) fn attach_proxy_routing(
     }
     if let Some(codes) = opts.retry_status_codes {
         config.retry.retry_status_codes = codes;
+    }
+    if let Some(codes) = opts.fallback_status_codes {
+        config.retry.fallback_status_codes = codes;
     }
     config.retry.max_attempts = opts.retry_max_attempts.filter(|v| *v > 0);
 

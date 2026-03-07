@@ -105,6 +105,14 @@ fn parse_openai_output(output: &[Value], warnings: &mut Vec<Warning>) -> Vec<Con
                 let Some(name) = item.get("name").and_then(Value::as_str) else {
                     continue;
                 };
+                let thought_signature = item
+                    .get("thought_signature")
+                    .or_else(|| item.get("thoughtSignature"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                let call_id =
+                    encode_tool_call_id_with_thought_signature(call_id, thought_signature);
                 let arguments_raw = item.get("arguments").and_then(Value::as_str).unwrap_or("");
                 let context = format!("id={call_id}");
                 let arguments = crate::types::parse_tool_call_arguments_json_or_string(
@@ -137,12 +145,17 @@ impl LanguageModel for OpenAI {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
-        let provider_options = selected_provider_options
+        let raw_selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = raw_selected_provider_options
             .as_ref()
             .map(crate::types::ProviderOptions::from_value)
             .transpose()?
             .unwrap_or_default();
+        let (selected_provider_options, mut schema_warnings) =
+            sanitize_openai_responses_provider_options(
+                raw_selected_provider_options,
+                "generate.provider_options",
+            );
         let (body, mut warnings) = Self::build_responses_body(
             &request,
             model,
@@ -150,7 +163,9 @@ impl LanguageModel for OpenAI {
             selected_provider_options.as_ref(),
             false,
             "generate.provider_options",
+            self.should_send_function_call_thought_signature(model),
         )?;
+        warnings.append(&mut schema_warnings);
 
         let url = self.responses_url();
         let req = self.client.http.post(url);
@@ -198,20 +213,28 @@ impl LanguageModel for OpenAI {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
-            let provider_options = selected_provider_options
+            let raw_selected_provider_options =
+                request.provider_options_value_for(self.provider())?;
+            let provider_options = raw_selected_provider_options
                 .as_ref()
                 .map(crate::types::ProviderOptions::from_value)
                 .transpose()?
                 .unwrap_or_default();
-            let (body, warnings) = Self::build_responses_body(
+            let (selected_provider_options, mut schema_warnings) =
+                sanitize_openai_responses_provider_options(
+                    raw_selected_provider_options,
+                    "stream.provider_options",
+                );
+            let (body, mut warnings) = Self::build_responses_body(
                 &request,
                 model,
                 &provider_options,
                 selected_provider_options.as_ref(),
                 true,
                 "stream.provider_options",
+                self.should_send_function_call_thought_signature(model),
             )?;
+            warnings.append(&mut schema_warnings);
 
             let url = self.responses_url();
             let req = self.client.http.post(url);
@@ -301,8 +324,19 @@ impl LanguageModel for OpenAI {
                                                 .and_then(Value::as_str)
                                                 .unwrap_or("")
                                                 .to_string();
+                                            let thought_signature = item
+                                                .get("thought_signature")
+                                                .or_else(|| item.get("thoughtSignature"))
+                                                .and_then(Value::as_str)
+                                                .map(str::trim)
+                                                .filter(|value| !value.is_empty());
+                                            let call_id =
+                                                encode_tool_call_id_with_thought_signature(
+                                                    call_id,
+                                                    thought_signature,
+                                                );
                                             buffer.push_back(Ok(StreamChunk::ToolCallStart {
-                                                id: call_id.to_string(),
+                                                id: call_id.clone(),
                                                 name: name.to_string(),
                                             }));
                                             buffer.push_back(Ok(StreamChunk::ToolCallDelta {

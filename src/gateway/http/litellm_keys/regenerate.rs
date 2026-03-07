@@ -124,49 +124,20 @@ async fn litellm_key_regenerate_inner(
                 .map(|v| v.to_string())
         });
 
-    let (key, persisted_keys) = {
-        let mut gateway = state.gateway.lock().await;
-        let keys = gateway.list_virtual_keys();
+    let (key, persisted_keys) = state.gateway.mutate_control_plane(
+        |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
+            let keys = gateway.list_virtual_keys();
 
-        let Some(existing) = keys.iter().find(|key| key.token == token).cloned() else {
-            return Err(error_response(
-                StatusCode::NOT_FOUND,
-                "not_found",
-                "virtual key not found",
-            ));
-        };
-
-        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-            if existing.tenant_id.as_deref() != Some(admin_tenant) {
+            let Some(existing) = keys.iter().find(|key| key.token == token).cloned() else {
                 return Err(error_response(
-                    StatusCode::FORBIDDEN,
-                    "forbidden",
-                    "cannot regenerate keys for a different tenant",
+                    StatusCode::NOT_FOUND,
+                    "not_found",
+                    "virtual key not found",
                 ));
-            }
-        }
+            };
 
-        if keys
-            .iter()
-            .any(|candidate| candidate.token == new_token && candidate.id != existing.id)
-        {
-            return Err(error_response(
-                StatusCode::CONFLICT,
-                "conflict",
-                "new_key already exists",
-            ));
-        }
-
-        let mut key = existing.clone();
-        key.token = new_token.clone();
-
-        if let Some(user_id) = payload.user_id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
-            key.user_id = Some(user_id.to_string());
-        }
-
-        if let Some(tenant_id) = tenant_id.as_deref() {
             if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if tenant_id != admin_tenant {
+                if existing.tenant_id.as_deref() != Some(admin_tenant) {
                     return Err(error_response(
                         StatusCode::FORBIDDEN,
                         "forbidden",
@@ -174,62 +145,96 @@ async fn litellm_key_regenerate_inner(
                     ));
                 }
             }
-            key.tenant_id = Some(tenant_id.to_string());
-        }
 
-        if let Some(models) = payload.models.as_ref() {
-            key.guardrails.allow_models = models.clone();
-        }
-
-        if let Some(max_budget) = payload.max_budget {
-            if !max_budget.is_finite() || max_budget < 0.0 {
+            if keys
+                .iter()
+                .any(|candidate| candidate.token == new_token && candidate.id != existing.id)
+            {
                 return Err(error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request",
-                    "max_budget must be a non-negative finite number",
+                    StatusCode::CONFLICT,
+                    "conflict",
+                    "new_key already exists",
                 ));
             }
-            let micros = (max_budget * 1_000_000.0).round();
-            if micros <= 0.0 {
-                key.budget.total_usd_micros = None;
-            } else {
-                key.budget.total_usd_micros = Some(micros as u64);
+
+            let mut key = existing.clone();
+            key.token = new_token.clone();
+
+            if let Some(user_id) = payload
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+            {
+                key.user_id = Some(user_id.to_string());
             }
-        }
 
-        if let Some(rpm) = payload.rpm_limit {
-            key.limits.rpm = Some(rpm);
-        }
-        if let Some(tpm) = payload.tpm_limit {
-            key.limits.tpm = Some(tpm);
-        }
+            if let Some(tenant_id) = tenant_id.as_deref() {
+                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+                    if tenant_id != admin_tenant {
+                        return Err(error_response(
+                            StatusCode::FORBIDDEN,
+                            "forbidden",
+                            "cannot regenerate keys for a different tenant",
+                        ));
+                    }
+                }
+                key.tenant_id = Some(tenant_id.to_string());
+            }
 
-        if let Some(blocked) = payload.blocked {
-            key.enabled = !blocked;
-        }
+            if let Some(models) = payload.models.as_ref() {
+                key.guardrails.allow_models = models.clone();
+            }
 
-        let old_id = &existing.id;
-        if let Some(new_id) = new_alias.as_deref() {
-            if new_id != old_id {
-                if keys.iter().any(|candidate| candidate.id == new_id) {
+            if let Some(max_budget) = payload.max_budget {
+                if !max_budget.is_finite() || max_budget < 0.0 {
                     return Err(error_response(
-                        StatusCode::CONFLICT,
-                        "conflict",
-                        "key_alias already exists",
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request",
+                        "max_budget must be a non-negative finite number",
                     ));
                 }
-                gateway.remove_virtual_key(old_id);
-                key.id = new_id.to_string();
+                let micros = (max_budget * 1_000_000.0).round();
+                if micros <= 0.0 {
+                    key.budget.total_usd_micros = None;
+                } else {
+                    key.budget.total_usd_micros = Some(micros as u64);
+                }
             }
-        }
 
-        gateway.upsert_virtual_key(key.clone());
-        let persisted_keys = gateway.list_virtual_keys();
-        drop(gateway);
-        (key, persisted_keys)
-    };
+            if let Some(rpm) = payload.rpm_limit {
+                key.limits.rpm = Some(rpm);
+            }
+            if let Some(tpm) = payload.tpm_limit {
+                key.limits.tpm = Some(tpm);
+            }
 
-    persist_virtual_keys(&state, &persisted_keys).await?;
+            if let Some(blocked) = payload.blocked {
+                key.enabled = !blocked;
+            }
+
+            let old_id = &existing.id;
+            if let Some(new_id) = new_alias.as_deref() {
+                if new_id != old_id {
+                    if keys.iter().any(|candidate| candidate.id == new_id) {
+                        return Err(error_response(
+                            StatusCode::CONFLICT,
+                            "conflict",
+                            "key_alias already exists",
+                        ));
+                    }
+                    gateway.remove_virtual_key(old_id);
+                    key.id = new_id.to_string();
+                }
+            }
+
+            gateway.upsert_virtual_key(key.clone());
+            Ok((key, gateway.list_virtual_keys()))
+        },
+    )?;
+    state.sync_control_plane_from_gateway();
+
+    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.regenerate").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -241,7 +246,12 @@ async fn litellm_key_regenerate_inner(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "litellm.key.regenerate",

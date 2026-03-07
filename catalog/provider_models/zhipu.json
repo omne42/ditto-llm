@@ -1,0 +1,4151 @@
+{
+  "provider": {
+    "id": "zhipu",
+    "display_name": "Zhipu AI / GLM",
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "protocol": "zhipu",
+    "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "ZHIPU_API_KEY"
+      ]
+    }
+  },
+  "models": {
+    "autoglm-phone": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/autoglm-phone.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/autoglm-phone.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "AutoGLM-Phone",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "视觉模型"
+      ],
+      "summary": "AutoGLM-Phone 是一个基于视觉语言模型的 AI 手机智能助理框架。它能以多模态方式理解屏幕内容，并通过 ADB 自动操控设备。用户只需用自然语言下指令，如“打开小红书搜美食”，模型即可解析意图、理解界面并自动规划、执行操作流程，无需手动点击。 新模型上线，限时免费！",
+      "context_window_tokens": 20000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/autoglm-phone.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "AutoGLM-Phone 是一个基于视觉语言模型的 AI 手机智能助理框架。它能以多模态方式理解屏幕内容，并通过 ADB 自动操控设备。用户只需用自然语言下指令，如“打开小红书搜美食”，模型即可解析意图、理解界面并自动规划、执行操作流程，无需手动点击。 新模型上线，限时免费！",
+          "card_titles": [
+            "输入",
+            "输出",
+            "上下文窗口",
+            "最大输出",
+            "支持的语言",
+            "支持操控的硬件设备"
+          ],
+          "card_values": [
+            "需要完成的任务指令",
+            "任务行动完成",
+            "20K",
+            "2048",
+            "中文",
+            "Android 系统的手机"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "AutoGLM-Phone",
+            "手机智能助理框架",
+            "- 支持用自然语言自动完成 App 操作任务 / - 支持完整操作指令集",
+            "20K",
+            "2048"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/autoglm-phone.md"
+        }
+      ]
+    },
+    "charglm-4": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/charglm-4.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/humanoid/charglm-4.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "CharGLM-4",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "其他模型"
+      ],
+      "summary": "CharGLM-4 是智谱AI 推出的角色扮演专用模型，支持基于人设的角色扮演、超长多轮的记忆、千人千面的角色对话。该模型广泛应用于情感陪伴、游戏智能 NPC、网红/明星/影视剧 IP 分身、数字人/虚拟主播、文字冒险游戏等拟人对话或游戏场景。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 8000,
+      "max_output_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/charglm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "CharGLM-4 是智谱AI 推出的角色扮演专用模型，支持基于人设的角色扮演、超长多轮的记忆、千人千面的角色对话。该模型广泛应用于情感陪伴、游戏智能 NPC、网红/明星/影视剧 IP 分身、数字人/虚拟主播、文字冒险游戏等拟人对话或游戏场景。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "1 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "8K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/charglm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "其他模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "CharGLM-4",
+            "拟人模型",
+            "适用于情感陪伴和虚拟角色",
+            "8K",
+            "4K"
+          ],
+          "detail_url": ""
+        }
+      ]
+    },
+    "codegeex-4": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+      "display_name": "CodeGeeX-4",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "其他模型"
+      ],
+      "summary": "适用于代码自动补全任务",
+      "context_window_tokens": 128000,
+      "max_output_tokens": 32000,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "其他模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "CodeGeeX-4",
+            "代码模型",
+            "适用于代码自动补全任务",
+            "128K",
+            "32k"
+          ],
+          "detail_url": ""
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "其他模型",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from the official model overview because no dedicated CodeGeeX-4 API page is currently linked from docs.bigmodel.cn."
+        }
+      ]
+    },
+    "cogvideox-2": {
+      "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+      "display_name": "cogvideox-2",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        }
+      ]
+    },
+    "cogvideox-3": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/cogvideox-3.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/cogvideox-3.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "CogVideoX-3",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "CogVideoX-3 新增首尾帧生成功能，画面稳定度、清晰度大幅提升，主体大幅度运动流畅自然，指令遵循与物理真实模拟更佳，还提升了高清现实及 3D 风格场景表现。",
+      "input_modalities": [
+        "image",
+        "text",
+        "start_end_frame"
+      ],
+      "output_modalities": [
+        "video"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/cogvideox-3.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "CogVideoX-3 新增首尾帧生成功能，画面稳定度、清晰度大幅提升，主体大幅度运动流畅自然，指令遵循与物理真实模拟更佳，还提升了高清现实及 3D 风格场景表现。",
+          "card_titles": [
+            "时长",
+            "清晰度",
+            "价格",
+            "输入模态",
+            "输出模态"
+          ],
+          "card_values": [
+            "5s, 10s",
+            "支持多分辨率，最高4K",
+            "1 元 / 次",
+            "图像、文本、首尾帧",
+            "视频"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/cogvideox-3.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "CogVideoX-3",
+            "高智能旗舰",
+            "- 主观清晰度大幅提升 / - 更好的指令遵循、物理真实模拟 / - 现实、3D风格场景表现提升 / - 新增首尾帧生成功能",
+            "图像、文本、首尾帧",
+            "支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/cogvideox-3.md"
+        }
+      ]
+    },
+    "cogvideox-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogvideox-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/cogvideox-flash.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "CogVideoX-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型",
+        "免费模型"
+      ],
+      "summary": "CogVideoX-Flash 是智谱推出的免费视频生成模型，能够根据用户指令生成符合要求且美学评分更高的视频。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogvideox-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "CogVideoX-Flash 是智谱推出的免费视频生成模型，能够根据用户指令生成符合要求且美学评分更高的视频。"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "CogVideoX-Flash",
+            "免费模型",
+            "- 沉浸式AI音效 / - 4K 高清画质呈现 / - 10 秒视频时长拓展 / - 60fps 高帧率输出",
+            "图像、文本",
+            "支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogvideox-flash.md"
+        }
+      ]
+    },
+    "cogview-3-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogview-3-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/cogview-3-flash.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "Cogview-3-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图像生成模型",
+        "免费模型"
+      ],
+      "summary": "CogView-3-Flash 是智谱推出的免费图像生成模型，能够根据用户指令生成符合要求且美学评分更高的图像。CogView-3-Flash 主要应用于艺术创作、设计参考、游戏开发、虚拟现实等领域，帮助用户快速实现从文本到图像的转换需求。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogview-3-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "CogView-3-Flash 是智谱推出的免费图像生成模型，能够根据用户指令生成符合要求且美学评分更高的图像。CogView-3-Flash 主要应用于艺术创作、设计参考、游戏开发、虚拟现实等领域，帮助用户快速实现从文本到图像的转换需求。"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+          "source_page": "image_generation",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/images/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "图像生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多分辨率"
+          ],
+          "values": [
+            "CogView-3-Flash",
+            "免费模型",
+            "- 创意丰富多样 / - 推理速度快",
+            "支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/cogview-3-flash.md"
+        }
+      ]
+    },
+    "cogview-4": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/cogview-4.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/image-generation/cogview-4.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "CogView-4",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图像生成模型"
+      ],
+      "summary": "CogView-4 是智谱首个支持生成汉字的开源文生图模型，在语义理解、图像生成质量、中英文字生成能力等方面全面提升，支持任意长度的中英双语输入，能够生成在给定范围内的任意分辨率图像。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "image"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/cogview-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "CogView-4 是智谱首个支持生成汉字的开源文生图模型，在语义理解、图像生成质量、中英文字生成能力等方面全面提升，支持任意长度的中英双语输入，能够生成在给定范围内的任意分辨率图像。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态"
+          ],
+          "card_values": [
+            "0.06 元 / 次",
+            "文本",
+            "图像"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/cogview-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "image.generation",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+          "source_page": "image_generation",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/images/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "图像生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多分辨率"
+          ],
+          "values": [
+            "CogView-4",
+            "图像生成",
+            "- 高质量图像生成 / - 风格多样化 / - 细节丰富",
+            "支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/cogview-4.md"
+        }
+      ]
+    },
+    "cogview-4-250304": {
+      "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+      "display_name": "cogview-4-250304",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图像生成模型"
+      ],
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+          "source_page": "image_generation",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/images/generations"
+        }
+      ]
+    },
+    "embedding-2": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-2.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-2.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/文本嵌入.md"
+      ],
+      "display_name": "Embedding-2",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "embedding"
+      ],
+      "categories": [
+        "向量模型"
+      ],
+      "summary": "Embedding-2 是智谱AI 推出的第二代文本向量化模型，能够将文本转换为高维向量表示，用于语义相似性计算和搜索。该模型在语义理解、文本检索和相似度计算方面表现优异，适用于构建智能搜索、推荐系统和知识库等应用。",
+      "input_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 8000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-2.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Embedding-2 是智谱AI 推出的第二代文本向量化模型，能够将文本转换为高维向量表示，用于语义相似性计算和搜索。该模型在语义理解、文本检索和相似度计算方面表现优异，适用于构建智能搜索、推荐系统和知识库等应用。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "向量维度"
+          ],
+          "card_values": [
+            "0.5 元 / 百万 Tokens",
+            "文本",
+            "向量",
+            "8K",
+            "1024"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-2.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "embedding",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/文本嵌入.md",
+          "source_page": "embeddings",
+          "section": "文本嵌入",
+          "api_surface": "embedding",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/embeddings"
+        }
+      ]
+    },
+    "embedding-3": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-3.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-3.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/文本嵌入.md"
+      ],
+      "display_name": "Embedding-3",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "embedding"
+      ],
+      "categories": [
+        "向量模型"
+      ],
+      "summary": "Embedding-3 是智谱AI 推出的第三代文本向量化模型，在前代基础上全面升级，提供更强的语义理解能力和更灵活的向量维度选择。该模型支持自定义向量维度，在保持高质量语义表示的同时，为不同应用场景提供了更优的性能和成本平衡。",
+      "input_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 8000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-3.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Embedding-3 是智谱AI 推出的第三代文本向量化模型，在前代基础上全面升级，提供更强的语义理解能力和更灵活的向量维度选择。该模型支持自定义向量维度，在保持高质量语义表示的同时，为不同应用场景提供了更优的性能和成本平衡。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "向量维度"
+          ],
+          "card_values": [
+            "0.5 元 / 百万 Tokens",
+            "文本",
+            "向量",
+            "8K",
+            "256-2048（可自定义）"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/embedding/embedding-3.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "embedding",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/文本嵌入.md",
+          "source_page": "embeddings",
+          "section": "文本嵌入",
+          "api_surface": "embedding",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/embeddings"
+        }
+      ]
+    },
+    "emohaa": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/emohaa.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/humanoid/emohaa.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "Emohaa",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "其他模型"
+      ],
+      "summary": "Emohaa 是智谱AI 推出的专业心理咨询模型，学习了经典的 Hill 助人理论，拥有人类心理咨询师的专业话术能力。该模型具有较强的倾听、情感映射、共情等情绪支持能力，帮助用户了解自身想法和感受，学习应对情绪问题，帮助用户实现乐观、积极的心理和情感状态。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 8000,
+      "max_output_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/emohaa.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Emohaa 是智谱AI 推出的专业心理咨询模型，学习了经典的 Hill 助人理论，拥有人类心理咨询师的专业话术能力。该模型具有较强的倾听、情感映射、共情等情绪支持能力，帮助用户了解自身想法和感受，学习应对情绪问题，帮助用户实现乐观、积极的心理和情感状态。",
+          "note": "Emohaa 模型虽然具备专业的心理支持能力，但不能替代专业的心理治疗。对于严重的心理健康问题，建议寻求专业心理医生的帮助。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "15 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "8K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/humanoid/emohaa.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "其他模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "Emohaa",
+            "心理模型",
+            "具备专业咨询能力，帮助用 / 户理解情感并应对情绪问题",
+            "8K",
+            "4k"
+          ],
+          "detail_url": ""
+        }
+      ]
+    },
+    "glm-4-air-250414": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+      "display_name": "GLM-4-Air-250414",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "高性价比",
+            "0.5 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "128K",
+            "16K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-4-airx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+      "display_name": "GLM-4-AirX",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 8000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "极速推理",
+            "10 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "8K",
+            "4K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-4-flash-250414": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4-flash-250414.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4-flash-250414.md",
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4-Flash-250414",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型",
+        "免费模型",
+        "历史模型"
+      ],
+      "summary": "GLM-4-Flash-250414 语言模型是 智谱AI 首个免费的大模型 API，它在实时网页检索、长上下文处理、多语言支持等方面表现出色，适用于智能问答、摘要生成和文本数据处理等多种应用场景。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 16000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4-flash-250414.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4-Flash-250414 语言模型是 智谱AI 首个免费的大模型 API，它在实时网页检索、长上下文处理、多语言支持等方面表现出色，适用于智能问答、摘要生成和文本数据处理等多种应用场景。"
+        },
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "免费版",
+            "/",
+            "文本",
+            "文本",
+            "128K",
+            "16K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4-Flash-250414",
+            "免费模型",
+            "- 超长上下文处理能力 / - 多语言支持 / - 支持外部工具调用",
+            "128K",
+            "16K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md"
+        }
+      ]
+    },
+    "glm-4-flashx-250414": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4-FlashX-250414",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 16000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "高速低价",
+            "0.1 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "128K",
+            "16K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4-FlashX-250414",
+            "高速低价",
+            "- Flash 增强版本 / - 超快推理速度 / - 更高并发保障",
+            "128K",
+            "16K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md"
+        }
+      ]
+    },
+    "glm-4-long": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4-long.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4-long.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4-Long",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "GLM-4-Long 是一款专为处理超长文本和记忆型任务而设计的语言模型，支持 1M 超长输入（150-200万字）。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 1000000,
+      "max_output_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4-long.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4-Long 是一款专为处理超长文本和记忆型任务而设计的语言模型，支持 1M 超长输入（150-200万字）。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "1 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "1M",
+            "4K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4-long.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4-Long",
+            "超长输入",
+            "- 支持高达 1M 的上下文长度 / - 能够理解和回应复杂的查询 / - 为处理超长文本和记忆型任务设计",
+            "1M",
+            "4K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4-long.md"
+        }
+      ]
+    },
+    "glm-4-plus": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+      "display_name": "GLM-4-Plus",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4 系列包含 Plus、Air-250414、AirX、FlashX-250414、Flash-250414 这五个模型。 1. GLM-4-Plus 语言模型是智谱 BigModel 开放平台的高智能模型，在语言理解、逻辑推理、指令遵循、长文本处理等方面性能表现优异。 2. GLM-4-Air-250414 为基座语言模型。该模型能快速执行复杂任务，在工具调用、联网搜索、代码等智能体任务上的能力得到大大加强。GLM-4-AirX 为该模型的高速版。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "高性能",
+            "5 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "128K",
+            "4K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-4-voice": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-4-voice.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-4-voice.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4-Voice",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-4-Voice 是智谱推出的首个端到端语音模型。它能够直接理解和生成中英文语音，实现实时语音对话，并可根据用户指令灵活调整语音的情感、语调、语速和方言等特性，使语音交互更加自然生动。",
+      "input_modalities": [
+        "audio",
+        "text"
+      ],
+      "output_modalities": [
+        "audio"
+      ],
+      "context_window_tokens": 8000,
+      "max_output_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-4-voice.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4-Voice 是智谱推出的首个端到端语音模型。它能够直接理解和生成中英文语音，实现实时语音对话，并可根据用户指令灵活调整语音的情感、语调、语速和方言等特性，使语音交互更加自然生动。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "80 元 / 百万 Tokens",
+            "音频、文本",
+            "音频",
+            "8K",
+            "4K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-4-voice.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-4-Voice",
+            "语音模型",
+            "- 直接理解和生成中英文语音，实现实时语音对话 / - 根据用户指令灵活调整语音的情感、语调、语速和方言等特性",
+            "文本、音频"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-4-voice.md"
+        }
+      ]
+    },
+    "glm-4.1v-thinking-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.1v-thinking-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.1v-thinking-flash.md",
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.1V-Thinking-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型",
+        "免费模型"
+      ],
+      "summary": "GLM-4.1V-Thinking-Flash 是智谱推出的免费视觉推理模型。它在图表/视频理解、前端 Coding、GUI 任务等场景表现出色，核心能力达到全面新 SOTA。模型引入思维链推理机制，显著提升了复杂场景中的回答精准度与可解释性。",
+      "input_modalities": [
+        "video",
+        "image",
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 64000,
+      "max_output_tokens": 16000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.1v-thinking-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.1V-Thinking-Flash 是智谱推出的免费视觉推理模型。它在图表/视频理解、前端 Coding、GUI 任务等场景表现出色，核心能力达到全面新 SOTA。模型引入思维链推理机制，显著提升了复杂场景中的回答精准度与可解释性。"
+        },
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.1V-Thinking 系列是 10B 尺寸性能卓越的视觉推理模型。它在图表/视频理解、前端 Coding、GUI 任务等核心能力达到全面新 SOTA，并引入思维链推理机制，显著提升模型在复杂场景中的回答精准度与可解释性。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "免费版",
+            "/",
+            "视频、图像、文本",
+            "文本",
+            "64K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.1V-Thinking-Flash",
+            "免费模型",
+            "- 视觉推理能力 / - 复杂场景理解 / - 多步骤分析",
+            "64K",
+            "16K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.1v-thinking-flash.md"
+        }
+      ]
+    },
+    "glm-4.1v-thinking-flashx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.1V-Thinking-FlashX",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型"
+      ],
+      "summary": "GLM-4.1V-Thinking 系列是 10B 尺寸性能卓越的视觉推理模型。它在图表/视频理解、前端 Coding、GUI 任务等核心能力达到全面新 SOTA，并引入思维链推理机制，显著提升模型在复杂场景中的回答精准度与可解释性。",
+      "input_modalities": [
+        "video",
+        "image",
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 64000,
+      "max_output_tokens": 16000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.1V-Thinking 系列是 10B 尺寸性能卓越的视觉推理模型。它在图表/视频理解、前端 Coding、GUI 任务等核心能力达到全面新 SOTA，并引入思维链推理机制，显著提升模型在复杂场景中的回答精准度与可解释性。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "高并发版",
+            "2 元 / 百万 Tokens",
+            "视频、图像、文本",
+            "文本",
+            "64K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.1V-Thinking-FlashX",
+            "轻量视觉推理",
+            "- 视觉推理能力 / - 复杂场景理解 / - 多步骤分析 / - 高并发",
+            "64K",
+            "16K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.1v-thinking.md"
+        }
+      ]
+    },
+    "glm-4.5": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+      "display_name": "GLM-4.5",
+      "status": "deprecated",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "我们强大的推理模型，3550亿参数",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 96000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "我们强大的推理模型，3550亿参数",
+          "note": "GLM-4.5、GLM-4.5-X 模型即将下线，建议选择最新旗舰文本模型 GLM-4.7。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-4.5-air": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.5-Air",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "高性价比 轻量级 强性能",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 96000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "高性价比 轻量级 强性能",
+          "note": "GLM-4.5、GLM-4.5-X 模型即将下线，建议选择最新旗舰文本模型 GLM-4.7。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.5-Air",
+            "高性价比",
+            "- 在推理、编码和智能体任务上表现强劲",
+            "128K",
+            "96K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md"
+        }
+      ]
+    },
+    "glm-4.5-airx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.5-AirX",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "轻量级 强性能 极速响应",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 96000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "轻量级 强性能 极速响应",
+          "note": "GLM-4.5、GLM-4.5-X 模型即将下线，建议选择最新旗舰文本模型 GLM-4.7。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.5-AirX",
+            "高性价比-极速版",
+            "- 推理速度快，且价格适中 / - 适用于时效性有较强要求的场景",
+            "128K",
+            "96K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md"
+        }
+      ]
+    },
+    "glm-4.5-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.5-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.5-flash.md",
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.5-Flash",
+      "status": "deprecated",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型",
+        "免费模型"
+      ],
+      "summary": "GLM-4.5-Flash 模型在确保强大推理能力、稳定代码生成和多工具协同处理能力的同时，具备显著的运行速度优势，且完全免费开放使用。 模型支持最长 128K 的上下文处理，可高效应对长文本理解、多轮对话连续性和结构化内容生成等复杂任务，采用混合推理模式，提供两种模式：用于复杂推理和工具使用的思考模式，以及用于即时响应的非思考模式。可通过 thinking.type 参数启用或关闭（支持 enabled 和 disabled 两种设置），默认开启动态思考功能。 GLM-4.5-Flash 在工具调用、网页浏览、软件工程、前端编程领域进行了优化，可以接入 Claude Code、Roo Code 等代码智能体中使用，也可以通过工具调用接口支持任意的智能体应用。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 96000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.5-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.5-Flash 模型在确保强大推理能力、稳定代码生成和多工具协同处理能力的同时，具备显著的运行速度优势，且完全免费开放使用。 模型支持最长 128K 的上下文处理，可高效应对长文本理解、多轮对话连续性和结构化内容生成等复杂任务，采用混合推理模式，提供两种模式：用于复杂推理和工具使用的思考模式，以及用于即时响应的非思考模式。可通过 thinking.type 参数启用或关闭（支持 enabled 和 disabled 两种设置），默认开启动态思考功能。 GLM-4.5-Flash 在工具调用、网页浏览、软件工程、前端编程领域进行了优化，可以接入 Claude Code、Roo Code 等代码智能体中使用，也可以通过工具调用接口支持任意的智能体应用。",
+          "note": "GLM-4.5-Flash 将于2026年1月30日下线，请您及时将模型编码更新为最新版本。正式下线后，相关请求将会自动路由至 GLM-4.7-Flash。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.5-flash.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "免费 高效 多功能",
+          "note": "GLM-4.5、GLM-4.5-X 模型即将下线，建议选择最新旗舰文本模型 GLM-4.7。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.5-Flash",
+            "免费模型",
+            "- 支持深度思考模式 / - 支持最长 128K 的上下文处理",
+            "128K",
+            "96K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.5-flash.md"
+        }
+      ]
+    },
+    "glm-4.5-x": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+      "display_name": "GLM-4.5-X",
+      "status": "deprecated",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "高性能 强推理 极速响应",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 96000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "高性能 强推理 极速响应",
+          "note": "GLM-4.5、GLM-4.5-X 模型即将下线，建议选择最新旗舰文本模型 GLM-4.7。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "128K",
+            "96K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.5.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-4.6": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.6.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.6.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.6",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "GLM-4.6 是智谱的语言模型，其总参数量 355B，激活参数 32B。GLM-4.6 所有核心能力上均完成了对 GLM-4.5 的超越，具体如下： * 高级编码能力：在公开基准与真实编程任务中，GLM-4.6 的代码能力对齐 Claude Sonnet 4。 * 上下文长度：上下文窗口由 128K→200K，适应更长的代码和智能体任务。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.6.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.6 是智谱的语言模型，其总参数量 355B，激活参数 32B。GLM-4.6 所有核心能力上均完成了对 GLM-4.5 的超越，具体如下： * 高级编码能力：在公开基准与真实编程任务中，GLM-4.6 的代码能力对齐 Claude Sonnet 4。 * 上下文长度：上下文窗口由 128K→200K，适应更长的代码和智能体任务。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "200K",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.6.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.6",
+            "超强性能",
+            "- 上下文提升至200K / - 高级编码能力、强大推理以及工具调用能力",
+            "200K",
+            "128K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.6.md"
+        }
+      ]
+    },
+    "glm-4.6v": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.6V",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型"
+      ],
+      "summary": "GLM-4.6V 系列是 GLM 系列在多模态方向上的一次重要迭代，包含 GLM-4.6V（旗舰版）、GLM-4.6V-FlashX（轻量高速版）、GLM-4.6V-Flash（完全免费）。它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+      "input_modalities": [
+        "video",
+        "image",
+        "text",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 32000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.6V 系列是 GLM 系列在多模态方向上的一次重要迭代，包含 GLM-4.6V（旗舰版）、GLM-4.6V-FlashX（轻量高速版）、GLM-4.6V-Flash（完全免费）。它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+          "card_titles": [
+            "定位",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "旗舰视觉推理（106B）",
+            "视频、图像、文本、文件",
+            "文本",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.6V",
+            "旗舰视觉推理",
+            "- 视觉推理模型SOTA / - 原生支持工具调用 / - 超长上下文 / - 前端代码复刻效果提升",
+            "128K",
+            "32K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md"
+        }
+      ]
+    },
+    "glm-4.6v-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.6V-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型",
+        "免费模型"
+      ],
+      "summary": "GLM-4.6V-Flash 是 GLM-4.6V 的免费版本，是 GLM 系列在多模态方向上的一次重要迭代，支持开启或关闭思考模式。它将训练时上下文窗口提升到128k tokens，在 视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+      "input_modalities": [
+        "video",
+        "image",
+        "text",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 32000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.6V-Flash 是 GLM-4.6V 的免费版本，是 GLM 系列在多模态方向上的一次重要迭代，支持开启或关闭思考模式。它将训练时上下文窗口提升到128k tokens，在 视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "视频、图像、文本、文件",
+            "文本",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.6V-Flash",
+            "免费模型",
+            "- 视觉推理能力 / - 支持工具调用 / - 可灵活开关思考模式",
+            "128K",
+            "32K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.6v-flash.md"
+        }
+      ]
+    },
+    "glm-4.6v-flashx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md"
+      ],
+      "display_name": "GLM-4.6V-FlashX",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型"
+      ],
+      "summary": "GLM-4.6V 系列是 GLM 系列在多模态方向上的一次重要迭代，包含 GLM-4.6V（旗舰版）、GLM-4.6V-FlashX（轻量高速版）、GLM-4.6V-Flash（完全免费）。它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+      "input_modalities": [
+        "video",
+        "image",
+        "text",
+        "file"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.6V 系列是 GLM 系列在多模态方向上的一次重要迭代，包含 GLM-4.6V（旗舰版）、GLM-4.6V-FlashX（轻量高速版）、GLM-4.6V-Flash（完全免费）。它将训练时上下文窗口提升到128k tokens，在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。",
+          "card_titles": [
+            "定位",
+            "输入模态",
+            "输出模态",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "轻量高速（9B）",
+            "视频、图像、文本、文件",
+            "文本",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-4.6v.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        }
+      ]
+    },
+    "glm-4.7": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.7",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "GLM-4.7 系列是智谱最新旗舰模型，面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得开源模型中的出色表现。通用能力提升，回复更简洁自然，写作更具沉浸感。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.7 系列是智谱最新旗舰模型，面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得开源模型中的出色表现。通用能力提升，回复更简洁自然，写作更具沉浸感。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+          "card_titles": [
+            "定位",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "旗舰版",
+            "文本",
+            "文本",
+            "200K",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.7",
+            "高智能模型",
+            "- 通用对话、推理与智能体能力上实现全面升级 / - 编程更强、更稳、审美更好",
+            "200K",
+            "128K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md"
+        }
+      ]
+    },
+    "glm-4.7-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.7-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "免费模型"
+      ],
+      "summary": "GLM-4.7-Flash 作为 30B 级 SOTA 模型，提供了一个兼顾性能与效率的新选择。面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得同尺寸开源模型中的出色表现。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.7-Flash 作为 30B 级 SOTA 模型，提供了一个兼顾性能与效率的新选择。面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得同尺寸开源模型中的出色表现。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "文本",
+            "文本",
+            "200K",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.7-Flash",
+            "免费模型",
+            "- 最新基座模型的普惠版本",
+            "200K",
+            "128K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash.md"
+        }
+      ]
+    },
+    "glm-4.7-flashx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4.7-FlashX",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "GLM-4.7 系列是智谱最新旗舰模型，面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得开源模型中的出色表现。通用能力提升，回复更简洁自然，写作更具沉浸感。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4.7 系列是智谱最新旗舰模型，面向 Agentic Coding 场景强化了编码能力、长程任务规划与工具协同，并在多个公开基准的当期榜单中取得开源模型中的出色表现。通用能力提升，回复更简洁自然，写作更具沉浸感。在执行复杂智能体任务，在工具调用时指令遵循更强，Artifacts 与 Agentic Coding 的前端美感和长程任务完成效率进一步提升。",
+          "card_titles": [
+            "定位",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "轻量高速版",
+            "文本",
+            "文本",
+            "200K",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4.7-FlashX",
+            "轻量高速",
+            "- 小尺寸，强能力 / - 适用于中文写作、翻译、长文本、情感/角色扮演等通用场景",
+            "200K",
+            "128K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7.md"
+        }
+      ]
+    },
+    "glm-4v-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4v-flash.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/free/glm-4v-flash.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-4V-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion",
+        "chat.completion.async"
+      ],
+      "categories": [
+        "视觉模型",
+        "免费模型"
+      ],
+      "summary": "GLM-4V-Flash 是智谱推出的首个完全免费的图像理解模型。在图像识别、图像问答、图像推理等多项任务中展现出卓越的性能。在企业应用场景中，GLM-4V-Flash 表现突出，不仅能够帮助企业实现高效图像处理，还能紧密贴合不同垂直领域的实际需求，适配多样化应用场景。",
+      "context_window_tokens": 16000,
+      "max_output_tokens": 1000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4v-flash.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-4V-Flash 是智谱推出的首个完全免费的图像理解模型。在图像识别、图像问答、图像推理等多项任务中展现出卓越的性能。在企业应用场景中，GLM-4V-Flash 表现突出，不仅能够帮助企业实现高效图像处理，还能紧密贴合不同垂直领域的实际需求，适配多样化应用场景。"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全异步.md",
+          "source_page": "chat_completion_async",
+          "section": "对话补全(异步)",
+          "api_surface": "chat.completion.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-4V-Flash",
+            "免费模型",
+            "- 图像理解 / - 多语言支持",
+            "16K",
+            "1K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/free/glm-4v-flash.md"
+        }
+      ]
+    },
+    "glm-5": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-5",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "GLM-5 是智谱新一代的旗舰基座模型，面向 Agentic Engineering 打造，能够在复杂系统工程与长程 Agent 任务中提供可靠生产力。在 Coding 与 Agent 能力上，GLM-5 取得开源 SOTA 表现，在真实编程场景的使用体感逼近 Claude Opus 4.5，擅长复杂系统工程与长程 Agent 任务，是通用 Agent 助手的理想基座。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 200000,
+      "max_output_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-5 是智谱新一代的旗舰基座模型，面向 Agentic Engineering 打造，能够在复杂系统工程与长程 Agent 任务中提供可靠生产力。在 Coding 与 Agent 能力上，GLM-5 取得开源 SOTA 表现，在真实编程场景的使用体感逼近 Claude Opus 4.5，擅长复杂系统工程与长程 Agent 任务，是通用 Agent 助手的理想基座。",
+          "card_titles": [
+            "定位",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "旗舰基座模型",
+            "文本",
+            "文本",
+            "200K",
+            "128K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/对话补全.md",
+          "source_page": "chat_completion",
+          "section": "对话补全",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "文本模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-5",
+            "最新旗舰基座",
+            "- 编程能力对齐Claude Opus 4.5 / - 擅长 Agentic 长程规划与执行",
+            "200K",
+            "128K"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-5.md"
+        }
+      ]
+    },
+    "glm-asr-2512": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/语音转文本.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-ASR-2512",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "audio.transcription"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-ASR-2512 是智谱新一代语音识别模型，支持将语音实时转换为高质量文字。无论是日常聊天、会议记录、工作文档，还是包含专业术语的场景，都能精准识别与转换，大幅提升输入与记录效率。模型在多场景、多口音条件下依旧保持行业出色的识别表现，字符错误率（CER）仅为 0.0717，带来既快速又可靠的语音输入体验。",
+      "input_modalities": [
+        "audio"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-ASR-2512 是智谱新一代语音识别模型，支持将语音实时转换为高质量文字。无论是日常聊天、会议记录、工作文档，还是包含专业术语的场景，都能精准识别与转换，大幅提升输入与记录效率。模型在多场景、多口音条件下依旧保持行业出色的识别表现，字符错误率（CER）仅为 0.0717，带来既快速又可靠的语音输入体验。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "上传文件限制"
+          ],
+          "card_values": [
+            "音频",
+            "文本",
+            "文件大小 ≤ 25 MB、音频时长 ≤ 30 秒"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "audio.transcription",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/语音转文本.md",
+          "source_page": "speech_to_text",
+          "section": "语音转文本",
+          "api_surface": "audio.transcription",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-ASR-2512",
+            "语音识别",
+            "- 字符错误率（CER）仅为 0.0717 / - 支持用户自定义词汇 / - 支持多种主流语言和方言",
+            "音频"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-asr-2512.md"
+        }
+      ]
+    },
+    "glm-image": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/glm-image.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/image-generation/glm-image.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/图像生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-Image",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "image.generation",
+        "image.generation.async"
+      ],
+      "categories": [
+        "图像生成模型"
+      ],
+      "summary": "GLM-Image 是智谱新旗舰图像生成模型， 模型全程基于国产芯片完成训练，采用独创的「自回归+扩散解码器」混合架构，兼顾全局指令理解与局部细节刻画，克服了海报、PPT、科普图等知识密集型场景生成难题，是面向以 Nano Banana Pro 为代表的新一代「认知型生成」技术范式的一次重要探索。",
+      "output_modalities": [
+        "image"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/glm-image.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Image 是智谱新旗舰图像生成模型， 模型全程基于国产芯片完成训练，采用独创的「自回归+扩散解码器」混合架构，兼顾全局指令理解与局部细节刻画，克服了海报、PPT、科普图等知识密集型场景生成难题，是面向以 Nano Banana Pro 为代表的新一代「认知型生成」技术范式的一次重要探索。",
+          "note": "请注意，GLM-Image 模型的输出是图片 URL，您需要通过 URL 下载图片。",
+          "card_titles": [
+            "价格",
+            "输入模态",
+            "输出模态",
+            "多分辨率"
+          ],
+          "card_values": [
+            "0.1 元 / 次",
+            "文本（最大输入1000字符）",
+            "图像",
+            "支持 1:1、3:4、4:3、16:9 等"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/glm-image.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "image.generation",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成.md",
+          "source_page": "image_generation",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/images/generations"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/图像生成异步.md",
+          "source_page": "image_generation_async",
+          "section": "图像生成(异步)",
+          "api_surface": "image.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/async/images/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "图像生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多分辨率"
+          ],
+          "values": [
+            "GLM-Image",
+            "旗舰图像生成",
+            "- 在复杂指令遵循与知识密集场景上更强 / - 文字渲染开源 SOTA，汉字尤其出色",
+            "支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/image-generation/glm-image.md"
+        }
+      ]
+    },
+    "glm-ocr": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-ocr.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-ocr.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/版面解析.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-OCR",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "ocr"
+      ],
+      "categories": [
+        "视觉模型"
+      ],
+      "summary": "GLM-OCR 是一款轻量级的专业 OCR 模型，参数仅为0.9B，但多项能力达到了SOTA水平，以 “小尺寸、高精度” 实现文档解析能力新标杆。其核心要点如下： * 性能 SOTA：在模型发布时以 94.62 分登顶 OmniDocBench V1.5，并在表格、公式等多项主流文档理解基准中取得当前最佳表现； * 针对真实业务场景优化：在代码文档、复杂表格、印章等复杂场景中表现稳定且精度领先，即使在版式复杂、字体多样或图文混排情况下，识别准确度依旧出色；",
+      "input_modalities": [
+        "pdf"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 10000000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-ocr.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-OCR 是一款轻量级的专业 OCR 模型，参数仅为0.9B，但多项能力达到了SOTA水平，以 “小尺寸、高精度” 实现文档解析能力新标杆。其核心要点如下： * 性能 SOTA：在模型发布时以 94.62 分登顶 OmniDocBench V1.5，并在表格、公式等多项主流文档理解基准中取得当前最佳表现； * 针对真实业务场景优化：在代码文档、复杂表格、印章等复杂场景中表现稳定且精度领先，即使在版式复杂、字体多样或图文混排情况下，识别准确度依旧出色；",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "支持的语言"
+          ],
+          "card_values": [
+            "- PDF、图片（JPG、PNG） - 单图 ≤ 10 MB，PDF ≤ 50 MB - 最大支持 100 页",
+            "文本、图片链接、md 文档",
+            "中文、英文、法语、西班牙语、俄罗斯语、德语、日语、韩语等……"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-ocr.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "ocr",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/版面解析.md",
+          "source_page": "ocr",
+          "section": "版面解析",
+          "api_surface": "ocr",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/layout_parsing"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视觉模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "GLM-OCR",
+            "轻量图文解析",
+            "- 性能SOTA / - 高精度、高效率 / - 支持多种常见复杂文档解析",
+            "输入: / - 单图 ≤ 10 MB，PDF ≤ 50 MB / - 最大支持100页 /",
+            "/"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/vlm/glm-ocr.md"
+        }
+      ]
+    },
+    "glm-realtime-air": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+        "https://docs.bigmodel.cn/cn/asyncapi/realtime.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-Realtime-Air",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "realtime.websocket"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-Realtime 是一款音视频通话模型，能够提供实时的视频通话功能，通话记忆时长长达2分钟，具有跨文本、音频和视频进行实时推理的能力。",
+      "input_modalities": [
+        "video",
+        "audio",
+        "text"
+      ],
+      "output_modalities": [
+        "audio"
+      ],
+      "context_window_tokens": 8000,
+      "max_output_tokens": 1000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Realtime 是一款音视频通话模型，能够提供实时的视频通话功能，通话记忆时长长达2分钟，具有跨文本、音频和视频进行实时推理的能力。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "最大输出 Tokens",
+            "价格",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "视频、音频、文本",
+            "音频",
+            "1K",
+            "GLM-Realtime-Flash: 音频：0.18元/分钟；视频：1.2元/分钟 GLM-Realtime-Air: 音频：0.3元/分钟；视频：2.1元/分钟",
+            "音频通话: 8K, 预计20轮 视频通话: 32K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "realtime.websocket",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/cn/asyncapi/realtime.md",
+          "source_page": "realtime",
+          "section": "音视频通话",
+          "api_surface": "realtime.websocket",
+          "method": "WS",
+          "endpoint": "wss://open.bigmodel.cn/api/paas/v4/realtime"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-Realtime",
+            "实时音视频",
+            "- 能够提供实时的视频通话功能，通话记忆时长长达2分钟 / - 具有跨文本、音频和视频进行实时推理的能力",
+            "视频、音频、文本"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md"
+        }
+      ]
+    },
+    "glm-realtime-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+        "https://docs.bigmodel.cn/cn/asyncapi/realtime.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-Realtime-Flash",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "realtime.websocket"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-Realtime 是一款音视频通话模型，能够提供实时的视频通话功能，通话记忆时长长达2分钟，具有跨文本、音频和视频进行实时推理的能力。",
+      "input_modalities": [
+        "video",
+        "audio",
+        "text"
+      ],
+      "output_modalities": [
+        "audio"
+      ],
+      "context_window_tokens": 8000,
+      "max_output_tokens": 1000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Realtime 是一款音视频通话模型，能够提供实时的视频通话功能，通话记忆时长长达2分钟，具有跨文本、音频和视频进行实时推理的能力。",
+          "card_titles": [
+            "输入模态",
+            "输出模态",
+            "最大输出 Tokens",
+            "价格",
+            "上下文窗口"
+          ],
+          "card_values": [
+            "视频、音频、文本",
+            "音频",
+            "1K",
+            "GLM-Realtime-Flash: 音频：0.18元/分钟；视频：1.2元/分钟 GLM-Realtime-Air: 音频：0.3元/分钟；视频：2.1元/分钟",
+            "音频通话: 8K, 预计20轮 视频通话: 32K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "realtime.websocket",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/cn/asyncapi/realtime.md",
+          "source_page": "realtime",
+          "section": "音视频通话",
+          "api_surface": "realtime.websocket",
+          "method": "WS",
+          "endpoint": "wss://open.bigmodel.cn/api/paas/v4/realtime"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-Realtime",
+            "实时音视频",
+            "- 能够提供实时的视频通话功能，通话记忆时长长达2分钟 / - 具有跨文本、音频和视频进行实时推理的能力",
+            "视频、音频、文本"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-realtime.md"
+        }
+      ]
+    },
+    "glm-tts": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/文本转语音.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-TTS",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "audio.speech"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-TTS 语音合成模型以新一代智谱语音大模型为核心，突破传统语音合成框架，通过上下文智能预判文本情绪与语调，显著提升语音自然度与表现力，让合成语音具备真实情感与生命力。GLM‑TTS 在架构上采用两阶段生成，并在训练中引入基于 GRPO 的强化学习方案，在公开评测的「字错误率」和「情感表达」上取得开源 SOTA 表现。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "audio"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-TTS 语音合成模型以新一代智谱语音大模型为核心，突破传统语音合成框架，通过上下文智能预判文本情绪与语调，显著提升语音自然度与表现力，让合成语音具备真实情感与生命力。GLM‑TTS 在架构上采用两阶段生成，并在训练中引入基于 GRPO 的强化学习方案，在公开评测的「字错误率」和「情感表达」上取得开源 SOTA 表现。",
+          "card_titles": [
+            "输入模态",
+            "输出模态"
+          ],
+          "card_values": [
+            "文本",
+            "音频"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "audio.speech",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/文本转语音.md",
+          "source_page": "text_to_speech",
+          "section": "文本转语音",
+          "api_surface": "audio.speech",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/audio/speech"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-TTS",
+            "语音合成模型",
+            "- 超拟人语音合成，情感表达增强 / - 非流式与流式接口",
+            "文本"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts.md"
+        }
+      ]
+    },
+    "glm-tts-clone": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts-clone.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts-clone.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/音色复刻.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "GLM-TTS-Clone",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.voice_clone"
+      ],
+      "categories": [
+        "音视频模型"
+      ],
+      "summary": "GLM-TTS-Clone 是智谱推出的音色克隆模型，只需 3 秒语音样本，即可学习说话者的音色与语气习惯，可在通用朗读、情感配音、教育测评、电子书、有声客服等场景中生成自然流畅、贴近真人的语音。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts-clone.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-TTS-Clone 是智谱推出的音色克隆模型，只需 3 秒语音样本，即可学习说话者的音色与语气习惯，可在通用朗读、情感配音、教育测评、电子书、有声客服等场景中生成自然流畅、贴近真人的语音。",
+          "card_titles": [
+            "输入模态",
+            "输出模态"
+          ],
+          "card_values": [
+            "需要克隆音色的音频、试听文本（可选）",
+            "音色ID、试听音频（可选）"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts-clone.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "audio.speech",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/音色复刻.md",
+          "source_page": "voice_clone",
+          "section": "音色复刻",
+          "api_surface": "audio.voice_clone",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/voice/clone"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "音视频模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持"
+          ],
+          "values": [
+            "GLM-TTS-Clone",
+            "音色克隆模型",
+            "- 3秒音频即可生成音色 / - 支持普通话及轻口音 / - 细腻的情感表达",
+            "文本、音频"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/sound-and-video/glm-tts-clone.md"
+        }
+      ]
+    },
+    "glm-z1-air": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+      "display_name": "GLM-Z1-Air",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "max_output_tokens": 32000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+          "note": "GLM-Z1 系列模型已下线，建议选择最新旗舰文本模型 GLM-4.6，该模型同样支持思考模式。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出 Tokens"
+          ],
+          "card_values": [
+            "高性价比",
+            "0.5 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "128K",
+            "32K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-z1-airx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+      "display_name": "GLM-Z1-AirX",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 32000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+          "note": "GLM-Z1 系列模型已下线，建议选择最新旗舰文本模型 GLM-4.6，该模型同样支持思考模式。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "极速推理",
+            "5 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "32K",
+            "30K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-z1-flash": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+      "display_name": "GLM-Z1-Flash",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+          "note": "GLM-Z1 系列模型已下线，建议选择最新旗舰文本模型 GLM-4.6，该模型同样支持思考模式。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "免费版",
+            "/",
+            "文本",
+            "文本",
+            "128K",
+            "32K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "glm-z1-flashx": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+      "display_name": "GLM-Z1-FlashX",
+      "status": "historical",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "历史模型"
+      ],
+      "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "context_window_tokens": 128000,
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "GLM-Z1 系列包含Air、AirX、FlashX、Flash这四个模型。 1. GLM-Z1-Air 是一款具备深度思考能力的推理模型。该模型通过推理数据增强和对齐优化，数理推理能力显著增强，适合高频调用场景。GLM-Z1-AirX 为该模型的高速版。 2. GLM-Z1-FlashX 具有超快推理速度和更快并发保障，极致性价比，进一步降低推理模型的使用门槛，是免费推理模型 GLM-Z1-Flash 的增强版本。",
+          "note": "GLM-Z1 系列模型已下线，建议选择最新旗舰文本模型 GLM-4.6，该模型同样支持思考模式。",
+          "card_titles": [
+            "定位",
+            "价格",
+            "输入模态",
+            "输出模态",
+            "上下文窗口",
+            "最大输出Tokens"
+          ],
+          "card_values": [
+            "高速低价",
+            "0.1 元 / 百万 Tokens",
+            "文本",
+            "文本",
+            "128K",
+            "32K"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/text/glm-z1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "chat.completion",
+          "notes": "Inferred from official model-page examples or interface description."
+        }
+      ]
+    },
+    "rerank": {
+      "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/文本重排序.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/api-reference/模型-api/文本重排序.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "rerank",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "rerank"
+      ],
+      "categories": [
+        "其他模型"
+      ],
+      "summary": "计算文本之间的 score 值， / 对召回结果进行重排序",
+      "context_window_tokens": 4000,
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/文本重排序.md",
+          "source_page": "rerank",
+          "section": "文本重排序",
+          "api_surface": "rerank",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/rerank"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "其他模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "上下文",
+            "最大输出"
+          ],
+          "values": [
+            "Rerank",
+            "重排序模型",
+            "计算文本之间的 score 值， / 对召回结果进行重排序",
+            "4K",
+            "-"
+          ],
+          "detail_url": ""
+        }
+      ]
+    },
+    "vidu2-image": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "vidu2-image",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "首尾帧",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "参考生视频",
+            "4s",
+            "720P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu 2",
+            "高速低价",
+            "- 速度优、性价比优 / - 语义增强的首尾帧衔接 / - 多参考图的一致性强化",
+            "图像、参考、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md"
+        }
+      ]
+    },
+    "vidu2-reference": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "vidu2-reference",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "首尾帧",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "参考生视频",
+            "4s",
+            "720P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu 2",
+            "高速低价",
+            "- 速度优、性价比优 / - 语义增强的首尾帧衔接 / - 多参考图的一致性强化",
+            "图像、参考、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md"
+        }
+      ]
+    },
+    "vidu2-start-end": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "vidu2-start-end",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu 2 视频生成大模型，平衡速度与质量，主攻图生视频、首尾帧功能，支持 4 秒时长下 720P 分辨率输出。生成速度大幅提升，成本显著降低；图生视频修复变色问题，画面稳定可控适配电商等场景，首尾帧语义理解与多参考图一致性增强，成为泛娱乐、互联网、动漫短剧、广告量产的高效工具。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "首尾帧",
+            "4s",
+            "720P",
+            "1.25 元 / 次",
+            "参考生视频",
+            "4s",
+            "720P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu 2",
+            "高速低价",
+            "- 速度优、性价比优 / - 语义增强的首尾帧衔接 / - 多参考图的一致性强化",
+            "图像、参考、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/vidu2.md"
+        }
+      ]
+    },
+    "viduq1-image": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "viduq1-image",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "首尾帧",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "文生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu Q1",
+            "质量较优",
+            "- 影视级的画质清晰度 / - 精准解决画面崩坏 / - 多艺术形态的风格 / - 行业标杆级转场流畅度",
+            "图像、文本、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md"
+        }
+      ]
+    },
+    "viduq1-start-end": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "viduq1-start-end",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "首尾帧",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "文生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu Q1",
+            "质量较优",
+            "- 影视级的画质清晰度 / - 精准解决画面崩坏 / - 多艺术形态的风格 / - 行业标杆级转场流畅度",
+            "图像、文本、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md"
+        }
+      ]
+    },
+    "viduq1-text": {
+      "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+      "source_urls": [
+        "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+        "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+        "https://docs.bigmodel.cn/cn/guide/start/model-overview.md"
+      ],
+      "display_name": "viduq1-text",
+      "status": "active",
+      "vendor": "zhipu",
+      "api_surfaces": [
+        "video.generation.async"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "概览",
+          "summary": "Vidu Q1 是 Vidu 新一代视频生成大模型，聚焦高质量视频创作，固定输出 5 秒、24 帧、1080P 规格内容。凭借对清晰度的深度优化，画质质感大幅跃升，手部穿模、画面抖动等问题显著改善；写实风格逼近真实场景，2D 动画画风精准保持，首尾帧转场更加丝滑，适用于影视、广告、动漫短剧等高要求创作场景。",
+          "card_titles": [
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格",
+            "能力",
+            "时长",
+            "清晰度",
+            "价格"
+          ],
+          "card_values": [
+            "图生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "首尾帧",
+            "5s",
+            "1080P",
+            "2.5 元 / 次",
+            "文生视频",
+            "5s",
+            "1080P",
+            "2.5 元 / 次"
+          ]
+        },
+        {
+          "table_kind": "inference",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md",
+          "source_page": "model_page",
+          "section": "调用示例",
+          "api_surface": "video.generation.async",
+          "notes": "Inferred from official model-page examples or interface description."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.bigmodel.cn/api-reference/模型-api/视频生成异步.md",
+          "source_page": "video_generation_async",
+          "section": "视频生成(异步)",
+          "api_surface": "video.generation.async",
+          "method": "POST",
+          "endpoint": "https://open.bigmodel.cn/api/paas/v4/videos/generations"
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://docs.bigmodel.cn/cn/guide/start/model-overview.md",
+          "source_page": "model_overview",
+          "section": "视频生成模型",
+          "columns": [
+            "模型",
+            "定位",
+            "特点",
+            "多模态支持",
+            "多分辨率"
+          ],
+          "values": [
+            "Vidu Q1",
+            "质量较优",
+            "- 影视级的画质清晰度 / - 精准解决画面崩坏 / - 多艺术形态的风格 / - 行业标杆级转场流畅度",
+            "图像、文本、首尾帧",
+            "不支持"
+          ],
+          "detail_url": "https://docs.bigmodel.cn/cn/guide/models/video-generation/viduq1.md"
+        }
+      ]
+    }
+  }
+}

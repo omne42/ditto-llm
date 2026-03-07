@@ -107,7 +107,7 @@
 
 需要启用 feature `gateway-routing-advanced`，并在启动时通过 CLI 打开对应开关：
 
-- `--proxy-retry` / `--proxy-retry-status-codes` / `--proxy-retry-max-attempts`
+- `--proxy-retry` / `--proxy-retry-status-codes` / `--proxy-fallback-status-codes` / `--proxy-retry-max-attempts`
 - `--proxy-circuit-breaker` / `--proxy-cb-failure-threshold` / `--proxy-cb-cooldown-secs`
 - `--proxy-health-checks` / `--proxy-health-check-*`
 
@@ -120,7 +120,9 @@
 重要细节：
 
 - `max_attempts` 的默认值是 “候选 backend 数量”（即最多尝试一遍 fallback 列表）
-- 只有当启用 retry 时才会对“失败”继续尝试下一个 backend
+- 网络错误始终会尝试 fallback 到下一个 backend
+- `--proxy-retry` + `--proxy-retry-status-codes`：命中状态码时按 retry 语义 fallback
+- `--proxy-fallback-status-codes`：命中状态码时直接 fallback（即使未启用 `--proxy-retry`）
 
 ### 3.2 Circuit Breaker（按连续失败）
 

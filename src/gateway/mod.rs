@@ -15,10 +15,14 @@ pub mod litellm_config;
 #[cfg(feature = "gateway-metrics-prometheus")]
 pub mod metrics_prometheus;
 mod multipart;
+#[cfg(feature = "gateway-store-mysql")]
+pub mod mysql_store;
 pub mod observability;
 #[cfg(feature = "gateway-otel")]
 pub mod otel;
 pub mod passthrough;
+#[cfg(feature = "gateway-store-postgres")]
+pub mod postgres_store;
 pub mod proxy_backend;
 #[cfg(feature = "gateway-proxy-cache")]
 pub mod proxy_cache;
@@ -38,8 +42,8 @@ pub mod token_count;
 #[cfg(feature = "gateway-translation")]
 pub mod translation;
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -50,6 +54,18 @@ use cache::ResponseCache;
 use limits::RateLimiter;
 use observability::{Observability, ObservabilitySnapshot};
 use router::Router;
+
+pub(crate) fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+pub(crate) fn read_unpoisoned<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
+    lock.read().unwrap_or_else(|poison| poison.into_inner())
+}
+
+pub(crate) fn write_unpoisoned<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
+    lock.write().unwrap_or_else(|poison| poison.into_inner())
+}
 
 pub use budget::BudgetConfig;
 pub use cache::CacheConfig;
@@ -63,7 +79,11 @@ pub use guardrails::GuardrailsConfig;
 pub use http::GatewayHttpState;
 pub use http_backend::HttpBackend;
 pub use limits::LimitsConfig;
+#[cfg(feature = "gateway-store-mysql")]
+pub use mysql_store::{MySqlStore, MySqlStoreError};
 pub use passthrough::PassthroughConfig;
+#[cfg(feature = "gateway-store-postgres")]
+pub use postgres_store::{PostgresStore, PostgresStoreError};
 pub use proxy_backend::ProxyBackend;
 #[cfg(feature = "gateway-proxy-cache")]
 pub use proxy_cache::{CachedProxyResponse, ProxyCacheConfig, ProxyResponseCache};
@@ -465,16 +485,160 @@ impl Clock for SystemClock {
     }
 }
 
-pub struct Gateway {
+struct GatewayControlPlane {
     config: GatewayConfig,
     virtual_key_token_index: HashMap<String, usize>,
     backends: HashMap<String, Arc<dyn Backend>>,
-    limits: RateLimiter,
-    cache: ResponseCache,
-    budget: BudgetTracker,
     router: Router,
-    observability: Observability,
+}
+
+impl GatewayControlPlane {
+    fn new(config: GatewayConfig) -> Self {
+        let router = Router::new(config.router.clone());
+        let mut control_plane = Self {
+            config,
+            virtual_key_token_index: HashMap::new(),
+            backends: HashMap::new(),
+            router,
+        };
+        control_plane.rebuild_virtual_key_token_index();
+        control_plane
+    }
+
+    fn list_virtual_keys(&self) -> Vec<VirtualKeyConfig> {
+        self.config.virtual_keys.clone()
+    }
+
+    fn replace_virtual_keys(&mut self, keys: Vec<VirtualKeyConfig>) {
+        self.config.virtual_keys = keys;
+        self.rebuild_virtual_key_token_index();
+    }
+
+    fn router_config(&self) -> RouterConfig {
+        self.config.router.clone()
+    }
+
+    fn replace_router_config(&mut self, router: RouterConfig) {
+        self.config.router = router.clone();
+        self.router = Router::new(router);
+    }
+
+    fn backend_names(&self) -> Vec<String> {
+        let mut names = std::collections::BTreeSet::new();
+        for backend in &self.config.backends {
+            names.insert(backend.name.clone());
+        }
+        names.extend(self.backends.keys().cloned());
+        names.into_iter().collect()
+    }
+
+    fn backend_model_maps(&self) -> HashMap<String, BTreeMap<String, String>> {
+        self.config
+            .backends
+            .iter()
+            .map(|backend| (backend.name.clone(), backend.model_map.clone()))
+            .collect()
+    }
+
+    fn config_snapshot(&self) -> GatewayConfig {
+        self.config.clone()
+    }
+
+    fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
+        if let Some(index) = self.virtual_key_token_index.get(token).copied()
+            && let Some(key) = self.config.virtual_keys.get(index)
+            && key.token == token
+        {
+            return Some(key);
+        }
+        self.config
+            .virtual_keys
+            .iter()
+            .find(|key| key.token == token)
+    }
+
+    fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
+        if let Some(existing) = self
+            .config
+            .virtual_keys
+            .iter_mut()
+            .find(|candidate| candidate.id == key.id)
+        {
+            *existing = key;
+            self.rebuild_virtual_key_token_index();
+            false
+        } else {
+            self.config.virtual_keys.push(key);
+            self.rebuild_virtual_key_token_index();
+            true
+        }
+    }
+
+    fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
+        let index = self
+            .config
+            .virtual_keys
+            .iter()
+            .position(|key| key.id == id)?;
+        let removed = self.config.virtual_keys.remove(index);
+        self.rebuild_virtual_key_token_index();
+        Some(removed)
+    }
+
+    fn rebuild_virtual_key_token_index(&mut self) {
+        self.virtual_key_token_index.clear();
+        for (idx, key) in self.config.virtual_keys.iter().enumerate() {
+            self.virtual_key_token_index
+                .entry(key.token.clone())
+                .or_insert(idx);
+        }
+    }
+}
+
+pub struct Gateway {
+    control_plane: RwLock<GatewayControlPlane>,
+    limits: Arc<Mutex<RateLimiter>>,
+    cache: Arc<Mutex<ResponseCache>>,
+    budget: Arc<Mutex<BudgetTracker>>,
+    observability: Arc<Mutex<Observability>>,
     clock: Box<dyn Clock>,
+}
+
+pub(crate) struct GatewayMutation<'a> {
+    control_plane: &'a mut GatewayControlPlane,
+    cache: &'a Mutex<ResponseCache>,
+}
+
+impl GatewayMutation<'_> {
+    pub(crate) fn list_virtual_keys(&self) -> Vec<VirtualKeyConfig> {
+        self.control_plane.list_virtual_keys()
+    }
+
+    pub(crate) fn replace_virtual_keys(&mut self, keys: Vec<VirtualKeyConfig>) {
+        self.control_plane.replace_virtual_keys(keys);
+    }
+
+    pub(crate) fn replace_router_config(&mut self, router: RouterConfig) {
+        self.control_plane.replace_router_config(router);
+    }
+
+    pub(crate) fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
+        if self
+            .control_plane
+            .config
+            .virtual_keys
+            .iter()
+            .find(|candidate| candidate.id == key.id)
+            .is_some_and(|existing| existing.cache != key.cache)
+        {
+            lock_unpoisoned(self.cache).remove_scope(&key.id);
+        }
+        self.control_plane.upsert_virtual_key(key)
+    }
+
+    pub(crate) fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
+        self.control_plane.remove_virtual_key(id)
+    }
 }
 
 pub(crate) struct GatewayPreparedCall {
@@ -503,87 +667,97 @@ impl Gateway {
     }
 
     pub fn with_clock(config: GatewayConfig, clock: Box<dyn Clock>) -> Self {
-        let router = Router::new(config.router.clone());
-        let mut gateway = Self {
-            config,
-            virtual_key_token_index: HashMap::new(),
-            backends: HashMap::new(),
-            limits: RateLimiter::default(),
-            cache: ResponseCache::default(),
-            budget: BudgetTracker::default(),
-            router,
-            observability: Observability::default(),
+        Self {
+            control_plane: RwLock::new(GatewayControlPlane::new(config)),
+            limits: Arc::new(Mutex::new(RateLimiter::default())),
+            cache: Arc::new(Mutex::new(ResponseCache::default())),
+            budget: Arc::new(Mutex::new(BudgetTracker::default())),
+            observability: Arc::new(Mutex::new(Observability::default())),
             clock,
+        }
+    }
+
+    fn with_control_plane<R>(&self, f: impl FnOnce(&GatewayControlPlane) -> R) -> R {
+        let control_plane = read_unpoisoned(&self.control_plane);
+        f(&control_plane)
+    }
+
+    pub(crate) fn mutate_control_plane<R>(
+        &self,
+        f: impl FnOnce(&mut GatewayMutation<'_>) -> R,
+    ) -> R {
+        let result = {
+            let mut control_plane = write_unpoisoned(&self.control_plane);
+            let mut mutation = GatewayMutation {
+                control_plane: &mut control_plane,
+                cache: &self.cache,
+            };
+            f(&mut mutation)
         };
-        gateway.rebuild_virtual_key_token_index();
-        gateway
+        self.prune_internal_scopes();
+        result
     }
 
     pub fn register_backend(&mut self, name: impl Into<String>, backend: impl Backend + 'static) {
-        self.backends.insert(name.into(), Arc::new(backend));
+        let control_plane = self
+            .control_plane
+            .get_mut()
+            .unwrap_or_else(|poison| poison.into_inner());
+        control_plane
+            .backends
+            .insert(name.into(), Arc::new(backend));
     }
 
     pub fn observability(&self) -> ObservabilitySnapshot {
-        self.observability.snapshot()
+        lock_unpoisoned(&self.observability).snapshot()
+    }
+
+    pub(crate) fn config_snapshot(&self) -> GatewayConfig {
+        self.with_control_plane(GatewayControlPlane::config_snapshot)
+    }
+
+    pub(crate) fn backend_model_maps(&self) -> HashMap<String, BTreeMap<String, String>> {
+        self.with_control_plane(GatewayControlPlane::backend_model_maps)
     }
 
     pub fn list_virtual_keys(&self) -> Vec<VirtualKeyConfig> {
-        self.config.virtual_keys.clone()
+        self.with_control_plane(GatewayControlPlane::list_virtual_keys)
     }
 
-    pub(crate) fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        if let Some(index) = self.virtual_key_token_index.get(token).copied() {
-            if let Some(key) = self.config.virtual_keys.get(index) {
-                if key.token == token {
-                    return Some(key);
-                }
-            }
-        }
-        self.config
-            .virtual_keys
-            .iter()
-            .find(|key| key.token == token)
+    pub fn replace_virtual_keys(&self, keys: Vec<VirtualKeyConfig>) {
+        self.mutate_control_plane(|mutation| mutation.replace_virtual_keys(keys));
     }
 
-    fn rebuild_virtual_key_token_index(&mut self) {
-        self.virtual_key_token_index.clear();
-        for (idx, key) in self.config.virtual_keys.iter().enumerate() {
-            self.virtual_key_token_index
-                .entry(key.token.clone())
-                .or_insert(idx);
-        }
+    pub fn router_config(&self) -> RouterConfig {
+        self.with_control_plane(GatewayControlPlane::router_config)
     }
 
-    pub fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
-        if let Some(existing) = self.config.virtual_keys.iter_mut().find(|k| k.id == key.id) {
-            let cache_changed = existing.cache != key.cache;
-            if cache_changed {
-                self.cache.remove_scope(&key.id);
-            }
-            *existing = key;
-            self.rebuild_virtual_key_token_index();
-            self.prune_internal_scopes();
-            false
-        } else {
-            self.config.virtual_keys.push(key);
-            self.rebuild_virtual_key_token_index();
-            self.prune_internal_scopes();
-            true
-        }
+    pub fn replace_router_config(&self, router: RouterConfig) {
+        self.mutate_control_plane(|mutation| mutation.replace_router_config(router));
     }
 
-    pub fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
-        let index = self.config.virtual_keys.iter().position(|k| k.id == id)?;
-        let removed = self.config.virtual_keys.remove(index);
-        self.rebuild_virtual_key_token_index();
-        self.prune_internal_scopes();
-        Some(removed)
+    pub fn backend_names(&self) -> Vec<String> {
+        self.with_control_plane(GatewayControlPlane::backend_names)
     }
 
-    fn prune_internal_scopes(&mut self) {
+    #[cfg(test)]
+    pub(crate) fn virtual_key_by_token(&self, token: &str) -> Option<VirtualKeyConfig> {
+        self.with_control_plane(|control_plane| control_plane.virtual_key_by_token(token).cloned())
+    }
+
+    pub fn upsert_virtual_key(&self, key: VirtualKeyConfig) -> bool {
+        self.mutate_control_plane(|mutation| mutation.upsert_virtual_key(key))
+    }
+
+    pub fn remove_virtual_key(&self, id: &str) -> Option<VirtualKeyConfig> {
+        self.mutate_control_plane(|mutation| mutation.remove_virtual_key(id))
+    }
+
+    fn prune_internal_scopes(&self) {
+        let virtual_keys = self.list_virtual_keys();
         let mut scopes = HashSet::<String>::new();
 
-        for key in &self.config.virtual_keys {
+        for key in &virtual_keys {
             scopes.insert(key.id.clone());
 
             if let Some(tenant_id) = key
@@ -614,18 +788,19 @@ impl Gateway {
             }
         }
 
-        self.limits.retain_scopes(&scopes);
-        self.budget.retain_scopes(&scopes);
-        self.cache.retain_scopes(&scopes);
+        lock_unpoisoned(&self.limits).retain_scopes(&scopes);
+        lock_unpoisoned(&self.budget).retain_scopes(&scopes);
+        lock_unpoisoned(&self.cache).retain_scopes(&scopes);
     }
 
     pub(crate) fn prepare_handle_request(
-        &mut self,
+        &self,
         request: &GatewayRequest,
     ) -> Result<GatewayPreparedRequest, GatewayError> {
-        self.observability.record_request();
+        lock_unpoisoned(&self.observability).record_request();
 
-        let key = self
+        let control_plane = read_unpoisoned(&self.control_plane);
+        let key = control_plane
             .virtual_key_by_token(&request.virtual_key)
             .ok_or(GatewayError::Unauthorized)?
             .clone();
@@ -638,11 +813,10 @@ impl Gateway {
         let minute = now / 60;
         let tokens = request.total_tokens();
 
-        if let Err(err) = self
-            .limits
-            .check_and_consume(&key.id, &key.limits, tokens, minute)
+        if let Err(err) =
+            lock_unpoisoned(&self.limits).check_and_consume(&key.id, &key.limits, tokens, minute)
         {
-            self.observability.record_rate_limited();
+            lock_unpoisoned(&self.observability).record_rate_limited();
             return Err(err);
         }
 
@@ -654,11 +828,13 @@ impl Gateway {
             key.tenant_limits.as_ref(),
         ) {
             let scope = format!("tenant:{tenant_id}");
-            if let Err(err) = self
-                .limits
-                .check_and_consume(&scope, tenant_limits, tokens, minute)
-            {
-                self.observability.record_rate_limited();
+            if let Err(err) = lock_unpoisoned(&self.limits).check_and_consume(
+                &scope,
+                tenant_limits,
+                tokens,
+                minute,
+            ) {
+                lock_unpoisoned(&self.observability).record_rate_limited();
                 return Err(err);
             }
         }
@@ -671,11 +847,13 @@ impl Gateway {
             key.project_limits.as_ref(),
         ) {
             let scope = format!("project:{project_id}");
-            if let Err(err) = self
-                .limits
-                .check_and_consume(&scope, project_limits, tokens, minute)
-            {
-                self.observability.record_rate_limited();
+            if let Err(err) = lock_unpoisoned(&self.limits).check_and_consume(
+                &scope,
+                project_limits,
+                tokens,
+                minute,
+            ) {
+                lock_unpoisoned(&self.observability).record_rate_limited();
                 return Err(err);
             }
         }
@@ -688,40 +866,39 @@ impl Gateway {
             key.user_limits.as_ref(),
         ) {
             let scope = format!("user:{user_id}");
-            if let Err(err) = self
-                .limits
-                .check_and_consume(&scope, user_limits, tokens, minute)
+            if let Err(err) =
+                lock_unpoisoned(&self.limits).check_and_consume(&scope, user_limits, tokens, minute)
             {
-                self.observability.record_rate_limited();
+                lock_unpoisoned(&self.observability).record_rate_limited();
                 return Err(err);
             }
         }
 
-        let guardrails = self
+        let guardrails = control_plane
             .router
             .rule_for_model(&request.model, Some(&key))
             .and_then(|rule| rule.guardrails.as_ref())
             .unwrap_or(&key.guardrails);
 
         if let Err(err) = guardrails.check(request) {
-            self.observability.record_guardrail_blocked();
+            lock_unpoisoned(&self.observability).record_guardrail_blocked();
             return Err(err);
         }
 
         if let Err(err) = key.passthrough.validate(request) {
-            self.observability.record_guardrail_blocked();
+            lock_unpoisoned(&self.observability).record_guardrail_blocked();
             return Err(err);
         }
 
-        let backend_name = self.router.select_backend(request, &key)?;
+        let backend_name = control_plane.router.select_backend(request, &key)?;
 
         let bypass_cache = key.passthrough.bypass_cache(request);
         let cache_key =
             (key.cache.enabled && !bypass_cache).then(|| control_plane_cache_key(&key.id, request));
         if let Some(cache_key) = cache_key.as_deref() {
-            if let Some(mut cached) = self.cache.get(&key.id, cache_key, now) {
+            if let Some(mut cached) = lock_unpoisoned(&self.cache).get(&key.id, cache_key, now) {
                 cached.cached = true;
-                self.observability.record_cache_hit();
+                lock_unpoisoned(&self.observability).record_cache_hit();
                 return Ok(GatewayPreparedRequest::Cached {
                     key_id: key.id.clone(),
                     response: cached,
@@ -729,11 +906,10 @@ impl Gateway {
             }
         }
 
-        if let Err(err) = self
-            .budget
-            .can_spend(&key.id, &key.budget, u64::from(tokens))
+        if let Err(err) =
+            lock_unpoisoned(&self.budget).can_spend(&key.id, &key.budget, u64::from(tokens))
         {
-            self.observability.record_budget_exceeded();
+            lock_unpoisoned(&self.observability).record_budget_exceeded();
             return Err(err);
         }
 
@@ -745,11 +921,10 @@ impl Gateway {
             key.tenant_budget.as_ref(),
         ) {
             let scope = format!("tenant:{tenant_id}");
-            if let Err(err) = self
-                .budget
-                .can_spend(&scope, tenant_budget, u64::from(tokens))
+            if let Err(err) =
+                lock_unpoisoned(&self.budget).can_spend(&scope, tenant_budget, u64::from(tokens))
             {
-                self.observability.record_budget_exceeded();
+                lock_unpoisoned(&self.observability).record_budget_exceeded();
                 return Err(err);
             }
         }
@@ -762,11 +937,10 @@ impl Gateway {
             key.project_budget.as_ref(),
         ) {
             let scope = format!("project:{project_id}");
-            if let Err(err) = self
-                .budget
-                .can_spend(&scope, project_budget, u64::from(tokens))
+            if let Err(err) =
+                lock_unpoisoned(&self.budget).can_spend(&scope, project_budget, u64::from(tokens))
             {
-                self.observability.record_budget_exceeded();
+                lock_unpoisoned(&self.observability).record_budget_exceeded();
                 return Err(err);
             }
         }
@@ -778,22 +952,23 @@ impl Gateway {
             key.user_budget.as_ref(),
         ) {
             let scope = format!("user:{user_id}");
-            if let Err(err) = self
-                .budget
-                .can_spend(&scope, user_budget, u64::from(tokens))
+            if let Err(err) =
+                lock_unpoisoned(&self.budget).can_spend(&scope, user_budget, u64::from(tokens))
             {
-                self.observability.record_budget_exceeded();
+                lock_unpoisoned(&self.observability).record_budget_exceeded();
                 return Err(err);
             }
         }
 
-        let backend = self.backends.get(&backend_name).cloned().ok_or_else(|| {
-            GatewayError::BackendNotFound {
+        let backend = control_plane
+            .backends
+            .get(&backend_name)
+            .cloned()
+            .ok_or_else(|| GatewayError::BackendNotFound {
                 name: backend_name.clone(),
-            }
-        })?;
+            })?;
 
-        self.observability.record_backend_call();
+        lock_unpoisoned(&self.observability).record_backend_call();
 
         let tenant_budget_scope = key
             .tenant_id
@@ -826,17 +1001,17 @@ impl Gateway {
                     .map(|budget| (format!("user:{user_id}"), budget.clone()))
             });
 
-        // Reserve token budgets before releasing the gateway lock so concurrent
-        // requests cannot pass budget checks against stale spent counters.
-        self.budget.spend(&key.id, &key.budget, u64::from(tokens));
+        // Reserve token budgets before returning so concurrent requests cannot
+        // pass budget checks against stale spent counters.
+        lock_unpoisoned(&self.budget).spend(&key.id, &key.budget, u64::from(tokens));
         if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-            self.budget.spend(scope, budget, u64::from(tokens));
+            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
         }
         if let Some((scope, budget)) = project_budget_scope.as_ref() {
-            self.budget.spend(scope, budget, u64::from(tokens));
+            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
         }
         if let Some((scope, budget)) = user_budget_scope.as_ref() {
-            self.budget.spend(scope, budget, u64::from(tokens));
+            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
         }
 
         Ok(GatewayPreparedRequest::Call(Box::new(
@@ -855,53 +1030,58 @@ impl Gateway {
     }
 
     pub(crate) fn complete_handle_success(
-        &mut self,
+        &self,
         prepared: &GatewayPreparedCall,
         response: &GatewayResponse,
     ) {
-        if let Some(cache_key) = prepared.cache_key.as_ref() {
-            // Use the latest key config so in-flight requests do not re-populate
-            // cache entries after cache has been disabled or key has been removed.
-            let Some(key) = self
+        let Some(cache_key) = prepared.cache_key.as_ref() else {
+            return;
+        };
+        let Some(cache_config) = self.with_control_plane(|control_plane| {
+            control_plane
                 .config
                 .virtual_keys
                 .iter()
-                .find(|k| k.id == prepared.key_id)
-            else {
-                return;
-            };
-            if !key.enabled || !key.cache.enabled {
-                return;
-            }
-            let now = self.clock.now_epoch_seconds();
-            self.cache.insert(
-                &prepared.key_id,
-                cache_key.clone(),
-                response.clone(),
-                &key.cache,
-                now,
-            );
-        }
+                .find(|key| key.id == prepared.key_id)
+                .and_then(|key| {
+                    if key.enabled && key.cache.enabled {
+                        Some(key.cache.clone())
+                    } else {
+                        None
+                    }
+                })
+        }) else {
+            return;
+        };
+
+        let now = self.clock.now_epoch_seconds();
+        lock_unpoisoned(&self.cache).insert(
+            &prepared.key_id,
+            cache_key.clone(),
+            response.clone(),
+            &cache_config,
+            now,
+        );
     }
 
-    pub(crate) fn complete_handle_failure(&mut self, prepared: &GatewayPreparedCall) {
-        self.budget
-            .refund(&prepared.key_id, &prepared.key_budget, prepared.tokens);
+    pub(crate) fn complete_handle_failure(&self, prepared: &GatewayPreparedCall) {
+        lock_unpoisoned(&self.budget).refund(
+            &prepared.key_id,
+            &prepared.key_budget,
+            prepared.tokens,
+        );
         if let Some((scope, budget)) = prepared.tenant_budget_scope.as_ref() {
-            self.budget.refund(scope, budget, prepared.tokens);
+            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
         }
         if let Some((scope, budget)) = prepared.project_budget_scope.as_ref() {
-            self.budget.refund(scope, budget, prepared.tokens);
+            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
         }
         if let Some((scope, budget)) = prepared.user_budget_scope.as_ref() {
-            self.budget.refund(scope, budget, prepared.tokens);
+            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
         }
     }
 
-    pub async fn handle(
-        &mut self,
-        request: GatewayRequest,
-    ) -> Result<GatewayResponse, GatewayError> {
+    pub async fn handle(&self, request: GatewayRequest) -> Result<GatewayResponse, GatewayError> {
         match self.prepare_handle_request(&request)? {
             GatewayPreparedRequest::Cached { response, .. } => Ok(response),
             GatewayPreparedRequest::Call(prepared) => {

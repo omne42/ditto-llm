@@ -2,6 +2,11 @@
 
 Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
+如果你要做跨仓库/跨语言对接（例如 rust-ui），可优先参考冻结的 v0.1 契约产物：
+
+- OpenAPI：`contracts/gateway-contract-v0.1.openapi.yaml`
+- Rust 类型包：`crates/ditto-gateway-contract-types`
+
 > 说明：本页重点描述 Ditto Gateway 自己暴露的端点与语义；对于 `/v1/*` passthrough 的具体请求/响应格式，请参考 OpenAI-compatible API（Ditto 尽量不变形）。
 
 ## Health
@@ -125,13 +130,19 @@ Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 
 
 常见端点：
 
+- `GET /admin/config/version`、`GET /admin/config/versions`、`GET /admin/config/versions/:version_id`（read-only 或 write token；按版本明细支持 `?include_tokens=true`）
+- `GET /admin/config/diff`（read-only 或 write token；`from_version_id` + `to_version_id` 对比版本差异；支持 `include_tokens`）
+- `GET /admin/config/export`（read-only 或 write token；默认导出当前配置，支持 `version_id` + `include_tokens`）
+- `POST /admin/config/validate`（read-only 或 write token；校验 `virtual_keys` 与可选 `router` payload（含可选 hash），不修改配置）
+- `PUT /admin/config/router`（需要 write token；更新 router 配置并生成新版本；支持 `dry_run`）
+- `POST /admin/config/rollback`（需要 write token；回滚 virtual keys + router 到指定版本；支持 `dry_run`）
 - `GET /admin/keys`（read-only 或 write token）
 - `POST /admin/keys`、`PUT|DELETE /admin/keys/:id`（需要 write token）
 - `POST /admin/proxy_cache/purge`（需要 write token + proxy cache）
 - `GET /admin/backends`（read-only 或 write token）
 - `POST /admin/backends/:name/reset`（需要 write token + `gateway-routing-advanced`）
-- `GET /admin/audit`、`GET /admin/budgets*`（需要启用 sqlite/redis store）
-- `GET /admin/costs*`（需要启用 sqlite/redis store + `gateway-costing`）
+- `GET /admin/audit`、`GET /admin/budgets*`（需要启用 sqlite/pg/mysql/redis store）
+- `GET /admin/costs*`（需要启用 sqlite/pg/mysql/redis store + `gateway-costing`）
 
 详细见「Admin API」。
 

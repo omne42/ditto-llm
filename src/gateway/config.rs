@@ -308,6 +308,9 @@ impl BackendConfig {
             if let Some(default_model) = provider_config.default_model.as_mut() {
                 *default_model = expand_env_placeholders(default_model, env)?;
             }
+            if let Some(normalize_endpoint) = provider_config.normalize_endpoint.as_mut() {
+                *normalize_endpoint = expand_env_placeholders(normalize_endpoint, env)?;
+            }
             for value in provider_config.model_whitelist.iter_mut() {
                 *value = expand_env_placeholders(value, env)?;
             }
@@ -340,6 +343,14 @@ impl BackendConfig {
                     default_model,
                     env,
                     "backends[].provider_config.default_model",
+                )
+                .await?;
+            }
+            if let Some(normalize_endpoint) = provider_config.normalize_endpoint.as_mut() {
+                resolve_secret_in_string(
+                    normalize_endpoint,
+                    env,
+                    "backends[].provider_config.normalize_endpoint",
                 )
                 .await?;
             }
@@ -645,6 +656,9 @@ mod tests {
             )]),
             auth: None,
             capabilities: None,
+            upstream_api: None,
+            normalize_to: None,
+            normalize_endpoint: None,
         };
 
         let mut backend = BackendConfig {

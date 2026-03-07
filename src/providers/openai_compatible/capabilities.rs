@@ -28,10 +28,7 @@ impl OpenAICompatibleEmbeddings {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &[
-            "OPENAI_COMPAT_API_KEY",
-            "OPENAI_API_KEY",
-        ];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
         Ok(Self {
             client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
                 .await?,
@@ -352,9 +349,12 @@ mod tests {
             .with_model("test-model");
 
         let mut request = GenerateRequest::from(vec![Message::user("hi")]);
-        request.provider_options = Some(json!({
-            "openai-compatible": { "stream": true }
-        }));
+        request.provider_options = Some(
+            json!({
+                "openai-compatible": { "stream": true }
+            })
+            .into(),
+        );
 
         let response = client.generate(request).await?;
 
@@ -379,7 +379,8 @@ mod tests {
             }],
         }];
 
-        let (mapped, warnings) = OpenAICompatible::messages_to_chat_messages(&messages);
+        let (mapped, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
         assert!(warnings.is_empty());
         assert_eq!(
             mapped,
@@ -402,7 +403,8 @@ mod tests {
             }],
         }];
 
-        let (mapped, warnings) = OpenAICompatible::messages_to_chat_messages(&messages);
+        let (mapped, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
         assert!(warnings.is_empty());
         assert_eq!(mapped.len(), 1);
 
@@ -433,7 +435,8 @@ mod tests {
             }],
         }];
 
-        let (mapped, warnings) = OpenAICompatible::messages_to_chat_messages(&messages);
+        let (mapped, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
         assert!(warnings.is_empty());
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].get("role").and_then(Value::as_str), Some("user"));

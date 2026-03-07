@@ -4,12 +4,14 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::VirtualKeyConfig;
+use super::{RouterConfig, VirtualKeyConfig};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GatewayStateFile {
     #[serde(default)]
     pub virtual_keys: Vec<VirtualKeyConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub router: Option<RouterConfig>,
 }
 
 #[derive(Debug, Error)]

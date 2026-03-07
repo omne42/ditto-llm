@@ -483,12 +483,27 @@ fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::
     let _ = logger.log_event(kind, payload);
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 async fn append_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
     let payload = state.redactor.redact(payload);
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload.clone()).await;
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let _ = store.append_audit_log(kind, payload.clone()).await;
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 

@@ -1,0 +1,610 @@
+{
+  "provider": {
+    "id": "xai",
+    "display_name": "xAI / Grok",
+    "base_url": "https://api.x.ai/v1",
+    "protocol": "openai",
+    "source_url": "https://docs.x.ai/developers/models",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "XAI_API_KEY"
+      ]
+    }
+  },
+  "models": {
+    "grok-4-0709": {
+      "source_url": "https://docs.x.ai/docs/models/grok-4",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-4",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-create-chat-completion"
+      ],
+      "display_name": "Grok 4",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "推理模型",
+        "视觉模型",
+        "代码模型"
+      ],
+      "aliases": [
+        "grok-4"
+      ],
+      "summary": "Powerful frontier model designed for real-world utility with native tool use, search, vision, and strong coding performance.",
+      "context_window_tokens": 256000,
+      "max_output_tokens": 16000,
+      "pricing_input_usd_per_million": "3.00",
+      "pricing_output_usd_per_million": "15.00",
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "vision",
+        "structured_outputs",
+        "tool_use",
+        "web_search",
+        "coding"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-4",
+          "source_page": "grok_4",
+          "section": "Model summary",
+          "api_model_name": "grok-4-0709",
+          "model_alias": "grok-4",
+          "image_support": "true",
+          "structured_outputs": "true",
+          "notes": "The Grok 4 model page lists the API model name, latest alias, image support, structured outputs, and pricing."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "xAI exposes Grok text and multimodal chat models through the Chat Completions API."
+        },
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-4",
+          "resolved_model": "grok-4-0709"
+        }
+      ]
+    },
+    "grok-4-fast-reasoning-0709": {
+      "source_url": "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-create-chat-completion"
+      ],
+      "display_name": "Grok 4 Fast Reasoning",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "推理模型",
+        "长上下文模型"
+      ],
+      "aliases": [
+        "grok-4-fast-reasoning"
+      ],
+      "summary": "Reasoning model optimized for high-throughput agentic and long-context workloads with a 2M-token context window.",
+      "context_window_tokens": 2000000,
+      "max_output_tokens": 64000,
+      "pricing_input_usd_per_million": "0.20",
+      "pricing_output_usd_per_million": "0.50",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "structured_outputs",
+        "reasoning",
+        "long_context"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
+          "source_page": "grok_4_fast_reasoning",
+          "section": "Model summary",
+          "api_model_name": "grok-4-fast-reasoning-0709",
+          "model_alias": "grok-4-fast-reasoning",
+          "image_support": "false",
+          "structured_outputs": "true",
+          "notes": "The Grok 4 Fast Reasoning page documents the API model id, alias, 2M context window, and token pricing."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Reasoning-capable Grok text models are served through the Chat Completions API."
+        },
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-4-fast-reasoning",
+          "resolved_model": "grok-4-fast-reasoning-0709"
+        }
+      ]
+    },
+    "grok-3-fast-20251025": {
+      "source_url": "https://docs.x.ai/docs/models/grok-3-fast",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-3-fast",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-create-chat-completion"
+      ],
+      "display_name": "Grok 3 Fast",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "文本模型",
+        "低延迟模型"
+      ],
+      "aliases": [
+        "grok-3-fast"
+      ],
+      "summary": "Low-latency Grok model for day-to-day conversational tasks, optimized for responsiveness and throughput.",
+      "context_window_tokens": 2000000,
+      "max_output_tokens": 16000,
+      "pricing_input_usd_per_million": "5.00",
+      "pricing_output_usd_per_million": "25.00",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "structured_outputs",
+        "low_latency"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-3-fast",
+          "source_page": "grok_3_fast",
+          "section": "Model summary",
+          "api_model_name": "grok-3-fast-20251025",
+          "model_alias": "grok-3-fast",
+          "image_support": "false",
+          "structured_outputs": "true",
+          "notes": "The Grok 3 Fast page documents the API model id, latest alias, 2M context window, and token pricing."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Grok 3 Fast is served through the Chat Completions API."
+        },
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-3-fast",
+          "resolved_model": "grok-3-fast-20251025"
+        }
+      ]
+    },
+    "grok-code-fast-1-0825": {
+      "source_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-code-fast-1",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-create-chat-completion"
+      ],
+      "display_name": "Grok Code Fast 1",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "代码模型",
+        "文本模型"
+      ],
+      "aliases": [
+        "grok-code-fast-1"
+      ],
+      "summary": "Fast specialized coding model for autocomplete, edit suggestions, and agentic software development tasks.",
+      "context_window_tokens": 131072,
+      "pricing_input_usd_per_million": "0.20",
+      "pricing_output_usd_per_million": "1.50",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "coding",
+        "code_completion",
+        "edit_suggestions",
+        "agentic_development"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
+          "source_page": "grok_code_fast_1",
+          "section": "Model summary",
+          "api_model_name": "grok-code-fast-1-0825",
+          "model_alias": "grok-code-fast-1",
+          "notes": "The Grok Code Fast 1 page documents the API model id, alias, and coding-focused positioning."
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Models and Pricing",
+          "api_model_name": "grok-code-fast-1-0825",
+          "context_window_tokens": "131072",
+          "input_pricing_usd_per_million": "0.20",
+          "output_pricing_usd_per_million": "1.50",
+          "notes": "The models and pricing table provides the 131,072-token context window and token pricing for Grok Code Fast 1."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Coding-oriented Grok text models are exposed via the Chat Completions API."
+        },
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-code-fast-1",
+          "resolved_model": "grok-code-fast-1-0825"
+        }
+      ]
+    },
+    "grok-2-image-1212": {
+      "source_url": "https://docs.x.ai/docs/models/grok-imagine-image",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-imagine-image",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-createimage"
+      ],
+      "display_name": "Grok 2 Image",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图像生成模型"
+      ],
+      "summary": "Text-to-image model tuned for strong prompt adherence and high-quality generations without a fixed style.",
+      "max_input_tokens": 4096,
+      "max_output_images": 1,
+      "pricing_per_image_usd": "0.07",
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "image"
+      ],
+      "supported_features": [
+        "prompt_adherence",
+        "single_image_output"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-imagine-image",
+          "source_page": "grok_imagine_image",
+          "section": "Model summary",
+          "api_model_name": "grok-2-image-1212",
+          "notes": "The Grok image generation page documents the API model name, prompt-only input, single-image output, and per-image pricing."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-createimage",
+          "source_page": "create_image",
+          "section": "Create Image",
+          "api_surface": "image.generation",
+          "endpoint": "https://api.x.ai/v1/images/generations",
+          "notes": "xAI image generation models are exposed through the Create Image endpoint."
+        }
+      ]
+    },
+    "grok-imagine-2": {
+      "source_url": "https://docs.x.ai/docs/models/grok-imagine-video",
+      "source_urls": [
+        "https://docs.x.ai/docs/models/grok-imagine-video",
+        "https://docs.x.ai/developers/models",
+        "https://docs.x.ai/api/operation/operation-createvideo"
+      ],
+      "display_name": "Grok Imagine 2",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "video.generation"
+      ],
+      "categories": [
+        "视频生成模型"
+      ],
+      "summary": "Text-and-image conditioned video generation model for high-quality video creation.",
+      "max_input_images": 7,
+      "pricing_5_seconds_cents": "35.00",
+      "pricing_15_seconds_cents": "50.00",
+      "pricing_30_seconds_cents": "100.00",
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "video"
+      ],
+      "supported_features": [
+        "image_conditioning",
+        "multi_image_input"
+      ],
+      "supported_output_lengths_seconds": [
+        "5",
+        "15",
+        "30"
+      ],
+      "records": [
+        {
+          "table_kind": "model_page",
+          "source_url": "https://docs.x.ai/docs/models/grok-imagine-video",
+          "source_page": "grok_imagine_video",
+          "section": "Model summary",
+          "api_model_name": "grok-imagine-2",
+          "notes": "The Grok video generation page documents the API model name, text/image inputs, supported output lengths, and pricing in cents."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-createvideo",
+          "source_page": "create_video",
+          "section": "Create Video",
+          "api_surface": "video.generation",
+          "endpoint": "https://api.x.ai/v1/video/generations",
+          "notes": "xAI video generation models are exposed through the Create Video endpoint."
+        }
+      ]
+    },
+    "grok-2-latest": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-2-latest",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "文本模型"
+      ],
+      "summary": "Official latest alias listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-2-1212",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-2-latest",
+          "resolved_model": "grok-2-1212"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Alias-only Grok text models still resolve through the Chat Completions API."
+        }
+      ]
+    },
+    "grok-2-vision-latest": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-2-vision-latest",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "视觉模型"
+      ],
+      "summary": "Official latest alias listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-2-vision-1212",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-2-vision-latest",
+          "resolved_model": "grok-2-vision-1212"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Alias-only Grok vision models are invoked through the Chat Completions API."
+        }
+      ]
+    },
+    "grok-beta": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-beta",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "文本模型"
+      ],
+      "summary": "Official Grok beta alias still listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-beta",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-beta",
+          "resolved_model": "grok-beta"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Legacy Grok beta aliases remain documented as chat-capable model ids."
+        }
+      ]
+    },
+    "grok-vision-beta": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-vision-beta",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "视觉模型"
+      ],
+      "summary": "Official Grok vision beta alias still listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-vision-beta",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-vision-beta",
+          "resolved_model": "grok-vision-beta"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Legacy Grok beta vision aliases are invoked through the Chat Completions API."
+        }
+      ]
+    },
+    "grok-3": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-3",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "文本模型"
+      ],
+      "summary": "Official latest alias listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-3-20250217",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-3",
+          "resolved_model": "grok-3-20250217"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Alias-only Grok 3 requests are routed through the Chat Completions API."
+        }
+      ]
+    },
+    "grok-3-mini": {
+      "source_url": "https://docs.x.ai/developers/models",
+      "display_name": "grok-3-mini",
+      "status": "active",
+      "vendor": "xai",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "categories": [
+        "模型别名",
+        "推理模型"
+      ],
+      "summary": "Official latest alias listed in xAI Models and Pricing.",
+      "resolved_model_version": "grok-3-mini-20250217",
+      "records": [
+        {
+          "table_kind": "alias_mapping",
+          "source_url": "https://docs.x.ai/developers/models",
+          "source_page": "models_and_pricing",
+          "section": "Model Aliases",
+          "alias": "grok-3-mini",
+          "resolved_model": "grok-3-mini-20250217"
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://docs.x.ai/api/operation/operation-create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.x.ai/v1/chat/completions",
+          "notes": "Alias-only Grok 3 Mini requests are routed through the Chat Completions API."
+        }
+      ]
+    }
+  }
+}

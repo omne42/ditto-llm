@@ -1,0 +1,664 @@
+# Generated from official Google AI for Developers model docs. Edit via scripts/generate_google_model_catalog.py.
+# Source index: https://ai.google.dev/gemini-api/docs/models
+# Generated at: 2026-03-07T00:00:00Z
+
+[provider]
+id = "google"
+display_name = "Google AI for Developers"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+protocol = "gemini_generate_content"
+source_url = "https://ai.google.dev/gemini-api/docs/models"
+
+[provider.auth]
+type = "query_param_env"
+param = "key"
+keys = ["GOOGLE_API_KEY"]
+
+[models."gemini-3.1-pro"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro"
+display_name = "Gemini 3.1 Pro"
+model_code = "gemini-3.1-pro"
+summary = "Flagship multimodal reasoning model for coding, planning, and long-context agent workflows."
+latest_update = "March 2026"
+
+api_surfaces = ["generate.content"]
+[models."gemini-3.1-pro".supported_data_types]
+input = ["text", "image", "video", "audio", "pdf"]
+output = ["text"]
+
+[models."gemini-3.1-pro".limits]
+input_token_limit = "1048576"
+output_token_limit = "65536"
+
+[models."gemini-3.1-pro".capabilities]
+batch_api = "supported"
+cached_content = "supported"
+code_execution = "supported"
+function_calling = "supported"
+google_search = "supported"
+live_api = "not_supported"
+search_grounding = "supported"
+structured_outputs = "supported"
+system_instructions = "supported"
+thinking = "supported"
+tuning = "supported"
+url_context = "supported"
+
+[[models."gemini-3.1-pro".versions]]
+channel = "preview"
+model = "gemini-3.1-pro-preview-09-12"
+
+[[models."gemini-3.1-pro".versions]]
+channel = "experimental"
+model = "gemini-3.1-pro-exp-08-27"
+
+[[models."gemini-3.1-pro".versions]]
+channel = "stable"
+model = "gemini-3.1-pro"
+
+[[models."gemini-3.1-pro".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-3.1-flash"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash"
+display_name = "Gemini 3.1 Flash"
+model_code = "gemini-3.1-flash"
+summary = "Fast multimodal model for interactive assistants, tools, and long-context chat workloads."
+latest_update = "March 2026"
+
+api_surfaces = ["generate.content"]
+[models."gemini-3.1-flash".supported_data_types]
+input = ["text", "image", "video", "audio", "pdf"]
+output = ["text"]
+
+[models."gemini-3.1-flash".limits]
+input_token_limit = "1048576"
+output_token_limit = "65536"
+
+[models."gemini-3.1-flash".capabilities]
+batch_api = "supported"
+cached_content = "supported"
+code_execution = "supported"
+function_calling = "supported"
+google_search = "supported"
+live_api = "not_supported"
+search_grounding = "supported"
+structured_outputs = "supported"
+system_instructions = "supported"
+thinking = "supported"
+tuning = "supported"
+url_context = "supported"
+
+[[models."gemini-3.1-flash".versions]]
+channel = "preview"
+model = "gemini-3.1-flash-preview-09-18"
+
+[[models."gemini-3.1-flash".versions]]
+channel = "experimental"
+model = "gemini-3.1-flash-exp-08-27"
+
+[[models."gemini-3.1-flash".versions]]
+channel = "stable"
+model = "gemini-3.1-flash"
+
+[[models."gemini-3.1-flash".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-pro"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro"
+display_name = "Gemini 2.5 Pro"
+model_code = "gemini-2.5-pro"
+summary = "High-capability multimodal model for reasoning, coding, and very large contexts."
+latest_update = "September 2025"
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-pro".supported_data_types]
+input = ["text", "image", "video", "audio", "pdf"]
+output = ["text"]
+
+[models."gemini-2.5-pro".limits]
+input_token_limit = "1048576"
+output_token_limit = "65536"
+
+[models."gemini-2.5-pro".capabilities]
+batch_api = "supported"
+cached_content = "supported"
+code_execution = "supported"
+function_calling = "supported"
+google_search = "supported"
+live_api = "not_supported"
+search_grounding = "supported"
+structured_outputs = "supported"
+system_instructions = "supported"
+thinking = "supported"
+tuning = "supported"
+url_context = "supported"
+
+[[models."gemini-2.5-pro".versions]]
+channel = "stable"
+model = "gemini-2.5-pro"
+
+[[models."gemini-2.5-pro".versions]]
+channel = "preview"
+model = "gemini-2.5-pro-preview-06-05"
+
+[[models."gemini-2.5-pro".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-flash"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash"
+display_name = "Gemini 2.5 Flash"
+model_code = "gemini-2.5-flash"
+summary = "Best price-performance multimodal model with adaptive thinking, tool use, and large-context chat."
+latest_update = "September 2025"
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-flash".supported_data_types]
+input = ["text", "image", "video", "audio", "pdf"]
+output = ["text"]
+
+[models."gemini-2.5-flash".limits]
+input_token_limit = "1048576"
+output_token_limit = "65536"
+
+[models."gemini-2.5-flash".capabilities]
+batch_api = "supported"
+cached_content = "supported"
+code_execution = "supported"
+function_calling = "supported"
+google_search = "supported"
+live_api = "not_supported"
+search_grounding = "supported"
+structured_outputs = "supported"
+system_instructions = "supported"
+thinking = "supported"
+tuning = "supported"
+url_context = "supported"
+
+[[models."gemini-2.5-flash".versions]]
+channel = "stable"
+model = "gemini-2.5-flash"
+
+[[models."gemini-2.5-flash".versions]]
+channel = "preview"
+model = "gemini-2.5-flash-preview-05-20"
+
+[[models."gemini-2.5-flash".versions]]
+channel = "preview"
+model = "gemini-2.5-flash-preview-04-17"
+
+[[models."gemini-2.5-flash".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-flash-lite-preview-06-17"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite-preview-06-17"
+display_name = "Gemini 2.5 Flash Lite Preview 06-17"
+model_code = "gemini-2.5-flash-lite-preview-06-17"
+summary = "Lower-latency, lower-cost Gemini 2.5 Flash Lite preview for text and multimodal prompts."
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-flash-lite-preview-06-17".supported_data_types]
+input = ["text", "image", "video", "audio", "pdf"]
+output = ["text"]
+
+[[models."gemini-2.5-flash-lite-preview-06-17".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite-preview-06-17"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-flash-image"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-image"
+display_name = "Gemini 2.5 Flash Image"
+model_code = "gemini-2.5-flash-image"
+summary = "Gemini image generation and editing model that can follow text prompts and multimodal instructions."
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-flash-image".supported_data_types]
+input = ["text", "image"]
+output = ["text", "image"]
+
+[[models."gemini-2.5-flash-image".versions]]
+channel = "preview"
+model = "gemini-2.5-flash-image"
+
+[[models."gemini-2.5-flash-image".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-image"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-flash-live"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-live"
+display_name = "Gemini 2.5 Flash Live"
+model_code = "gemini-live-2.5-flash-preview"
+summary = "Realtime multimodal model for low-latency conversations with text, audio, and video streams."
+latest_update = "September 2025"
+
+api_surfaces = ["realtime.websocket"]
+[models."gemini-2.5-flash-live".supported_data_types]
+input = ["text", "audio", "video"]
+output = ["text", "audio"]
+
+[models."gemini-2.5-flash-live".limits]
+input_token_limit = "128000"
+output_token_limit = "8192"
+
+[models."gemini-2.5-flash-live".capabilities]
+live_api = "supported"
+function_calling = "supported"
+google_search = "supported"
+system_instructions = "supported"
+thinking = "supported"
+
+[[models."gemini-2.5-flash-live".versions]]
+channel = "preview"
+model = "gemini-live-2.5-flash-preview"
+
+[[models."gemini-2.5-flash-live".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/live"
+source_page = "live_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+notes = "Google Live API models use bidirectional websocket sessions rather than plain generateContent HTTP requests."
+[models."gemini-2.5-flash-preview-native-audio-dialog"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-preview-native-audio-dialog"
+display_name = "Gemini 2.5 Flash Native Audio"
+model_code = "gemini-2.5-flash-preview-native-audio-dialog"
+summary = "Native audio dialog preview for speech-in, speech-out interactions."
+
+api_surfaces = ["realtime.websocket"]
+[models."gemini-2.5-flash-preview-native-audio-dialog".supported_data_types]
+input = ["audio", "text"]
+output = ["audio", "text"]
+
+[[models."gemini-2.5-flash-preview-native-audio-dialog".versions]]
+channel = "preview"
+model = "gemini-2.5-flash-preview-native-audio-dialog"
+
+[[models."gemini-2.5-flash-preview-native-audio-dialog".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/live"
+source_page = "live_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+notes = "Google Live API models use bidirectional websocket sessions rather than plain generateContent HTTP requests."
+[models."gemini-2.5-flash-exp-native-audio-thinking-dialog"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-exp-native-audio-thinking-dialog"
+display_name = "Gemini 2.5 Flash Thinking Audio"
+model_code = "gemini-2.5-flash-exp-native-audio-thinking-dialog"
+summary = "Experimental native-audio model with explicit thinking behavior for spoken dialog."
+
+api_surfaces = ["realtime.websocket"]
+[models."gemini-2.5-flash-exp-native-audio-thinking-dialog".supported_data_types]
+input = ["audio", "text"]
+output = ["audio", "text"]
+
+[[models."gemini-2.5-flash-exp-native-audio-thinking-dialog".versions]]
+channel = "experimental"
+model = "gemini-2.5-flash-exp-native-audio-thinking-dialog"
+
+[[models."gemini-2.5-flash-exp-native-audio-thinking-dialog".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/live"
+source_page = "live_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+notes = "Google Live API models use bidirectional websocket sessions rather than plain generateContent HTTP requests."
+[models."gemini-2.5-pro-preview-tts"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro-preview-tts"
+display_name = "Gemini 2.5 Pro TTS"
+model_code = "gemini-2.5-pro-preview-tts"
+summary = "High-quality text-to-speech preview tuned for expressive narration and longer responses."
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-pro-preview-tts".supported_data_types]
+input = ["text"]
+output = ["audio"]
+
+[[models."gemini-2.5-pro-preview-tts".versions]]
+channel = "preview"
+model = "gemini-2.5-pro-preview-tts"
+
+[[models."gemini-2.5-pro-preview-tts".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro-preview-tts"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.5-flash-preview-tts"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-preview-tts"
+display_name = "Gemini 2.5 Flash TTS"
+model_code = "gemini-2.5-flash-preview-tts"
+summary = "Faster text-to-speech preview for low-latency speech generation."
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.5-flash-preview-tts".supported_data_types]
+input = ["text"]
+output = ["audio"]
+
+[[models."gemini-2.5-flash-preview-tts".versions]]
+channel = "preview"
+model = "gemini-2.5-flash-preview-tts"
+
+[[models."gemini-2.5-flash-preview-tts".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-preview-tts"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-embedding"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-embedding"
+display_name = "Gemini Embedding"
+model_code = "gemini-embedding-001"
+summary = "Google embedding model for semantic search, retrieval, clustering, and ranking workflows."
+latest_update = "January 2025"
+
+api_surfaces = ["embedding"]
+[models."gemini-embedding".supported_data_types]
+input = ["text"]
+output = ["embeddings"]
+
+[models."gemini-embedding".limits]
+input_token_limit = "2048"
+output_dimension_size = "3072"
+
+[models."gemini-embedding".capabilities]
+batch_api = "supported"
+cached_content = "not_supported"
+code_execution = "not_supported"
+function_calling = "not_supported"
+google_search = "not_supported"
+live_api = "not_supported"
+search_grounding = "not_supported"
+structured_outputs = "not_supported"
+system_instructions = "not_supported"
+thinking = "not_supported"
+tuning = "not_supported"
+url_context = "not_supported"
+
+[[models."gemini-embedding".versions]]
+channel = "stable"
+model = "gemini-embedding-001"
+
+[[models."gemini-embedding".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-embedding"
+source_page = "embed_content"
+section = "Embeddings"
+api_surface = "embedding"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-embedding-exp"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-embedding-exp"
+display_name = "Experimental Gemini Embedding"
+model_code = "gemini-embedding-exp-03-07"
+summary = "Experimental Gemini embedding release for retrieval and similarity evaluation."
+
+api_surfaces = ["embedding"]
+[models."gemini-embedding-exp".supported_data_types]
+input = ["text"]
+output = ["embeddings"]
+
+[[models."gemini-embedding-exp".versions]]
+channel = "experimental"
+model = "gemini-embedding-exp-03-07"
+
+[[models."gemini-embedding-exp".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-embedding-exp"
+source_page = "embed_content"
+section = "Embeddings"
+api_surface = "embedding"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-exp-03-07:embedContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemma-3"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemma-3"
+display_name = "Gemma 3"
+model_code = "gemma-3-27b-it"
+summary = "Open Gemma instruction-tuned family with text-and-image understanding across multiple sizes."
+latest_update = "March 2025"
+
+api_surfaces = ["generate.content"]
+[models."gemma-3".supported_data_types]
+input = ["text", "image"]
+output = ["text"]
+
+[[models."gemma-3".versions]]
+channel = "stable"
+model = "gemma-3-27b-it"
+
+[[models."gemma-3".versions]]
+channel = "stable"
+model = "gemma-3-12b-it"
+
+[[models."gemma-3".versions]]
+channel = "stable"
+model = "gemma-3-4b-it"
+
+[[models."gemma-3".versions]]
+channel = "stable"
+model = "gemma-3-1b-it"
+
+[[models."gemma-3".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemma-3"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."medgemma"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/medgemma"
+display_name = "MedGemma"
+model_code = "medgemma-27b-text-it"
+summary = "Domain-focused Gemma family for medical text and multimodal medical reasoning."
+latest_update = "May 2025"
+
+api_surfaces = ["generate.content"]
+[models."medgemma".supported_data_types]
+input = ["text", "image"]
+output = ["text"]
+
+[[models."medgemma".versions]]
+channel = "stable"
+model = "medgemma-27b-text-it"
+
+[[models."medgemma".versions]]
+channel = "stable"
+model = "medgemma-4b-multimodal"
+
+[[models."medgemma".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/medgemma"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/medgemma-27b-text-it:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."signgemma"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/signgemma"
+display_name = "SignGemma"
+model_code = "signgemma-9b-it"
+summary = "Experimental Gemma model for sign-language understanding and translation from video inputs."
+latest_update = "September 2025"
+
+api_surfaces = ["generate.content"]
+[models."signgemma".supported_data_types]
+input = ["video"]
+output = ["text"]
+
+[[models."signgemma".versions]]
+channel = "experimental"
+model = "signgemma-9b-it"
+
+[[models."signgemma".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/signgemma"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/signgemma-9b-it:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-robotics-er"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-robotics-er"
+display_name = "Gemini Robotics-ER"
+model_code = "gemini-robotics-er-1.5-preview"
+summary = "Embodied reasoning model for robotics research with spatial understanding and action planning."
+latest_update = "March 2025"
+
+api_surfaces = ["generate.content"]
+[[models."gemini-robotics-er".versions]]
+channel = "preview"
+model = "gemini-robotics-er-1.5-preview"
+
+[[models."gemini-robotics-er".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-robotics-er"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-robotics-er-1.5-preview:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gemini-2.0-flash-preview-image-generation"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash-preview-image-generation"
+display_name = "Gemini 2.0 Flash Preview Image Generation"
+model_code = "gemini-2.0-flash-preview-image-generation"
+summary = "Preview Gemini 2.0 model for text-and-image prompting with image generation output."
+
+api_surfaces = ["generate.content"]
+[models."gemini-2.0-flash-preview-image-generation".supported_data_types]
+input = ["text", "image"]
+output = ["text", "image"]
+
+[[models."gemini-2.0-flash-preview-image-generation".versions]]
+channel = "preview"
+model = "gemini-2.0-flash-preview-image-generation"
+
+[[models."gemini-2.0-flash-preview-image-generation".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash-preview-image-generation"
+source_page = "generate_content"
+section = "Generate Content"
+api_surface = "generate.content"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."imagen-4"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/imagen-4"
+display_name = "Imagen 4"
+model_code = "imagen-4.0-generate-001"
+summary = "Imagen family for high-fidelity text-to-image generation, editing, and style-controlled outputs."
+latest_update = "June 2025"
+
+api_surfaces = ["image.generation"]
+[models."imagen-4".supported_data_types]
+input = ["text", "image"]
+output = ["image"]
+
+[models."imagen-4".limits]
+output_images = "up_to_4"
+
+[[models."imagen-4".versions]]
+channel = "stable"
+model = "imagen-4.0-generate-001"
+
+[[models."imagen-4".versions]]
+channel = "stable_faster"
+model = "imagen-4.0-fast-generate-001"
+
+[[models."imagen-4".versions]]
+channel = "stable_ultra"
+model = "imagen-4.0-ultra-generate-001"
+
+[[models."imagen-4".versions]]
+channel = "preview"
+model = "imagen-4.0-generate-preview-06-06"
+
+[[models."imagen-4".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/api/imagen-api"
+source_page = "imagen_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict"
+notes = "Endpoint mapped from the official Google media generation docs that use predict or predictLongRunning operations."
+[models."veo-2"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/veo-2"
+display_name = "Veo 2"
+model_code = "veo-2.0-generate-001"
+summary = "Google video generation model for prompt-based clip synthesis."
+latest_update = "February 2026"
+
+api_surfaces = ["video.generation"]
+[models."veo-2".supported_data_types]
+input = ["text", "image"]
+output = ["video"]
+
+[[models."veo-2".versions]]
+channel = "experimental"
+model = "veo-2.0-generate-001"
+
+[[models."veo-2".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/video"
+source_page = "video_generation"
+section = "Video Generation"
+api_surface = "video.generation"
+endpoint = "https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning"
+notes = "Endpoint mapped from the official Google media generation docs that use predict or predictLongRunning operations."
+[models."lyria"]
+source_url = "https://ai.google.dev/gemini-api/docs/models/lyria"
+display_name = "Lyria"
+model_code = "lyria-realtime-exp"
+summary = "Realtime music generation model for prompt-driven audio creation."
+latest_update = "March 2025"
+
+api_surfaces = ["realtime.websocket"]
+[models."lyria".supported_data_types]
+input = ["text"]
+output = ["audio"]
+
+[[models."lyria".versions]]
+channel = "experimental"
+model = "lyria-realtime-exp"
+
+[[models."lyria".records]]
+table_kind = "api_reference"
+source_url = "https://ai.google.dev/gemini-api/docs/live"
+source_page = "live_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+notes = "Google Live API models use bidirectional websocket sessions rather than plain generateContent HTTP requests."

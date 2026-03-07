@@ -10,7 +10,23 @@
 
 ---
 
-## 1) 四种形态（长期不变）
+## 0) 分层与仓库边界（长期不变）
+
+Ditto 的产品分层：
+
+- **L0（本仓库）**：模型互转与直接调用（SDK/adapter/protocol）
+- **L1（本仓库）**：Gateway/Proxy 平台能力（API + routing + control-plane）
+- **L2（独立仓库）**：企业闭环平台（评测/治理/审批/组织体系）
+
+契约：
+
+- L2 通过 L1 的稳定接口接入（而不是直连 L0 内部实现细节）。
+- L1 必须可独立部署和运营，不依赖 L2 才能工作。
+- L0/L1 的 feature gating 口径保持稳定，避免“默认全家桶”。
+
+---
+
+## 1) 四种形态（L0/L1 范围内长期不变）
 
 Ditto 必须能同时以 4 种形态工作（见 `README.md` / `TODO.md`）：
 
@@ -94,3 +110,29 @@ pnpm -r run typecheck
 pnpm -r run build
 ```
 
+---
+
+## 6) Gateway Contract v0.1（冻结产物）
+
+为了给 rust-ui 复用并避免手写模型漂移，L1 网关契约在仓库内提供两份冻结产物：
+
+- OpenAPI：`contracts/gateway-contract-v0.1.openapi.yaml`
+- Rust 类型包：`crates/ditto-gateway-contract-types`
+
+该类型包内置：
+
+- `GATEWAY_CONTRACT_VERSION = \"0.1.0\"`
+- `GATEWAY_OPENAPI_V0_1_YAML`（直接嵌入上面的 OpenAPI 文件）
+
+并在测试里校验：
+
+- 版本号一致
+- 关键路径存在（`/v1/chat/completions`、`/admin/audit`、`/admin/budgets`、`/admin/costs`、`/admin/reservations/reap`）
+- 查询参数默认值一致（`audit limit=100`、`ledger limit=1000`、`offset=0`）
+- 网关真实响应可被 contract 类型反序列化（`tests/gateway_contract_v0_1.rs`）
+
+此外，CI 有 contract guard 闸门（`.github/workflows/ci.yml` 的 `gateway-contract-guard` job）：
+
+- OpenAPI diff：识别 breaking / feature / patch 级别改动
+- semver gate：改动级别与 `info.version` 升级级别必须匹配
+- 冻结产物一致性：`info.version`、`GATEWAY_CONTRACT_VERSION`、`package.version` 必须一致；contract id 也必须一致

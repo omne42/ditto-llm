@@ -1,7 +1,6 @@
 #[cfg(feature = "gateway-costing")]
 fn estimate_charge_cost_usd_micros(
     state: &GatewayHttpState,
-    gateway: &super::Gateway,
     request_model: Option<&str>,
     input_tokens_estimate: u32,
     max_output_tokens: u32,
@@ -23,20 +22,9 @@ fn estimate_charge_cost_usd_micros(
             continue;
         }
 
-        let mapped_model = gateway
-            .config
-            .backends
-            .iter()
-            .find(|backend| backend.name == backend_name.as_str())
-            .and_then(|backend| {
-                backend
-                    .model_map
-                    .get(request_model)
-                    .or_else(|| backend.model_map.get("*"))
-            })
-            .map(|model| model.as_str());
+        let mapped_model = state.mapped_backend_model(backend_name, request_model);
 
-        if let Some(mapped_model) = mapped_model {
+        if let Some(mapped_model) = mapped_model.as_deref() {
             cost = max_option_u64(
                 cost,
                 pricing.estimate_cost_usd_micros_for_service_tier(

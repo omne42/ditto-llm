@@ -524,7 +524,7 @@ pub fn chat_completions_request_to_generate_request(
     let provider_options = parse_provider_options_from_openai_request(obj);
     if provider_options != ProviderOptions::default() {
         out.provider_options = Some(
-            serde_json::to_value(provider_options)
+            crate::types::ProviderOptionsEnvelope::from_options(provider_options)
                 .map_err(|err| format!("failed to serialize provider_options: {err}"))?,
         );
     }
@@ -619,7 +619,7 @@ pub fn completions_request_to_generate_request(request: &Value) -> ParseResult<G
     let provider_options = parse_provider_options_from_openai_request(obj);
     if provider_options != ProviderOptions::default() {
         out.provider_options = Some(
-            serde_json::to_value(provider_options)
+            crate::types::ProviderOptionsEnvelope::from_options(provider_options)
                 .map_err(|err| format!("failed to serialize provider_options: {err}"))?,
         );
     }
@@ -772,11 +772,7 @@ pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<Gen
         .ok_or_else(|| "responses request must be a JSON object".to_string())?;
 
     let mut provider_options = ProviderOptions::default();
-    if let Some(existing) = out
-        .provider_options
-        .as_ref()
-        .and_then(|value| ProviderOptions::from_value(value).ok())
-    {
+    if let Some(existing) = out.parsed_provider_options().ok().flatten() {
         provider_options = existing;
     }
 
@@ -800,7 +796,7 @@ pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<Gen
 
     if provider_options != ProviderOptions::default() {
         out.provider_options = Some(
-            serde_json::to_value(provider_options)
+            crate::types::ProviderOptionsEnvelope::from_options(provider_options)
                 .map_err(|err| format!("failed to serialize provider_options: {err}"))?,
         );
     }

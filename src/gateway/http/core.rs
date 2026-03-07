@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path as StdPath, PathBuf};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex as StdMutex, RwLock};
 use std::task::{Context, Poll};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -51,29 +51,57 @@ use super::proxy_routing::{BackendHealth, BackendHealthSnapshot, FailureKind, Pr
 #[cfg(feature = "gateway-store-sqlite")]
 use super::{SqliteStore, SqliteStoreError};
 
+#[cfg(feature = "gateway-store-postgres")]
+use super::{PostgresStore, PostgresStoreError};
+
+#[cfg(feature = "gateway-store-mysql")]
+use super::{MySqlStore, MySqlStoreError};
+
 #[cfg(feature = "gateway-store-redis")]
 use super::{RedisStore, RedisStoreError};
 
 #[cfg(feature = "gateway-tokenizer")]
 use super::token_count;
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-use super::{AuditLogRecord, BudgetLedgerRecord};
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+use super::AuditLogRecord;
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+use super::BudgetLedgerRecord;
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 use super::CostLedgerRecord;
 
+use super::budget::BudgetTracker;
 use super::interop;
+use super::limits::RateLimiter;
+use super::observability::Observability;
+use super::redaction::GatewayRedactor;
 use super::responses_shim;
 #[cfg(feature = "gateway-translation")]
 use super::translation;
-use super::redaction::GatewayRedactor;
 use super::{
-    Gateway, GatewayError, GatewayPreparedRequest, GatewayRequest, GatewayResponse, GatewayStateFile,
-    ObservabilitySnapshot, ProxyBackend, VirtualKeyConfig,
+    Gateway, GatewayError, GatewayPreparedRequest, GatewayRequest, GatewayResponse,
+    GatewayStateFile, ObservabilitySnapshot, ProxyBackend, RouterConfig, VirtualKeyConfig,
+    lock_unpoisoned,
 };
 
 static REQUEST_ID_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -85,9 +113,140 @@ struct AdminTenantToken {
     read_only: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct ConfigVersionInfo {
+    version_id: String,
+    created_at_ms: u64,
+    reason: String,
+    virtual_key_count: usize,
+    virtual_keys_sha256: String,
+    router_default_backend_count: usize,
+    router_rule_count: usize,
+    router_sha256: String,
+}
+
+#[derive(Clone, Debug)]
+struct ConfigVersionSnapshot {
+    info: ConfigVersionInfo,
+    virtual_keys: Vec<VirtualKeyConfig>,
+    router: RouterConfig,
+}
+
+#[derive(Debug)]
+struct ConfigVersionHistory {
+    max_entries: usize,
+    next_sequence: u64,
+    entries: VecDeque<ConfigVersionSnapshot>,
+}
+
+impl ConfigVersionHistory {
+    fn with_bootstrap(virtual_keys: Vec<VirtualKeyConfig>, router: RouterConfig) -> Self {
+        let mut history = Self {
+            max_entries: 100,
+            next_sequence: 1,
+            entries: VecDeque::new(),
+        };
+        let _ = history.push_snapshot(virtual_keys, router, "bootstrap");
+        history
+    }
+
+    fn push_snapshot(
+        &mut self,
+        virtual_keys: Vec<VirtualKeyConfig>,
+        router: RouterConfig,
+        reason: impl Into<String>,
+    ) -> ConfigVersionInfo {
+        let info = ConfigVersionInfo {
+            version_id: format!("cfgv-{:020}", self.next_sequence),
+            created_at_ms: now_epoch_millis_u64(),
+            reason: reason.into(),
+            virtual_key_count: virtual_keys.len(),
+            virtual_keys_sha256: virtual_keys_sha256(&virtual_keys),
+            router_default_backend_count: router.default_backends.len(),
+            router_rule_count: router.rules.len(),
+            router_sha256: router_sha256(&router),
+        };
+        self.next_sequence = self.next_sequence.saturating_add(1);
+
+        self.entries.push_back(ConfigVersionSnapshot {
+            info: info.clone(),
+            virtual_keys,
+            router,
+        });
+        while self.entries.len() > self.max_entries {
+            let _ = self.entries.pop_front();
+        }
+
+        info
+    }
+
+    fn current_info(&self) -> Option<ConfigVersionInfo> {
+        self.entries.back().map(|snapshot| snapshot.info.clone())
+    }
+
+    fn list_infos_desc(&self) -> Vec<ConfigVersionInfo> {
+        self.entries
+            .iter()
+            .rev()
+            .map(|snapshot| snapshot.info.clone())
+            .collect()
+    }
+
+    fn find_snapshot(&self, version_id: &str) -> Option<ConfigVersionSnapshot> {
+        self.entries
+            .iter()
+            .find(|snapshot| snapshot.info.version_id == version_id)
+            .cloned()
+    }
+}
+
+fn now_epoch_millis_u64() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn virtual_keys_sha256(virtual_keys: &[VirtualKeyConfig]) -> String {
+    use sha2::Digest as _;
+
+    let payload = serde_json::to_vec(virtual_keys).unwrap_or_default();
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(b"ditto-gateway-config-version-v1|");
+    hasher.update(payload);
+
+    hex_lower_bytes(&hasher.finalize())
+}
+
+fn router_sha256(router: &RouterConfig) -> String {
+    use sha2::Digest as _;
+
+    let payload = serde_json::to_vec(router).unwrap_or_default();
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(b"ditto-gateway-router-version-v1|");
+    hasher.update(payload);
+
+    hex_lower_bytes(&hasher.finalize())
+}
+
+fn hex_lower_bytes(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+    for &byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
 #[derive(Clone)]
 pub struct GatewayHttpState {
-    gateway: Arc<Mutex<Gateway>>,
+    gateway: Arc<Gateway>,
+    control_plane: Arc<RwLock<GatewayControlPlaneSnapshot>>,
+    limits: Arc<StdMutex<RateLimiter>>,
+    budget: Arc<StdMutex<BudgetTracker>>,
+    observability: Arc<StdMutex<Observability>>,
+    config_versions: Arc<Mutex<ConfigVersionHistory>>,
     redactor: Arc<GatewayRedactor>,
     proxy_backends: Arc<HashMap<String, ProxyBackend>>,
     a2a_agents: Arc<HashMap<String, A2aAgentState>>,
@@ -100,6 +259,10 @@ pub struct GatewayHttpState {
     state_file: Option<PathBuf>,
     #[cfg(feature = "gateway-store-sqlite")]
     sqlite_store: Option<SqliteStore>,
+    #[cfg(feature = "gateway-store-postgres")]
+    postgres_store: Option<PostgresStore>,
+    #[cfg(feature = "gateway-store-mysql")]
+    mysql_store: Option<MySqlStore>,
     #[cfg(feature = "gateway-store-redis")]
     redis_store: Option<RedisStore>,
     #[cfg(feature = "gateway-costing")]
@@ -127,11 +290,18 @@ pub struct GatewayHttpState {
 
 impl GatewayHttpState {
     pub fn new(gateway: Gateway) -> Self {
+        let initial_config = gateway.config_snapshot();
+        let initial_virtual_keys = initial_config.virtual_keys.clone();
+        let initial_router = initial_config.router.clone();
+        let control_plane = GatewayControlPlaneSnapshot::from_gateway(&gateway);
+        let limits = gateway.limits.clone();
+        let budget = gateway.budget.clone();
+        let observability = gateway.observability.clone();
         let redactor = Arc::new(GatewayRedactor::from_config(
-            &gateway.config.observability.redaction,
+            &initial_config.observability.redaction,
         ));
         let mut proxy_backend_backpressure: HashMap<String, Arc<Semaphore>> = HashMap::new();
-        for backend in &gateway.config.backends {
+        for backend in &initial_config.backends {
             let Some(max_in_flight) = backend.max_in_flight else {
                 continue;
             };
@@ -142,7 +312,15 @@ impl GatewayHttpState {
         }
 
         Self {
-            gateway: Arc::new(Mutex::new(gateway)),
+            gateway: Arc::new(gateway),
+            control_plane: Arc::new(RwLock::new(control_plane)),
+            limits,
+            budget,
+            observability,
+            config_versions: Arc::new(Mutex::new(ConfigVersionHistory::with_bootstrap(
+                initial_virtual_keys,
+                initial_router,
+            ))),
             redactor,
             proxy_backends: Arc::new(HashMap::new()),
             a2a_agents: Arc::new(HashMap::new()),
@@ -155,6 +333,10 @@ impl GatewayHttpState {
             state_file: None,
             #[cfg(feature = "gateway-store-sqlite")]
             sqlite_store: None,
+            #[cfg(feature = "gateway-store-postgres")]
+            postgres_store: None,
+            #[cfg(feature = "gateway-store-mysql")]
+            mysql_store: None,
             #[cfg(feature = "gateway-store-redis")]
             redis_store: None,
             #[cfg(feature = "gateway-costing")]
@@ -179,6 +361,83 @@ impl GatewayHttpState {
             #[cfg(feature = "sdk")]
             devtools: None,
         }
+    }
+
+    pub(crate) fn record_request(&self) {
+        lock_unpoisoned(&self.observability).record_request();
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    pub(crate) fn record_cache_hit(&self) {
+        lock_unpoisoned(&self.observability).record_cache_hit();
+    }
+
+    pub(crate) fn record_rate_limited(&self) {
+        lock_unpoisoned(&self.observability).record_rate_limited();
+    }
+
+    pub(crate) fn record_guardrail_blocked(&self) {
+        lock_unpoisoned(&self.observability).record_guardrail_blocked();
+    }
+
+    pub(crate) fn record_budget_exceeded(&self) {
+        lock_unpoisoned(&self.observability).record_budget_exceeded();
+    }
+
+    pub(crate) fn record_backend_call(&self) {
+        lock_unpoisoned(&self.observability).record_backend_call();
+    }
+
+    pub(crate) fn observability_snapshot(&self) -> ObservabilitySnapshot {
+        lock_unpoisoned(&self.observability).snapshot()
+    }
+
+    pub(crate) fn check_and_consume_rate_limit(
+        &self,
+        scope: &str,
+        limits: &super::LimitsConfig,
+        tokens: u32,
+        minute: u64,
+    ) -> Result<(), GatewayError> {
+        lock_unpoisoned(&self.limits).check_and_consume(scope, limits, tokens, minute)
+    }
+
+    pub(crate) fn can_spend_budget_tokens(
+        &self,
+        scope: &str,
+        budget: &super::BudgetConfig,
+        tokens: u64,
+    ) -> Result<(), GatewayError> {
+        lock_unpoisoned(&self.budget).can_spend(scope, budget, tokens)
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    pub(crate) fn can_spend_budget_cost(
+        &self,
+        scope: &str,
+        budget: &super::BudgetConfig,
+        usd_micros: u64,
+    ) -> Result<(), GatewayError> {
+        lock_unpoisoned(&self.budget).can_spend_cost_usd_micros(scope, budget, usd_micros)
+    }
+
+    pub(crate) fn spend_budget_tokens(
+        &self,
+        scope: &str,
+        budget: &super::BudgetConfig,
+        tokens: u64,
+    ) {
+        lock_unpoisoned(&self.budget).spend(scope, budget, tokens);
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    pub(crate) fn spend_budget_cost(
+        &self,
+        scope: &str,
+        budget: &super::BudgetConfig,
+        usd_micros: u64,
+    ) {
+        lock_unpoisoned(&self.budget).spend_cost_usd_micros(scope, budget, usd_micros);
     }
 
     fn has_any_admin_tokens(&self) -> bool {
@@ -273,6 +532,18 @@ impl GatewayHttpState {
     #[cfg(feature = "gateway-store-sqlite")]
     pub fn with_sqlite_store(mut self, store: SqliteStore) -> Self {
         self.sqlite_store = Some(store);
+        self
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    pub fn with_postgres_store(mut self, store: PostgresStore) -> Self {
+        self.postgres_store = Some(store);
+        self
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    pub fn with_mysql_store(mut self, store: MySqlStore) -> Self {
+        self.mysql_store = Some(store);
         self
     }
 
@@ -379,13 +650,19 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/mcp/", any(handle_mcp_root))
         .route("/mcp/*subpath", any(handle_mcp_subpath))
         .route("/:mcp_servers/mcp", any(handle_mcp_namespaced_root))
-        .route("/:mcp_servers/mcp/*path", any(handle_mcp_namespaced_subpath))
+        .route(
+            "/:mcp_servers/mcp/*path",
+            any(handle_mcp_namespaced_subpath),
+        )
         .route("/chat/completions", any(handle_openai_compat_proxy_root))
         .route("/completions", any(handle_openai_compat_proxy_root))
         .route("/embeddings", any(handle_openai_compat_proxy_root))
         .route("/moderations", any(handle_openai_compat_proxy_root))
         .route("/images/generations", any(handle_openai_compat_proxy_root))
-        .route("/audio/transcriptions", any(handle_openai_compat_proxy_root))
+        .route(
+            "/audio/transcriptions",
+            any(handle_openai_compat_proxy_root),
+        )
         .route("/audio/translations", any(handle_openai_compat_proxy_root))
         .route("/audio/speech", any(handle_openai_compat_proxy_root))
         .route("/files", any(handle_openai_compat_proxy_root))
@@ -400,7 +677,10 @@ pub fn router(state: GatewayHttpState) -> Router {
         .route("/responses/compact", any(handle_openai_compat_proxy_root))
         .route("/responses/*path", any(handle_openai_compat_proxy))
         .route("/messages", post(handle_anthropic_messages))
-        .route("/messages/count_tokens", post(handle_anthropic_count_tokens))
+        .route(
+            "/messages/count_tokens",
+            post(handle_anthropic_count_tokens),
+        )
         .route("/v1/messages", post(handle_anthropic_messages))
         .route(
             "/v1/messages/count_tokens",
@@ -416,6 +696,24 @@ pub fn router(state: GatewayHttpState) -> Router {
     }
 
     if state.has_any_admin_tokens() {
+        if state.admin_token.is_some() || state.admin_read_token.is_some() {
+            router = router
+                .route("/admin/config/version", get(get_config_version))
+                .route("/admin/config/versions", get(list_config_versions))
+                .route("/admin/config/export", get(export_config))
+                .route("/admin/config/validate", post(validate_config_payload))
+                .route("/admin/config/diff", get(diff_config_versions))
+                .route(
+                    "/admin/config/versions/:version_id",
+                    get(get_config_version_by_id),
+                );
+        }
+        if state.admin_token.is_some() {
+            router = router
+                .route("/admin/config/router", put(upsert_config_router))
+                .route("/admin/config/rollback", post(rollback_config_version));
+        }
+
         let mut keys_router = get(list_keys);
         if state.has_admin_write_tokens() {
             keys_router = keys_router.post(upsert_key);
@@ -442,11 +740,26 @@ pub fn router(state: GatewayHttpState) -> Router {
             }
         }
 
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
         {
             router = router
                 .route("/admin/audit", get(list_audit_logs))
-                .route("/admin/audit/export", get(export_audit_logs))
+                .route("/admin/audit/export", get(export_audit_logs));
+        }
+
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
+        {
+            router = router
                 .route("/admin/budgets", get(list_budget_ledgers))
                 .route("/admin/budgets/tenants", get(list_tenant_budget_ledgers))
                 .route("/admin/budgets/projects", get(list_project_budget_ledgers))
@@ -541,10 +854,7 @@ async fn handle_gateway(
         }),
     );
 
-    let prepared = {
-        let mut gateway = state.gateway.lock().await;
-        gateway.prepare_handle_request(&request)
-    };
+    let prepared = state.gateway.prepare_handle_request(&request);
     let (_virtual_key_id, result) = match prepared {
         Ok(GatewayPreparedRequest::Cached { key_id, response }) => (Some(key_id), Ok(response)),
         Ok(GatewayPreparedRequest::Call(prepared)) => {
@@ -553,17 +863,11 @@ async fn handle_gateway(
                 Ok(mut response) => {
                     response.backend = prepared.backend_name.clone();
                     response.cached = false;
-                    {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway.complete_handle_success(&prepared, &response);
-                    }
+                    state.gateway.complete_handle_success(&prepared, &response);
                     (virtual_key_id, Ok(response))
                 }
                 Err(err) => {
-                    {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway.complete_handle_failure(&prepared);
-                    }
+                    state.gateway.complete_handle_failure(&prepared);
                     (virtual_key_id, Err(err))
                 }
             }
@@ -571,7 +875,12 @@ async fn handle_gateway(
         Err(err) => (None, Err(err)),
     };
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     {
         let input_tokens = u64::from(request.input_tokens);
         let spent_tokens = result
@@ -582,7 +891,9 @@ async fn handle_gateway(
             #[cfg(feature = "gateway-store-sqlite")]
             if let Some(store) = state.sqlite_store.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store.record_spent_tokens(virtual_key_id, spent_tokens).await
+                    if let Err(err) = store
+                        .record_spent_tokens(virtual_key_id, spent_tokens)
+                        .await
                     {
                         emit_json_log(
                             &state,
@@ -599,10 +910,56 @@ async fn handle_gateway(
                 }
             }
 
+            #[cfg(feature = "gateway-store-postgres")]
+            if let Some(store) = state.postgres_store.as_ref() {
+                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
+                    if let Err(err) = store
+                        .record_spent_tokens(virtual_key_id, spent_tokens)
+                        .await
+                    {
+                        emit_json_log(
+                            &state,
+                            "gateway.warning",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "virtual_key_id": virtual_key_id,
+                                "warning": "store_record_spent_tokens_failed",
+                                "store": "postgres",
+                                "error": err.to_string(),
+                            }),
+                        );
+                    }
+                }
+            }
+
+            #[cfg(feature = "gateway-store-mysql")]
+            if let Some(store) = state.mysql_store.as_ref() {
+                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
+                    if let Err(err) = store
+                        .record_spent_tokens(virtual_key_id, spent_tokens)
+                        .await
+                    {
+                        emit_json_log(
+                            &state,
+                            "gateway.warning",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "virtual_key_id": virtual_key_id,
+                                "warning": "store_record_spent_tokens_failed",
+                                "store": "mysql",
+                                "error": err.to_string(),
+                            }),
+                        );
+                    }
+                }
+            }
+
             #[cfg(feature = "gateway-store-redis")]
             if let Some(store) = state.redis_store.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store.record_spent_tokens(virtual_key_id, spent_tokens).await
+                    if let Err(err) = store
+                        .record_spent_tokens(virtual_key_id, spent_tokens)
+                        .await
                     {
                         emit_json_log(
                             &state,
@@ -621,7 +978,12 @@ async fn handle_gateway(
         }
     }
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
         append_audit_log(
             &state,
@@ -733,9 +1095,8 @@ fn google_error(
     )
 }
 
-async fn gateway_uses_virtual_keys(state: &GatewayHttpState) -> bool {
-    let gateway = state.gateway.lock().await;
-    !gateway.config.virtual_keys.is_empty()
+fn gateway_uses_virtual_keys(state: &GatewayHttpState) -> bool {
+    state.uses_virtual_keys()
 }
 
 fn synthesize_bearer_header(token: &str) -> Option<axum::http::HeaderValue> {

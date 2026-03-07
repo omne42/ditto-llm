@@ -1,4 +1,4 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn list_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -6,7 +6,7 @@ async fn list_budget_ledgers(
 ) -> Result<Json<Vec<BudgetLedgerRecord>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
     let tenant_scopes = if let Some(tenant_id) = admin.tenant_id.as_deref() {
-        let keys = { state.gateway.lock().await.list_virtual_keys() };
+        let keys = { state.list_virtual_keys_snapshot() };
         Some(tenant_allowed_scopes(&keys, tenant_id))
     } else {
         None
@@ -20,6 +20,54 @@ async fn list_budget_ledgers(
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let mut ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        if let Some(scopes) = tenant_scopes.as_ref() {
+            ledgers.retain(|ledger| scopes.contains(ledger.key_id.as_str()));
+        }
+        if let Some(key_prefix) = key_prefix {
+            ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
+        }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
+        return Ok(Json(ledgers));
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let mut ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        if let Some(scopes) = tenant_scopes.as_ref() {
+            ledgers.retain(|ledger| scopes.contains(ledger.key_id.as_str()));
+        }
+        if let Some(key_prefix) = key_prefix {
+            ledgers.retain(|ledger| ledger.key_id.starts_with(key_prefix));
+        }
+        apply_admin_list_window(
+            &mut ledgers,
+            query.offset,
+            query.limit,
+            MAX_ADMIN_LEDGER_LIMIT,
+        );
+        return Ok(Json(ledgers));
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let mut ledgers = store.list_budget_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -73,7 +121,7 @@ async fn list_budget_ledgers(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Serialize)]
 struct ProjectBudgetLedger {
     project_id: Option<String>,
@@ -83,7 +131,7 @@ struct ProjectBudgetLedger {
     updated_at_ms: u64,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Serialize)]
 struct UserBudgetLedger {
     user_id: Option<String>,
@@ -93,7 +141,7 @@ struct UserBudgetLedger {
     updated_at_ms: u64,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Serialize)]
 struct TenantBudgetLedger {
     tenant_id: Option<String>,
@@ -103,7 +151,7 @@ struct TenantBudgetLedger {
     updated_at_ms: u64,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn group_budget_ledgers_by_project(
     ledgers: &[BudgetLedgerRecord],
     keys: &[VirtualKeyConfig],
@@ -151,7 +199,7 @@ fn group_budget_ledgers_by_project(
         .collect()
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn group_budget_ledgers_by_user(
     ledgers: &[BudgetLedgerRecord],
     keys: &[VirtualKeyConfig],
@@ -199,7 +247,7 @@ fn group_budget_ledgers_by_user(
         .collect()
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn group_budget_ledgers_by_tenant(
     ledgers: &[BudgetLedgerRecord],
     keys: &[VirtualKeyConfig],
@@ -247,20 +295,44 @@ fn group_budget_ledgers_by_tenant(
         .collect()
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn list_project_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ProjectBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
 
-    let mut keys = { state.gateway.lock().await.list_virtual_keys() };
+    let mut keys = { state.list_virtual_keys_snapshot() };
     if let Some(tenant_id) = admin.tenant_id.as_deref() {
         keys.retain(|key| key.tenant_id.as_deref() == Some(tenant_id));
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_project(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_project(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let ledgers = store.list_budget_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -290,20 +362,44 @@ async fn list_project_budget_ledgers(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn list_user_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<UserBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
 
-    let mut keys = { state.gateway.lock().await.list_virtual_keys() };
+    let mut keys = { state.list_virtual_keys_snapshot() };
     if let Some(tenant_id) = admin.tenant_id.as_deref() {
         keys.retain(|key| key.tenant_id.as_deref() == Some(tenant_id));
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_user(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_user(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let ledgers = store.list_budget_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -333,20 +429,44 @@ async fn list_user_budget_ledgers(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn list_tenant_budget_ledgers(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<TenantBudgetLedger>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
 
-    let mut keys = { state.gateway.lock().await.list_virtual_keys() };
+    let mut keys = { state.list_virtual_keys_snapshot() };
     if let Some(tenant_id) = admin.tenant_id.as_deref() {
         keys.retain(|key| key.tenant_id.as_deref() == Some(tenant_id));
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_tenant(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let ledgers = store.list_budget_ledgers().await.map_err(|err| {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "storage_error",
+                err.to_string(),
+            )
+        })?;
+        return Ok(Json(group_budget_ledgers_by_tenant(&ledgers, &keys)));
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let ledgers = store.list_budget_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -73,9 +73,11 @@ async fn handle_openai_compat_proxy(
         } else {
             None
         };
-        to_bytes(incoming_body, max_body_bytes).await.map_err(|err| {
-            openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err)
-        })?
+        to_bytes(incoming_body, max_body_bytes)
+            .await
+            .map_err(|err| {
+                openai_error(StatusCode::BAD_REQUEST, "invalid_request_error", None, err)
+            })?
     };
 
     let content_type_is_json = parts
@@ -160,20 +162,30 @@ async fn handle_openai_compat_proxy(
     #[cfg(not(feature = "gateway-store-sqlite"))]
     let use_sqlite_budget = false;
 
+    #[cfg(feature = "gateway-store-postgres")]
+    let use_postgres_budget = state.postgres_store.is_some();
+    #[cfg(not(feature = "gateway-store-postgres"))]
+    let use_postgres_budget = false;
+
+    #[cfg(feature = "gateway-store-mysql")]
+    let use_mysql_budget = state.mysql_store.is_some();
+    #[cfg(not(feature = "gateway-store-mysql"))]
+    let use_mysql_budget = false;
+
     #[cfg(feature = "gateway-store-redis")]
     let use_redis_budget = state.redis_store.is_some();
     #[cfg(not(feature = "gateway-store-redis"))]
     let use_redis_budget = false;
 
-    let use_persistent_budget = use_sqlite_budget || use_redis_budget;
+    let use_persistent_budget =
+        use_sqlite_budget || use_postgres_budget || use_mysql_budget || use_redis_budget;
 
     let _now_epoch_seconds = now_epoch_seconds();
     let minute = _now_epoch_seconds / 60;
     #[cfg(feature = "gateway-store-redis")]
     let rate_limit_route = normalize_rate_limit_route(path_and_query);
 
-
-    let (
+    let ResolvedGatewayContext {
         virtual_key_id,
         limits,
         budget,
@@ -186,25 +198,27 @@ async fn handle_openai_compat_proxy(
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
-    ) = resolve_openai_compat_proxy_gateway_context(
-        &state,
-        &parts,
-        &body,
-        &parsed_json,
-        &request_id,
-        path_and_query,
-        &model,
-        &service_tier,
-        input_tokens_estimate,
-        max_output_tokens,
-        charge_tokens,
-        minute,
-        use_redis_budget,
-        use_persistent_budget,
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        metrics_path.clone(),
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        metrics_timer_start,
+    } = resolve_openai_compat_proxy_gateway_context(
+        ResolveOpenAiCompatProxyGatewayContextRequest {
+            state: &state,
+            parts: &parts,
+            body: &body,
+            parsed_json: &parsed_json,
+            request_id: &request_id,
+            path_and_query,
+            model: &model,
+            service_tier: &service_tier,
+            input_tokens_estimate,
+            max_output_tokens,
+            charge_tokens,
+            minute,
+            use_redis_budget,
+            use_persistent_budget,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            metrics_path: &metrics_path,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            metrics_timer_start,
+        },
     )
     .await?;
 
@@ -217,9 +231,11 @@ async fn handle_openai_compat_proxy(
     );
 
     #[cfg(feature = "gateway-store-redis")]
-    if let (Some(store), Some(virtual_key_id), Some(limits)) =
-        (state.redis_store.as_ref(), virtual_key_id.as_deref(), limits.as_ref())
-    {
+    if let (Some(store), Some(virtual_key_id), Some(limits)) = (
+        state.redis_store.as_ref(),
+        virtual_key_id.as_deref(),
+        limits.as_ref(),
+    ) {
         if let Err(err) = store
             .check_and_consume_rate_limits(
                 virtual_key_id,
@@ -232,8 +248,7 @@ async fn handle_openai_compat_proxy(
         {
             let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
             if is_rate_limited {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_rate_limited();
+                state.record_rate_limited();
             }
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -269,13 +284,18 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), tenant_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
+            .check_and_consume_rate_limits(
+                scope,
+                &rate_limit_route,
+                limits,
+                charge_tokens,
+                _now_epoch_seconds,
+            )
             .await
         {
             let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
             if is_rate_limited {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_rate_limited();
+                state.record_rate_limited();
             }
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -311,13 +331,18 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), project_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
+            .check_and_consume_rate_limits(
+                scope,
+                &rate_limit_route,
+                limits,
+                charge_tokens,
+                _now_epoch_seconds,
+            )
             .await
         {
             let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
             if is_rate_limited {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_rate_limited();
+                state.record_rate_limited();
             }
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -353,13 +378,18 @@ async fn handle_openai_compat_proxy(
         (state.redis_store.as_ref(), user_limits_scope.as_ref())
     {
         if let Err(err) = store
-            .check_and_consume_rate_limits(scope, &rate_limit_route, limits, charge_tokens, _now_epoch_seconds)
+            .check_and_consume_rate_limits(
+                scope,
+                &rate_limit_route,
+                limits,
+                charge_tokens,
+                _now_epoch_seconds,
+            )
             .await
         {
             let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
             if is_rate_limited {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_rate_limited();
+                state.record_rate_limited();
             }
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
@@ -448,30 +478,38 @@ async fn handle_openai_compat_proxy(
         }
     }
 
-
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-	    let budget_reservation_params = ProxyBudgetReservationParams {
-	        state: &state,
-	        use_persistent_budget,
-	        virtual_key_id: virtual_key_id.as_deref(),
-	        budget: budget.as_ref(),
-	        tenant_budget_scope: &tenant_budget_scope,
-	        project_budget_scope: &project_budget_scope,
-	        user_budget_scope: &user_budget_scope,
-	        request_id: &request_id,
-	        path_and_query,
-	        model: &model,
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
+    let budget_reservation_params = ProxyBudgetReservationParams {
+        state: &state,
+        use_persistent_budget,
+        virtual_key_id: virtual_key_id.as_deref(),
+        budget: budget.as_ref(),
+        tenant_budget_scope: &tenant_budget_scope,
+        project_budget_scope: &project_budget_scope,
+        user_budget_scope: &user_budget_scope,
+        request_id: &request_id,
+        path_and_query,
+        model: &model,
         charge_tokens,
     };
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     let (_token_budget_reserved, token_budget_reservation_ids) =
         match reserve_proxy_token_budgets_for_request(budget_reservation_params).await {
             Ok(reserved) => reserved,
             Err(err) => {
                 if err.0 == StatusCode::PAYMENT_REQUIRED {
-                    let mut gateway = state.gateway.lock().await;
-                    gateway.observability.record_budget_exceeded();
+                    state.record_budget_exceeded();
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -497,12 +535,22 @@ async fn handle_openai_compat_proxy(
             }
         };
 
-    #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+    #[cfg(not(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    )))]
     let _token_budget_reserved = false;
 
     #[cfg(all(
         feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ),
     ))]
     let (_cost_budget_reserved, cost_budget_reservation_ids) =
         match reserve_proxy_cost_budgets_for_request(
@@ -515,8 +563,7 @@ async fn handle_openai_compat_proxy(
             Ok(reserved) => reserved,
             Err(err) => {
                 if err.0 == StatusCode::PAYMENT_REQUIRED {
-                    let mut gateway = state.gateway.lock().await;
-                    gateway.observability.record_budget_exceeded();
+                    state.record_budget_exceeded();
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -544,7 +591,12 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(not(all(
         feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ),
     )))]
     let _cost_budget_reserved = false;
     emit_json_log(
@@ -593,19 +645,29 @@ async fn handle_openai_compat_proxy(
         charge_tokens,
         stream_requested: _stream_requested,
         strip_authorization,
-		        use_persistent_budget,
-		        virtual_key_id: &virtual_key_id,
-		        budget: &budget,
-	        tenant_budget_scope: &tenant_budget_scope,
-		        project_budget_scope: &project_budget_scope,
-		        user_budget_scope: &user_budget_scope,
-		        charge_cost_usd_micros,
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        use_persistent_budget,
+        virtual_key_id: &virtual_key_id,
+        budget: &budget,
+        tenant_budget_scope: &tenant_budget_scope,
+        project_budget_scope: &project_budget_scope,
+        user_budget_scope: &user_budget_scope,
+        charge_cost_usd_micros,
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
         token_budget_reservation_ids: &token_budget_reservation_ids,
         cost_budget_reserved: _cost_budget_reserved,
         #[cfg(all(
             feature = "gateway-costing",
-            any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+            any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-postgres",
+                feature = "gateway-store-mysql",
+                feature = "gateway-store-redis"
+            ),
         ))]
         cost_budget_reservation_ids: &cost_budget_reservation_ids,
         max_attempts,
@@ -646,7 +708,8 @@ async fn handle_openai_compat_proxy(
             }
         }
 
-        match attempt_proxy_backend(attempt_params, &backend_name, idx, &attempted_backends).await? {
+        match attempt_proxy_backend(attempt_params, &backend_name, idx, &attempted_backends).await?
+        {
             BackendAttemptOutcome::Response(response) => return Ok(response),
             BackendAttemptOutcome::Continue(err) => {
                 if let Some(err) = err {
@@ -657,12 +720,22 @@ async fn handle_openai_compat_proxy(
         }
     }
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     rollback_proxy_token_budget_reservations(&state, &token_budget_reservation_ids).await;
 
     #[cfg(all(
         feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ),
     ))]
     rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
 
@@ -671,24 +744,21 @@ async fn handle_openai_compat_proxy(
     #[cfg(not(feature = "gateway-metrics-prometheus"))]
     let proxy_metrics = None;
 
-    Err(
-        finalize_openai_compat_proxy_failure(
-            &state,
-            ProxyFailureContext {
-                request_id: &request_id,
-                method: &parts.method,
-                path_and_query,
-                model: &model,
-                virtual_key_id: virtual_key_id.as_deref(),
-                attempted_backends: &attempted_backends,
-                body_len: body.len(),
-                charge_tokens,
-                charge_cost_usd_micros,
-                last_err,
-                metrics: proxy_metrics,
-            },
-        )
-        .await,
+    Err(finalize_openai_compat_proxy_failure(
+        &state,
+        ProxyFailureContext {
+            request_id: &request_id,
+            method: &parts.method,
+            path_and_query,
+            model: &model,
+            virtual_key_id: virtual_key_id.as_deref(),
+            attempted_backends: &attempted_backends,
+            body_len: body.len(),
+            charge_tokens,
+            charge_cost_usd_micros,
+            last_err,
+            metrics: proxy_metrics,
+        },
     )
-
+    .await)
 }

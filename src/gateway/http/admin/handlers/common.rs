@@ -1,4 +1,9 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Deserialize)]
 struct LedgerQuery {
     #[serde(default)]
@@ -9,20 +14,40 @@ struct LedgerQuery {
     offset: usize,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn default_audit_limit() -> usize {
     100
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn default_audit_export_limit() -> usize {
     1000
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 const MAX_ADMIN_LEDGER_LIMIT: usize = 10_000;
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn apply_admin_list_window<T>(items: &mut Vec<T>, offset: usize, limit: Option<usize>, max: usize) {
     if offset > 0 {
         if offset >= items.len() {
@@ -39,7 +64,12 @@ fn apply_admin_list_window<T>(items: &mut Vec<T>, offset: usize, limit: Option<u
     }
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn tenant_allowed_scopes(keys: &[VirtualKeyConfig], tenant_id: &str) -> std::collections::HashSet<String> {
     let tenant_id = tenant_id.trim();
     let mut scopes = std::collections::HashSet::<String>::new();

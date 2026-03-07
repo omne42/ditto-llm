@@ -50,6 +50,11 @@ mod tests {
         env_nonempty("DITTO_REDIS_URL").or_else(|| env_nonempty("REDIS_URL"))
     }
 
+    fn required_redis_url() -> String {
+        redis_url()
+            .unwrap_or_else(|| panic!("missing redis test url; set DITTO_REDIS_URL or REDIS_URL"))
+    }
+
     static PREFIX_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn test_prefix() -> String {
@@ -59,9 +64,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_round_trips_virtual_keys_and_budget_ledgers() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -76,6 +79,20 @@ mod tests {
         let loaded = store.load_virtual_keys().await.expect("load");
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].id, "key-1");
+
+        let router = super::super::RouterConfig {
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        };
+        store
+            .replace_router_config(&router)
+            .await
+            .expect("persist router");
+        let loaded_router = store.load_router_config().await.expect("load router");
+        assert!(loaded_router.is_some());
+        let loaded_router = loaded_router.expect("router");
+        assert_eq!(loaded_router.default_backends.len(), 0);
+        assert_eq!(loaded_router.rules.len(), 0);
 
         store
             .reserve_budget_tokens("req-1", "key-1", 10, 5)
@@ -95,9 +112,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_commit_budget_reservation_with_tokens_releases_difference() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -129,9 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_commit_cost_reservation_with_usd_micros_releases_difference() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -166,9 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_reaps_stale_budget_reservations() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -201,9 +212,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_reaps_stale_cost_reservations() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -236,9 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_rate_limits_enforce_rpm() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")
@@ -272,9 +279,7 @@ mod tests {
 
     #[tokio::test]
     async fn redis_store_rate_limits_enforce_tpm() {
-        let Some(url) = redis_url() else {
-            return;
-        };
+        let url = required_redis_url();
 
         let store = RedisStore::new(url)
             .expect("store")

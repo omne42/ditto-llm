@@ -22,6 +22,56 @@ ditto-gateway <gateway.(json|yaml)> [flags...]
 cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
+### 配置子命令（provider/model add）
+
+当启用 `gateway` feature 时，`ditto-gateway` 也支持配置写入子命令（不启动网关进程）：
+
+```bash
+# `add` 与 `set` 等价（互为别名）
+# 增量更新 provider（不会整文件覆盖）
+cargo run --features gateway --bin ditto-gateway -- \
+  provider add openrouter \
+  --namespace google \
+  --upstream-api gemini_generate_content \
+  --auth-type api_key_env \
+  --auth-key OPENROUTER_API_KEY \
+  --base-url https://openrouter.ai/api/v1 \
+  --scope workspace
+
+# 增量更新 model（不会整文件覆盖）
+cargo run --features gateway --bin ditto-gateway -- \
+  model add gemini-3.1-pro \
+  --provider google.providers.openrouter \
+  --set-default \
+  --scope workspace
+
+# 列表 / 查看 / 删除
+cargo run --features gateway --bin ditto-gateway -- provider list --namespace google
+cargo run --features gateway --bin ditto-gateway -- provider show openrouter --namespace google
+cargo run --features gateway --bin ditto-gateway -- provider delete openrouter --namespace google
+cargo run --features gateway --bin ditto-gateway -- model list
+cargo run --features gateway --bin ditto-gateway -- model show gemini-3.1-pro
+cargo run --features gateway --bin ditto-gateway -- model delete gemini-3.1-pro
+
+# 多步交互默认开启（参数可预填，剩余项交互补全）
+cargo run --features gateway --bin ditto-gateway -- \
+  provider add openrouter \
+  --namespace google \
+  --upstream-api gemini_generate_content
+
+# 非交互（脚本场景）
+cargo run --features gateway --bin ditto-gateway -- \
+  provider add openrouter \
+  --namespace google \
+  --upstream-api gemini_generate_content \
+  --no-interactive
+```
+
+说明：
+
+- `provider/model add` 的底层实现在 `ditto-llm` 库（`upsert_provider_config` / `upsert_model_config`），Omne 也复用同一套方法。
+- 默认是 merge update（增量更新）；不会清空已有无关配置。
+
 ---
 
 ## 2) 配置与运行（Core）
@@ -58,17 +108,20 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 
 ---
 
-## 4) 存储（state / sqlite / redis）
+## 4) 存储（state / sqlite / pg / mysql / redis）
 
-三选一（超过一个会直接报错）：
+可以并行启用多个持久层（例如 `--sqlite` + `--pg` 做双写）。
 
-- `--state PATH`：JSON state file（只持久化 virtual keys）
+- `--state PATH`：JSON state file（持久化 `virtual_keys` + `router`）
 - `--sqlite PATH`：sqlite store（需要 `--features gateway-store-sqlite`）
+- `--pg URL` / `--pg-env ENV`：postgres store（需要 `--features gateway-store-postgres`）
+- `--mysql URL` / `--mysql-env ENV`：mysql store（需要 `--features gateway-store-mysql`）
 - `--redis URL`：redis store（需要 `--features gateway-store-redis`）
 
-可选（适用于 sqlite/redis）：
+可选（适用于持久层）：
 
-- `--audit-retention-secs SECS`：审计日志保留期（只保留最近 `SECS` 秒；启用 sqlite/redis store 时默认 30 天；设置为 `0` 表示不做清理）
+- `--audit-retention-secs SECS`：审计日志保留期（只保留最近 `SECS` 秒；启用持久层时默认 30 天；设置为 `0` 表示不做清理）
+- `--db-doctor`：只执行存储层 schema 自检并退出（任一已配置 store 自检失败即进程失败）
 
 redis 相关：
 
@@ -78,6 +131,8 @@ redis 相关：
 约束：
 
 - `--redis` 与 `--redis-env` 互斥
+- `--pg`/`--postgres` 与 `--pg-env`/`--postgres-env` 互斥
+- `--mysql` 与 `--mysql-env` 互斥
 
 ---
 
@@ -112,6 +167,7 @@ redis 相关：
 - Retry：
   - `--proxy-retry`
   - `--proxy-retry-status-codes CODES`（逗号分隔，如 `429,500,502`）
+  - `--proxy-fallback-status-codes CODES`（命中状态码时直接 fallback 到下一个 backend；不依赖 `--proxy-retry`）
   - `--proxy-retry-max-attempts N`
 - Circuit breaker：
   - `--proxy-circuit-breaker`

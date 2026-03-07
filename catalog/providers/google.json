@@ -1,0 +1,1511 @@
+{
+  "schema_version": "ditto.provider_catalog.v1",
+  "normalized_from": "catalog/provider_models/google.json",
+  "provider": {
+    "id": "google",
+    "display_name": "Google AI for Developers",
+    "base_url": "https://generativelanguage.googleapis.com/v1beta",
+    "protocol": "gemini_generate_content",
+    "source_url": "https://ai.google.dev/gemini-api/docs/models",
+    "auth": {
+      "type": "query_param_env",
+      "param": "key",
+      "keys": [
+        "GOOGLE_API_KEY"
+      ]
+    }
+  },
+  "interfaces": {
+    "content.generate": {
+      "object": "content.generate",
+      "display_name": "Generate Content",
+      "protocol": "gemini_generate_content",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:generateContent"
+    },
+    "content.generate_stream": {
+      "object": "content.generate_stream",
+      "display_name": "Stream Generate Content",
+      "protocol": "gemini_stream_generate_content",
+      "transport": "sse",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:streamGenerateContent?alt=sse"
+    },
+    "content.batch": {
+      "object": "content.batch",
+      "display_name": "Batch Generate Content",
+      "protocol": "gemini_batch_generate_content",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:batchGenerateContent"
+    },
+    "embedding": {
+      "object": "embedding",
+      "display_name": "Embed Content",
+      "protocol": "gemini_embed_content",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:embedContent"
+    },
+    "embedding.batch": {
+      "object": "embedding.batch",
+      "display_name": "Batch Embed Content",
+      "protocol": "gemini_batch_embed_contents",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:batchEmbedContents"
+    },
+    "live.session": {
+      "object": "live.session",
+      "display_name": "Live API Session",
+      "protocol": "gemini_live",
+      "transport": "websocket",
+      "path": "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+    },
+    "speech.generate": {
+      "object": "speech.generate",
+      "display_name": "Text To Speech",
+      "protocol": "gemini_generate_content",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:generateContent",
+      "notes": "Semantic TTS interface carried over the Gemini generateContent endpoint."
+    },
+    "image.generate": {
+      "object": "image.generate",
+      "display_name": "Image Generation",
+      "protocol": "google_predict",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:predict"
+    },
+    "video.generate": {
+      "object": "video.generate",
+      "display_name": "Video Generation",
+      "protocol": "google_predict_long_running",
+      "transport": "http",
+      "method": "POST",
+      "path_template": "/v1beta/models/{model}:predictLongRunning"
+    },
+    "music.session": {
+      "object": "music.session",
+      "display_name": "Realtime Music Session",
+      "protocol": "google_music_live",
+      "transport": "websocket",
+      "path": "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateMusic"
+    }
+  },
+  "models": {
+    "gemini-3.1-pro": {
+      "identity": {
+        "catalog_id": "gemini-3.1-pro",
+        "provider_model_id": "gemini-3.1-pro",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-3.1-pro-preview-09-12",
+          "gemini-3.1-pro-exp-08-27",
+          "gemini-3.1-pro"
+        ]
+      },
+      "display_name": "Gemini 3.1 Pro",
+      "summary": "Flagship multimodal reasoning model for coding, planning, and long-context agent workflows.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "March 2026"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "1048576",
+        "output_token_limit": "65536"
+      },
+      "capabilities": {
+        "batch_api": true,
+        "cached_content": true,
+        "code_execution": true,
+        "function_calling": true,
+        "google_search": true,
+        "live_api": false,
+        "search_grounding": true,
+        "structured_outputs": true,
+        "system_instructions": true,
+        "thinking": true,
+        "tuning": true,
+        "url_context": true,
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": true,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream",
+        "content.batch"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-3.1-pro",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-3.1-pro-preview-09-12"
+          },
+          {
+            "channel": "experimental",
+            "model": "gemini-3.1-pro-exp-08-27"
+          },
+          {
+            "channel": "stable",
+            "model": "gemini-3.1-pro"
+          }
+        ]
+      }
+    },
+    "gemini-3.1-flash": {
+      "identity": {
+        "catalog_id": "gemini-3.1-flash",
+        "provider_model_id": "gemini-3.1-flash",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-3.1-flash-preview-09-18",
+          "gemini-3.1-flash-exp-08-27",
+          "gemini-3.1-flash"
+        ]
+      },
+      "display_name": "Gemini 3.1 Flash",
+      "summary": "Fast multimodal model for interactive assistants, tools, and long-context chat workloads.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "March 2026"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "1048576",
+        "output_token_limit": "65536"
+      },
+      "capabilities": {
+        "batch_api": true,
+        "cached_content": true,
+        "code_execution": true,
+        "function_calling": true,
+        "google_search": true,
+        "live_api": false,
+        "search_grounding": true,
+        "structured_outputs": true,
+        "system_instructions": true,
+        "thinking": true,
+        "tuning": true,
+        "url_context": true,
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": true,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream",
+        "content.batch"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-3.1-flash",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-3.1-flash-preview-09-18"
+          },
+          {
+            "channel": "experimental",
+            "model": "gemini-3.1-flash-exp-08-27"
+          },
+          {
+            "channel": "stable",
+            "model": "gemini-3.1-flash"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-pro": {
+      "identity": {
+        "catalog_id": "gemini-2.5-pro",
+        "provider_model_id": "gemini-2.5-pro",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-pro",
+          "gemini-2.5-pro-preview-06-05"
+        ]
+      },
+      "display_name": "Gemini 2.5 Pro",
+      "summary": "High-capability multimodal model for reasoning, coding, and very large contexts.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "September 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "1048576",
+        "output_token_limit": "65536"
+      },
+      "capabilities": {
+        "batch_api": true,
+        "cached_content": true,
+        "code_execution": true,
+        "function_calling": true,
+        "google_search": true,
+        "live_api": false,
+        "search_grounding": true,
+        "structured_outputs": true,
+        "system_instructions": true,
+        "thinking": true,
+        "tuning": true,
+        "url_context": true,
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": true,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream",
+        "content.batch"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-pro",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "gemini-2.5-pro"
+          },
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-pro-preview-06-05"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash",
+        "provider_model_id": "gemini-2.5-flash",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-flash",
+          "gemini-2.5-flash-preview-05-20",
+          "gemini-2.5-flash-preview-04-17"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash",
+      "summary": "Best price-performance multimodal model with adaptive thinking, tool use, and large-context chat.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "September 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "1048576",
+        "output_token_limit": "65536"
+      },
+      "capabilities": {
+        "batch_api": true,
+        "cached_content": true,
+        "code_execution": true,
+        "function_calling": true,
+        "google_search": true,
+        "live_api": false,
+        "search_grounding": true,
+        "structured_outputs": true,
+        "system_instructions": true,
+        "thinking": true,
+        "tuning": true,
+        "url_context": true,
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": true,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream",
+        "content.batch"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "gemini-2.5-flash"
+          },
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-flash-preview-05-20"
+          },
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-flash-preview-04-17"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash-lite-preview-06-17": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-lite-preview-06-17",
+        "provider_model_id": "gemini-2.5-flash-lite-preview-06-17",
+        "brand": "google",
+        "family": "gemini"
+      },
+      "display_name": "Gemini 2.5 Flash Lite Preview 06-17",
+      "summary": "Lower-latency, lower-cost Gemini 2.5 Flash Lite preview for text and multimodal prompts.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": true,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite-preview-06-17"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash-lite-preview-06-17"
+      }
+    },
+    "gemini-2.5-flash-image": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-image",
+        "provider_model_id": "gemini-2.5-flash-image",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-flash-image"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash Image",
+      "summary": "Gemini image generation and editing model that can follow text prompts and multimodal instructions.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text",
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-image"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash-image",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-flash-image"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash-live": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-live",
+        "provider_model_id": "gemini-live-2.5-flash-preview",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-live-2.5-flash-preview"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash Live",
+      "summary": "Realtime multimodal model for low-latency conversations with text, audio, and video streams.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "latest_update": "September 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio",
+          "video"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "128000",
+        "output_token_limit": "8192"
+      },
+      "capabilities": {
+        "function_calling": true,
+        "google_search": true,
+        "live_api": true,
+        "system_instructions": true,
+        "thinking": true,
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "live.session",
+      "supported_interface_ids": [
+        "live.session"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-live"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-live-2.5-flash-preview",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-live-2.5-flash-preview"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash-preview-native-audio-dialog": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-preview-native-audio-dialog",
+        "provider_model_id": "gemini-2.5-flash-preview-native-audio-dialog",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-flash-preview-native-audio-dialog"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash Native Audio",
+      "summary": "Native audio dialog preview for speech-in, speech-out interactions.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "audio",
+          "text"
+        ],
+        "output": [
+          "audio",
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "live.session",
+      "supported_interface_ids": [
+        "live.session"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-preview-native-audio-dialog"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash-preview-native-audio-dialog",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-flash-preview-native-audio-dialog"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash-exp-native-audio-thinking-dialog": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-exp-native-audio-thinking-dialog",
+        "provider_model_id": "gemini-2.5-flash-exp-native-audio-thinking-dialog",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-flash-exp-native-audio-thinking-dialog"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash Thinking Audio",
+      "summary": "Experimental native-audio model with explicit thinking behavior for spoken dialog.",
+      "release_channel": "experimental",
+      "lifecycle": {
+        "status": "experimental"
+      },
+      "modalities": {
+        "input": [
+          "audio",
+          "text"
+        ],
+        "output": [
+          "audio",
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "live.session",
+      "supported_interface_ids": [
+        "live.session"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-exp-native-audio-thinking-dialog"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash-exp-native-audio-thinking-dialog",
+        "versions": [
+          {
+            "channel": "experimental",
+            "model": "gemini-2.5-flash-exp-native-audio-thinking-dialog"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-pro-preview-tts": {
+      "identity": {
+        "catalog_id": "gemini-2.5-pro-preview-tts",
+        "provider_model_id": "gemini-2.5-pro-preview-tts",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-pro-preview-tts"
+        ]
+      },
+      "display_name": "Gemini 2.5 Pro TTS",
+      "summary": "High-quality text-to-speech preview tuned for expressive narration and longer responses.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "speech.generate",
+      "supported_interface_ids": [
+        "speech.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro-preview-tts"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-pro-preview-tts",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-pro-preview-tts"
+          }
+        ]
+      }
+    },
+    "gemini-2.5-flash-preview-tts": {
+      "identity": {
+        "catalog_id": "gemini-2.5-flash-preview-tts",
+        "provider_model_id": "gemini-2.5-flash-preview-tts",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.5-flash-preview-tts"
+        ]
+      },
+      "display_name": "Gemini 2.5 Flash TTS",
+      "summary": "Faster text-to-speech preview for low-latency speech generation.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "speech.generate",
+      "supported_interface_ids": [
+        "speech.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-preview-tts"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.5-flash-preview-tts",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-2.5-flash-preview-tts"
+          }
+        ]
+      }
+    },
+    "gemini-embedding": {
+      "identity": {
+        "catalog_id": "gemini-embedding",
+        "provider_model_id": "gemini-embedding-001",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-embedding-001"
+        ]
+      },
+      "display_name": "Gemini Embedding",
+      "summary": "Google embedding model for semantic search, retrieval, clustering, and ranking workflows.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "January 2025"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "embeddings"
+        ]
+      },
+      "limits": {
+        "input_token_limit": "2048",
+        "output_dimension_size": "3072"
+      },
+      "capabilities": {
+        "batch_api": true,
+        "cached_content": false,
+        "code_execution": false,
+        "function_calling": false,
+        "google_search": false,
+        "live_api": false,
+        "search_grounding": false,
+        "structured_outputs": false,
+        "system_instructions": false,
+        "thinking": false,
+        "tuning": false,
+        "url_context": false,
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": true,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "embedding",
+      "supported_interface_ids": [
+        "embedding",
+        "embedding.batch"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-embedding"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-embedding-001",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "gemini-embedding-001"
+          }
+        ]
+      }
+    },
+    "gemini-embedding-exp": {
+      "identity": {
+        "catalog_id": "gemini-embedding-exp",
+        "provider_model_id": "gemini-embedding-exp-03-07",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-embedding-exp-03-07"
+        ]
+      },
+      "display_name": "Experimental Gemini Embedding",
+      "summary": "Experimental Gemini embedding release for retrieval and similarity evaluation.",
+      "release_channel": "experimental",
+      "lifecycle": {
+        "status": "experimental"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "embeddings"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": true,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "embedding",
+      "supported_interface_ids": [
+        "embedding"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-embedding-exp"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-embedding-exp-03-07",
+        "versions": [
+          {
+            "channel": "experimental",
+            "model": "gemini-embedding-exp-03-07"
+          }
+        ]
+      }
+    },
+    "gemma-3": {
+      "identity": {
+        "catalog_id": "gemma-3",
+        "provider_model_id": "gemma-3-27b-it",
+        "brand": "google",
+        "family": "gemma",
+        "version_ids": [
+          "gemma-3-27b-it",
+          "gemma-3-12b-it",
+          "gemma-3-4b-it",
+          "gemma-3-1b-it"
+        ]
+      },
+      "display_name": "Gemma 3",
+      "summary": "Open Gemma instruction-tuned family with text-and-image understanding across multiple sizes.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "March 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemma-3"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemma-3-27b-it",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "gemma-3-27b-it"
+          },
+          {
+            "channel": "stable",
+            "model": "gemma-3-12b-it"
+          },
+          {
+            "channel": "stable",
+            "model": "gemma-3-4b-it"
+          },
+          {
+            "channel": "stable",
+            "model": "gemma-3-1b-it"
+          }
+        ]
+      }
+    },
+    "medgemma": {
+      "identity": {
+        "catalog_id": "medgemma",
+        "provider_model_id": "medgemma-27b-text-it",
+        "brand": "google",
+        "family": "medgemma",
+        "version_ids": [
+          "medgemma-27b-text-it",
+          "medgemma-4b-multimodal"
+        ]
+      },
+      "display_name": "MedGemma",
+      "summary": "Domain-focused Gemma family for medical text and multimodal medical reasoning.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "May 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/medgemma"
+      ],
+      "vendor_metadata": {
+        "model_code": "medgemma-27b-text-it",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "medgemma-27b-text-it"
+          },
+          {
+            "channel": "stable",
+            "model": "medgemma-4b-multimodal"
+          }
+        ]
+      }
+    },
+    "signgemma": {
+      "identity": {
+        "catalog_id": "signgemma",
+        "provider_model_id": "signgemma-9b-it",
+        "brand": "google",
+        "family": "signgemma",
+        "version_ids": [
+          "signgemma-9b-it"
+        ]
+      },
+      "display_name": "SignGemma",
+      "summary": "Experimental Gemma model for sign-language understanding and translation from video inputs.",
+      "release_channel": "experimental",
+      "lifecycle": {
+        "status": "experimental",
+        "latest_update": "September 2025"
+      },
+      "modalities": {
+        "input": [
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": false,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate",
+        "content.generate_stream"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/signgemma"
+      ],
+      "vendor_metadata": {
+        "model_code": "signgemma-9b-it",
+        "versions": [
+          {
+            "channel": "experimental",
+            "model": "signgemma-9b-it"
+          }
+        ]
+      }
+    },
+    "gemini-robotics-er": {
+      "identity": {
+        "catalog_id": "gemini-robotics-er",
+        "provider_model_id": "gemini-robotics-er-1.5-preview",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-robotics-er-1.5-preview"
+        ]
+      },
+      "display_name": "Gemini Robotics-ER",
+      "summary": "Embodied reasoning model for robotics research with spatial understanding and action planning.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "latest_update": "March 2025"
+      },
+      "capabilities": {
+        "streaming": false
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-robotics-er"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-robotics-er-1.5-preview",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-robotics-er-1.5-preview"
+          }
+        ]
+      }
+    },
+    "gemini-2.0-flash-preview-image-generation": {
+      "identity": {
+        "catalog_id": "gemini-2.0-flash-preview-image-generation",
+        "provider_model_id": "gemini-2.0-flash-preview-image-generation",
+        "brand": "google",
+        "family": "gemini",
+        "version_ids": [
+          "gemini-2.0-flash-preview-image-generation"
+        ]
+      },
+      "display_name": "Gemini 2.0 Flash Preview Image Generation",
+      "summary": "Preview Gemini 2.0 model for text-and-image prompting with image generation output.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text",
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "content.generate",
+      "supported_interface_ids": [
+        "content.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/gemini-2.0-flash-preview-image-generation"
+      ],
+      "vendor_metadata": {
+        "model_code": "gemini-2.0-flash-preview-image-generation",
+        "versions": [
+          {
+            "channel": "preview",
+            "model": "gemini-2.0-flash-preview-image-generation"
+          }
+        ]
+      }
+    },
+    "imagen-4": {
+      "identity": {
+        "catalog_id": "imagen-4",
+        "provider_model_id": "imagen-4.0-generate-001",
+        "brand": "google",
+        "family": "imagen",
+        "version_ids": [
+          "imagen-4.0-generate-001",
+          "imagen-4.0-fast-generate-001",
+          "imagen-4.0-ultra-generate-001",
+          "imagen-4.0-generate-preview-06-06"
+        ]
+      },
+      "display_name": "Imagen 4",
+      "summary": "Imagen family for high-fidelity text-to-image generation, editing, and style-controlled outputs.",
+      "release_channel": "stable",
+      "lifecycle": {
+        "status": "active",
+        "latest_update": "June 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "limits": {
+        "output_images": "up_to_4"
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generate",
+      "supported_interface_ids": [
+        "image.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/imagen-4"
+      ],
+      "vendor_metadata": {
+        "model_code": "imagen-4.0-generate-001",
+        "versions": [
+          {
+            "channel": "stable",
+            "model": "imagen-4.0-generate-001"
+          },
+          {
+            "channel": "stable_faster",
+            "model": "imagen-4.0-fast-generate-001"
+          },
+          {
+            "channel": "stable_ultra",
+            "model": "imagen-4.0-ultra-generate-001"
+          },
+          {
+            "channel": "preview",
+            "model": "imagen-4.0-generate-preview-06-06"
+          }
+        ]
+      }
+    },
+    "veo-2": {
+      "identity": {
+        "catalog_id": "veo-2",
+        "provider_model_id": "veo-2.0-generate-001",
+        "brand": "google",
+        "family": "veo",
+        "version_ids": [
+          "veo-2.0-generate-001"
+        ]
+      },
+      "display_name": "Veo 2",
+      "summary": "Google video generation model for prompt-based clip synthesis.",
+      "release_channel": "experimental",
+      "lifecycle": {
+        "status": "experimental",
+        "latest_update": "February 2026"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "video"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": true,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "video.generate",
+      "supported_interface_ids": [
+        "video.generate"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/veo-2"
+      ],
+      "vendor_metadata": {
+        "model_code": "veo-2.0-generate-001",
+        "versions": [
+          {
+            "channel": "experimental",
+            "model": "veo-2.0-generate-001"
+          }
+        ]
+      }
+    },
+    "lyria": {
+      "identity": {
+        "catalog_id": "lyria",
+        "provider_model_id": "lyria-realtime-exp",
+        "brand": "google",
+        "family": "lyria",
+        "version_ids": [
+          "lyria-realtime-exp"
+        ]
+      },
+      "display_name": "Lyria",
+      "summary": "Realtime music generation model for prompt-driven audio creation.",
+      "release_channel": "experimental",
+      "lifecycle": {
+        "status": "experimental",
+        "latest_update": "March 2025"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "music.session",
+      "supported_interface_ids": [
+        "music.session"
+      ],
+      "source_urls": [
+        "https://ai.google.dev/gemini-api/docs/models/lyria"
+      ],
+      "vendor_metadata": {
+        "model_code": "lyria-realtime-exp",
+        "versions": [
+          {
+            "channel": "experimental",
+            "model": "lyria-realtime-exp"
+          }
+        ]
+      }
+    }
+  }
+}

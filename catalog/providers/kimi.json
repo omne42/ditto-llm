@@ -1,0 +1,843 @@
+{
+  "schema_version": "ditto.provider_catalog.v1",
+  "normalized_from": "catalog/provider_models/kimi.json",
+  "provider": {
+    "id": "kimi",
+    "display_name": "Kimi by Moonshot AI",
+    "base_url": "https://api.moonshot.cn/v1",
+    "protocol": "openai",
+    "source_url": "https://platform.moonshot.cn/docs/introduction",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "MOONSHOT_API_KEY"
+      ]
+    }
+  },
+  "interfaces": {
+    "chat.completion": {
+      "object": "chat.completion",
+      "display_name": "Chat Completions API",
+      "protocol": "openai_chat_completions",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/chat/completions"
+    },
+    "model.list": {
+      "object": "model.list",
+      "display_name": "List Models API",
+      "protocol": "openai_models_list",
+      "transport": "http",
+      "method": "GET",
+      "path": "/v1/models"
+    }
+  },
+  "models": {
+    "kimi-k2.5": {
+      "identity": {
+        "catalog_id": "kimi-k2.5",
+        "provider_model_id": "kimi-k2.5",
+        "brand": "kimi",
+        "family": "kimi-k2.5"
+      },
+      "display_name": "Kimi K2.5",
+      "summary": "Kimi's current flagship multimodal model for coding, vision understanding, reasoning, chat, and agent workflows. Supports both thinking and non-thinking modes.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 262144
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": true,
+        "video_understanding": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": true,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text, image, video",
+        "output_summary": "Text",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat"
+      }
+    },
+    "kimi-k2-0905-preview": {
+      "identity": {
+        "catalog_id": "kimi-k2-0905-preview",
+        "provider_model_id": "kimi-k2-0905-preview",
+        "brand": "kimi",
+        "family": "kimi-k2"
+      },
+      "display_name": "Kimi K2 0905 Preview",
+      "summary": "Latest Kimi K2 preview model with stronger agentic coding, better front-end code quality, and improved long-context understanding.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 262144
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "kimi-k2-0711-preview": {
+      "identity": {
+        "catalog_id": "kimi-k2-0711-preview",
+        "provider_model_id": "kimi-k2-0711-preview",
+        "brand": "kimi",
+        "family": "kimi-k2"
+      },
+      "display_name": "Kimi K2 0711 Preview",
+      "summary": "Original Kimi K2 preview release: a 1T-parameter MoE text model focused on coding and agent tasks.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 131072
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "kimi-k2-turbo-preview": {
+      "identity": {
+        "catalog_id": "kimi-k2-turbo-preview",
+        "provider_model_id": "kimi-k2-turbo-preview",
+        "brand": "kimi",
+        "family": "kimi-k2"
+      },
+      "display_name": "Kimi K2 Turbo Preview",
+      "summary": "High-speed Kimi K2 variant aligned to the latest K2 preview, optimized for lower latency and higher tokens-per-second output.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 262144
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "speed": "60-100_tokens_per_second",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "kimi-k2-thinking": {
+      "identity": {
+        "catalog_id": "kimi-k2-thinking",
+        "provider_model_id": "kimi-k2-thinking",
+        "brand": "kimi",
+        "family": "kimi-k2"
+      },
+      "display_name": "Kimi K2 Thinking",
+      "summary": "Long-thinking K2 model for deep reasoning, complex problem solving, and multi-step tool use.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 262144
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "kimi-k2-thinking-turbo": {
+      "identity": {
+        "catalog_id": "kimi-k2-thinking-turbo",
+        "provider_model_id": "kimi-k2-thinking-turbo",
+        "brand": "kimi",
+        "family": "kimi-k2"
+      },
+      "display_name": "Kimi K2 Thinking Turbo",
+      "summary": "High-speed K2 thinking model for deep reasoning workloads that also need lower latency.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 262144
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/docs/pricing/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "speed": "60-100_tokens_per_second",
+        "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "moonshot-v1-8k": {
+      "identity": {
+        "catalog_id": "moonshot-v1-8k",
+        "provider_model_id": "moonshot-v1-8k",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 8K",
+      "summary": "Text generation model for short prompts and responses.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 8192
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/introduction",
+        "https://platform.moonshot.cn/docs/api/chat"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat"
+      }
+    },
+    "moonshot-v1-32k": {
+      "identity": {
+        "catalog_id": "moonshot-v1-32k",
+        "provider_model_id": "moonshot-v1-32k",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 32K",
+      "summary": "Text generation model for longer text workloads.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/introduction",
+        "https://platform.moonshot.cn/docs/api/chat"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat"
+      }
+    },
+    "moonshot-v1-128k": {
+      "identity": {
+        "catalog_id": "moonshot-v1-128k",
+        "provider_model_id": "moonshot-v1-128k",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 128K",
+      "summary": "Text generation model for very long-context workloads.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 131072
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/introduction",
+        "https://platform.moonshot.cn/docs/api/chat"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat"
+      }
+    },
+    "moonshot-v1-auto": {
+      "identity": {
+        "catalog_id": "moonshot-v1-auto",
+        "provider_model_id": "moonshot-v1-auto",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 Auto",
+      "summary": "Auto-routed Moonshot v1 text model alias listed in the current Chat Completion docs. The official docs do not currently document its routing behavior beyond availability.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "moonshot-v1-8k-vision-preview": {
+      "identity": {
+        "catalog_id": "moonshot-v1-8k-vision-preview",
+        "provider_model_id": "moonshot-v1-8k-vision-preview",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 8K Vision Preview",
+      "summary": "Preview vision model that understands image content and responds with text.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 8192
+      },
+      "capabilities": {
+        "streaming": true,
+        "vision": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "moonshot-v1-32k-vision-preview": {
+      "identity": {
+        "catalog_id": "moonshot-v1-32k-vision-preview",
+        "provider_model_id": "moonshot-v1-32k-vision-preview",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 32K Vision Preview",
+      "summary": "Preview vision model that understands image content and responds with text for longer contexts.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "vision": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    },
+    "moonshot-v1-128k-vision-preview": {
+      "identity": {
+        "catalog_id": "moonshot-v1-128k-vision-preview",
+        "provider_model_id": "moonshot-v1-128k-vision-preview",
+        "brand": "kimi",
+        "family": "moonshot-v1"
+      },
+      "display_name": "Moonshot v1 128K Vision Preview",
+      "summary": "Preview vision model that understands image content and responds with text for the largest Moonshot v1 context window.",
+      "release_channel": "preview",
+      "lifecycle": {
+        "status": "preview",
+        "stage": "preview"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 131072
+      },
+      "capabilities": {
+        "streaming": true,
+        "vision": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+        "https://platform.moonshot.cn/docs/api/chat",
+        "https://platform.moonshot.cn/blog/posts/changelog"
+      ],
+      "vendor_metadata": {
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+        "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog"
+      }
+    }
+  }
+}

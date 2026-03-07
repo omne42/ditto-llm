@@ -3,10 +3,21 @@
 本页不是“营销列表”，而是一个工程化 checklist：帮助你评估 Ditto-LLM 距离“企业级平台能力”还差哪些积木，以及哪些可以由外部基础设施承接。
 
 > 原则：Ditto 负责 **模型治理与路由控制面**；通用的“身份/网络/合规”尽量交给外层 API gateway / service mesh / IAM。
+> 分层边界：本仓库聚焦 **L0+L1**；本文中“企业平台闭环”能力属于 **L2（独立仓库）** 的演进目标。
 
 ---
 
-## 1) 当前已具备（可用于生产落地的部分）
+## 0) 分层口径（先明确范围）
+
+- **L0（本仓库）**：provider 适配与协议互转（SDK/stream/warnings）。
+- **L1（本仓库）**：可部署网关与控制面（keys/limits/budget/routing/observability）。
+- **L2（独立仓库）**：企业治理闭环（prompt/eval/agent eval/RBAC+SSO+SCIM/审批流）。
+
+本文“当前已具备”主要是 L1；“企业级缺口”多数属于 L2 或外层基础设施承接。
+
+---
+
+## 1) 当前已具备（L1：可用于生产落地的部分）
 
 ### 1.1 多副本所需的共享状态（推荐）
 
@@ -109,13 +120,14 @@
 
 当前状态：
 
-- keys 可通过 Admin API 修改并持久化
-- gateway.json 仍以文件分发为主
+- 已支持 L1 最小切片：virtual keys 配置版本历史与回滚（`GET /admin/config/version`、`GET /admin/config/versions`、`POST /admin/config/rollback`）。
+- keys 可通过 Admin API 修改并持久化；gateway.json 仍以文件分发为主。
+- 仍缺：按租户/流量灰度发布、以及 budgets/router/policy 的统一版本治理。
 
 建议承接方式：
 
 - 用 GitOps/配置中心管理 `gateway.json` 与 `.env`，通过滚动升级发布
-- 未来可扩展为“路由/策略也可通过 Admin API 管理”
+- 未来扩展为“路由/策略也可通过 Admin API 管理 + 统一版本化”
 
 ### 2.6 计费与对账（Billing）
 

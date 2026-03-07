@@ -6,6 +6,7 @@ async fn sqlite_store_round_trips_virtual_keys() {
     let path = dir.path().join("gateway.sqlite");
     let store = SqliteStore::new(&path);
     store.init().await.expect("init");
+    store.verify_schema().await.expect("verify schema");
 
     let key = VirtualKeyConfig::new("key-1", "vk-1");
     store
@@ -24,6 +25,30 @@ async fn sqlite_store_round_trips_virtual_keys() {
         .expect("persist empty");
     let loaded = store.load_virtual_keys().await.expect("load");
     assert!(loaded.is_empty());
+}
+
+#[tokio::test]
+async fn sqlite_store_round_trips_router_config() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    let router = RouterConfig {
+        default_backends: Vec::new(),
+        rules: Vec::new(),
+    };
+
+    store
+        .replace_router_config(&router)
+        .await
+        .expect("persist router");
+
+    let loaded = store.load_router_config().await.expect("load router");
+    assert!(loaded.is_some());
+    let loaded = loaded.expect("router");
+    assert_eq!(loaded.default_backends.len(), 0);
+    assert_eq!(loaded.rules.len(), 0);
 }
 
 #[tokio::test]
@@ -192,4 +217,66 @@ async fn sqlite_store_commit_cost_reservation_with_usd_micros_releases_differenc
     assert_eq!(ledgers[1].key_id, "key-2");
     assert_eq!(ledgers[1].spent_usd_micros, 2);
     assert_eq!(ledgers[1].reserved_usd_micros, 0);
+}
+
+#[tokio::test]
+async fn sqlite_store_reaps_stale_budget_reservations() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    store
+        .reserve_budget_tokens("req-1", "key-1", 20, 4)
+        .await
+        .expect("reserve");
+
+    let (scanned, reaped, released) = store
+        .reap_stale_budget_reservations(u64::MAX, 100, true)
+        .await
+        .expect("dry run reap");
+    assert_eq!((scanned, reaped, released), (1, 1, 4));
+    let ledgers = store.list_budget_ledgers().await.expect("ledgers dry");
+    assert_eq!(ledgers.len(), 1);
+    assert_eq!(ledgers[0].reserved_tokens, 4);
+
+    let (scanned, reaped, released) = store
+        .reap_stale_budget_reservations(u64::MAX, 100, false)
+        .await
+        .expect("reap");
+    assert_eq!((scanned, reaped, released), (1, 1, 4));
+    let ledgers = store.list_budget_ledgers().await.expect("ledgers");
+    assert_eq!(ledgers.len(), 1);
+    assert_eq!(ledgers[0].reserved_tokens, 0);
+}
+
+#[tokio::test]
+async fn sqlite_store_reaps_stale_cost_reservations() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    store
+        .reserve_cost_usd_micros("req-1", "key-1", 20, 7)
+        .await
+        .expect("reserve");
+
+    let (scanned, reaped, released) = store
+        .reap_stale_cost_reservations(u64::MAX, 100, true)
+        .await
+        .expect("dry run reap");
+    assert_eq!((scanned, reaped, released), (1, 1, 7));
+    let ledgers = store.list_cost_ledgers().await.expect("ledgers dry");
+    assert_eq!(ledgers.len(), 1);
+    assert_eq!(ledgers[0].reserved_usd_micros, 7);
+
+    let (scanned, reaped, released) = store
+        .reap_stale_cost_reservations(u64::MAX, 100, false)
+        .await
+        .expect("reap");
+    assert_eq!((scanned, reaped, released), (1, 1, 7));
+    let ledgers = store.list_cost_ledgers().await.expect("ledgers");
+    assert_eq!(ledgers.len(), 1);
+    assert_eq!(ledgers[0].reserved_usd_micros, 0);
 }

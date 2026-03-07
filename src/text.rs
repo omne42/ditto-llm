@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use futures_util::stream;
 use serde_json::Value;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 
 use crate::model::{LanguageModel, StreamResult};
 use crate::stream::StreamCollector;
@@ -86,7 +86,6 @@ impl StreamTextHandle {
 
 pub struct StreamTextResult {
     handle: StreamTextHandle,
-    ready: Arc<Notify>,
     text_enabled: Arc<AtomicBool>,
     full_enabled: Arc<AtomicBool>,
     pub text_stream: stream::BoxStream<'static, Result<String>>,
@@ -103,7 +102,6 @@ impl StreamTextResult {
     ) -> (StreamTextHandle, stream::BoxStream<'static, Result<String>>) {
         self.text_enabled.store(true, Ordering::Relaxed);
         self.full_enabled.store(false, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.text_stream)
     }
 
@@ -115,7 +113,6 @@ impl StreamTextResult {
     ) {
         self.text_enabled.store(false, Ordering::Relaxed);
         self.full_enabled.store(true, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.full_stream)
     }
 
@@ -128,7 +125,6 @@ impl StreamTextResult {
     ) {
         self.text_enabled.store(true, Ordering::Relaxed);
         self.full_enabled.store(true, Ordering::Relaxed);
-        self.ready.notify_one();
         (self.handle, self.text_stream, self.full_stream)
     }
 
@@ -172,7 +168,6 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let state_task = state.clone();
     let handle = StreamTextHandle { state };
 
-    let ready = Arc::new(Notify::new());
     let text_enabled = Arc::new(AtomicBool::new(false));
     let full_enabled = Arc::new(AtomicBool::new(false));
 
@@ -267,39 +262,25 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
     let aborter = Arc::new(AbortOnDrop::new(task.abort_handle()));
 
     let text_stream = stream::unfold(
-        (
-            text_rx,
-            aborter.clone(),
-            text_enabled.clone(),
-            ready.clone(),
-        ),
-        |(mut rx, aborter, enabled, ready)| async move {
-            if !enabled.swap(true, Ordering::AcqRel) {
-                ready.notify_one();
-            }
-            rx.recv()
-                .await
-                .map(|item| (item, (rx, aborter, enabled, ready)))
+        (text_rx, aborter.clone(), text_enabled.clone()),
+        |(mut rx, aborter, enabled)| async move {
+            enabled.store(true, Ordering::Release);
+            rx.recv().await.map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
 
     let full_stream = stream::unfold(
-        (full_rx, aborter, full_enabled.clone(), ready.clone()),
-        |(mut rx, aborter, enabled, ready)| async move {
-            if !enabled.swap(true, Ordering::AcqRel) {
-                ready.notify_one();
-            }
-            rx.recv()
-                .await
-                .map(|item| (item, (rx, aborter, enabled, ready)))
+        (full_rx, aborter, full_enabled.clone()),
+        |(mut rx, aborter, enabled)| async move {
+            enabled.store(true, Ordering::Release);
+            rx.recv().await.map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
 
     StreamTextResult {
         handle,
-        ready,
         text_enabled,
         full_enabled,
         text_stream,

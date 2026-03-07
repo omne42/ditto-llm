@@ -6,7 +6,8 @@ impl RedisStore {
     ) -> Result<(), RedisStoreError> {
         let mut conn = self.connection().await?;
         let kind = kind.into();
-        let ts_ms = now_millis_u64();
+        let ts_ms_i64 = now_millis();
+        let ts_ms = if ts_ms_i64 <= 0 { 0 } else { ts_ms_i64 as u64 };
         let id: i64 = conn.incr(self.key_audit_seq(), 1).await?;
         let member = format!("{id:020}");
         let record = AuditLogRecord {
@@ -21,6 +22,7 @@ impl RedisStore {
         let idx_key = self.key_audit_by_ts();
 
         let retention_secs = self.audit_retention_secs;
+        let should_reap = should_run_retention_reap(&self.audit_last_retention_reap_ms, ts_ms_i64);
         let mut pipe = redis::pipe();
         pipe.atomic();
         if let Some(retention_secs) = retention_secs {
@@ -33,9 +35,7 @@ impl RedisStore {
             pipe.set(&record_key, &serialized);
         }
         pipe.zadd(&idx_key, member, ts_ms);
-        if let Some(retention_secs) = retention_secs {
-            let retention_ms = retention_secs.saturating_mul(1000);
-            let cutoff_ms = ts_ms.saturating_sub(retention_ms);
+        if should_reap && let Some(cutoff_ms) = audit_cutoff_ms(retention_secs, ts_ms) {
             pipe.cmd("ZREMRANGEBYSCORE")
                 .arg(&idx_key)
                 .arg("-inf")
@@ -166,12 +166,10 @@ fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+#[cfg(test)]
 fn now_millis_u64() -> u64 {
-    if now_millis() <= 0 {
-        0
-    } else {
-        now_millis() as u64
-    }
+    let now_ms = now_millis();
+    if now_ms <= 0 { 0 } else { now_ms as u64 }
 }
 
 fn tokens_to_i64(tokens: u64) -> i64 {

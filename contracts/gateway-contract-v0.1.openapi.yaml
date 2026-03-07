@@ -1,0 +1,408 @@
+openapi: 3.0.3
+info:
+  title: Ditto Gateway Contract
+  version: 0.1.0
+  description: |
+    Frozen v0.1 contract for Ditto Gateway middle-layer APIs.
+    Scope: health + proxy passthrough envelope + admin audit/budget/cost/reap.
+  x-ditto-contract-id: gateway-v0.1
+  x-ditto-contract-scope:
+    - health
+    - proxy
+    - admin-audit
+    - admin-budget
+    - admin-cost
+    - admin-reap
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - VirtualKeyAuth: []
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Gateway health probe
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/chat/completions:
+    post:
+      operationId: proxyChatCompletions
+      summary: OpenAI-compatible passthrough endpoint
+      description: |
+        Request/response payloads are forwarded in an OpenAI-compatible shape.
+        v0.1 intentionally keeps this as a permissive JSON envelope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProxyJsonEnvelope'
+      responses:
+        '200':
+          description: Successful OpenAI-compatible response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyJsonEnvelope'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited / budget exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream/proxy error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/audit:
+    get:
+      operationId: listAuditLogs
+      summary: List audit logs
+      security:
+        - AdminBearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - in: query
+          name: since_ts_ms
+          schema:
+            type: integer
+            minimum: 0
+            format: uint64
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogRecord'
+        '400':
+          description: Store not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Storage error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/budgets:
+    get:
+      operationId: listBudgetLedgers
+      summary: List token budget ledgers
+      security:
+        - AdminBearerAuth: []
+      parameters:
+        - in: query
+          name: key_prefix
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Budget ledgers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BudgetLedgerRecord'
+        '400':
+          description: Store not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Storage error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/costs:
+    get:
+      operationId: listCostLedgers
+      summary: List cost budget ledgers
+      security:
+        - AdminBearerAuth: []
+      parameters:
+        - in: query
+          name: key_prefix
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Cost ledgers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CostLedgerRecord'
+        '400':
+          description: Store not configured or costing disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Storage error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/reservations/reap:
+    post:
+      operationId: reapReservations
+      summary: Reap stale token/cost reservations
+      security:
+        - AdminBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReapReservationsRequest'
+      responses:
+        '200':
+          description: Reap summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReapReservationsResponse'
+        '400':
+          description: Bad request or store not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (tenant-scoped token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Storage error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    VirtualKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: DittoVirtualKey
+    AdminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: DittoAdminToken
+
+  schemas:
+    ProxyJsonEnvelope:
+      type: object
+      additionalProperties: true
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    AuditLogRecord:
+      type: object
+      required: [id, ts_ms, kind, payload]
+      properties:
+        id:
+          type: integer
+          format: int64
+        ts_ms:
+          type: integer
+          format: uint64
+        kind:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+
+    BudgetLedgerRecord:
+      type: object
+      required: [key_id, spent_tokens, reserved_tokens, updated_at_ms]
+      properties:
+        key_id:
+          type: string
+        spent_tokens:
+          type: integer
+          format: uint64
+        reserved_tokens:
+          type: integer
+          format: uint64
+        updated_at_ms:
+          type: integer
+          format: uint64
+
+    CostLedgerRecord:
+      type: object
+      required: [key_id, spent_usd_micros, reserved_usd_micros, updated_at_ms]
+      properties:
+        key_id:
+          type: string
+        spent_usd_micros:
+          type: integer
+          format: uint64
+        reserved_usd_micros:
+          type: integer
+          format: uint64
+        updated_at_ms:
+          type: integer
+          format: uint64
+
+    ReapReservationsRequest:
+      type: object
+      properties:
+        older_than_secs:
+          type: integer
+          format: uint64
+          default: 86400
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          default: 1000
+        dry_run:
+          type: boolean
+          default: false
+
+    ReapReservationsCounts:
+      type: object
+      required: [scanned, reaped, released]
+      properties:
+        scanned:
+          type: integer
+          format: uint64
+        reaped:
+          type: integer
+          format: uint64
+        released:
+          type: integer
+          format: uint64
+
+    ReapReservationsResponse:
+      type: object
+      required: [store, dry_run, cutoff_ts_ms, budget, cost]
+      properties:
+        store:
+          type: string
+          enum: [sqlite, postgres, mysql, redis]
+        dry_run:
+          type: boolean
+        cutoff_ts_ms:
+          type: integer
+          format: uint64
+        budget:
+          $ref: '#/components/schemas/ReapReservationsCounts'
+        cost:
+          $ref: '#/components/schemas/ReapReservationsCounts'

@@ -11,6 +11,14 @@
 
 ---
 
+## 0) 补充：与 Bifrost / Rust Proxy 项目的定位差异
+
+- 与 `maximhq/bifrost` 相比：Ditto 当前更强调“L0 SDK + L1 Gateway 一体化”与 feature-gated 渐进交付，而不是先做重平台层。
+- 与 Rust 高星项目（例如 TensorZero / Plano）相比：Ditto 的定位是“统一 SDK 语义 + 可替换网关”，不是仅做 dataplane proxy，也不是直接绑定完整评测平台。
+- 分层约束：企业闭环能力定义在 **L2 独立仓库**，避免把 L1 Gateway 变成重耦合单体。
+
+---
+
 ## 1) SDK 侧（对标 Vercel AI SDK）
 
 ### 已对齐
@@ -63,7 +71,7 @@
 - 观测：Prometheus/OTel/JSON logs 已有，并提供 per-path/per-backend latency histograms 与状态码计数；仍缺更细粒度的指标维度（例如按 model/provider 聚合、streaming 特有指标）以及可配置的采样/脱敏策略
 - 代理缓存：已有 best-effort in-memory cache（非流式）；支持在 `--redis` 场景下把 proxy cache 写入 Redis 以跨实例复用，并提供 admin purge（按 cache key 或全量）；仍缺 streaming cache 与更细粒度的 invalidation 策略
 - Translation：当前覆盖 `GET /v1/models`/`GET /v1/models/*`/`POST /v1/chat/completions`/`POST /v1/completions`/`POST /v1/responses`/`POST /v1/responses/compact`/`POST /v1/embeddings`/`POST /v1/moderations`/`POST /v1/images/generations`/`POST /v1/audio/transcriptions`/`POST /v1/audio/translations`/`POST /v1/audio/speech`/`/v1/files*`/`POST /v1/rerank`/`/v1/batches`；其余 OpenAI 端点的 translation 仍需扩面
-- 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ 审计导出到对象存储（S3/GCS）+ manifest（sha256/chain hash；可配 S3 Object Lock 参数）；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule）。仍缺：IP-based/令牌桶限流、配置版本化/灰度/回滚等更完整平台能力。
+- 企业平台能力：仍缺完整 RBAC/SSO/SCIM 与更复杂的组织/审批流；但已具备可用的“平台 MVP”（✅ RBAC-lite：read-only/write admin token + tenant-scoped admin token；✅ tenant 维度归因与 shared budgets/limits；✅ per-route Redis 分布式限流（加权滑窗 60s）；✅ 审计保留期 + HTTP 导出（JSONL/CSV）+ hash-chain + verifier；✅ 审计导出到对象存储（S3/GCS）+ manifest（sha256/chain hash；可配 S3 Object Lock 参数）；✅ Docker Compose / K8s / Helm + Grafana dashboard + PrometheusRule；✅ virtual keys 配置版本历史与回滚）。仍缺：IP-based/令牌桶限流、配置灰度发布、以及 budgets/router/policy 的统一版本治理。
 - 平台化生态：✅ Secret Manager 集成（`secret://...`）+ ✅ 最小 Admin UI；仍缺：更多 guardrails/alerting/logging destinations 的官方 adapters（可先做通用扩展点 + 少量官方适配）
 - 平台扩展项：✅ A2A agent gateway（LiteLLM-like `/a2a/*` JSON-RPC 代理）+ ✅ MCP gateway（LiteLLM-like `/mcp*` + OpenAI-compatible `POST /v1/chat/completions` 与 `POST /v1/responses` 的 `tools: [{\"type\":\"mcp\", ...}]`）已支持；仍缺 LiteLLM 那种更细粒度的 MCP 权限/参数白名单等企业策略（可先用 `allowed_tools` + 多实例隔离承接）
 

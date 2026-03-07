@@ -1,37 +1,119 @@
-type ResolvedGatewayContext = (
-    Option<String>,
-    Option<super::LimitsConfig>,
-    Option<super::BudgetConfig>,
-    Option<(String, super::BudgetConfig)>,
-    Option<(String, super::BudgetConfig)>,
-    Option<(String, super::BudgetConfig)>,
-    Option<(String, super::LimitsConfig)>,
-    Option<(String, super::LimitsConfig)>,
-    Option<(String, super::LimitsConfig)>,
-    Vec<String>,
-    bool,
-    Option<u64>,
-);
+#[derive(Debug, Clone)]
+struct ResolvedGatewayContext {
+    virtual_key_id: Option<String>,
+    limits: Option<super::LimitsConfig>,
+    budget: Option<super::BudgetConfig>,
+    tenant_budget_scope: Option<(String, super::BudgetConfig)>,
+    project_budget_scope: Option<(String, super::BudgetConfig)>,
+    user_budget_scope: Option<(String, super::BudgetConfig)>,
+    tenant_limits_scope: Option<(String, super::LimitsConfig)>,
+    project_limits_scope: Option<(String, super::LimitsConfig)>,
+    user_limits_scope: Option<(String, super::LimitsConfig)>,
+    backend_candidates: Vec<String>,
+    strip_authorization: bool,
+    charge_cost_usd_micros: Option<u64>,
+}
 
-#[allow(clippy::too_many_arguments)]
-async fn resolve_openai_compat_proxy_gateway_context(
-    state: &GatewayHttpState,
-    parts: &axum::http::request::Parts,
-    body: &Bytes,
-    parsed_json: &Option<serde_json::Value>,
-    request_id: &str,
-    path_and_query: &str,
-    model: &Option<String>,
-    _service_tier: &Option<String>,
+struct ResolveOpenAiCompatProxyGatewayContextRequest<'a> {
+    state: &'a GatewayHttpState,
+    parts: &'a axum::http::request::Parts,
+    body: &'a Bytes,
+    parsed_json: &'a Option<serde_json::Value>,
+    request_id: &'a str,
+    path_and_query: &'a str,
+    model: &'a Option<String>,
+    service_tier: &'a Option<String>,
     input_tokens_estimate: u32,
-    _max_output_tokens: u32,
+    max_output_tokens: u32,
     charge_tokens: u32,
     minute: u64,
     use_redis_budget: bool,
     use_persistent_budget: bool,
-    #[cfg(feature = "gateway-metrics-prometheus")] metrics_path: String,
-    #[cfg(feature = "gateway-metrics-prometheus")] metrics_timer_start: Instant,
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    metrics_path: &'a str,
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    metrics_timer_start: Instant,
+}
+
+#[derive(Debug, Clone)]
+struct OpenAiCompatProxyGatewayPreamble {
+    strip_authorization: bool,
+    key: Option<super::VirtualKeyConfig>,
+}
+
+async fn resolve_openai_compat_proxy_gateway_preamble(
+    state: &GatewayHttpState,
+    parts: &axum::http::request::Parts,
+) -> Result<OpenAiCompatProxyGatewayPreamble, (StatusCode, Json<OpenAiErrorResponse>)> {
+    state.record_request();
+
+    let strip_authorization = state.uses_virtual_keys();
+    let key = if strip_authorization {
+        let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+            openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "missing virtual key",
+            )
+        })?;
+        let key = state.virtual_key_by_token(&token).ok_or_else(|| {
+            openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "unauthorized virtual key",
+            )
+        })?;
+        if !key.enabled {
+            return Err(openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "virtual key disabled",
+            ));
+        }
+        Some(key)
+    } else {
+        None
+    };
+
+    Ok(OpenAiCompatProxyGatewayPreamble {
+        strip_authorization,
+        key,
+    })
+}
+
+async fn resolve_openai_compat_proxy_gateway_context(
+    request: ResolveOpenAiCompatProxyGatewayContextRequest<'_>,
 ) -> Result<ResolvedGatewayContext, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let ResolveOpenAiCompatProxyGatewayContextRequest {
+        state,
+        parts,
+        body,
+        parsed_json,
+        request_id,
+        path_and_query,
+        model,
+        service_tier,
+        input_tokens_estimate,
+        max_output_tokens,
+        charge_tokens,
+        minute,
+        use_redis_budget,
+        use_persistent_budget,
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        metrics_path,
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        metrics_timer_start,
+    } = request;
+    #[cfg(not(feature = "gateway-costing"))]
+    let _ = (&service_tier, max_output_tokens);
+
+    let gateway_preamble = resolve_openai_compat_proxy_gateway_preamble(state, parts).await?;
+    let strip_authorization = gateway_preamble.strip_authorization;
+    let key = gateway_preamble.key;
+
     let (
         virtual_key_id,
         limits,
@@ -43,43 +125,8 @@ async fn resolve_openai_compat_proxy_gateway_context(
         project_limits_scope,
         user_limits_scope,
         backend_candidates,
-        strip_authorization,
         charge_cost_usd_micros,
     ) = {
-        let mut gateway = state.gateway.lock().await;
-        gateway.observability.record_request();
-
-        let strip_authorization = !gateway.config.virtual_keys.is_empty();
-        let key = if gateway.config.virtual_keys.is_empty() {
-            None
-        } else {
-            let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
-                openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "missing virtual key",
-                )
-            })?;
-            let key = gateway.virtual_key_by_token(&token).cloned().ok_or_else(|| {
-                openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "unauthorized virtual key",
-                )
-            })?;
-            if !key.enabled {
-                return Err(openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "virtual key disabled",
-                ));
-            }
-            Some(key)
-        };
-
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
             let limits = Some(key.limits.clone());
@@ -157,7 +204,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 (has_cost_budget, cost_budget_policy)
             };
 
-            #[cfg(feature = "gateway-costing")]
+                        #[cfg(feature = "gateway-costing")]
             if has_cost_budget
                 && matches!(
                     cost_budget_policy,
@@ -180,151 +227,131 @@ async fn resolve_openai_compat_proxy_gateway_context(
             }
 
             if !use_redis_budget {
-                if let Err(err) = gateway
-                    .limits
-                    .check_and_consume(&key.id, &key.limits, charge_tokens, minute)
+                if let Err(err) =
+                    state.check_and_consume_rate_limit(&key.id, &key.limits, charge_tokens, minute)
                 {
-                    gateway.observability.record_rate_limited();
+                    state.record_rate_limited();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-metrics-prometheus")]
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
-                        drop(gateway);
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                                                let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_rate_limited(
                             Some(&key.id),
                             model.as_deref(),
-                            &metrics_path,
+                            metrics_path,
                         );
-                        metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
                         if let Some(model) = model.as_deref() {
                             metrics.record_proxy_response_status_by_model(model, status);
                             metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        metrics.observe_proxy_request_duration(&metrics_path, duration);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
                     return Err(mapped);
                 }
                 if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .limits
-                            .check_and_consume(scope, limits, charge_tokens, minute)
+                        state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
                     {
-                        gateway.observability.record_rate_limited();
+                        state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_rate_limited(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
                 }
                 if let Some((scope, limits)) = project_limits_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .limits
-                            .check_and_consume(scope, limits, charge_tokens, minute)
+                        state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
                     {
-                        gateway.observability.record_rate_limited();
+                        state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_rate_limited(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
                 }
                 if let Some((scope, limits)) = user_limits_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .limits
-                            .check_and_consume(scope, limits, charge_tokens, minute)
+                        state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
                     {
-                        gateway.observability.record_rate_limited();
+                        state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_rate_limited(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
                 }
             }
 
-            let guardrails = model
-                .as_deref()
-                .and_then(|model| {
-                    gateway
-                        .router
-                        .rule_for_model(model, Some(key))
-                        .and_then(|rule| rule.guardrails.as_ref())
-                })
-                .unwrap_or(&key.guardrails)
-                .clone();
+            let guardrails = state.guardrails_for_model(model.as_deref(), key);
 
             if let Some(model_id) = model.as_deref() {
                 if let Some(reason) = guardrails.check_model(model_id) {
-                    gateway.observability.record_guardrail_blocked();
+                    state.record_guardrail_blocked();
                     let err = openai_error(
                         StatusCode::FORBIDDEN,
                         "policy_error",
@@ -335,20 +362,19 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
-                        drop(gateway);
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                                                let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_guardrail_blocked(
                             Some(&key.id),
                             model.as_deref(),
-                            &metrics_path,
+                            metrics_path,
                         );
-                        metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
                         if let Some(model) = model.as_deref() {
                             metrics.record_proxy_response_status_by_model(model, status);
                             metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        metrics.observe_proxy_request_duration(&metrics_path, duration);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
                     return Err(err);
                 }
@@ -356,7 +382,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
             if let Some(limit) = guardrails.max_input_tokens {
                 if input_tokens_estimate > limit {
-                    gateway.observability.record_guardrail_blocked();
+                    state.record_guardrail_blocked();
                     let err = openai_error(
                         StatusCode::FORBIDDEN,
                         "policy_error",
@@ -367,27 +393,25 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
-                        drop(gateway);
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                                                let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_guardrail_blocked(
                             Some(&key.id),
                             model.as_deref(),
-                            &metrics_path,
+                            metrics_path,
                         );
-                        metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
                         if let Some(model) = model.as_deref() {
                             metrics.record_proxy_response_status_by_model(model, status);
                             metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        metrics.observe_proxy_request_duration(&metrics_path, duration);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
                     return Err(err);
                 }
             }
 
-            drop(gateway);
-
+            
             if guardrails.validate_schema {
                 let reason = if let Some(body_json) = parsed_json.as_ref() {
                     validate_openai_request_schema(path_and_query, body_json)
@@ -404,10 +428,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     None
                 };
                 if let Some(reason) = reason {
-                    {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway.observability.record_guardrail_blocked();
-                    }
+                    state.record_guardrail_blocked();
                     let err = openai_error(
                         StatusCode::BAD_REQUEST,
                         "invalid_request_error",
@@ -419,18 +440,18 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
                         let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_guardrail_blocked(
                             Some(&key.id),
                             model.as_deref(),
-                            &metrics_path,
+                            metrics_path,
                         );
-                        metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
                         if let Some(model) = model.as_deref() {
                             metrics.record_proxy_response_status_by_model(model, status);
                             metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        metrics.observe_proxy_request_duration(&metrics_path, duration);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
                     return Err(err);
                 }
@@ -439,10 +460,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
             if guardrails.has_text_filters() {
                 if let Ok(text) = std::str::from_utf8(body) {
                     if let Some(reason) = guardrails.check_text(text) {
-                        {
-                            let mut gateway = state.gateway.lock().await;
-                            gateway.observability.record_guardrail_blocked();
-                        }
+                        state.record_guardrail_blocked();
                         let err = openai_error(
                             StatusCode::FORBIDDEN,
                             "policy_error",
@@ -457,87 +475,79 @@ async fn resolve_openai_compat_proxy_gateway_context(
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_guardrail_blocked(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(err);
                     }
                 }
             }
 
-            let mut gateway = state.gateway.lock().await;
-
-            if !use_persistent_budget {
+                        if !use_persistent_budget {
                 if let Err(err) =
-                    gateway
-                        .budget
-                        .can_spend(&key.id, &key.budget, u64::from(charge_tokens))
+                    state.can_spend_budget_tokens(&key.id, &key.budget, u64::from(charge_tokens))
                 {
-                    gateway.observability.record_budget_exceeded();
+                    state.record_budget_exceeded();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-metrics-prometheus")]
                     if let Some(metrics) = state.prometheus_metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
-                        drop(gateway);
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                                                let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_budget_exceeded(
                             Some(&key.id),
                             model.as_deref(),
-                            &metrics_path,
+                            metrics_path,
                         );
-                        metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
                         if let Some(model) = model.as_deref() {
                             metrics.record_proxy_response_status_by_model(model, status);
                             metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        metrics.observe_proxy_request_duration(&metrics_path, duration);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
                     return Err(mapped);
                 }
 
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .budget
-                            .can_spend(scope, budget, u64::from(charge_tokens))
+                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
                     {
-                        gateway.observability.record_budget_exceeded();
+                        state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_budget_exceeded(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
@@ -545,34 +555,31 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .budget
-                            .can_spend(scope, budget, u64::from(charge_tokens))
+                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
                     {
-                        gateway.observability.record_budget_exceeded();
+                        state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_budget_exceeded(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
@@ -580,34 +587,31 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
                     if let Err(err) =
-                        gateway
-                            .budget
-                            .can_spend(scope, budget, u64::from(charge_tokens))
+                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
                     {
-                        gateway.observability.record_budget_exceeded();
+                        state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
+                                                        let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
                             metrics.record_proxy_budget_exceeded(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
@@ -616,8 +620,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
             let budget = Some(key.budget.clone());
 
-            let backends = gateway
-                .router
+            let backends = state
                 .select_backends_for_model_seeded(
                     model.as_deref().unwrap_or_default(),
                     Some(key),
@@ -650,11 +653,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                             estimate_charge_cost_usd_micros(
                                 state,
-                                &gateway,
                                 model.as_deref(),
                                 input_tokens_estimate,
-                                _max_output_tokens,
-                                _service_tier.as_deref(),
+                                max_output_tokens,
+                                service_tier.as_deref(),
                                 &backends,
                             )
                         }
@@ -670,11 +672,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 } else {
                     estimate_charge_cost_usd_micros(
                         state,
-                        &gateway,
                         model.as_deref(),
                         input_tokens_estimate,
-                        _max_output_tokens,
-                        _service_tier.as_deref(),
+                        max_output_tokens,
+                        service_tier.as_deref(),
                         &backends,
                     )
                 }
@@ -694,31 +695,34 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         ));
                     };
 
-                    if let Err(err) = gateway.budget.can_spend_cost_usd_micros(
+                    if let Err(err) = state.can_spend_budget_cost(
                         &key.id,
                         &key.budget,
                         charge_cost_usd_micros,
                     ) {
-                        gateway.observability.record_budget_exceeded();
+                        state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
                         if let Some(metrics) = state.prometheus_metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                            drop(gateway);
-                            let mut metrics = metrics.lock().await;
-                            metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                                                        let mut metrics = metrics.lock().await;
+                            metrics.record_proxy_request(
+                                Some(&key.id),
+                                model.as_deref(),
+                                metrics_path,
+                            );
                             metrics.record_proxy_budget_exceeded(
                                 Some(&key.id),
                                 model.as_deref(),
-                                &metrics_path,
+                                metrics_path,
                             );
-                            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                            metrics.record_proxy_response_status_by_path(metrics_path, status);
                             if let Some(model) = model.as_deref() {
                                 metrics.record_proxy_response_status_by_model(model, status);
                                 metrics.observe_proxy_request_duration_by_model(model, duration);
                             }
-                            metrics.observe_proxy_request_duration(&metrics_path, duration);
+                            metrics.observe_proxy_request_duration(metrics_path, duration);
                         }
                         return Err(mapped);
                     }
@@ -729,8 +733,8 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     .as_ref()
                     .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
                     || project_budget_scope
-                    .as_ref()
-                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                        .as_ref()
+                        .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
                     || user_budget_scope
                         .as_ref()
                         .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
@@ -746,35 +750,38 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = gateway.budget.can_spend_cost_usd_micros(
+                            if let Err(err) = state.can_spend_budget_cost(
                                 scope,
                                 budget,
                                 charge_cost_usd_micros,
                             ) {
-                                gateway.observability.record_budget_exceeded();
+                                state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
                                 if let Some(metrics) = state.prometheus_metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                    drop(gateway);
-                                    let mut metrics = metrics.lock().await;
+                                                                        let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
                                     metrics.record_proxy_budget_exceeded(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
-                                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                                    metrics
+                                        .record_proxy_response_status_by_path(metrics_path, status);
                                     if let Some(model) = model.as_deref() {
-                                        metrics.record_proxy_response_status_by_model(model, status);
-                                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                                        metrics
+                                            .record_proxy_response_status_by_model(model, status);
+                                        metrics.observe_proxy_request_duration_by_model(
+                                            model, duration,
+                                        );
                                     }
-                                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                                    metrics.observe_proxy_request_duration(metrics_path, duration);
                                 }
                                 return Err(mapped);
                             }
@@ -783,35 +790,38 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = gateway.budget.can_spend_cost_usd_micros(
+                            if let Err(err) = state.can_spend_budget_cost(
                                 scope,
                                 budget,
                                 charge_cost_usd_micros,
                             ) {
-                                gateway.observability.record_budget_exceeded();
+                                state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
                                 if let Some(metrics) = state.prometheus_metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                    drop(gateway);
-                                    let mut metrics = metrics.lock().await;
+                                                                        let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
                                     metrics.record_proxy_budget_exceeded(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
-                                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                                    metrics
+                                        .record_proxy_response_status_by_path(metrics_path, status);
                                     if let Some(model) = model.as_deref() {
-                                        metrics.record_proxy_response_status_by_model(model, status);
-                                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                                        metrics
+                                            .record_proxy_response_status_by_model(model, status);
+                                        metrics.observe_proxy_request_duration_by_model(
+                                            model, duration,
+                                        );
                                     }
-                                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                                    metrics.observe_proxy_request_duration(metrics_path, duration);
                                 }
                                 return Err(mapped);
                             }
@@ -820,35 +830,38 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = user_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = gateway.budget.can_spend_cost_usd_micros(
+                            if let Err(err) = state.can_spend_budget_cost(
                                 scope,
                                 budget,
                                 charge_cost_usd_micros,
                             ) {
-                                gateway.observability.record_budget_exceeded();
+                                state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
                                 if let Some(metrics) = state.prometheus_metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                    drop(gateway);
-                                    let mut metrics = metrics.lock().await;
+                                                                        let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
                                     metrics.record_proxy_budget_exceeded(
                                         Some(&key.id),
                                         model.as_deref(),
-                                        &metrics_path,
+                                        metrics_path,
                                     );
-                                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                                    metrics
+                                        .record_proxy_response_status_by_path(metrics_path, status);
                                     if let Some(model) = model.as_deref() {
-                                        metrics.record_proxy_response_status_by_model(model, status);
-                                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                                        metrics
+                                            .record_proxy_response_status_by_model(model, status);
+                                        metrics.observe_proxy_request_duration_by_model(
+                                            model, duration,
+                                        );
                                     }
-                                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                                    metrics.observe_proxy_request_duration(metrics_path, duration);
                                 }
                                 return Err(mapped);
                             }
@@ -857,8 +870,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
-            drop(gateway);
-            (
+                        (
                 virtual_key_id,
                 limits,
                 budget,
@@ -869,12 +881,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 project_limits_scope,
                 user_limits_scope,
                 backends,
-                strip_authorization,
                 charge_cost_usd_micros,
             )
         } else {
-            let backends = gateway
-                .router
+            let backends = state
                 .select_backends_for_model_seeded(
                     model.as_deref().unwrap_or_default(),
                     None,
@@ -885,18 +895,16 @@ async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(feature = "gateway-costing")]
             let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
                 state,
-                &gateway,
                 model.as_deref(),
                 input_tokens_estimate,
-                _max_output_tokens,
-                _service_tier.as_deref(),
+                max_output_tokens,
+                service_tier.as_deref(),
                 &backends,
             );
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
-            drop(gateway);
-            (
+                        (
                 None,
                 None,
                 None,
@@ -907,13 +915,12 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 None,
                 None,
                 backends,
-                strip_authorization,
                 charge_cost_usd_micros,
             )
         }
     };
 
-    Ok((
+    Ok(ResolvedGatewayContext {
         virtual_key_id,
         limits,
         budget,
@@ -926,5 +933,5 @@ async fn resolve_openai_compat_proxy_gateway_context(
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
-    ))
+    })
 }

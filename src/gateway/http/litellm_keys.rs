@@ -211,23 +211,25 @@ async fn litellm_key_generate(
         }
     }
 
-    let persisted_keys = {
-        let mut gateway = state.gateway.lock().await;
-        if gateway
-            .list_virtual_keys()
-            .iter()
-            .any(|existing| existing.id == virtual_key.id)
-        {
-            return Err(error_response(
-                StatusCode::CONFLICT,
-                "conflict",
-                "key_alias already exists",
-            ));
-        }
-        gateway.upsert_virtual_key(virtual_key.clone());
-        gateway.list_virtual_keys()
-    };
-    persist_virtual_keys(&state, &persisted_keys).await?;
+    let persisted_keys = state.gateway.mutate_control_plane(
+        |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
+            if gateway
+                .list_virtual_keys()
+                .iter()
+                .any(|existing| existing.id == virtual_key.id)
+            {
+                return Err(error_response(
+                    StatusCode::CONFLICT,
+                    "conflict",
+                    "key_alias already exists",
+                ));
+            }
+            gateway.upsert_virtual_key(virtual_key.clone());
+            Ok(gateway.list_virtual_keys())
+        },
+    )?;
+    state.sync_control_plane_from_gateway();
+    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.generate").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -239,7 +241,12 @@ async fn litellm_key_generate(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "litellm.key.generate",
@@ -289,7 +296,9 @@ struct LitellmKeyUpdateRequest {
     blocked: Option<bool>,
 }
 
-fn litellm_generate_response_from_virtual_key(key: &VirtualKeyConfig) -> LitellmKeyGenerateResponse {
+fn litellm_generate_response_from_virtual_key(
+    key: &VirtualKeyConfig,
+) -> LitellmKeyGenerateResponse {
     LitellmKeyGenerateResponse {
         key: key.token.clone(),
         token: Some(key.token.clone()),
@@ -346,37 +355,20 @@ async fn litellm_key_update(
                 .map(|v| v.to_string())
         });
 
-    let (key, persisted_keys) = {
-        let mut gateway = state.gateway.lock().await;
-        let keys = gateway.list_virtual_keys();
+    let (key, persisted_keys) = state.gateway.mutate_control_plane(
+        |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
+            let keys = gateway.list_virtual_keys();
 
-        let Some(existing) = keys.iter().find(|key| key.token == key_token).cloned() else {
-            return Err(error_response(
-                StatusCode::NOT_FOUND,
-                "not_found",
-                "virtual key not found",
-            ));
-        };
-
-        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-            if existing.tenant_id.as_deref() != Some(admin_tenant) {
+            let Some(existing) = keys.iter().find(|key| key.token == key_token).cloned() else {
                 return Err(error_response(
-                    StatusCode::FORBIDDEN,
-                    "forbidden",
-                    "cannot update keys for a different tenant",
+                    StatusCode::NOT_FOUND,
+                    "not_found",
+                    "virtual key not found",
                 ));
-            }
-        }
+            };
 
-        let mut key = existing.clone();
-
-        if let Some(user_id) = payload.user_id.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
-            key.user_id = Some(user_id.to_string());
-        }
-
-        if let Some(tenant_id) = tenant_id.as_deref() {
             if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if tenant_id != admin_tenant {
+                if existing.tenant_id.as_deref() != Some(admin_tenant) {
                     return Err(error_response(
                         StatusCode::FORBIDDEN,
                         "forbidden",
@@ -384,62 +376,84 @@ async fn litellm_key_update(
                     ));
                 }
             }
-            key.tenant_id = Some(tenant_id.to_string());
-        }
 
-        if let Some(models) = payload.models.as_ref() {
-            key.guardrails.allow_models = models.clone();
-        }
+            let mut key = existing.clone();
 
-        if let Some(max_budget) = payload.max_budget {
-            if !max_budget.is_finite() || max_budget < 0.0 {
-                return Err(error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request",
-                    "max_budget must be a non-negative finite number",
-                ));
+            if let Some(user_id) = payload
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+            {
+                key.user_id = Some(user_id.to_string());
             }
-            let micros = (max_budget * 1_000_000.0).round();
-            if micros <= 0.0 {
-                key.budget.total_usd_micros = None;
-            } else {
-                key.budget.total_usd_micros = Some(micros as u64);
+
+            if let Some(tenant_id) = tenant_id.as_deref() {
+                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+                    if tenant_id != admin_tenant {
+                        return Err(error_response(
+                            StatusCode::FORBIDDEN,
+                            "forbidden",
+                            "cannot update keys for a different tenant",
+                        ));
+                    }
+                }
+                key.tenant_id = Some(tenant_id.to_string());
             }
-        }
 
-        if let Some(rpm) = payload.rpm_limit {
-            key.limits.rpm = Some(rpm);
-        }
-        if let Some(tpm) = payload.tpm_limit {
-            key.limits.tpm = Some(tpm);
-        }
+            if let Some(models) = payload.models.as_ref() {
+                key.guardrails.allow_models = models.clone();
+            }
 
-        if let Some(blocked) = payload.blocked {
-            key.enabled = !blocked;
-        }
-
-        let old_id = &existing.id;
-        if let Some(new_id) = new_alias.as_deref() {
-            if new_id != old_id {
-                if keys.iter().any(|candidate| candidate.id == new_id) {
+            if let Some(max_budget) = payload.max_budget {
+                if !max_budget.is_finite() || max_budget < 0.0 {
                     return Err(error_response(
-                        StatusCode::CONFLICT,
-                        "conflict",
-                        "key_alias already exists",
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request",
+                        "max_budget must be a non-negative finite number",
                     ));
                 }
-                gateway.remove_virtual_key(old_id);
-                key.id = new_id.to_string();
+                let micros = (max_budget * 1_000_000.0).round();
+                if micros <= 0.0 {
+                    key.budget.total_usd_micros = None;
+                } else {
+                    key.budget.total_usd_micros = Some(micros as u64);
+                }
             }
-        }
 
-        gateway.upsert_virtual_key(key.clone());
-        let persisted_keys = gateway.list_virtual_keys();
-        drop(gateway);
-        (key, persisted_keys)
-    };
+            if let Some(rpm) = payload.rpm_limit {
+                key.limits.rpm = Some(rpm);
+            }
+            if let Some(tpm) = payload.tpm_limit {
+                key.limits.tpm = Some(tpm);
+            }
 
-    persist_virtual_keys(&state, &persisted_keys).await?;
+            if let Some(blocked) = payload.blocked {
+                key.enabled = !blocked;
+            }
+
+            let old_id = &existing.id;
+            if let Some(new_id) = new_alias.as_deref() {
+                if new_id != old_id {
+                    if keys.iter().any(|candidate| candidate.id == new_id) {
+                        return Err(error_response(
+                            StatusCode::CONFLICT,
+                            "conflict",
+                            "key_alias already exists",
+                        ));
+                    }
+                    gateway.remove_virtual_key(old_id);
+                    key.id = new_id.to_string();
+                }
+            }
+
+            gateway.upsert_virtual_key(key.clone());
+            Ok((key, gateway.list_virtual_keys()))
+        },
+    )?;
+    state.sync_control_plane_from_gateway();
+
+    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.update").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -451,7 +465,12 @@ async fn litellm_key_update(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "litellm.key.update",
@@ -489,74 +508,76 @@ async fn litellm_key_delete(
     let mut deleted_keys: Vec<String> = Vec::new();
     let mut deleted_key_ids: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
-    let persisted_keys = {
-        let mut gateway = state.gateway.lock().await;
-        let mut current = gateway.list_virtual_keys();
+    let persisted_keys = state.gateway.mutate_control_plane(
+        |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
+            let mut current = gateway.list_virtual_keys();
 
-        for alias in aliases {
-            let alias = alias.trim().to_string();
-            if alias.is_empty() {
-                continue;
-            }
-            let Some((found_id, found_tenant)) = current
-                .iter()
-                .find(|key| key.id == alias)
-                .map(|key| (key.id.clone(), key.tenant_id.clone()))
-            else {
-                missing.push(alias);
-                continue;
-            };
-            if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if found_tenant.as_deref() != Some(admin_tenant) {
-                    return Err(error_response(
-                        StatusCode::FORBIDDEN,
-                        "forbidden",
-                        "cannot delete keys for a different tenant",
-                    ));
+            for alias in aliases {
+                let alias = alias.trim().to_string();
+                if alias.is_empty() {
+                    continue;
+                }
+                let Some((found_id, found_tenant)) = current
+                    .iter()
+                    .find(|key| key.id == alias)
+                    .map(|key| (key.id.clone(), key.tenant_id.clone()))
+                else {
+                    missing.push(alias);
+                    continue;
+                };
+                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+                    if found_tenant.as_deref() != Some(admin_tenant) {
+                        return Err(error_response(
+                            StatusCode::FORBIDDEN,
+                            "forbidden",
+                            "cannot delete keys for a different tenant",
+                        ));
+                    }
+                }
+                if gateway.remove_virtual_key(&found_id).is_some() {
+                    deleted_keys.push(alias);
+                    deleted_key_ids.push(found_id.clone());
+                    current.retain(|key| key.id != found_id);
+                } else {
+                    missing.push(alias);
                 }
             }
-            if gateway.remove_virtual_key(&found_id).is_some() {
-                deleted_keys.push(alias);
-                deleted_key_ids.push(found_id.clone());
-                current.retain(|key| key.id != found_id);
-            } else {
-                missing.push(alias);
-            }
-        }
 
-        for token in keys {
-            let token = token.trim().to_string();
-            if token.is_empty() {
-                continue;
-            }
-            let Some((found_id, found_tenant)) = current
-                .iter()
-                .find(|key| key.token == token)
-                .map(|key| (key.id.clone(), key.tenant_id.clone()))
-            else {
-                missing.push(token);
-                continue;
-            };
-            if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if found_tenant.as_deref() != Some(admin_tenant) {
-                    return Err(error_response(
-                        StatusCode::FORBIDDEN,
-                        "forbidden",
-                        "cannot delete keys for a different tenant",
-                    ));
+            for token in keys {
+                let token = token.trim().to_string();
+                if token.is_empty() {
+                    continue;
+                }
+                let Some((found_id, found_tenant)) = current
+                    .iter()
+                    .find(|key| key.token == token)
+                    .map(|key| (key.id.clone(), key.tenant_id.clone()))
+                else {
+                    missing.push(token);
+                    continue;
+                };
+                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
+                    if found_tenant.as_deref() != Some(admin_tenant) {
+                        return Err(error_response(
+                            StatusCode::FORBIDDEN,
+                            "forbidden",
+                            "cannot delete keys for a different tenant",
+                        ));
+                    }
+                }
+                if gateway.remove_virtual_key(&found_id).is_some() {
+                    deleted_keys.push(token);
+                    deleted_key_ids.push(found_id.clone());
+                    current.retain(|key| key.id != found_id);
+                } else {
+                    missing.push(token);
                 }
             }
-            if gateway.remove_virtual_key(&found_id).is_some() {
-                deleted_keys.push(token);
-                deleted_key_ids.push(found_id.clone());
-                current.retain(|key| key.id != found_id);
-            } else {
-                missing.push(token);
-            }
-        }
 
-        gateway.list_virtual_keys()
-    };
+            Ok(gateway.list_virtual_keys())
+        },
+    )?;
+    state.sync_control_plane_from_gateway();
 
     if !missing.is_empty() {
         return Err(error_response(
@@ -566,7 +587,7 @@ async fn litellm_key_delete(
         ));
     }
 
-    persist_virtual_keys(&state, &persisted_keys).await?;
+    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.delete").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -578,7 +599,12 @@ async fn litellm_key_delete(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "litellm.key.delete",
@@ -590,9 +616,7 @@ async fn litellm_key_delete(
     )
     .await;
 
-    Ok(Json(LitellmKeyDeleteResponse {
-        deleted_keys,
-    }))
+    Ok(Json(LitellmKeyDeleteResponse { deleted_keys }))
 }
 
 async fn litellm_key_info(
@@ -626,20 +650,13 @@ async fn litellm_key_info(
         (None, token)
     };
 
-    let key = {
-        let gateway = state.gateway.lock().await;
-        gateway
-            .list_virtual_keys()
-            .into_iter()
-            .find(|key| key.token == token)
-            .ok_or_else(|| {
-                error_response(
-                    StatusCode::NOT_FOUND,
-                    "not_found",
-                    "virtual key not found",
-                )
-            })?
-    };
+    let key = state
+        .list_virtual_keys_snapshot()
+        .into_iter()
+        .find(|key| key.token == token)
+        .ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, "not_found", "virtual key not found")
+        })?;
 
     if let Some(admin) = admin {
         if let Some(admin_tenant) = admin.tenant_id.as_deref() {
@@ -678,7 +695,8 @@ async fn litellm_key_list(
         .filter(|v| !v.is_empty())
         .map(|v| v.to_string())
         .or_else(|| {
-            query.team_id
+            query
+                .team_id
                 .as_deref()
                 .map(str::trim)
                 .filter(|v| !v.is_empty())
@@ -699,9 +717,7 @@ async fn litellm_key_list(
         .filter(|v| !v.is_empty())
         .map(|v| v.to_string());
 
-    let gateway = state.gateway.lock().await;
-    let mut keys = gateway.list_virtual_keys();
-    drop(gateway);
+    let mut keys = state.list_virtual_keys_snapshot();
 
     if let Some(admin_tenant) = admin.tenant_id.as_deref() {
         keys.retain(|key| key.tenant_id.as_deref() == Some(admin_tenant));

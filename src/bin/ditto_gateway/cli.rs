@@ -17,10 +17,15 @@ pub(crate) struct GatewayCliArgs {
     pub dotenv_path: Option<PathBuf>,
     pub state_path: Option<PathBuf>,
     pub sqlite_path: Option<PathBuf>,
+    pub postgres_url: Option<String>,
+    pub postgres_url_env: Option<String>,
+    pub mysql_url: Option<String>,
+    pub mysql_url_env: Option<String>,
     pub redis_url: Option<String>,
     pub redis_url_env: Option<String>,
     pub redis_prefix: Option<String>,
     pub audit_retention_secs: Option<u64>,
+    pub db_doctor: bool,
     pub backend_specs: Vec<String>,
     pub upstream_specs: Vec<String>,
     pub json_logs: bool,
@@ -40,6 +45,7 @@ pub(crate) struct GatewayCliArgs {
     pub prometheus_max_path_series: Option<usize>,
     pub proxy_retry_enabled: bool,
     pub proxy_retry_status_codes: Option<Vec<u16>>,
+    pub proxy_fallback_status_codes: Option<Vec<u16>>,
     pub proxy_retry_max_attempts: Option<usize>,
     pub proxy_circuit_breaker_enabled: bool,
     pub proxy_cb_failure_threshold: Option<u32>,
@@ -73,13 +79,28 @@ pub(crate) fn parse_gateway_cli_args(
     let mut dotenv_path: Option<PathBuf> = None;
     let mut state_path: Option<PathBuf> = None;
     let mut sqlite_path: Option<PathBuf> = None;
+    let mut postgres_url: Option<String> = None;
+    let mut postgres_url_env: Option<String> = None;
+    let mut mysql_url: Option<String> = None;
+    let mut mysql_url_env: Option<String> = None;
     let mut redis_url: Option<String> = None;
     let mut redis_url_env: Option<String> = None;
     let mut redis_prefix: Option<String> = None;
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     let mut audit_retention_secs: Option<u64> = None;
-    #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+    #[cfg(not(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    )))]
     let audit_retention_secs: Option<u64> = None;
+    let mut db_doctor = false;
     let mut backend_specs: Vec<String> = Vec::new();
     let mut upstream_specs: Vec<String> = Vec::new();
     let mut json_logs = false;
@@ -99,6 +120,7 @@ pub(crate) fn parse_gateway_cli_args(
     let mut prometheus_max_path_series: Option<usize> = None;
     let mut proxy_retry_enabled = false;
     let mut proxy_retry_status_codes: Option<Vec<u16>> = None;
+    let mut proxy_fallback_status_codes: Option<Vec<u16>> = None;
     let mut proxy_retry_max_attempts: Option<usize> = None;
     let mut proxy_circuit_breaker_enabled = false;
     let mut proxy_cb_failure_threshold: Option<u32> = None;
@@ -177,6 +199,21 @@ pub(crate) fn parse_gateway_cli_args(
             "--sqlite" => {
                 sqlite_path = Some(args.next().ok_or("missing value for --sqlite")?.into());
             }
+            "--pg" | "--postgres" => {
+                postgres_url = Some(args.next().ok_or("missing value for --pg/--postgres")?);
+            }
+            "--pg-env" | "--postgres-env" => {
+                postgres_url_env = Some(
+                    args.next()
+                        .ok_or("missing value for --pg-env/--postgres-env")?,
+                );
+            }
+            "--mysql" => {
+                mysql_url = Some(args.next().ok_or("missing value for --mysql")?);
+            }
+            "--mysql-env" => {
+                mysql_url_env = Some(args.next().ok_or("missing value for --mysql-env")?);
+            }
             "--redis" => {
                 redis_url = Some(args.next().ok_or("missing value for --redis")?);
             }
@@ -187,7 +224,12 @@ pub(crate) fn parse_gateway_cli_args(
                 redis_prefix = Some(args.next().ok_or("missing value for --redis-prefix")?);
             }
             "--audit-retention-secs" => {
-                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+                #[cfg(any(
+                    feature = "gateway-store-sqlite",
+                    feature = "gateway-store-postgres",
+                    feature = "gateway-store-mysql",
+                    feature = "gateway-store-redis"
+                ))]
                 {
                     let raw = args
                         .next()
@@ -200,14 +242,19 @@ pub(crate) fn parse_gateway_cli_args(
 
                 #[cfg(not(any(
                     feature = "gateway-store-sqlite",
+                    feature = "gateway-store-postgres",
+                    feature = "gateway-store-mysql",
                     feature = "gateway-store-redis"
                 )))]
                 {
                     return Err(
-                        "--audit-retention-secs requires `--features gateway-store-sqlite` or `--features gateway-store-redis`"
+                        "--audit-retention-secs requires a persistent store feature (`gateway-store-sqlite` / `gateway-store-postgres` / `gateway-store-mysql` / `gateway-store-redis`)"
                             .into(),
                     );
                 }
+            }
+            "--db-doctor" => {
+                db_doctor = true;
             }
             "--backend" => {
                 backend_specs.push(args.next().ok_or("missing value for --backend")?);
@@ -344,6 +391,13 @@ pub(crate) fn parse_gateway_cli_args(
                         .ok_or("missing value for --proxy-retry-status-codes")?,
                 )?);
             }
+            "--proxy-fallback-status-codes" => {
+                proxy_fallback_status_codes = Some(parse_status_codes(
+                    &args
+                        .next()
+                        .ok_or("missing value for --proxy-fallback-status-codes")?,
+                )?);
+            }
             "--proxy-retry-max-attempts" => {
                 proxy_retry_enabled = true;
                 let raw = args
@@ -439,10 +493,15 @@ pub(crate) fn parse_gateway_cli_args(
         dotenv_path,
         state_path,
         sqlite_path,
+        postgres_url,
+        postgres_url_env,
+        mysql_url,
+        mysql_url_env,
         redis_url,
         redis_url_env,
         redis_prefix,
         audit_retention_secs,
+        db_doctor,
         backend_specs,
         upstream_specs,
         json_logs,
@@ -462,6 +521,7 @@ pub(crate) fn parse_gateway_cli_args(
         prometheus_max_path_series,
         proxy_retry_enabled,
         proxy_retry_status_codes,
+        proxy_fallback_status_codes,
         proxy_retry_max_attempts,
         proxy_circuit_breaker_enabled,
         proxy_cb_failure_threshold,
@@ -524,11 +584,11 @@ pub(crate) async fn resolve_cli_secret(
 fn usage() -> &'static str {
     #[cfg(feature = "gateway-config-yaml")]
     {
-        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
     #[cfg(not(feature = "gateway-config-yaml"))]
     {
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
 }
 
@@ -575,11 +635,61 @@ mod tests {
     }
 
     #[test]
+    fn parses_sql_store_args() {
+        let cli = parse_gateway_cli_args(
+            vec![
+                "gateway.json".to_string(),
+                "--sqlite".to_string(),
+                "./gateway.sqlite".to_string(),
+                "--pg".to_string(),
+                "postgres://user:pass@localhost/ditto".to_string(),
+                "--mysql".to_string(),
+                "mysql://user:pass@localhost/ditto".to_string(),
+            ]
+            .into_iter(),
+        )
+        .expect("parse");
+        assert_eq!(cli.sqlite_path, Some(PathBuf::from("./gateway.sqlite")));
+        assert_eq!(
+            cli.postgres_url.as_deref(),
+            Some("postgres://user:pass@localhost/ditto")
+        );
+        assert_eq!(
+            cli.mysql_url.as_deref(),
+            Some("mysql://user:pass@localhost/ditto")
+        );
+    }
+
+    #[test]
     fn rejects_unknown_args() {
         let err = parse_gateway_cli_args(
             vec!["gateway.json".to_string(), "--wat".to_string()].into_iter(),
         )
         .expect_err("reject");
         assert!(err.to_string().contains("unknown arg"));
+    }
+
+    #[test]
+    fn parses_db_doctor_flag() {
+        let cli = parse_gateway_cli_args(
+            vec!["gateway.json".to_string(), "--db-doctor".to_string()].into_iter(),
+        )
+        .expect("parse");
+        assert!(cli.db_doctor);
+    }
+
+    #[test]
+    fn parses_proxy_fallback_status_codes() {
+        let cli = parse_gateway_cli_args(
+            vec![
+                "gateway.json".to_string(),
+                "--proxy-fallback-status-codes".to_string(),
+                "500, 502 ,500".to_string(),
+            ]
+            .into_iter(),
+        )
+        .expect("parse");
+        assert_eq!(cli.proxy_fallback_status_codes, Some(vec![500, 502]));
+        assert!(!cli.proxy_retry_enabled);
     }
 }

@@ -2,11 +2,53 @@ use std::collections::HashMap;
 
 use serde_json::{Map, Value};
 
+use crate::Result;
 use crate::types::{
     ContentPart, FileSource, FinishReason, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
-use crate::{DittoError, Result};
+
+const GOOGLE_TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
+
+pub(crate) fn build_google_tool_call_id(seq: u64, thought_signature: Option<&str>) -> String {
+    let base_id = format!("call_{seq}");
+    let Some(signature) = thought_signature.map(str::trim).filter(|s| !s.is_empty()) else {
+        return base_id;
+    };
+    let mut hex = String::with_capacity(signature.len() * 2);
+    for byte in signature.as_bytes() {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{base_id}{GOOGLE_TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR}{hex}")
+}
+
+pub(crate) fn extract_google_tool_call_thought_signature(id: &str) -> Option<String> {
+    let (_, hex) = id.rsplit_once(GOOGLE_TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR)?;
+    if hex.len() % 2 != 0 {
+        return None;
+    }
+    let mut bytes = Vec::<u8>::with_capacity(hex.len() / 2);
+    for chunk in hex.as_bytes().chunks_exact(2) {
+        let hex_pair = std::str::from_utf8(chunk).ok()?;
+        let byte = u8::from_str_radix(hex_pair, 16).ok()?;
+        bytes.push(byte);
+    }
+    String::from_utf8(bytes).ok()
+}
+
+pub(crate) fn extract_google_part_thought_signature<'a>(
+    part: &'a Value,
+    function_call: &'a Value,
+) -> Option<&'a str> {
+    part.get("thoughtSignature")
+        .or_else(|| part.get("thought_signature"))
+        .or_else(|| function_call.get("thoughtSignature"))
+        .or_else(|| function_call.get("thought_signature"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
 
 pub(crate) fn build_tool_name_map(messages: &[Message]) -> HashMap<String, String> {
     let mut map = HashMap::<String, String>::new();
@@ -34,12 +76,6 @@ pub(crate) fn convert_messages(
     for message in messages {
         match message.role {
             Role::System => {
-                if !system_messages_allowed {
-                    return Err(DittoError::InvalidResponse(
-                        "system messages are only supported at the beginning for GenAI providers"
-                            .to_string(),
-                    ));
-                }
                 let mut text = String::new();
                 for part in &message.content {
                     match part {
@@ -50,8 +86,23 @@ pub(crate) fn convert_messages(
                         }),
                     }
                 }
-                if !text.trim().is_empty() {
-                    system_parts.push(text);
+
+                let text = text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+
+                if system_messages_allowed {
+                    system_parts.push(text.to_string());
+                } else {
+                    warnings.push(Warning::Compatibility {
+                        feature: "system_message.mid_conversation".to_string(),
+                        details: "Google GenAI only supports systemInstruction at the beginning; downgraded a late system message to user content".to_string(),
+                    });
+                    contents.push(serde_json::json!({
+                        "role": "user",
+                        "parts": [{ "text": format!("[SYSTEM MESSAGE]\n{text}") }]
+                    }));
                 }
             }
             Role::User => {
@@ -118,11 +169,25 @@ pub(crate) fn convert_messages(
                             }
                         }
                         ContentPart::ToolCall {
-                            name, arguments, ..
+                            id,
+                            name,
+                            arguments,
+                            ..
                         } => {
-                            parts.push(serde_json::json!({
-                                "functionCall": { "name": name, "args": arguments }
-                            }));
+                            let thought_signature = extract_google_tool_call_thought_signature(id);
+                            let mut function_call = Map::<String, Value>::new();
+                            function_call.insert("name".to_string(), Value::String(name.clone()));
+                            function_call.insert("args".to_string(), arguments.clone());
+                            let mut tool_part = Map::<String, Value>::new();
+                            tool_part
+                                .insert("functionCall".to_string(), Value::Object(function_call));
+                            if let Some(thought_signature) = thought_signature {
+                                tool_part.insert(
+                                    "thoughtSignature".to_string(),
+                                    Value::String(thought_signature),
+                                );
+                            }
+                            parts.push(Value::Object(tool_part));
                         }
                         other => warnings.push(Warning::Unsupported {
                             feature: "assistant_content_part".to_string(),
@@ -195,10 +260,11 @@ pub(crate) fn convert_messages(
 }
 
 pub(crate) fn tool_to_google(tool: Tool, warnings: &mut Vec<Warning>) -> Value {
-    warn_on_unresolvable_json_schema_refs(&tool.name, &tool.parameters, warnings);
-    warn_on_unsupported_json_schema_keywords(&tool.name, &tool.parameters, warnings);
+    let tool_name = tool.name.clone();
+    warn_on_unresolvable_json_schema_refs(&tool_name, &tool.parameters, warnings);
+    warn_on_unsupported_json_schema_keywords(&tool_name, &tool.parameters, warnings);
     let mut out = Map::<String, Value>::new();
-    out.insert("name".to_string(), Value::String(tool.name));
+    out.insert("name".to_string(), Value::String(tool_name.clone()));
     out.insert(
         "description".to_string(),
         Value::String(tool.description.unwrap_or_default()),
@@ -206,9 +272,37 @@ pub(crate) fn tool_to_google(tool: Tool, warnings: &mut Vec<Warning>) -> Value {
     if let Some(parameters) =
         crate::utils::json_schema::convert_json_schema_to_openapi_schema(&tool.parameters, true)
     {
+        let mut parameters = parameters;
+        let removed = remove_google_unsupported_tool_schema_keywords(&mut parameters);
+        if removed > 0 {
+            warnings.push(Warning::Compatibility {
+                feature: "tool.parameters.google_unsupported_keywords".to_string(),
+                details: format!(
+                    "tool {tool_name} removed unsupported Google tool schema keyword(s): additionalProperties ({removed} occurrence{})",
+                    if removed == 1 { "" } else { "s" }
+                ),
+            });
+        }
         out.insert("parameters".to_string(), parameters);
     }
     Value::Object(out)
+}
+
+fn remove_google_unsupported_tool_schema_keywords(value: &mut Value) -> usize {
+    match value {
+        Value::Object(obj) => {
+            let mut removed = usize::from(obj.remove("additionalProperties").is_some());
+            for child in obj.values_mut() {
+                removed += remove_google_unsupported_tool_schema_keywords(child);
+            }
+            removed
+        }
+        Value::Array(values) => values
+            .iter_mut()
+            .map(remove_google_unsupported_tool_schema_keywords)
+            .sum(),
+        _ => 0,
+    }
 }
 
 fn warn_on_unsupported_json_schema_keywords(
@@ -332,6 +426,10 @@ pub(crate) fn parse_usage_metadata(value: &Value) -> Usage {
     let mut usage = Usage::default();
     if let Some(obj) = value.as_object() {
         usage.input_tokens = obj.get("promptTokenCount").and_then(Value::as_u64);
+        usage.cache_input_tokens = obj
+            .get("cachedContentTokenCount")
+            .and_then(Value::as_u64)
+            .or_else(|| obj.get("cachedTokenCount").and_then(Value::as_u64));
         usage.output_tokens = obj.get("candidatesTokenCount").and_then(Value::as_u64);
         usage.total_tokens = obj.get("totalTokenCount").and_then(Value::as_u64);
     }
@@ -367,7 +465,8 @@ pub(crate) fn parse_google_candidate(
                 continue;
             };
             let args = call.get("args").cloned().unwrap_or(Value::Null);
-            let id = format!("call_{}", *tool_call_seq);
+            let thought_signature = extract_google_part_thought_signature(part, call);
+            let id = build_google_tool_call_id(*tool_call_seq, thought_signature);
             *tool_call_seq = tool_call_seq.saturating_add(1);
             *has_tool_calls = true;
             out.push(ContentPart::ToolCall {

@@ -10,6 +10,8 @@ pub struct ProxyRetryConfig {
     #[serde(default = "default_retry_status_codes")]
     pub retry_status_codes: Vec<u16>,
     #[serde(default)]
+    pub fallback_status_codes: Vec<u16>,
+    #[serde(default)]
     pub max_attempts: Option<usize>,
 }
 
@@ -22,8 +24,23 @@ impl Default for ProxyRetryConfig {
         Self {
             enabled: false,
             retry_status_codes: default_retry_status_codes(),
+            fallback_status_codes: Vec::new(),
             max_attempts: None,
         }
+    }
+}
+
+impl ProxyRetryConfig {
+    pub fn should_retry_status(&self, status: u16) -> bool {
+        self.enabled && self.retry_status_codes.contains(&status)
+    }
+
+    pub fn should_fallback_status(&self, status: u16) -> bool {
+        self.should_retry_status(status) || self.fallback_status_codes.contains(&status)
+    }
+
+    pub fn is_failure_status(&self, status: u16) -> bool {
+        self.retry_status_codes.contains(&status) || self.fallback_status_codes.contains(&status)
     }
 }
 

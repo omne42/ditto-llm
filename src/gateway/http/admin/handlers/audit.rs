@@ -1,4 +1,4 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Deserialize)]
 struct AuditQuery {
     #[serde(default = "default_audit_limit")]
@@ -7,7 +7,7 @@ struct AuditQuery {
     since_ts_ms: Option<u64>,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Deserialize)]
 struct AuditExportQuery {
     #[serde(default)]
@@ -20,7 +20,7 @@ struct AuditExportQuery {
     before_ts_ms: Option<u64>,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn list_audit_logs(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -30,6 +30,58 @@ async fn list_audit_logs(
 
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.sqlite_store.as_ref() {
+        let mut logs = store
+            .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
+            .await
+            .map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+        if let Some(tenant_id) = admin.tenant_id.as_deref() {
+            logs.retain(|log| {
+                log.payload
+                    .get("tenant_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(tenant_id)
+            });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
+        return Ok(Json(logs));
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let mut logs = store
+            .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
+            .await
+            .map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+        if let Some(tenant_id) = admin.tenant_id.as_deref() {
+            logs.retain(|log| {
+                log.payload
+                    .get("tenant_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(tenant_id)
+            });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
+        return Ok(Json(logs));
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
         let mut logs = store
             .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
             .await
@@ -87,7 +139,7 @@ async fn list_audit_logs(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len().saturating_mul(2));
@@ -98,7 +150,7 @@ fn hex_lower(bytes: &[u8]) -> String {
     out
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn audit_chain_hash(prev_hash: Option<&str>, record: &AuditLogRecord) -> String {
     use sha2::Digest as _;
 
@@ -113,7 +165,7 @@ fn audit_chain_hash(prev_hash: Option<&str>, record: &AuditLogRecord) -> String 
     hex_lower(&hasher.finalize())
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn csv_escape(value: &str) -> String {
     if !value.contains([',', '"', '\n', '\r']) {
         return value.to_string();
@@ -122,7 +174,7 @@ fn csv_escape(value: &str) -> String {
     format!("\"{escaped}\"")
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Debug, Serialize)]
 struct AuditExportRecord {
     id: i64,
@@ -134,7 +186,7 @@ struct AuditExportRecord {
     hash: String,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn export_audit_logs(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -176,6 +228,58 @@ async fn export_audit_logs(
         return render_audit_export(&format, logs);
     }
 
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        let mut logs = store
+            .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
+            .await
+            .map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+        if let Some(tenant_id) = admin.tenant_id.as_deref() {
+            logs.retain(|log| {
+                log.payload
+                    .get("tenant_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(tenant_id)
+            });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
+        return render_audit_export(&format, logs);
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
+        let mut logs = store
+            .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
+            .await
+            .map_err(|err| {
+                error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "storage_error",
+                    err.to_string(),
+                )
+            })?;
+        if let Some(tenant_id) = admin.tenant_id.as_deref() {
+            logs.retain(|log| {
+                log.payload
+                    .get("tenant_id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(tenant_id)
+            });
+        }
+        for log in &mut logs {
+            log.payload = state.redactor.redact(std::mem::take(&mut log.payload));
+        }
+        return render_audit_export(&format, logs);
+    }
+
     #[cfg(feature = "gateway-store-redis")]
     if let Some(store) = state.redis_store.as_ref() {
         let mut logs = store
@@ -209,7 +313,7 @@ async fn export_audit_logs(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 fn render_audit_export(
     format: &str,
     logs: Vec<AuditLogRecord>,

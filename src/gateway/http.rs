@@ -1,4 +1,7 @@
 // This file is intentionally split to keep each staged Rust file under the pre-commit size limit.
+mod control_plane;
+use self::control_plane::GatewayControlPlaneSnapshot;
+
 include!("http/core.rs");
 include!("http/anthropic.rs");
 include!("http/google_genai.rs");

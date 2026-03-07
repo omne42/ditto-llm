@@ -17,7 +17,12 @@ async fn finalize_openai_compat_proxy_failure(
     state: &GatewayHttpState,
     ctx: ProxyFailureContext<'_>,
 ) -> (StatusCode, Json<OpenAiErrorResponse>) {
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     {
         let (status, err_kind, err_code, err_message) = match ctx.last_err.as_ref() {
             Some((status, body)) => (

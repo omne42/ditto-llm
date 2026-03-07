@@ -1,0 +1,3469 @@
+# Generated from official OpenAI docs. Edit via scripts/generate_openai_model_catalog.py.
+# Source index: https://developers.openai.com/api/docs/models
+# Generated at: 2026-03-06T20:20:33Z
+
+[provider]
+id = "openai"
+display_name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+protocol = "openai"
+source_url = "https://developers.openai.com/api/docs/models"
+
+[provider.auth]
+type = "api_key_env"
+keys = ["OPENAI_API_KEY"]
+
+[models."babbage-002"]
+source_url = "https://developers.openai.com/api/docs/models/babbage-002"
+display_name = "babbage-002"
+stage = "default"
+tagline = "Replacement for the GPT-3 ada and babbage base models"
+summary = "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4."
+performance = "low"
+speed = "medium"
+input = "Text"
+output = "Text"
+max_output_tokens = 16384
+knowledge_cutoff = "Sep 01, 2021"
+
+api_surfaces = ["completion.legacy"]
+[models."babbage-002".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."babbage-002".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."babbage-002".revisions]
+snapshots = ["babbage-002"]
+
+[[models."babbage-002".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/babbage-002"
+source_page = "completions_api"
+section = "Legacy Completions"
+api_surface = "completion.legacy"
+endpoint = "https://api.openai.com/v1/completions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."chatgpt-4o-latest"]
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-4o-latest"
+display_name = "ChatGPT-4o"
+stage = "default"
+tagline = "GPT-4o model used in ChatGPT"
+summary = "Prompt example Math Tutor Prompt example Travel Assistant Prompt example Clothing Recommendation Prompt example Recipe Generation ChatGPT-4o points to the GPT-4o snapshot currently used in ChatGPT. We recommend using an API model like GPT-5 or GPT-4o for most API integrations, but feel free to use this ChatGPT-4o model to test our latest improvements for chat use cases."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."chatgpt-4o-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."chatgpt-4o-latest".features]
+streaming = true
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = true
+
+[models."chatgpt-4o-latest".tools]
+web_search = false
+file_search = false
+image_generation = false
+code_interpreter = false
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = false
+tool_search = false
+
+[models."chatgpt-4o-latest".revisions]
+snapshots = ["chatgpt-4o-latest"]
+
+[[models."chatgpt-4o-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-4o-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."chatgpt-4o-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-4o-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."chatgpt-image-latest"]
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-image-latest"
+display_name = "chatgpt-image-latest"
+stage = "default"
+tagline = "Image model used in ChatGPT."
+summary = "GPT Image Latest points to the image snapshot currently used in ChatGPT."
+performance = "highest"
+speed = "medium"
+input = "Text, image"
+output = "Image, text"
+
+api_surfaces = ["image.generation", "image.edit"]
+[models."chatgpt-image-latest".modalities]
+text = "input_and_output"
+image = "input_and_output"
+audio = "not_supported"
+video = "not_supported"
+
+[models."chatgpt-image-latest".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."chatgpt-image-latest".revisions]
+snapshots = ["chatgpt-image-latest"]
+
+[[models."chatgpt-image-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-image-latest"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+
+[[models."chatgpt-image-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/chatgpt-image-latest"
+source_page = "images_api"
+section = "Image Editing"
+api_surface = "image.edit"
+endpoint = "https://api.openai.com/v1/images/edits"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."codex-mini-latest"]
+source_url = "https://developers.openai.com/api/docs/models/codex-mini-latest"
+display_name = "codex-mini-latest"
+stage = "default"
+tagline = "Fast reasoning model optimized for the Codex CLI"
+summary = "codex-mini-latest is a fine-tuned version of o4-mini specifically for use in Codex CLI. For direct use in the API, we recommend starting with gpt-4.1."
+performance = "higher"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."codex-mini-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."codex-mini-latest".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."codex-mini-latest".revisions]
+snapshots = ["codex-mini-latest"]
+
+[[models."codex-mini-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/codex-mini-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."codex-mini-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/codex-mini-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."computer-use-preview"]
+source_url = "https://developers.openai.com/api/docs/models/computer-use-preview"
+display_name = "computer-use-preview"
+stage = "default"
+tagline = "Specialized model for computer use tool"
+summary = "The computer-use-preview model is a specialized model for the computer use tool. It is trained to understand and execute computer tasks. See the computer use guide for more information. This model is only usable in the Responses API ."
+performance = "average"
+speed = "slow"
+input = "Text, image"
+output = "Text"
+context_window = 8192
+max_output_tokens = 1024
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["responses"]
+[models."computer-use-preview".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."computer-use-preview".features]
+streaming = false
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."computer-use-preview".revisions]
+snapshots = ["computer-use-preview", "computer-use-preview-2025-03-11"]
+
+[[models."computer-use-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/computer-use-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."dall-e-2"]
+source_url = "https://developers.openai.com/api/docs/models/dall-e-2"
+display_name = "DALL·E 2"
+stage = "default"
+tagline = "Our first image generation model"
+summary = "DALL·E is an AI system that creates realistic images and art from a natural language description. Older than DALL·E 3, DALL·E 2 offers more control in prompting and more requests at once."
+performance = "low"
+speed = "slow"
+input = "Text"
+output = "Image"
+
+api_surfaces = ["image.generation"]
+[models."dall-e-2".modalities]
+text = "input_only"
+image = "output_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."dall-e-2".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."dall-e-2".revisions]
+snapshots = ["dall-e-2"]
+
+[[models."dall-e-2".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/dall-e-2"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."dall-e-3"]
+source_url = "https://developers.openai.com/api/docs/models/dall-e-3"
+display_name = "DALL·E 3"
+stage = "default"
+tagline = "Previous generation image generation model"
+summary = "DALL·E is an AI system that creates realistic images and art from a natural language description. DALL·E 3 currently supports the ability, given a prompt, to create a new image with a specific size."
+performance = "high"
+speed = "slow"
+input = "Text"
+output = "Image"
+
+api_surfaces = ["image.generation"]
+[models."dall-e-3".modalities]
+text = "input_only"
+image = "output_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."dall-e-3".revisions]
+snapshots = ["dall-e-3"]
+
+[[models."dall-e-3".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/dall-e-3"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."davinci-002"]
+source_url = "https://developers.openai.com/api/docs/models/davinci-002"
+display_name = "davinci-002"
+stage = "default"
+tagline = "Replacement for the GPT-3 curie and davinci base models"
+summary = "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4."
+performance = "low"
+speed = "medium"
+input = "Text"
+output = "Text"
+max_output_tokens = 16384
+knowledge_cutoff = "Sep 01, 2021"
+
+api_surfaces = ["completion.legacy"]
+[models."davinci-002".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."davinci-002".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."davinci-002".revisions]
+snapshots = ["davinci-002"]
+
+[[models."davinci-002".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/davinci-002"
+source_page = "completions_api"
+section = "Legacy Completions"
+api_surface = "completion.legacy"
+endpoint = "https://api.openai.com/v1/completions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-3.5-turbo"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-3.5-turbo"
+display_name = "GPT-3.5 Turbo"
+stage = "default"
+tagline = "Legacy GPT model for cheaper chat and non-chat tasks"
+summary = "GPT-3.5 Turbo models can understand and generate natural language or code and have been optimized for chat using the Chat Completions API but work well for non-chat tasks as well. As of July 2024, use gpt-4o-mini in place of GPT-3.5 Turbo, as it is cheaper, more capable, multimodal, and just as fast. GPT-3.5 Turbo is still available for use in the API."
+performance = "low"
+speed = "slow"
+input = "Text"
+output = "Text"
+context_window = 16385
+max_output_tokens = 4096
+knowledge_cutoff = "Sep 01, 2021"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-3.5-turbo".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-3.5-turbo".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."gpt-3.5-turbo".revisions]
+snapshots = ["gpt-3.5-turbo", "gpt-3.5-turbo-0125", "gpt-3.5-turbo-1106", "gpt-3.5-turbo-instruct"]
+
+[[models."gpt-3.5-turbo".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-3.5-turbo"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-3.5-turbo".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-3.5-turbo"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4"
+display_name = "GPT-4"
+stage = "default"
+tagline = "An older high-intelligence GPT model"
+summary = "GPT-4 is an older version of a high-intelligence GPT model, usable in Chat Completions."
+performance = "average"
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 8192
+max_output_tokens = 8192
+knowledge_cutoff = "Dec 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4".features]
+streaming = true
+function_calling = false
+structured_outputs = false
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4".revisions]
+snapshots = ["gpt-4", "gpt-4-0613", "gpt-4-0314"]
+
+[[models."gpt-4".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4-turbo"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo"
+display_name = "GPT-4 Turbo"
+stage = "default"
+tagline = "An older high-intelligence GPT model"
+summary = "GPT-4 Turbo is the next generation of GPT-4, an older high-intelligence GPT model. It was designed to be a cheaper, better version of GPT-4. Today, we recommend using a newer model like GPT-4o."
+performance = "average"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 4096
+knowledge_cutoff = "Dec 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4-turbo".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4-turbo".features]
+streaming = true
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4-turbo".revisions]
+snapshots = ["gpt-4-turbo", "gpt-4-turbo-2024-04-09", "gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-vision-preview"]
+
+[[models."gpt-4-turbo".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4-turbo".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4-turbo-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview"
+display_name = "GPT-4 Turbo Preview"
+stage = "default"
+tagline = "An older fast GPT model"
+summary = "This is a research preview of the GPT-4 Turbo model, an older high-intelligence GPT model."
+performance = "average"
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 128000
+max_output_tokens = 4096
+knowledge_cutoff = "Dec 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4-turbo-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4-turbo-preview".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4-turbo-preview".revisions]
+snapshots = ["gpt-4-turbo-preview", "gpt-4-0125-preview", "gpt-4-1106-vision-preview"]
+
+[[models."gpt-4-turbo-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4-turbo-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4.1"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1"
+display_name = "GPT-4.1"
+stage = "default"
+tagline = "Smartest non-reasoning model"
+summary = "GPT-4.1 excels at instruction following and tool calling, with broad knowledge across domains. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 for complex tasks."
+performance = "higher"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 1047576
+max_output_tokens = 32768
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4.1".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4.1".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = true
+
+[models."gpt-4.1".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = true
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = true
+tool_search = false
+
+[models."gpt-4.1".revisions]
+snapshots = ["gpt-4.1", "gpt-4.1-2025-04-14"]
+
+[[models."gpt-4.1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4.1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4.1-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+display_name = "GPT-4.1 mini"
+stage = "default"
+tagline = "Smaller, faster version of GPT-4.1"
+summary = "GPT-4.1 mini excels at instruction following and tool calling. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 mini for more complex tasks."
+performance = "high"
+speed = "fast"
+input = "Text, image"
+output = "Text"
+context_window = 1047576
+max_output_tokens = 32768
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4.1-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4.1-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = false
+predicted_outputs = true
+
+[models."gpt-4.1-mini".revisions]
+snapshots = ["gpt-4.1-mini", "gpt-4.1-mini-2025-04-14"]
+
+[[models."gpt-4.1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4.1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4.1-nano"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-nano"
+display_name = "GPT-4.1 nano"
+stage = "default"
+tagline = "Fastest, most cost-efficient version of GPT-4.1"
+summary = "GPT-4.1 nano excels at instruction following and tool calling. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 nano for more complex tasks."
+performance = "average"
+speed = "very_fast"
+input = "Text, image"
+output = "Text"
+context_window = 1047576
+max_output_tokens = 32768
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4.1-nano".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4.1-nano".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = false
+predicted_outputs = true
+
+[models."gpt-4.1-nano".revisions]
+snapshots = ["gpt-4.1-nano", "gpt-4.1-nano-2025-04-14"]
+
+[[models."gpt-4.1-nano".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-nano"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4.1-nano".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.1-nano"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4.5-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.5-preview"
+display_name = "GPT-4.5 Preview (Deprecated)"
+stage = "default"
+tagline = "Deprecated large model."
+summary = "Deprecated - a research preview of GPT-4.5. We recommend using gpt-4.1 or o3 models instead for most use cases"
+performance = "higher"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4.5-preview".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4.5-preview".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4.5-preview".revisions]
+snapshots = ["gpt-4.5-preview", "gpt-4.5-preview-2025-02-27"]
+
+[[models."gpt-4.5-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.5-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4.5-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4.5-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o"
+display_name = "GPT-4o"
+stage = "default"
+tagline = "Fast, intelligent, flexible GPT model"
+summary = "Prompt example Math Tutor Prompt example Travel Assistant Prompt example Clothing Recommendation Prompt example Recipe Generation GPT-4o (“o” for “omni”) is our versatile, high-intelligence flagship model. It accepts both text and image inputs, and produces text outputs (including Structured Outputs). It is the best model for most tasks, and is our most capable model outside of our o-series models."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4o".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = true
+predicted_outputs = true
+
+[models."gpt-4o".revisions]
+snapshots = ["gpt-4o", "gpt-4o-2024-08-06", "gpt-4o-2024-11-20", "gpt-4o-2024-05-13"]
+
+[[models."gpt-4o".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-audio-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview"
+display_name = "GPT-4o Audio"
+stage = "default"
+tagline = "GPT-4o models capable of audio inputs and outputs"
+summary = "This is a preview release of the GPT-4o Audio models. These models accept audio inputs and outputs, and can be used in the Chat Completions REST API."
+performance = "high"
+speed = "medium"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o-audio-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-4o-audio-preview".features]
+streaming = true
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-audio-preview".revisions]
+snapshots = ["gpt-4o-audio-preview", "gpt-4o-audio-preview-2025-06-03", "gpt-4o-audio-preview-2024-12-17", "gpt-4o-audio-preview-2024-10-01"]
+
+[[models."gpt-4o-audio-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o-audio-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+display_name = "GPT-4o mini"
+stage = "default"
+tagline = "Fast, affordable small model for focused tasks"
+summary = "Prompt example Intent Classification Prompt example Extract search keywords Prompt example Translate text Prompt example Generate tags GPT-4o mini (“o” for “omni”) is a fast, affordable small model for focused tasks. It accepts both text and image inputs, and produces text outputs (including Structured Outputs). It is ideal for fine-tuning, and model outputs from a larger model like GPT-4o can be distilled to GPT-4o-mini to produce similar results at lower cost and latency."
+performance = "average"
+speed = "fast"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4o-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = false
+predicted_outputs = true
+
+[models."gpt-4o-mini".revisions]
+snapshots = ["gpt-4o-mini", "gpt-4o-mini-2024-07-18"]
+
+[[models."gpt-4o-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-mini-audio-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview"
+display_name = "GPT-4o mini Audio"
+stage = "default"
+tagline = "Smaller model capable of audio inputs and outputs"
+summary = "This is a preview release of the smaller GPT-4o Audio mini model. It's designed to input audio or create audio outputs via the REST API."
+performance = "average"
+speed = "fast"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o-mini-audio-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-4o-mini-audio-preview".features]
+streaming = true
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-mini-audio-preview".revisions]
+snapshots = ["gpt-4o-mini-audio-preview", "gpt-4o-mini-audio-preview-2024-12-17"]
+
+[[models."gpt-4o-mini-audio-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o-mini-audio-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-mini-realtime-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-realtime-preview"
+display_name = "GPT-4o mini Realtime"
+stage = "default"
+tagline = "Smaller realtime model for text and audio inputs and outputs"
+summary = "This is a preview release of the GPT-4o-mini Realtime model, capable of responding to audio and text inputs in realtime over WebRTC or a WebSocket interface."
+performance = "average"
+speed = "very_fast"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 16000
+max_output_tokens = 4096
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["realtime.websocket"]
+[models."gpt-4o-mini-realtime-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-4o-mini-realtime-preview".features]
+streaming = false
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-mini-realtime-preview".revisions]
+snapshots = ["gpt-4o-mini-realtime-preview", "gpt-4o-mini-realtime-preview-2024-12-17"]
+
+[[models."gpt-4o-mini-realtime-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-realtime-preview"
+source_page = "realtime_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://api.openai.com/v1/realtime"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-4o-mini-search-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview"
+display_name = "GPT-4o mini Search Preview"
+stage = "default"
+tagline = "Fast, affordable small model for web search"
+summary = "GPT-4o mini Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page."
+performance = "average"
+speed = "fast"
+input = "Text"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o-mini-search-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4o-mini-search-preview".features]
+streaming = true
+function_calling = false
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-mini-search-preview".revisions]
+snapshots = ["gpt-4o-mini-search-preview", "gpt-4o-mini-search-preview-2025-03-11"]
+
+[[models."gpt-4o-mini-search-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o-mini-search-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-mini-transcribe"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe"
+display_name = "GPT-4o mini Transcribe"
+stage = "default"
+tagline = "Speech-to-text model powered by GPT-4o mini"
+summary = "GPT-4o mini Transcribe is a speech-to-text model that uses GPT-4o mini to transcribe audio. It offers improvements to word error rate and better language recognition and accuracy compared to original Whisper models. Use it for more accurate transcripts."
+performance = "high"
+speed = "fast"
+input = "Audio, text"
+output = "Text"
+context_window = 16000
+max_output_tokens = 2000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["audio.transcription"]
+[models."gpt-4o-mini-transcribe".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_only"
+video = "not_supported"
+
+[models."gpt-4o-mini-transcribe".revisions]
+snapshots = ["gpt-4o-mini-transcribe", "gpt-4o-mini-transcribe-2025-12-15", "gpt-4o-mini-transcribe-2025-03-20"]
+
+[[models."gpt-4o-mini-transcribe".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe"
+source_page = "audio_transcriptions_api"
+section = "Transcription"
+api_surface = "audio.transcription"
+endpoint = "https://api.openai.com/v1/audio/transcriptions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-4o-mini-tts"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-tts"
+display_name = "GPT-4o mini TTS"
+stage = "default"
+tagline = "Text-to-speech model powered by GPT-4o mini"
+summary = "GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, a fast and powerful language model. Use it to convert text to natural sounding spoken text. The maximum number of input tokens is 2000."
+performance = "higher"
+speed = "fast"
+input = "Text"
+output = "Audio"
+
+api_surfaces = ["audio.speech"]
+[models."gpt-4o-mini-tts".modalities]
+text = "input_only"
+image = "not_supported"
+audio = "output_only"
+video = "not_supported"
+
+[models."gpt-4o-mini-tts".revisions]
+snapshots = ["gpt-4o-mini-tts", "gpt-4o-mini-tts-2025-12-15", "gpt-4o-mini-tts-2025-03-20"]
+
+[[models."gpt-4o-mini-tts".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-mini-tts"
+source_page = "audio_speech_api"
+section = "Text to Speech"
+api_surface = "audio.speech"
+endpoint = "https://api.openai.com/v1/audio/speech"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-4o-realtime-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-realtime-preview"
+display_name = "GPT-4o Realtime"
+stage = "default"
+tagline = "Model capable of realtime text and audio inputs and outputs"
+summary = "This is a preview release of the GPT-4o Realtime model, capable of responding to audio and text inputs in realtime over WebRTC or a WebSocket interface."
+performance = "high"
+speed = "fast"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 32000
+max_output_tokens = 4096
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["realtime.websocket"]
+[models."gpt-4o-realtime-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-4o-realtime-preview".features]
+streaming = false
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-realtime-preview".revisions]
+snapshots = ["gpt-4o-realtime-preview", "gpt-4o-realtime-preview-2025-06-03", "gpt-4o-realtime-preview-2024-12-17", "gpt-4o-realtime-preview-2024-10-01"]
+
+[[models."gpt-4o-realtime-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-realtime-preview"
+source_page = "realtime_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://api.openai.com/v1/realtime"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-4o-search-preview"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-search-preview"
+display_name = "GPT-4o Search Preview"
+stage = "default"
+tagline = "GPT model for web search in Chat Completions"
+summary = "GPT-4o Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page."
+performance = "high"
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-4o-search-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-4o-search-preview".features]
+streaming = true
+function_calling = false
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-4o-search-preview".revisions]
+snapshots = ["gpt-4o-search-preview", "gpt-4o-search-preview-2025-03-11"]
+
+[[models."gpt-4o-search-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-search-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-4o-search-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-search-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-4o-transcribe"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-transcribe"
+display_name = "GPT-4o Transcribe"
+stage = "default"
+tagline = "Speech-to-text model powered by GPT-4o"
+summary = "GPT-4o Transcribe is a speech-to-text model that uses GPT-4o to transcribe audio. It offers improvements to word error rate and better language recognition and accuracy compared to original Whisper models. Use it for more accurate transcripts."
+performance = "higher"
+speed = "medium"
+input = "Audio, text"
+output = "Text"
+context_window = 16000
+max_output_tokens = 2000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["audio.transcription"]
+[models."gpt-4o-transcribe".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_only"
+video = "not_supported"
+
+[models."gpt-4o-transcribe".revisions]
+snapshots = ["gpt-4o-transcribe"]
+
+[[models."gpt-4o-transcribe".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-transcribe"
+source_page = "audio_transcriptions_api"
+section = "Transcription"
+api_surface = "audio.transcription"
+endpoint = "https://api.openai.com/v1/audio/transcriptions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-4o-transcribe-diarize"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-transcribe-diarize"
+display_name = "GPT-4o Transcribe Diarize"
+stage = "default"
+tagline = "Transcription model that identifies who's speaking when"
+summary = "GPT-4o Transcribe Diarize is an automatic speech recognition (ASR) model with built-in speaker diarization, meaning it associates audio segments with different speakers in a conversation. This model is only available in the Transcription API."
+performance = "higher"
+speed = "medium"
+input = "Text, audio"
+output = "Text"
+context_window = 16000
+max_output_tokens = 2000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["audio.transcription"]
+[models."gpt-4o-transcribe-diarize".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_only"
+video = "not_supported"
+
+[models."gpt-4o-transcribe-diarize".revisions]
+snapshots = ["gpt-4o-transcribe-diarize"]
+
+[[models."gpt-4o-transcribe-diarize".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-4o-transcribe-diarize"
+source_page = "audio_transcriptions_api"
+section = "Transcription"
+api_surface = "audio.transcription"
+endpoint = "https://api.openai.com/v1/audio/transcriptions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-5"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5"
+display_name = "GPT-5"
+stage = "default"
+tagline = "Previous intelligent reasoning model for coding and agentic tasks with configurable reasoning effort"
+summary = "GPT-5 is our previous model for coding, reasoning, and agentic tasks across domains. We recommend using the latest GPT-5.1 . Learn more in our latest model guide . Reasoning.effort supports: minimal, low, medium, and high."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = true
+
+[models."gpt-5".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = true
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = true
+tool_search = false
+
+[models."gpt-5".revisions]
+snapshots = ["gpt-5", "gpt-5-2025-08-07"]
+
+[[models."gpt-5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5-chat-latest"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-chat-latest"
+display_name = "GPT-5 Chat"
+stage = "default"
+tagline = "GPT-5 model used in ChatGPT"
+summary = "GPT-5 Chat points to the GPT-5 snapshot previously used in ChatGPT. For the latest Chat model, please refer to our models page . We recommend leveraging our latest-model for most API usage."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5-chat-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5-chat-latest".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5-chat-latest".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = true
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = true
+tool_search = false
+
+[models."gpt-5-chat-latest".revisions]
+snapshots = ["gpt-5-chat-latest"]
+
+[[models."gpt-5-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-chat-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-chat-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5-codex"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-codex"
+display_name = "GPT-5-Codex"
+stage = "default"
+tagline = "A version of GPT-5 optimized for agentic coding in Codex"
+summary = "GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments. It's available in the Responses API only and the underlying model snapshot will be regularly updated. If you want to learn more about prompting GPT-5-Codex, refer to our dedicated guide ."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["responses"]
+[models."gpt-5-codex".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5-codex".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5-codex".revisions]
+snapshots = ["gpt-5-codex"]
+
+[[models."gpt-5-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-codex"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-mini"
+display_name = "GPT-5 mini"
+stage = "default"
+tagline = "A faster, cost-efficient version of GPT-5 for well-defined tasks"
+summary = "GPT-5 mini is a faster, more cost-efficient version of GPT-5. It's great for well-defined tasks and precise prompts. Learn more in our latest model guide ."
+speed = "fast"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "May 31, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+
+[models."gpt-5-mini".tools]
+web_search = true
+file_search = true
+image_generation = false
+code_interpreter = true
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = true
+tool_search = false
+
+[models."gpt-5-mini".revisions]
+snapshots = ["gpt-5-mini", "gpt-5-mini-2025-08-07"]
+
+[[models."gpt-5-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5-nano"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-nano"
+display_name = "GPT-5 nano"
+stage = "default"
+tagline = "Fastest, most cost-efficient version of GPT-5"
+summary = "GPT-5 Nano is our fastest, cheapest version of GPT-5. It's great for summarization and classification tasks. Learn more in our latest model guide ."
+speed = "very_fast"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "May 31, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5-nano".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5-nano".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+
+[models."gpt-5-nano".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = true
+hosted_shell = false
+apply_patch = false
+skills = false
+computer_use = false
+mcp = true
+tool_search = false
+
+[models."gpt-5-nano".revisions]
+snapshots = ["gpt-5-nano", "gpt-5-nano-2025-08-07"]
+
+[[models."gpt-5-nano".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-nano"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5-nano".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-nano"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5-pro"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-pro"
+display_name = "GPT-5 pro"
+stage = "default"
+tagline = "Version of GPT-5 that produces smarter and more precise responses"
+summary = "GPT-5 pro uses more compute to think harder and provide consistently better answers. GPT-5 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode . As our most advanced reasoning model, GPT-5 pro defaults to (and only supports) reasoning.effort: high . GPT-5 pro does not support code interpreter."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 272000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["responses"]
+[models."gpt-5-pro".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5-pro".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5-pro".revisions]
+snapshots = ["gpt-5-pro", "gpt-5-pro-2025-10-06"]
+
+[[models."gpt-5-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5-pro"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.1"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1"
+display_name = "GPT-5.1"
+stage = "default"
+tagline = "The best model for coding and agentic tasks with configurable reasoning effort"
+summary = "GPT-5.1 is our flagship model for coding and agentic tasks with configurable reasoning and non-reasoning effort. Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, and high."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.1".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.1".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = true
+predicted_outputs = false
+
+[models."gpt-5.1".revisions]
+snapshots = ["gpt-5.1", "gpt-5.1-2025-11-13"]
+
+[[models."gpt-5.1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.1-chat-latest"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest"
+display_name = "GPT-5.1 Chat"
+stage = "default"
+tagline = "GPT-5.1 model used in ChatGPT"
+summary = "GPT-5.1 Chat points to the GPT-5.1 snapshot currently used in ChatGPT. We recommend GPT-5.1 for most API usage, but feel free to use this GPT-5.1 Chat model to test our latest improvements for chat use cases."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.1-chat-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.1-chat-latest".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.1-chat-latest".revisions]
+snapshots = ["gpt-5.1-chat-latest"]
+
+[[models."gpt-5.1-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.1-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.1-codex"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex"
+display_name = "GPT-5.1 Codex"
+stage = "default"
+tagline = "A version of GPT-5.1 optimized for agentic coding in Codex."
+summary = "GPT-5.1-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments. It's available in the Responses API only and the underlying model snapshot will be regularly updated. If you want to learn more about prompting GPT-5-Codex, refer to our dedicated guide"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["responses"]
+[models."gpt-5.1-codex".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.1-codex".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.1-codex".revisions]
+snapshots = ["gpt-5.1-codex"]
+
+[[models."gpt-5.1-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.1-codex-max"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+display_name = "GPT-5.1-Codex-Max"
+stage = "default"
+tagline = "A version of GPT-5.1-codex optimized for long running tasks."
+summary = "GPT‑5.1-Codex-Max is purpose-built for agentic coding. It's only available in the Responses API . Learn how to get the most of GPT-5.1-Codex-Max in the prompting guide ."
+speed = "fast"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.1-codex-max".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.1-codex-max".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.1-codex-max".revisions]
+snapshots = ["gpt-5.1-codex-max"]
+
+[[models."gpt-5.1-codex-max".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.1-codex-max".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.1-codex-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+display_name = "GPT-5.1 Codex mini"
+stage = "default"
+tagline = "Smaller, more cost-effective, less-capable version of GPT-5.1-Codex"
+summary = "GPT-5.1 Codex mini is a smaller, more cost-effective, less-capable version of GPT-5.1-Codex."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.1-codex-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.1-codex-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.1-codex-mini".revisions]
+snapshots = ["gpt-5.1-codex-mini"]
+
+[[models."gpt-5.1-codex-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.1-codex-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.2"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2"
+display_name = "GPT-5.2"
+stage = "default"
+tagline = "Previous frontier model for professional work with configurable reasoning effort"
+summary = "GPT-5.2 is our previous frontier model for complex professional work. We recommend using the latest GPT-5.4 . Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, high and xhigh."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.2".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.2".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = true
+predicted_outputs = false
+
+[models."gpt-5.2".revisions]
+snapshots = ["gpt-5.2", "gpt-5.2-2025-12-11"]
+
+[[models."gpt-5.2".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.2".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.2-chat-latest"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest"
+display_name = "GPT-5.2 Chat"
+stage = "default"
+tagline = "GPT-5.2 model used in ChatGPT"
+summary = "GPT-5.2 Chat points to the GPT-5.2 snapshot currently used in ChatGPT. We recommend GPT-5.4 for most API usage, but feel free to use this GPT-5.2 Chat model to test our latest improvements for chat use cases."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.2-chat-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.2-chat-latest".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.2-chat-latest".revisions]
+snapshots = ["gpt-5.2-chat-latest"]
+
+[[models."gpt-5.2-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.2-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.2-codex"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+display_name = "GPT-5.2-Codex"
+stage = "default"
+tagline = "Our most intelligent coding model optimized for long-horizon, agentic coding tasks."
+summary = "GPT-5.2-Codex is an upgraded version of GPT-5.2 optimized for agentic coding tasks in Codex or similar environments. GPT-5.2-Codex supports low medium high , and xhigh reasoning effort settings. If you want to learn more about prompting GPT-5.2-Codex, refer to our dedicated guide ."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.2-codex".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.2-codex".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.2-codex".revisions]
+snapshots = ["gpt-5.2-codex"]
+
+[[models."gpt-5.2-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.2-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.2-pro"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-pro"
+display_name = "GPT-5.2 pro"
+stage = "default"
+tagline = "Previous pro model for professional work that produces smarter and more precise responses."
+summary = "GPT-5.2 pro is our previous pro model for complex professional work. We recommend using GPT-5.4 pro for the latest pro model. GPT-5.2 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5.2 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode. GPT-5.2 pro supports reasoning.effort: medium, high, xhigh."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["responses"]
+[models."gpt-5.2-pro".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.2-pro".features]
+streaming = true
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.2-pro".revisions]
+snapshots = ["gpt-5.2-pro", "gpt-5.2-pro-2025-12-11"]
+
+[[models."gpt-5.2-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.2-pro"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.3-chat-latest"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest"
+display_name = "GPT-5.3 Chat"
+stage = "default"
+tagline = "GPT-5.3 Instant model used in ChatGPT"
+summary = "GPT-5.3 Chat points to the GPT-5.3 Instant snapshot currently used in ChatGPT. We recommend GPT-5.2 for API usage, but feel free to use this GPT-5.3 Chat model to test our latest improvements for chat use cases."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.3-chat-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.3-chat-latest".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.3-chat-latest".revisions]
+snapshots = ["gpt-5.3-chat-latest"]
+
+[[models."gpt-5.3-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.3-chat-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.3-codex"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+display_name = "GPT-5.3-Codex"
+stage = "default"
+tagline = "The most capable agentic coding model to date."
+summary = "GPT-5.3-Codex is optimized for agentic coding tasks in Codex or similar environments. GPT-5.3-Codex supports low medium high , and xhigh reasoning effort settings. If you want to learn more about prompting GPT-5.3-Codex, refer to our dedicated guide ."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 400000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.3-codex".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.3-codex".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-5.3-codex".revisions]
+snapshots = ["gpt-5.3-codex"]
+
+[[models."gpt-5.3-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.3-codex".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.4"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.4"
+display_name = "GPT-5.4"
+stage = "default"
+tagline = "Our most capable model for professional work"
+summary = "GPT-5.4 is our frontier model for complex professional work. Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, high and xhigh."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 1050000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-5.4".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.4".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = true
+
+[models."gpt-5.4".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = true
+hosted_shell = true
+apply_patch = true
+skills = true
+computer_use = true
+mcp = true
+tool_search = true
+
+[models."gpt-5.4".revisions]
+snapshots = ["gpt-5.4", "gpt-5.4-2026-03-05"]
+
+[[models."gpt-5.4".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.4"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-5.4".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.4"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-5.4-pro"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.4-pro"
+display_name = "GPT-5.4 pro"
+stage = "default"
+tagline = "Version of GPT-5.4 that produces smarter and more precise responses."
+summary = "GPT-5.4 pro uses more compute to think harder and provide consistently better answers. GPT-5.4 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5.4 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode . GPT-5.4 pro supports reasoning.effort: medium, high, xhigh."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 1050000
+max_output_tokens = 128000
+knowledge_cutoff = "Aug 31, 2025"
+
+api_surfaces = ["responses"]
+[models."gpt-5.4-pro".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-5.4-pro".features]
+streaming = true
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+
+[models."gpt-5.4-pro".tools]
+web_search = true
+file_search = true
+image_generation = true
+code_interpreter = false
+hosted_shell = false
+apply_patch = true
+skills = false
+computer_use = true
+mcp = true
+tool_search = true
+
+[models."gpt-5.4-pro".revisions]
+snapshots = ["gpt-5.4-pro", "gpt-5.4-pro-2026-03-05"]
+
+[[models."gpt-5.4-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-5.4-pro"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-audio"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio"
+display_name = "gpt-audio"
+stage = "default"
+tagline = "For audio inputs and outputs with Chat Completions API"
+summary = "The gpt-audio model is our first generally available audio model. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API."
+performance = "higher"
+speed = "medium"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-audio".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-audio".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-audio".revisions]
+snapshots = ["gpt-audio", "gpt-audio-2025-08-28"]
+
+[[models."gpt-audio".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-audio".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-audio-1.5"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-1.5"
+display_name = "gpt-audio-1.5"
+stage = "default"
+tagline = "The best voice model for audio in, audio out with Chat Completions."
+summary = "The gpt-audio model is our first generally available audio model. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API."
+performance = "higher"
+speed = "medium"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-audio-1.5".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-audio-1.5".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-audio-1.5".revisions]
+snapshots = ["gpt-audio-1.5"]
+
+[[models."gpt-audio-1.5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-1.5"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-audio-1.5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-1.5"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-audio-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-mini"
+display_name = "gpt-audio-mini"
+stage = "default"
+tagline = "A cost-efficient version of GPT Audio"
+summary = "A cost-efficient version of GPT Audio. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API."
+performance = "higher"
+speed = "very_fast"
+input = "Text, audio"
+output = "Text, audio"
+context_window = 128000
+max_output_tokens = 16384
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-audio-mini".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-audio-mini".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-audio-mini".revisions]
+snapshots = ["gpt-audio-mini", "gpt-audio-mini-2025-12-15", "gpt-audio-mini-2025-10-06"]
+
+[[models."gpt-audio-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-audio-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-audio-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-image-1"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1"
+display_name = "GPT Image 1"
+stage = "default"
+tagline = "Our previous image generation model"
+summary = "GPT Image 1 is a natively multimodal language model that accepts both text and image inputs, and produces image outputs."
+performance = "higher"
+speed = "slowest"
+input = "Text, image"
+output = "Image"
+
+api_surfaces = ["image.generation", "image.edit"]
+[models."gpt-image-1".modalities]
+text = "input_only"
+image = "input_and_output"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-image-1".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-image-1".revisions]
+snapshots = ["gpt-image-1"]
+
+[[models."gpt-image-1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+
+[[models."gpt-image-1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1"
+source_page = "images_api"
+section = "Image Editing"
+api_surface = "image.edit"
+endpoint = "https://api.openai.com/v1/images/edits"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-image-1-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1-mini"
+display_name = "gpt-image-1-mini"
+stage = "default"
+tagline = "A cost-efficient version of GPT Image 1"
+summary = "A cost-efficient version of GPT Image 1. It is a natively multimodal language model that accepts both text and image inputs, and produces image outputs."
+performance = "higher"
+speed = "slowest"
+input = "Text, image"
+output = "Image"
+
+api_surfaces = ["image.generation", "image.edit"]
+[models."gpt-image-1-mini".modalities]
+text = "input_only"
+image = "input_and_output"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-image-1-mini".revisions]
+snapshots = ["gpt-image-1-mini"]
+
+[[models."gpt-image-1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1-mini"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+
+[[models."gpt-image-1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1-mini"
+source_page = "images_api"
+section = "Image Editing"
+api_surface = "image.edit"
+endpoint = "https://api.openai.com/v1/images/edits"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-image-1.5"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1.5"
+display_name = "GPT Image 1.5"
+stage = "default"
+tagline = "State-of-the-art image generation model."
+summary = "GPT Image 1.5 is our latest image generation model, with better instruction following and adherence to prompts. Learn more in our GPT Image 1.5 usage guide ."
+performance = "highest"
+speed = "medium"
+input = "Text, image"
+output = "Image, text"
+
+api_surfaces = ["image.generation", "image.edit"]
+[models."gpt-image-1.5".modalities]
+text = "input_and_output"
+image = "input_and_output"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-image-1.5".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-image-1.5".revisions]
+snapshots = ["gpt-image-1.5", "gpt-image-1.5-2025-12-16"]
+
+[[models."gpt-image-1.5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1.5"
+source_page = "images_api"
+section = "Image Generation"
+api_surface = "image.generation"
+endpoint = "https://api.openai.com/v1/images/generations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+
+[[models."gpt-image-1.5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-image-1.5"
+source_page = "images_api"
+section = "Image Editing"
+api_surface = "image.edit"
+endpoint = "https://api.openai.com/v1/images/edits"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-oss-120b"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-120b"
+display_name = "gpt-oss-120b"
+stage = "default"
+tagline = "Most powerful open-weight model, fits into an H100 GPU"
+summary = "gpt-oss-120b is our most powerful open-weight model, which fits into a single H100 GPU (117B parameters with 5.1B active parameters). Download gpt-oss-120b on HuggingFace . Key features Permissive Apache 2.0 license: Build freely without copyleft restrictions or patent risk—ideal for experimentation, customization, and commercial deployment. Configurable reasoning effort: Easily adjust the reasoning effort (low, medium, high) based on your specific use case and latency needs. Full chain-of-thought: Gain complete access to the model's reasoning process, facilitating easier debugging and increased trust in outputs. Fine-tunable: Fully customize models to your specific use case through parameter fine-tuning. Agentic capabilities: Use the models' native capabilities for function calling, web browsing, Python code execution, and structured outputs."
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 131072
+max_output_tokens = 131072
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-oss-120b".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-oss-120b".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+
+[models."gpt-oss-120b".revisions]
+snapshots = ["gpt-oss-120b"]
+
+[[models."gpt-oss-120b".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-120b"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-oss-120b".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-120b"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-oss-20b"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-20b"
+display_name = "gpt-oss-20b"
+stage = "default"
+tagline = "Medium-sized open-weight model for low latency"
+summary = "gpt-oss-20b is our medium-sized open-weight model for low latency, local, or specialized use-cases (21B parameters with 3.6B active parameters). Download gpt-oss-20b on HuggingFace . Key features Permissive Apache 2.0 license: Build freely without copyleft restrictions or patent risk—ideal for experimentation, customization, and commercial deployment. Configurable reasoning effort: Easily adjust the reasoning effort (low, medium, high) based on your specific use case and latency needs. Full chain-of-thought: Gain complete access to the model's reasoning process, facilitating easier debugging and increased trust in outputs. Fine-tunable: Fully customize models to your specific use case through parameter fine-tuning. Agentic capabilities: Use the models' native capabilities for function calling, web browsing, Python code execution, and structured outputs."
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 131072
+max_output_tokens = 131072
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."gpt-oss-20b".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."gpt-oss-20b".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+
+[models."gpt-oss-20b".revisions]
+snapshots = ["gpt-oss-20b"]
+
+[[models."gpt-oss-20b".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-20b"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."gpt-oss-20b".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-oss-20b"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."gpt-realtime"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime"
+display_name = "gpt-realtime"
+stage = "default"
+tagline = "Model capable of realtime text and audio inputs and outputs"
+summary = "This is our first general-availability realtime model, capable of responding to audio and text inputs in realtime over WebRTC, WebSocket, or SIP connections."
+performance = "highest"
+speed = "fast"
+input = "Text, audio, image"
+output = "Text, audio"
+context_window = 32000
+max_output_tokens = 4096
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["realtime.websocket"]
+[models."gpt-realtime".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-realtime".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-realtime".revisions]
+snapshots = ["gpt-realtime", "gpt-realtime-2025-08-28"]
+
+[[models."gpt-realtime".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime"
+source_page = "realtime_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://api.openai.com/v1/realtime"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-realtime-1.5"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime-1.5"
+display_name = "gpt-realtime-1.5"
+stage = "default"
+tagline = "The best voice model for audio in, audio out."
+summary = "GPT-Reatime-1.5 is our flagship audio model for voice agents & customer support."
+performance = "highest"
+speed = "fast"
+input = "Text, audio, image"
+output = "Text, audio"
+context_window = 32000
+max_output_tokens = 4096
+knowledge_cutoff = "Sep 30, 2024"
+
+api_surfaces = ["realtime.websocket"]
+[models."gpt-realtime-1.5".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-realtime-1.5".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-realtime-1.5".revisions]
+snapshots = ["gpt-realtime-1.5"]
+
+[[models."gpt-realtime-1.5".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime-1.5"
+source_page = "realtime_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://api.openai.com/v1/realtime"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."gpt-realtime-mini"]
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime-mini"
+display_name = "gpt-realtime-mini"
+stage = "default"
+tagline = "A cost-efficient version of GPT Realtime"
+summary = "A cost-efficient version of GPT Realtime - capable of responding to audio and text inputs in realtime over WebRTC, WebSocket, or SIP connections."
+performance = "higher"
+speed = "very_fast"
+input = "Text, image, audio"
+output = "Text, audio"
+context_window = 32000
+max_output_tokens = 4096
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["realtime.websocket"]
+[models."gpt-realtime-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "input_and_output"
+video = "not_supported"
+
+[models."gpt-realtime-mini".features]
+function_calling = true
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."gpt-realtime-mini".revisions]
+snapshots = ["gpt-realtime-mini", "gpt-realtime-mini-2025-12-15", "gpt-realtime-mini-2025-10-06"]
+
+[[models."gpt-realtime-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/gpt-realtime-mini"
+source_page = "realtime_api"
+section = "Realtime / Live"
+api_surface = "realtime.websocket"
+endpoint = "wss://api.openai.com/v1/realtime"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."o1"]
+source_url = "https://developers.openai.com/api/docs/models/o1"
+display_name = "o1"
+stage = "default"
+tagline = "Previous full o-series reasoning model"
+summary = "The o1 series of models are trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o1".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o1".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o1".revisions]
+snapshots = ["o1", "o1-2024-12-17", "o1-preview", "o1-preview-2024-09-12"]
+
+[[models."o1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o1-mini"]
+source_url = "https://developers.openai.com/api/docs/models/o1-mini"
+display_name = "o1-mini"
+stage = "default"
+tagline = "A small model alternative to o1"
+summary = "The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini."
+speed = "slow"
+input = "Text"
+output = "Text"
+context_window = 128000
+max_output_tokens = 65536
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o1-mini".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o1-mini".features]
+streaming = true
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o1-mini".revisions]
+snapshots = ["o1-mini", "o1-mini-2024-09-12"]
+
+[[models."o1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o1-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o1-preview"]
+source_url = "https://developers.openai.com/api/docs/models/o1-preview"
+display_name = "o1 Preview"
+stage = "default"
+tagline = "Preview of our first o-series reasoning model"
+summary = "Research preview of the o1 series of models, trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user."
+speed = "slowest"
+input = "Text"
+output = "Text"
+context_window = 128000
+max_output_tokens = 32768
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o1-preview".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o1-preview".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o1-preview".revisions]
+snapshots = ["o1-preview", "o1-preview-2024-09-12"]
+
+[[models."o1-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1-preview"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o1-preview".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1-preview"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o1-pro"]
+source_url = "https://developers.openai.com/api/docs/models/o1-pro"
+display_name = "o1-pro"
+stage = "default"
+tagline = "Version of o1 with more compute for better responses"
+summary = "The o1 series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o1-pro model uses more compute to think harder and provide consistently better answers. o1-pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["responses"]
+[models."o1-pro".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o1-pro".features]
+streaming = false
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o1-pro".revisions]
+snapshots = ["o1-pro", "o1-pro-2025-03-19"]
+
+[[models."o1-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o1-pro"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o3"]
+source_url = "https://developers.openai.com/api/docs/models/o3"
+display_name = "o3"
+stage = "default"
+tagline = "Reasoning model for complex tasks, succeeded by GPT-5"
+summary = "o3 is a well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following. Use it to think through multi-step problems that involve analysis across text, code, and images. o3 is succeeded by GPT-5 . Learn more about how to use our reasoning models in our reasoning guide."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o3".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o3".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o3".revisions]
+snapshots = ["o3", "o3-2025-04-16"]
+
+[[models."o3".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o3".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o3-deep-research"]
+source_url = "https://developers.openai.com/api/docs/models/o3-deep-research"
+display_name = "o3-deep-research"
+stage = "default"
+tagline = "Our most powerful deep research model"
+summary = "o3-deep-research is our most advanced model for deep research, designed to tackle complex, multi-step research tasks. It can search and synthesize information from across the internet as well as from your own data—brought in through MCP connectors. Learn more about getting started with this model in our deep research guide."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o3-deep-research".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o3-deep-research".features]
+streaming = true
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o3-deep-research".revisions]
+snapshots = ["o3-deep-research", "o3-deep-research-2025-06-26"]
+
+[[models."o3-deep-research".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3-deep-research"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o3-deep-research".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3-deep-research"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o3-mini"]
+source_url = "https://developers.openai.com/api/docs/models/o3-mini"
+display_name = "o3-mini"
+stage = "default"
+tagline = "A small model alternative to o3"
+summary = "Prompt example Landing Page Generation Prompt example Analyze Return Policy Prompt example Text to SQL Prompt example Graph Entity Extraction o3-mini is our newest small reasoning model, providing high intelligence at the same cost and latency targets of o1-mini. o3-mini supports key developer features, like Structured Outputs, function calling, and Batch API."
+speed = "medium"
+input = "Text"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Oct 01, 2023"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o3-mini".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o3-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o3-mini".revisions]
+snapshots = ["o3-mini", "o3-mini-2025-01-31"]
+
+[[models."o3-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o3-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o3-pro"]
+source_url = "https://developers.openai.com/api/docs/models/o3-pro"
+display_name = "o3-pro"
+stage = "default"
+tagline = "Version of o3 with more compute for better responses"
+summary = "The o-series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o3-pro model uses more compute to think harder and provide consistently better answers. o3-pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since o3-pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode ."
+speed = "slowest"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["responses"]
+[models."o3-pro".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o3-pro".features]
+streaming = false
+function_calling = true
+structured_outputs = true
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o3-pro".revisions]
+snapshots = ["o3-pro", "o3-pro-2025-06-10"]
+
+[[models."o3-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o3-pro"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o4-mini"]
+source_url = "https://developers.openai.com/api/docs/models/o4-mini"
+display_name = "o4-mini"
+stage = "default"
+tagline = "Fast, cost-efficient reasoning model, succeeded by GPT-5 mini"
+summary = "o4-mini is our latest small o-series model. It's optimized for fast, effective reasoning with exceptionally efficient performance in coding and visual tasks. It's succeeded by GPT-5 mini . Learn more about how to use our reasoning models in our reasoning guide."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o4-mini".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o4-mini".features]
+streaming = true
+function_calling = true
+structured_outputs = true
+fine_tuning = true
+distillation = false
+predicted_outputs = false
+
+[models."o4-mini".revisions]
+snapshots = ["o4-mini", "o4-mini-2025-04-16"]
+
+[[models."o4-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o4-mini"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o4-mini".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o4-mini"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."o4-mini-deep-research"]
+source_url = "https://developers.openai.com/api/docs/models/o4-mini-deep-research"
+display_name = "o4-mini-deep-research"
+stage = "default"
+tagline = "Faster, more affordable deep research model"
+summary = "o4-mini-deep-research is our faster, more affordable deep research model—ideal for tackling complex, multi-step research tasks. It can search and synthesize information from across the internet as well as from your own data, brought in through MCP connectors. Learn more about how to use this model in our deep research guide."
+speed = "medium"
+input = "Text, image"
+output = "Text"
+context_window = 200000
+max_output_tokens = 100000
+knowledge_cutoff = "Jun 01, 2024"
+
+api_surfaces = ["chat.completion", "responses"]
+[models."o4-mini-deep-research".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."o4-mini-deep-research".features]
+streaming = true
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."o4-mini-deep-research".revisions]
+snapshots = ["o4-mini-deep-research", "o4-mini-deep-research-2025-06-26"]
+
+[[models."o4-mini-deep-research".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o4-mini-deep-research"
+source_page = "chat_completions_api"
+section = "Chat Completions"
+api_surface = "chat.completion"
+endpoint = "https://api.openai.com/v1/chat/completions"
+notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+
+[[models."o4-mini-deep-research".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/o4-mini-deep-research"
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+[models."omni-moderation-latest"]
+source_url = "https://developers.openai.com/api/docs/models/omni-moderation-latest"
+display_name = "omni-moderation"
+stage = "default"
+tagline = "Identify potentially harmful content in text and images"
+summary = "Moderation models are free models designed to detect harmful content. This model is our most capable moderation model, accepting images as input as well."
+performance = "high"
+speed = "medium"
+input = "Text, image"
+output = "Text"
+
+api_surfaces = ["moderation"]
+[models."omni-moderation-latest".modalities]
+text = "input_and_output"
+image = "input_only"
+audio = "not_supported"
+video = "not_supported"
+
+[models."omni-moderation-latest".features]
+streaming = false
+function_calling = false
+structured_outputs = false
+fine_tuning = false
+distillation = false
+predicted_outputs = false
+
+[models."omni-moderation-latest".revisions]
+snapshots = ["omni-moderation", "omni-moderation-latest", "omni-moderation-2024-09-26"]
+
+[[models."omni-moderation-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/omni-moderation-latest"
+source_page = "moderations_api"
+section = "Moderations"
+api_surface = "moderation"
+endpoint = "https://api.openai.com/v1/moderations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."sora-2"]
+source_url = "https://developers.openai.com/api/docs/models/sora-2"
+display_name = "Sora 2"
+stage = "default"
+tagline = "Flagship video generation with synced audio"
+summary = "Sora 2 is our new powerful media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images."
+performance = "higher"
+speed = "slow"
+input = "Text, image"
+output = "Video, audio"
+
+api_surfaces = ["video.generation"]
+[models."sora-2".modalities]
+text = "input_only"
+image = "input_only"
+audio = "output_only"
+video = "output_only"
+
+[models."sora-2".revisions]
+snapshots = ["sora-2", "sora-2-2025-12-08", "sora-2-2025-10-06"]
+
+[[models."sora-2".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/sora-2"
+source_page = "sora_api"
+section = "Video Generation"
+api_surface = "video.generation"
+endpoint = "https://api.openai.com/v1/videos"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."sora-2-pro"]
+source_url = "https://developers.openai.com/api/docs/models/sora-2-pro"
+display_name = "Sora 2 Pro"
+stage = "default"
+tagline = "Most advanced synced-audio video generation"
+summary = "Sora 2 Pro is our state-of-the-art, most advanced media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images."
+performance = "highest"
+speed = "slowest"
+input = "Text, image"
+output = "Video, audio"
+
+api_surfaces = ["video.generation"]
+[models."sora-2-pro".modalities]
+text = "input_only"
+image = "input_only"
+audio = "output_only"
+video = "output_only"
+
+[models."sora-2-pro".revisions]
+snapshots = ["sora-2-pro", "sora-2-pro-2025-10-06"]
+
+[[models."sora-2-pro".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/sora-2-pro"
+source_page = "sora_api"
+section = "Video Generation"
+api_surface = "video.generation"
+endpoint = "https://api.openai.com/v1/videos"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."text-embedding-3-large"]
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-3-large"
+display_name = "text-embedding-3-large"
+stage = "default"
+tagline = "Most capable embedding model"
+summary = "text-embedding-3-large is our most capable embedding model for both english and non-english tasks. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks."
+performance = "high"
+speed = "slow"
+input = "Text"
+output = "Text"
+
+api_surfaces = ["embedding"]
+[models."text-embedding-3-large".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."text-embedding-3-large".revisions]
+snapshots = ["text-embedding-3-large"]
+
+[[models."text-embedding-3-large".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-3-large"
+source_page = "embeddings_api"
+section = "Embeddings"
+api_surface = "embedding"
+endpoint = "https://api.openai.com/v1/embeddings"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."text-embedding-3-small"]
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+display_name = "text-embedding-3-small"
+stage = "default"
+tagline = "Small embedding model"
+summary = "text-embedding-3-small is our improved, more performant version of our ada embedding model. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks."
+performance = "average"
+speed = "medium"
+input = "Text"
+output = "Text"
+
+api_surfaces = ["embedding"]
+[models."text-embedding-3-small".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."text-embedding-3-small".revisions]
+snapshots = ["text-embedding-3-small"]
+
+[[models."text-embedding-3-small".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+source_page = "embeddings_api"
+section = "Embeddings"
+api_surface = "embedding"
+endpoint = "https://api.openai.com/v1/embeddings"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."text-embedding-ada-002"]
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-ada-002"
+display_name = "text-embedding-ada-002"
+stage = "default"
+tagline = "Older embedding model"
+summary = "text-embedding-ada-002 is our improved, more performant version of our ada embedding model. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks."
+performance = "low"
+speed = "slow"
+input = "Text"
+output = "Text"
+
+api_surfaces = ["embedding"]
+[models."text-embedding-ada-002".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."text-embedding-ada-002".revisions]
+snapshots = ["text-embedding-ada-002"]
+
+[[models."text-embedding-ada-002".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/text-embedding-ada-002"
+source_page = "embeddings_api"
+section = "Embeddings"
+api_surface = "embedding"
+endpoint = "https://api.openai.com/v1/embeddings"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."text-moderation-latest"]
+source_url = "https://developers.openai.com/api/docs/models/text-moderation-latest"
+display_name = "text-moderation"
+stage = "default"
+tagline = "Previous generation text-only moderation model"
+summary = "Moderation models are free models designed to detect harmful content. This is our text only moderation model; we expect omni-moderation-* models to be the best default moving forward."
+performance = "average"
+speed = "medium"
+input = "Text"
+output = "Text"
+max_output_tokens = 32768
+knowledge_cutoff = "Sep 01, 2021"
+
+api_surfaces = ["moderation"]
+[models."text-moderation-latest".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."text-moderation-latest".revisions]
+snapshots = ["text-moderation", "text-moderation-latest", "text-moderation-007", "text-moderation-stable"]
+
+[[models."text-moderation-latest".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/text-moderation-latest"
+source_page = "moderations_api"
+section = "Moderations"
+api_surface = "moderation"
+endpoint = "https://api.openai.com/v1/moderations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."text-moderation-stable"]
+source_url = "https://developers.openai.com/api/docs/models/text-moderation-stable"
+display_name = "text-moderation-stable"
+stage = "default"
+tagline = "Previous generation text-only moderation model"
+summary = "Moderation models are free models designed to detect harmful content. This is our text only moderation model; we expect omni-moderation-* models to be the best default moving forward."
+performance = "average"
+speed = "medium"
+input = "Text"
+output = "Text"
+max_output_tokens = 32768
+knowledge_cutoff = "Sep 01, 2021"
+
+api_surfaces = ["moderation"]
+[models."text-moderation-stable".modalities]
+text = "input_and_output"
+image = "not_supported"
+audio = "not_supported"
+video = "not_supported"
+
+[models."text-moderation-stable".revisions]
+snapshots = ["text-moderation-stable", "text-moderation-007"]
+
+[[models."text-moderation-stable".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/text-moderation-stable"
+source_page = "moderations_api"
+section = "Moderations"
+api_surface = "moderation"
+endpoint = "https://api.openai.com/v1/moderations"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."tts-1"]
+source_url = "https://developers.openai.com/api/docs/models/tts-1"
+display_name = "TTS-1"
+stage = "default"
+tagline = "Text-to-speech model optimized for speed"
+summary = "TTS is a model that converts text to natural sounding spoken text. The tts-1 model is optimized for realtime text-to-speech use cases. Use it with the Speech endpoint in the Audio API."
+performance = "average"
+speed = "fast"
+input = "Text"
+output = "Audio"
+
+api_surfaces = ["audio.speech"]
+[models."tts-1".modalities]
+text = "input_only"
+image = "not_supported"
+audio = "output_only"
+video = "not_supported"
+
+[models."tts-1".revisions]
+snapshots = ["tts-1"]
+
+[[models."tts-1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/tts-1"
+source_page = "audio_speech_api"
+section = "Text to Speech"
+api_surface = "audio.speech"
+endpoint = "https://api.openai.com/v1/audio/speech"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."tts-1-hd"]
+source_url = "https://developers.openai.com/api/docs/models/tts-1-hd"
+display_name = "TTS-1 HD"
+stage = "default"
+tagline = "Text-to-speech model optimized for quality"
+summary = "TTS is a model that converts text to natural sounding spoken text. The tts-1-hd model is optimized for high quality text-to-speech use cases. Use it with the Speech endpoint in the Audio API."
+performance = "high"
+speed = "medium"
+input = "Text"
+output = "Audio"
+
+api_surfaces = ["audio.speech"]
+[models."tts-1-hd".modalities]
+text = "input_only"
+image = "not_supported"
+audio = "output_only"
+video = "not_supported"
+
+[models."tts-1-hd".revisions]
+snapshots = ["tts-1-hd"]
+
+[[models."tts-1-hd".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/tts-1-hd"
+source_page = "audio_speech_api"
+section = "Text to Speech"
+api_surface = "audio.speech"
+endpoint = "https://api.openai.com/v1/audio/speech"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+[models."whisper-1"]
+source_url = "https://developers.openai.com/api/docs/models/whisper-1"
+display_name = "Whisper"
+stage = "default"
+tagline = "General-purpose speech recognition model"
+summary = "Whisper is a general-purpose speech recognition model, trained on a large dataset of diverse audio. You can also use it as a multitask model to perform multilingual speech recognition as well as speech translation and language identification."
+performance = "average"
+speed = "medium"
+input = "Audio"
+output = "Text"
+
+api_surfaces = ["audio.transcription"]
+[models."whisper-1".modalities]
+text = "output_only"
+image = "not_supported"
+audio = "input_only"
+video = "not_supported"
+
+[models."whisper-1".revisions]
+snapshots = ["whisper-1"]
+
+[[models."whisper-1".records]]
+table_kind = "api_reference"
+source_url = "https://developers.openai.com/api/docs/models/whisper-1"
+source_page = "audio_transcriptions_api"
+section = "Transcription"
+api_surface = "audio.transcription"
+endpoint = "https://api.openai.com/v1/audio/transcriptions"
+notes = "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."

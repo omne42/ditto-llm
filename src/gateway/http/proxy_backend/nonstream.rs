@@ -170,7 +170,7 @@
         )))]
         let _ = spent_cost_usd_micros;
 
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
         if !token_budget_reservation_ids.is_empty() {
             settle_proxy_token_budget_reservations(
                 state,
@@ -183,87 +183,59 @@
             (virtual_key_id.clone(), budget.clone())
         {
             if spend_tokens {
-                let mut gateway = state.gateway.lock().await;
-                gateway.budget.spend(&virtual_key_id, &budget, spent_tokens);
+                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
 
                 #[cfg(feature = "gateway-costing")]
                 if !use_persistent_budget {
                     if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                        gateway.budget.spend_cost_usd_micros(
-                            &virtual_key_id,
-                            &budget,
-                            spent_cost_usd_micros,
-                        );
+                        state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
                         if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                            gateway.budget.spend_cost_usd_micros(
-                                scope,
-                                budget,
-                                spent_cost_usd_micros,
-                            );
+                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                         }
                         if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            gateway.budget.spend_cost_usd_micros(
-                                scope,
-                                budget,
-                                spent_cost_usd_micros,
-                            );
+                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                         }
                         if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            gateway.budget.spend_cost_usd_micros(
-                                scope,
-                                budget,
-                                spent_cost_usd_micros,
-                            );
+                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                         }
                     }
                 }
             }
         }
-        #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+        #[cfg(not(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis")))]
         if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
             if spend_tokens {
-                let mut gateway = state.gateway.lock().await;
-                gateway.budget.spend(&virtual_key_id, &budget, spent_tokens);
+                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    gateway.budget.spend(scope, budget, spent_tokens);
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
 
                 #[cfg(feature = "gateway-costing")]
                 if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                    gateway.budget.spend_cost_usd_micros(
-                        &virtual_key_id,
-                        &budget,
-                        spent_cost_usd_micros,
-                    );
+                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
                     if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        gateway
-                            .budget
-                            .spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                     }
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        gateway
-                            .budget
-                            .spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                     }
                     if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        gateway
-                            .budget
-                            .spend_cost_usd_micros(scope, budget, spent_cost_usd_micros);
+                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                     }
                 }
             }
@@ -271,7 +243,7 @@
 
         #[cfg(all(
             feature = "gateway-costing",
-            any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+            any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
         ))]
         if !cost_budget_reservation_ids.is_empty() {
             settle_proxy_cost_budget_reservations(
@@ -285,7 +257,7 @@
 
         #[cfg(all(
             feature = "gateway-costing",
-            any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+            any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
         ))]
         if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
             if let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
@@ -293,6 +265,18 @@
             {
                 #[cfg(feature = "gateway-store-sqlite")]
                 if let Some(store) = state.sqlite_store.as_ref() {
+                    let _ = store
+                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                        .await;
+                }
+                #[cfg(feature = "gateway-store-postgres")]
+                if let Some(store) = state.postgres_store.as_ref() {
+                    let _ = store
+                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                        .await;
+                }
+                #[cfg(feature = "gateway-store-mysql")]
+                if let Some(store) = state.mysql_store.as_ref() {
                     let _ = store
                         .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                         .await;
@@ -306,7 +290,12 @@
             }
         }
 
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
         {
             let payload = serde_json::json!({
                 "request_id": &request_id,

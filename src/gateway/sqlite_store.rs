@@ -1,16 +1,21 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 use rusqlite::OptionalExtension;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, VirtualKeyConfig};
+use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
 
 #[derive(Clone, Debug)]
 pub struct SqliteStore {
     path: PathBuf,
     audit_retention_secs: Option<u64>,
+    audit_last_retention_reap_ms: Arc<AtomicI64>,
 }
+
+const AUDIT_RETENTION_REAP_INTERVAL_MS: i64 = 30_000;
 
 #[derive(Debug, Error)]
 pub enum SqliteStoreError {
@@ -20,6 +25,8 @@ pub enum SqliteStoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("schema check failed: {0}")]
+    Schema(String),
     #[error("budget exceeded: limit={limit} attempted={attempted}")]
     BudgetExceeded { limit: u64, attempted: u64 },
     #[error(
@@ -36,6 +43,7 @@ impl SqliteStore {
         Self {
             path: path.into(),
             audit_retention_secs: None,
+            audit_last_retention_reap_ms: Arc::new(AtomicI64::new(0)),
         }
     }
 
@@ -53,6 +61,49 @@ impl SqliteStore {
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let conn = open_connection(path)?;
             init_schema(&conn)?;
+            Ok(())
+        })
+        .await?
+    }
+
+    pub async fn verify_schema(&self) -> Result<(), SqliteStoreError> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
+            let conn = open_connection(path)?;
+
+            require_sqlite_table(&conn, "virtual_keys")?;
+            require_sqlite_table(&conn, "config_state")?;
+            require_sqlite_table(&conn, "audit_logs")?;
+            require_sqlite_table(&conn, "budget_ledger")?;
+            require_sqlite_table(&conn, "budget_reservations")?;
+            require_sqlite_table(&conn, "cost_ledger")?;
+            require_sqlite_table(&conn, "cost_reservations")?;
+
+            require_sqlite_column_type(&conn, "virtual_keys", "id", "TEXT")?;
+            require_sqlite_column_type(&conn, "virtual_keys", "value_json", "TEXT")?;
+            require_sqlite_column_type(&conn, "config_state", "key", "TEXT")?;
+            require_sqlite_column_type(&conn, "config_state", "value_json", "TEXT")?;
+            require_sqlite_column_type(&conn, "audit_logs", "ts_ms", "INTEGER")?;
+            require_sqlite_column_type(&conn, "audit_logs", "kind", "TEXT")?;
+            require_sqlite_column_type(&conn, "audit_logs", "payload_json", "TEXT")?;
+            require_sqlite_column_type(&conn, "budget_reservations", "ts_ms", "INTEGER")?;
+            require_sqlite_column_type(&conn, "cost_reservations", "ts_ms", "INTEGER")?;
+
+            require_sqlite_index(
+                &conn,
+                "budget_reservations",
+                "idx_budget_reservations_key_id",
+            )?;
+            require_sqlite_index(
+                &conn,
+                "budget_reservations",
+                "idx_budget_reservations_ts_ms",
+            )?;
+            require_sqlite_index(&conn, "cost_reservations", "idx_cost_reservations_key_id")?;
+            require_sqlite_index(&conn, "cost_reservations", "idx_cost_reservations_ts_ms")?;
+            require_sqlite_index(&conn, "audit_logs", "idx_audit_logs_ts_ms")?;
+            require_sqlite_index(&conn, "audit_logs", "idx_audit_logs_kind_ts_ms")?;
+
             Ok(())
         })
         .await?
@@ -101,6 +152,48 @@ impl SqliteStore {
                 )?;
             }
             tx.commit()?;
+            Ok(())
+        })
+        .await?
+    }
+
+    pub async fn load_router_config(&self) -> Result<Option<RouterConfig>, SqliteStoreError> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || -> Result<Option<RouterConfig>, SqliteStoreError> {
+            let conn = open_connection(path)?;
+            init_schema(&conn)?;
+
+            let raw: Option<String> = conn
+                .query_row(
+                    "SELECT value_json FROM config_state WHERE key='router'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let Some(raw) = raw else {
+                return Ok(None);
+            };
+            Ok(Some(serde_json::from_str(&raw)?))
+        })
+        .await?
+    }
+
+    pub async fn replace_router_config(
+        &self,
+        router: &RouterConfig,
+    ) -> Result<(), SqliteStoreError> {
+        let path = self.path.clone();
+        let value_json = serde_json::to_string(router)?;
+
+        tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
+            let conn = open_connection(path)?;
+            init_schema(&conn)?;
+
+            conn.execute(
+                "INSERT INTO config_state (key, value_json) VALUES ('router', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
+                rusqlite::params![value_json],
+            )?;
             Ok(())
         })
         .await?
@@ -455,6 +548,154 @@ impl SqliteStore {
         .await?
     }
 
+    pub async fn reap_stale_budget_reservations(
+        &self,
+        cutoff_ts_ms: u64,
+        max_reaped: usize,
+        dry_run: bool,
+    ) -> Result<(u64, u64, u64), SqliteStoreError> {
+        let path = self.path.clone();
+        let cutoff_ts_ms = tokens_to_i64(cutoff_ts_ms);
+        let max_reaped = i64::try_from(max_reaped.clamp(1, 100_000)).unwrap_or(100_000);
+        let ts_ms = now_millis();
+
+        tokio::task::spawn_blocking(move || -> Result<(u64, u64, u64), SqliteStoreError> {
+            let mut conn = open_connection(path)?;
+            init_schema(&conn)?;
+
+            let mut scanned = 0u64;
+            let mut reaped = 0u64;
+            let mut released_tokens = 0u64;
+
+            let tx = conn.transaction()?;
+            let mut stmt = tx.prepare(
+                "SELECT request_id, key_id, tokens
+                 FROM budget_reservations
+                 WHERE ts_ms < ?1
+                 ORDER BY ts_ms
+                 LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![cutoff_ts_ms, max_reaped], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?;
+
+            let mut reservations: Vec<(String, String, i64)> = Vec::new();
+            for row in rows {
+                let (request_id, key_id, tokens_i64) = row?;
+                scanned = scanned.saturating_add(1);
+                reaped = reaped.saturating_add(1);
+                released_tokens = released_tokens.saturating_add(i64_to_u64(tokens_i64));
+                reservations.push((request_id, key_id, tokens_i64));
+            }
+            drop(stmt);
+
+            if !dry_run {
+                for (request_id, key_id, tokens_i64) in reservations {
+                    tx.execute(
+                        "DELETE FROM budget_reservations WHERE request_id=?1",
+                        rusqlite::params![request_id],
+                    )?;
+                    tx.execute(
+                        "INSERT OR IGNORE INTO budget_ledger (key_id, spent_tokens, reserved_tokens, updated_at_ms)
+                         VALUES (?1, 0, 0, ?2)",
+                        rusqlite::params![key_id, ts_ms],
+                    )?;
+                    tx.execute(
+                        "UPDATE budget_ledger
+                         SET reserved_tokens = CASE WHEN reserved_tokens >= ?2 THEN reserved_tokens - ?2 ELSE 0 END,
+                             updated_at_ms = ?3
+                         WHERE key_id = ?1",
+                        rusqlite::params![key_id, tokens_i64.max(0), ts_ms],
+                    )?;
+                }
+                tx.commit()?;
+            } else {
+                tx.rollback()?;
+            }
+
+            Ok((scanned, reaped, released_tokens))
+        })
+        .await?
+    }
+
+    pub async fn reap_stale_cost_reservations(
+        &self,
+        cutoff_ts_ms: u64,
+        max_reaped: usize,
+        dry_run: bool,
+    ) -> Result<(u64, u64, u64), SqliteStoreError> {
+        let path = self.path.clone();
+        let cutoff_ts_ms = tokens_to_i64(cutoff_ts_ms);
+        let max_reaped = i64::try_from(max_reaped.clamp(1, 100_000)).unwrap_or(100_000);
+        let ts_ms = now_millis();
+
+        tokio::task::spawn_blocking(move || -> Result<(u64, u64, u64), SqliteStoreError> {
+            let mut conn = open_connection(path)?;
+            init_schema(&conn)?;
+
+            let mut scanned = 0u64;
+            let mut reaped = 0u64;
+            let mut released_usd_micros = 0u64;
+
+            let tx = conn.transaction()?;
+            let mut stmt = tx.prepare(
+                "SELECT request_id, key_id, usd_micros
+                 FROM cost_reservations
+                 WHERE ts_ms < ?1
+                 ORDER BY ts_ms
+                 LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![cutoff_ts_ms, max_reaped], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?;
+
+            let mut reservations: Vec<(String, String, i64)> = Vec::new();
+            for row in rows {
+                let (request_id, key_id, usd_i64) = row?;
+                scanned = scanned.saturating_add(1);
+                reaped = reaped.saturating_add(1);
+                released_usd_micros = released_usd_micros.saturating_add(i64_to_u64(usd_i64));
+                reservations.push((request_id, key_id, usd_i64));
+            }
+            drop(stmt);
+
+            if !dry_run {
+                for (request_id, key_id, usd_i64) in reservations {
+                    tx.execute(
+                        "DELETE FROM cost_reservations WHERE request_id=?1",
+                        rusqlite::params![request_id],
+                    )?;
+                    tx.execute(
+                        "INSERT OR IGNORE INTO cost_ledger (key_id, spent_usd_micros, reserved_usd_micros, updated_at_ms)
+                         VALUES (?1, 0, 0, ?2)",
+                        rusqlite::params![key_id, ts_ms],
+                    )?;
+                    tx.execute(
+                        "UPDATE cost_ledger
+                         SET reserved_usd_micros = CASE WHEN reserved_usd_micros >= ?2 THEN reserved_usd_micros - ?2 ELSE 0 END,
+                             updated_at_ms = ?3
+                         WHERE key_id = ?1",
+                        rusqlite::params![key_id, usd_i64.max(0), ts_ms],
+                    )?;
+                }
+                tx.commit()?;
+            } else {
+                tx.rollback()?;
+            }
+
+            Ok((scanned, reaped, released_usd_micros))
+        })
+        .await?
+    }
+
     pub async fn record_spent_tokens(
         &self,
         key_id: &str,
@@ -529,6 +770,8 @@ impl SqliteStore {
         let payload_json = serde_json::to_string(&payload)?;
         let ts_ms = now_millis();
         let retention_secs = self.audit_retention_secs;
+        let should_reap =
+            should_run_retention_reap(&self.audit_last_retention_reap_ms, retention_secs, ts_ms);
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let conn = open_connection(path)?;
@@ -537,7 +780,7 @@ impl SqliteStore {
                 "INSERT INTO audit_logs (ts_ms, kind, payload_json) VALUES (?1, ?2, ?3)",
                 rusqlite::params![ts_ms, kind, payload_json],
             )?;
-            if let Some(retention_secs) = retention_secs {
+            if should_reap && let Some(retention_secs) = retention_secs {
                 let retention_ms = retention_secs.saturating_mul(1000);
                 let retention_ms = i64::try_from(retention_ms).unwrap_or(i64::MAX);
                 let cutoff_ms = ts_ms.saturating_sub(retention_ms);
@@ -547,6 +790,21 @@ impl SqliteStore {
                 )?;
             }
             Ok(())
+        })
+        .await?
+    }
+
+    pub async fn reap_audit_logs_before(&self, cutoff_ts_ms: u64) -> Result<u64, SqliteStoreError> {
+        let path = self.path.clone();
+        let cutoff_ts_ms = tokens_to_i64(cutoff_ts_ms);
+        tokio::task::spawn_blocking(move || -> Result<u64, SqliteStoreError> {
+            let conn = open_connection(path)?;
+            init_schema(&conn)?;
+            let deleted = conn.execute(
+                "DELETE FROM audit_logs WHERE ts_ms < ?1",
+                rusqlite::params![cutoff_ts_ms],
+            )?;
+            Ok(deleted as u64)
         })
         .await?
     }
@@ -751,6 +1009,11 @@ fn init_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
             value_json TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS config_state (
+            key TEXT PRIMARY KEY NOT NULL,
+            value_json TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS budget_ledger (
             key_id TEXT PRIMARY KEY NOT NULL,
             spent_tokens INTEGER NOT NULL DEFAULT 0,
@@ -766,6 +1029,8 @@ fn init_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         );
         CREATE INDEX IF NOT EXISTS idx_budget_reservations_key_id
             ON budget_reservations(key_id);
+        CREATE INDEX IF NOT EXISTS idx_budget_reservations_ts_ms
+            ON budget_reservations(ts_ms);
 
         CREATE TABLE IF NOT EXISTS cost_ledger (
             key_id TEXT PRIMARY KEY NOT NULL,
@@ -782,6 +1047,8 @@ fn init_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         );
         CREATE INDEX IF NOT EXISTS idx_cost_reservations_key_id
             ON cost_reservations(key_id);
+        CREATE INDEX IF NOT EXISTS idx_cost_reservations_ts_ms
+            ON cost_reservations(ts_ms);
 
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -802,6 +1069,86 @@ fn open_connection(path: PathBuf) -> Result<rusqlite::Connection, rusqlite::Erro
     let _ = conn.busy_timeout(Duration::from_secs(5));
     let _ = conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
     Ok(conn)
+}
+
+fn require_sqlite_table(conn: &rusqlite::Connection, table: &str) -> Result<(), SqliteStoreError> {
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1 LIMIT 1",
+            rusqlite::params![table],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if exists.is_some() {
+        Ok(())
+    } else {
+        Err(SqliteStoreError::Schema(format!("missing table `{table}`")))
+    }
+}
+
+fn require_sqlite_column_type(
+    conn: &rusqlite::Connection,
+    table: &str,
+    column: &str,
+    expected_type: &str,
+) -> Result<(), SqliteStoreError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+    })?;
+
+    for row in rows {
+        let (name, column_type) = row?;
+        if name == column {
+            if column_type.eq_ignore_ascii_case(expected_type) {
+                return Ok(());
+            }
+            return Err(SqliteStoreError::Schema(format!(
+                "column `{table}.{column}` has type `{column_type}`, expected `{expected_type}`"
+            )));
+        }
+    }
+    Err(SqliteStoreError::Schema(format!(
+        "missing column `{table}.{column}`"
+    )))
+}
+
+fn require_sqlite_index(
+    conn: &rusqlite::Connection,
+    table: &str,
+    index: &str,
+) -> Result<(), SqliteStoreError> {
+    let mut stmt = conn.prepare(&format!("PRAGMA index_list({table})"))?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    for row in rows {
+        if row? == index {
+            return Ok(());
+        }
+    }
+    Err(SqliteStoreError::Schema(format!(
+        "missing index `{index}` on table `{table}`"
+    )))
+}
+
+fn should_run_retention_reap(
+    last_reap_ms: &AtomicI64,
+    retention_secs: Option<u64>,
+    now_ms: i64,
+) -> bool {
+    if retention_secs.is_none() {
+        return false;
+    }
+
+    let mut observed = last_reap_ms.load(Ordering::Relaxed);
+    loop {
+        if observed > 0 && now_ms.saturating_sub(observed) < AUDIT_RETENTION_REAP_INTERVAL_MS {
+            return false;
+        }
+        match last_reap_ms.compare_exchange(observed, now_ms, Ordering::AcqRel, Ordering::Relaxed) {
+            Ok(_) => return true,
+            Err(actual) => observed = actual,
+        }
+    }
 }
 
 fn now_millis() -> i64 {

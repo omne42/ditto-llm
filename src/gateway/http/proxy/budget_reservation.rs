@@ -1,4 +1,4 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Clone, Copy)]
 struct ProxyBudgetReservationContext<'a> {
     state: &'a GatewayHttpState,
@@ -10,7 +10,7 @@ struct ProxyBudgetReservationContext<'a> {
     model: &'a Option<String>,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn reserve_proxy_token_budget(
     ctx: ProxyBudgetReservationContext<'_>,
     limit: u64,
@@ -35,6 +35,138 @@ async fn reserve_proxy_token_budget(
         {
             Ok(()) => return Ok(()),
             Err(SqliteStoreError::BudgetExceeded { limit, attempted }) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "budget_exceeded",
+                            "limit": limit,
+                            "attempted": attempted,
+                            "charge_tokens": charge_tokens,
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                emit_json_log(
+                    state,
+                    "proxy.blocked",
+                    serde_json::json!({
+                        "request_id": request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "budget_scope": budget_scope,
+                        "reason": "budget_exceeded",
+                        "limit": limit,
+                        "attempted": attempted,
+                    }),
+                );
+                return Err(map_openai_gateway_error(GatewayError::BudgetExceeded {
+                    limit,
+                    attempted,
+                }));
+            }
+            Err(err) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "storage_error",
+                            "error": err.to_string(),
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                return Err(openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    Some("storage_error"),
+                    err.to_string(),
+                ));
+            }
+        }
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        match store
+            .reserve_budget_tokens(reservation_id, budget_scope, limit, charge_tokens_u64)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(PostgresStoreError::BudgetExceeded { limit, attempted }) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "budget_exceeded",
+                            "limit": limit,
+                            "attempted": attempted,
+                            "charge_tokens": charge_tokens,
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                emit_json_log(
+                    state,
+                    "proxy.blocked",
+                    serde_json::json!({
+                        "request_id": request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "budget_scope": budget_scope,
+                        "reason": "budget_exceeded",
+                        "limit": limit,
+                        "attempted": attempted,
+                    }),
+                );
+                return Err(map_openai_gateway_error(GatewayError::BudgetExceeded {
+                    limit,
+                    attempted,
+                }));
+            }
+            Err(err) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "storage_error",
+                            "error": err.to_string(),
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                return Err(openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    Some("storage_error"),
+                    err.to_string(),
+                ));
+            }
+        }
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
+        match store
+            .reserve_budget_tokens(reservation_id, budget_scope, limit, charge_tokens_u64)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(MySqlStoreError::BudgetExceeded { limit, attempted }) => {
                 let _ = store
                     .append_audit_log(
                         "proxy.blocked",
@@ -162,7 +294,7 @@ async fn reserve_proxy_token_budget(
     Ok(())
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn rollback_proxy_token_budget_reservations(
     state: &GatewayHttpState,
     reservation_ids: &[String],
@@ -172,6 +304,14 @@ async fn rollback_proxy_token_budget_reservations(
         if let Some(store) = state.sqlite_store.as_ref() {
             let _ = store.rollback_budget_reservation(reservation_id).await;
         }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.postgres_store.as_ref() {
+            let _ = store.rollback_budget_reservation(reservation_id).await;
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.mysql_store.as_ref() {
+            let _ = store.rollback_budget_reservation(reservation_id).await;
+        }
         #[cfg(feature = "gateway-store-redis")]
         if let Some(store) = state.redis_store.as_ref() {
             let _ = store.rollback_budget_reservation(reservation_id).await;
@@ -179,7 +319,7 @@ async fn rollback_proxy_token_budget_reservations(
     }
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn settle_proxy_token_budget_reservations(
     state: &GatewayHttpState,
     reservation_ids: &[String],
@@ -192,6 +332,26 @@ async fn settle_proxy_token_budget_reservations(
     for reservation_id in reservation_ids {
         #[cfg(feature = "gateway-store-sqlite")]
         if let Some(store) = state.sqlite_store.as_ref() {
+            if spend_tokens {
+                let _ = store
+                    .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
+                    .await;
+            } else {
+                let _ = store.rollback_budget_reservation(reservation_id).await;
+            }
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.postgres_store.as_ref() {
+            if spend_tokens {
+                let _ = store
+                    .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
+                    .await;
+            } else {
+                let _ = store.rollback_budget_reservation(reservation_id).await;
+            }
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.mysql_store.as_ref() {
             if spend_tokens {
                 let _ = store
                     .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
@@ -215,7 +375,7 @@ async fn settle_proxy_token_budget_reservations(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
 ))]
 async fn reserve_proxy_cost_budget(
     ctx: ProxyBudgetReservationContext<'_>,
@@ -244,6 +404,154 @@ async fn reserve_proxy_cost_budget(
         {
             Ok(()) => return Ok(()),
             Err(SqliteStoreError::CostBudgetExceeded {
+                limit_usd_micros,
+                attempted_usd_micros,
+            }) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "cost_budget_exceeded",
+                            "limit_usd_micros": limit_usd_micros,
+                            "attempted_usd_micros": attempted_usd_micros,
+                            "charge_cost_usd_micros": charge_cost_usd_micros,
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                emit_json_log(
+                    state,
+                    "proxy.blocked",
+                    serde_json::json!({
+                        "request_id": request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "budget_scope": budget_scope,
+                        "reason": "cost_budget_exceeded",
+                        "limit_usd_micros": limit_usd_micros,
+                        "attempted_usd_micros": attempted_usd_micros,
+                    }),
+                );
+                return Err(map_openai_gateway_error(GatewayError::CostBudgetExceeded {
+                    limit_usd_micros,
+                    attempted_usd_micros,
+                }));
+            }
+            Err(err) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "storage_error",
+                            "error": err.to_string(),
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                return Err(openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    Some("storage_error"),
+                    err.to_string(),
+                ));
+            }
+        }
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.postgres_store.as_ref() {
+        match store
+            .reserve_cost_usd_micros(
+                reservation_id,
+                budget_scope,
+                limit_usd_micros,
+                charge_cost_usd_micros,
+            )
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(PostgresStoreError::CostBudgetExceeded {
+                limit_usd_micros,
+                attempted_usd_micros,
+            }) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "cost_budget_exceeded",
+                            "limit_usd_micros": limit_usd_micros,
+                            "attempted_usd_micros": attempted_usd_micros,
+                            "charge_cost_usd_micros": charge_cost_usd_micros,
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                emit_json_log(
+                    state,
+                    "proxy.blocked",
+                    serde_json::json!({
+                        "request_id": request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "budget_scope": budget_scope,
+                        "reason": "cost_budget_exceeded",
+                        "limit_usd_micros": limit_usd_micros,
+                        "attempted_usd_micros": attempted_usd_micros,
+                    }),
+                );
+                return Err(map_openai_gateway_error(GatewayError::CostBudgetExceeded {
+                    limit_usd_micros,
+                    attempted_usd_micros,
+                }));
+            }
+            Err(err) => {
+                let _ = store
+                    .append_audit_log(
+                        "proxy.blocked",
+                        state.redactor.redact(serde_json::json!({
+                            "request_id": request_id,
+                            "virtual_key_id": virtual_key_id,
+                            "budget_scope": budget_scope,
+                            "reason": "storage_error",
+                            "error": err.to_string(),
+                            "path": path_and_query,
+                            "model": model,
+                        })),
+                    )
+                    .await;
+                return Err(openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    Some("storage_error"),
+                    err.to_string(),
+                ));
+            }
+        }
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.mysql_store.as_ref() {
+        match store
+            .reserve_cost_usd_micros(
+                reservation_id,
+                budget_scope,
+                limit_usd_micros,
+                charge_cost_usd_micros,
+            )
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(MySqlStoreError::CostBudgetExceeded {
                 limit_usd_micros,
                 attempted_usd_micros,
             }) => {
@@ -384,7 +692,7 @@ async fn reserve_proxy_cost_budget(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
 ))]
 async fn rollback_proxy_cost_budget_reservations(
     state: &GatewayHttpState,
@@ -393,6 +701,14 @@ async fn rollback_proxy_cost_budget_reservations(
     for reservation_id in reservation_ids {
         #[cfg(feature = "gateway-store-sqlite")]
         if let Some(store) = state.sqlite_store.as_ref() {
+            let _ = store.rollback_cost_reservation(reservation_id).await;
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.postgres_store.as_ref() {
+            let _ = store.rollback_cost_reservation(reservation_id).await;
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.mysql_store.as_ref() {
             let _ = store.rollback_cost_reservation(reservation_id).await;
         }
         #[cfg(feature = "gateway-store-redis")]
@@ -404,7 +720,7 @@ async fn rollback_proxy_cost_budget_reservations(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
 ))]
 async fn settle_proxy_cost_budget_reservations(
     state: &GatewayHttpState,
@@ -419,6 +735,26 @@ async fn settle_proxy_cost_budget_reservations(
     for reservation_id in reservation_ids {
         #[cfg(feature = "gateway-store-sqlite")]
         if let Some(store) = state.sqlite_store.as_ref() {
+            if spend_tokens {
+                let _ = store
+                    .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
+                    .await;
+            } else {
+                let _ = store.rollback_cost_reservation(reservation_id).await;
+            }
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.postgres_store.as_ref() {
+            if spend_tokens {
+                let _ = store
+                    .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
+                    .await;
+            } else {
+                let _ = store.rollback_cost_reservation(reservation_id).await;
+            }
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.mysql_store.as_ref() {
             if spend_tokens {
                 let _ = store
                     .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)

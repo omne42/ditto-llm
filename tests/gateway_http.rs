@@ -182,6 +182,804 @@ async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_llm::Res
 }
 
 #[tokio::test]
+async fn gateway_http_admin_config_versions_support_rollback() -> ditto_llm::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+    let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
+    let app = ditto_llm::gateway::http::router(state);
+
+    let get_current = Request::builder()
+        .method("GET")
+        .uri("/admin/config/version")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let current_response = app.clone().oneshot(get_current).await.unwrap();
+    assert_eq!(current_response.status(), StatusCode::OK);
+    let current_body = to_bytes(current_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let current_json: serde_json::Value = serde_json::from_slice(&current_body)?;
+    let bootstrap_version_id = current_json
+        .get("version_id")
+        .and_then(|value| value.as_str())
+        .expect("bootstrap version id")
+        .to_string();
+    assert_eq!(
+        current_json
+            .get("virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+
+    let new_key = VirtualKeyConfig::new("key-2", "vk-2");
+    let upsert = Request::builder()
+        .method("POST")
+        .uri("/admin/keys")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&new_key)?))
+        .unwrap();
+    let upsert_response = app.clone().oneshot(upsert).await.unwrap();
+    assert_eq!(upsert_response.status(), StatusCode::CREATED);
+
+    let list_versions = Request::builder()
+        .method("GET")
+        .uri("/admin/config/versions")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_versions_response = app.clone().oneshot(list_versions).await.unwrap();
+    assert_eq!(list_versions_response.status(), StatusCode::OK);
+    let versions_body = to_bytes(list_versions_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let versions_json: serde_json::Value = serde_json::from_slice(&versions_body)?;
+    let versions = versions_json.as_array().expect("versions array");
+    assert!(versions.len() >= 2);
+    let latest_version_id = versions[0]
+        .get("version_id")
+        .and_then(|value| value.as_str())
+        .expect("latest version id")
+        .to_string();
+    assert_eq!(
+        versions[0]
+            .get("virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(2)
+    );
+
+    let export_current_redacted = Request::builder()
+        .method("GET")
+        .uri("/admin/config/export")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let export_current_redacted_response =
+        app.clone().oneshot(export_current_redacted).await.unwrap();
+    assert_eq!(export_current_redacted_response.status(), StatusCode::OK);
+    let export_current_redacted_body =
+        to_bytes(export_current_redacted_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let export_current_redacted_json: serde_json::Value =
+        serde_json::from_slice(&export_current_redacted_body)?;
+    assert_eq!(
+        export_current_redacted_json
+            .pointer("/version_id")
+            .and_then(|value| value.as_str()),
+        Some(latest_version_id.as_str())
+    );
+    assert_eq!(
+        export_current_redacted_json
+            .pointer("/virtual_keys/0/token")
+            .and_then(|value| value.as_str()),
+        Some("redacted")
+    );
+
+    let export_bootstrap_with_tokens = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/export?version_id={bootstrap_version_id}&include_tokens=true"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let export_bootstrap_with_tokens_response = app
+        .clone()
+        .oneshot(export_bootstrap_with_tokens)
+        .await
+        .unwrap();
+    assert_eq!(
+        export_bootstrap_with_tokens_response.status(),
+        StatusCode::OK
+    );
+    let export_bootstrap_with_tokens_body = to_bytes(
+        export_bootstrap_with_tokens_response.into_body(),
+        usize::MAX,
+    )
+    .await
+    .unwrap();
+    let export_bootstrap_with_tokens_json: serde_json::Value =
+        serde_json::from_slice(&export_bootstrap_with_tokens_body)?;
+    assert_eq!(
+        export_bootstrap_with_tokens_json
+            .pointer("/version_id")
+            .and_then(|value| value.as_str()),
+        Some(bootstrap_version_id.as_str())
+    );
+    assert_eq!(
+        export_bootstrap_with_tokens_json
+            .pointer("/virtual_keys/0/token")
+            .and_then(|value| value.as_str()),
+        Some("vk-1")
+    );
+
+    let diff_redacted = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/diff?from_version_id={bootstrap_version_id}&to_version_id={latest_version_id}"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let diff_redacted_response = app.clone().oneshot(diff_redacted).await.unwrap();
+    assert_eq!(diff_redacted_response.status(), StatusCode::OK);
+    let diff_redacted_body = to_bytes(diff_redacted_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let diff_redacted_json: serde_json::Value = serde_json::from_slice(&diff_redacted_body)?;
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/from_virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/to_virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(2)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/added")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/removed")
+            .and_then(|value| value.as_u64()),
+        Some(0)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/changed")
+            .and_then(|value| value.as_u64()),
+        Some(0)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/summary/unchanged")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/added/0/id")
+            .and_then(|value| value.as_str()),
+        Some("key-2")
+    );
+    assert_eq!(
+        diff_redacted_json
+            .pointer("/added/0/token")
+            .and_then(|value| value.as_str()),
+        Some("redacted")
+    );
+
+    let diff_with_tokens = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/diff?from_version_id={bootstrap_version_id}&to_version_id={latest_version_id}&include_tokens=true"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let diff_with_tokens_response = app.clone().oneshot(diff_with_tokens).await.unwrap();
+    assert_eq!(diff_with_tokens_response.status(), StatusCode::OK);
+    let diff_with_tokens_body = to_bytes(diff_with_tokens_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let diff_with_tokens_json: serde_json::Value = serde_json::from_slice(&diff_with_tokens_body)?;
+    assert_eq!(
+        diff_with_tokens_json
+            .pointer("/added/0/token")
+            .and_then(|value| value.as_str()),
+        Some("vk-2")
+    );
+
+    let validate_ok = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "virtual_keys": [
+                    VirtualKeyConfig::new("valid-1", "vk-valid-1"),
+                    VirtualKeyConfig::new("valid-2", "vk-valid-2")
+                ]
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let validate_ok_response = app.clone().oneshot(validate_ok).await.unwrap();
+    assert_eq!(validate_ok_response.status(), StatusCode::OK);
+    let validate_ok_body = to_bytes(validate_ok_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let validate_ok_json: serde_json::Value = serde_json::from_slice(&validate_ok_body)?;
+    assert_eq!(
+        validate_ok_json
+            .get("valid")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        validate_ok_json
+            .pointer("/issues")
+            .and_then(|value| value.as_array())
+            .map(std::vec::Vec::len),
+        Some(0)
+    );
+    assert!(
+        validate_ok_json.get("computed_router_sha256").is_none(),
+        "router hash should be omitted when router payload is absent"
+    );
+
+    let validate_router_ok = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "router": {
+                    "default_backends": [{"backend": "primary", "weight": 1.0}],
+                    "rules": [{
+                        "model_prefix": "gpt-4o*",
+                        "backends": [{"backend": "primary", "weight": 1.0}]
+                    }]
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let validate_router_ok_response = app.clone().oneshot(validate_router_ok).await.unwrap();
+    assert_eq!(validate_router_ok_response.status(), StatusCode::OK);
+    let validate_router_ok_body = to_bytes(validate_router_ok_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let validate_router_ok_json: serde_json::Value =
+        serde_json::from_slice(&validate_router_ok_body)?;
+    assert_eq!(
+        validate_router_ok_json
+            .get("valid")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        validate_router_ok_json
+            .pointer("/router_default_backend_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert_eq!(
+        validate_router_ok_json
+            .pointer("/router_rule_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+    assert!(
+        validate_router_ok_json
+            .pointer("/computed_router_sha256")
+            .and_then(|value| value.as_str())
+            .is_some(),
+        "router hash should be returned when router payload is provided"
+    );
+    assert_eq!(
+        validate_router_ok_json
+            .pointer("/issues")
+            .and_then(|value| value.as_array())
+            .map(std::vec::Vec::len),
+        Some(0)
+    );
+
+    let validate_bad = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "virtual_keys": [
+                    VirtualKeyConfig::new("", ""),
+                    VirtualKeyConfig::new("dup", "dup-token"),
+                    VirtualKeyConfig::new("dup", "dup-token")
+                ],
+                "expected_virtual_keys_sha256": "not-a-real-hash"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let validate_bad_response = app.clone().oneshot(validate_bad).await.unwrap();
+    assert_eq!(validate_bad_response.status(), StatusCode::OK);
+    let validate_bad_body = to_bytes(validate_bad_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let validate_bad_json: serde_json::Value = serde_json::from_slice(&validate_bad_body)?;
+    assert_eq!(
+        validate_bad_json
+            .get("valid")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+    let issue_codes: std::collections::HashSet<&str> = validate_bad_json
+        .pointer("/issues")
+        .and_then(|value| value.as_array())
+        .expect("issues")
+        .iter()
+        .filter_map(|item| item.get("code"))
+        .filter_map(|value| value.as_str())
+        .collect();
+    assert!(issue_codes.contains("invalid_id"));
+    assert!(issue_codes.contains("invalid_token"));
+    assert!(issue_codes.contains("duplicate_id"));
+    assert!(issue_codes.contains("duplicate_token"));
+    assert!(issue_codes.contains("hash_mismatch"));
+
+    let validate_router_bad = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "router": {
+                    "default_backends": [{"backend": "unknown-backend", "weight": 1.0}],
+                    "rules": []
+                },
+                "expected_router_sha256": "not-a-real-router-hash"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let validate_router_bad_response = app.clone().oneshot(validate_router_bad).await.unwrap();
+    assert_eq!(validate_router_bad_response.status(), StatusCode::OK);
+    let validate_router_bad_body = to_bytes(validate_router_bad_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let validate_router_bad_json: serde_json::Value =
+        serde_json::from_slice(&validate_router_bad_body)?;
+    assert_eq!(
+        validate_router_bad_json
+            .get("valid")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+    let router_issue_codes: std::collections::HashSet<&str> = validate_router_bad_json
+        .pointer("/issues")
+        .and_then(|value| value.as_array())
+        .expect("issues")
+        .iter()
+        .filter_map(|item| item.get("code"))
+        .filter_map(|value| value.as_str())
+        .collect();
+    assert!(router_issue_codes.contains("invalid_router"));
+    assert!(router_issue_codes.contains("router_hash_mismatch"));
+
+    let get_bootstrap_redacted = Request::builder()
+        .method("GET")
+        .uri(format!("/admin/config/versions/{bootstrap_version_id}"))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let bootstrap_redacted_response = app.clone().oneshot(get_bootstrap_redacted).await.unwrap();
+    assert_eq!(bootstrap_redacted_response.status(), StatusCode::OK);
+    let bootstrap_redacted_body = to_bytes(bootstrap_redacted_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let bootstrap_redacted_json: serde_json::Value =
+        serde_json::from_slice(&bootstrap_redacted_body)?;
+    assert_eq!(
+        bootstrap_redacted_json
+            .pointer("/virtual_keys/0/token")
+            .and_then(|value| value.as_str()),
+        Some("redacted")
+    );
+
+    let get_bootstrap_with_tokens = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/versions/{bootstrap_version_id}?include_tokens=true"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let bootstrap_with_tokens_response = app
+        .clone()
+        .oneshot(get_bootstrap_with_tokens)
+        .await
+        .unwrap();
+    assert_eq!(bootstrap_with_tokens_response.status(), StatusCode::OK);
+    let bootstrap_with_tokens_body =
+        to_bytes(bootstrap_with_tokens_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let bootstrap_with_tokens_json: serde_json::Value =
+        serde_json::from_slice(&bootstrap_with_tokens_body)?;
+    assert_eq!(
+        bootstrap_with_tokens_json
+            .pointer("/virtual_keys/0/token")
+            .and_then(|value| value.as_str()),
+        Some("vk-1")
+    );
+
+    let rollback_dry_run = Request::builder()
+        .method("POST")
+        .uri("/admin/config/rollback")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "version_id": bootstrap_version_id,
+                "dry_run": true
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let rollback_dry_run_response = app.clone().oneshot(rollback_dry_run).await.unwrap();
+    assert_eq!(rollback_dry_run_response.status(), StatusCode::OK);
+    let rollback_dry_run_body = to_bytes(rollback_dry_run_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let rollback_dry_run_json: serde_json::Value = serde_json::from_slice(&rollback_dry_run_body)?;
+    assert_eq!(
+        rollback_dry_run_json
+            .get("dry_run")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        rollback_dry_run_json
+            .get("noop")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        rollback_dry_run_json
+            .pointer("/current_version/virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(2)
+    );
+
+    let list_keys_after_dry_run = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?include_tokens=true")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_keys_after_dry_run_response =
+        app.clone().oneshot(list_keys_after_dry_run).await.unwrap();
+    assert_eq!(list_keys_after_dry_run_response.status(), StatusCode::OK);
+    let keys_after_dry_run_body =
+        to_bytes(list_keys_after_dry_run_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let keys_after_dry_run: Vec<VirtualKeyConfig> =
+        serde_json::from_slice(&keys_after_dry_run_body)?;
+    assert_eq!(keys_after_dry_run.len(), 2);
+
+    let rollback = Request::builder()
+        .method("POST")
+        .uri("/admin/config/rollback")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "version_id": bootstrap_version_id }).to_string(),
+        ))
+        .unwrap();
+    let rollback_response = app.clone().oneshot(rollback).await.unwrap();
+    assert_eq!(rollback_response.status(), StatusCode::OK);
+    let rollback_body = to_bytes(rollback_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let rollback_json: serde_json::Value = serde_json::from_slice(&rollback_body)?;
+    assert_eq!(
+        rollback_json
+            .get("dry_run")
+            .and_then(|value| value.as_bool())
+            .expect("dry_run"),
+        false
+    );
+    assert_eq!(
+        rollback_json
+            .get("noop")
+            .and_then(|value| value.as_bool())
+            .expect("noop"),
+        false
+    );
+    assert_eq!(
+        rollback_json
+            .pointer("/current_version/virtual_key_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+
+    let list_keys = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?include_tokens=true")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let list_keys_response = app.oneshot(list_keys).await.unwrap();
+    assert_eq!(list_keys_response.status(), StatusCode::OK);
+    let keys_body = to_bytes(list_keys_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let keys: Vec<VirtualKeyConfig> = serde_json::from_slice(&keys_body)?;
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].id, "key-1");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_llm::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+    let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
+    let app = ditto_llm::gateway::http::router(state);
+
+    let get_bootstrap = Request::builder()
+        .method("GET")
+        .uri("/admin/config/version")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let bootstrap_response = app.clone().oneshot(get_bootstrap).await.unwrap();
+    assert_eq!(bootstrap_response.status(), StatusCode::OK);
+    let bootstrap_body = to_bytes(bootstrap_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let bootstrap_json: serde_json::Value = serde_json::from_slice(&bootstrap_body)?;
+    let bootstrap_version_id = bootstrap_json
+        .get("version_id")
+        .and_then(|value| value.as_str())
+        .expect("bootstrap version_id")
+        .to_string();
+    assert_eq!(
+        bootstrap_json
+            .get("router_rule_count")
+            .and_then(|value| value.as_u64()),
+        Some(0)
+    );
+
+    let new_router = serde_json::json!({
+        "router": {
+            "default_backends": [
+                {
+                    "backend": "primary",
+                    "weight": 1.0
+                }
+            ],
+            "rules": [
+                {
+                    "model_prefix": "gpt-4o*",
+                    "backends": [
+                        {
+                            "backend": "primary",
+                            "weight": 1.0
+                        }
+                    ]
+                }
+            ]
+        },
+        "dry_run": true
+    });
+
+    let upsert_router_dry_run = Request::builder()
+        .method("PUT")
+        .uri("/admin/config/router")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(new_router.to_string()))
+        .unwrap();
+    let upsert_router_dry_run_response = app.clone().oneshot(upsert_router_dry_run).await.unwrap();
+    assert_eq!(upsert_router_dry_run_response.status(), StatusCode::OK);
+    let upsert_router_dry_run_body =
+        to_bytes(upsert_router_dry_run_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let upsert_router_dry_run_json: serde_json::Value =
+        serde_json::from_slice(&upsert_router_dry_run_body)?;
+    assert_eq!(
+        upsert_router_dry_run_json
+            .get("dry_run")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        upsert_router_dry_run_json
+            .get("noop")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        upsert_router_dry_run_json
+            .get("router_changed")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+
+    let new_router_apply = serde_json::json!({
+        "router": {
+            "default_backends": [
+                {
+                    "backend": "primary",
+                    "weight": 1.0
+                }
+            ],
+            "rules": [
+                {
+                    "model_prefix": "gpt-4o*",
+                    "backends": [
+                        {
+                            "backend": "primary",
+                            "weight": 1.0
+                        }
+                    ]
+                }
+            ]
+        }
+    });
+    let upsert_router = Request::builder()
+        .method("PUT")
+        .uri("/admin/config/router")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(new_router_apply.to_string()))
+        .unwrap();
+    let upsert_router_response = app.clone().oneshot(upsert_router).await.unwrap();
+    assert_eq!(upsert_router_response.status(), StatusCode::OK);
+    let upsert_router_body = to_bytes(upsert_router_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let upsert_router_json: serde_json::Value = serde_json::from_slice(&upsert_router_body)?;
+    assert_eq!(
+        upsert_router_json
+            .get("noop")
+            .and_then(|value| value.as_bool()),
+        Some(false)
+    );
+    let router_version_id = upsert_router_json
+        .pointer("/current_version/version_id")
+        .and_then(|value| value.as_str())
+        .expect("router version id")
+        .to_string();
+    assert_ne!(router_version_id, bootstrap_version_id);
+
+    let get_router_version = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/versions/{router_version_id}?include_tokens=true"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let get_router_version_response = app.clone().oneshot(get_router_version).await.unwrap();
+    assert_eq!(get_router_version_response.status(), StatusCode::OK);
+    let get_router_version_body = to_bytes(get_router_version_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let get_router_version_json: serde_json::Value =
+        serde_json::from_slice(&get_router_version_body)?;
+    assert_eq!(
+        get_router_version_json
+            .pointer("/router/rules/0/model_prefix")
+            .and_then(|value| value.as_str()),
+        Some("gpt-4o*")
+    );
+    assert_eq!(
+        get_router_version_json
+            .pointer("/router_rule_count")
+            .and_then(|value| value.as_u64()),
+        Some(1)
+    );
+
+    let diff_router = Request::builder()
+        .method("GET")
+        .uri(format!(
+            "/admin/config/diff?from_version_id={bootstrap_version_id}&to_version_id={router_version_id}"
+        ))
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let diff_router_response = app.clone().oneshot(diff_router).await.unwrap();
+    assert_eq!(diff_router_response.status(), StatusCode::OK);
+    let diff_router_body = to_bytes(diff_router_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let diff_router_json: serde_json::Value = serde_json::from_slice(&diff_router_body)?;
+    assert_eq!(
+        diff_router_json
+            .pointer("/summary/router_changed")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        diff_router_json
+            .pointer("/router_before/rules")
+            .and_then(|value| value.as_array())
+            .map(std::vec::Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        diff_router_json
+            .pointer("/router_after/rules")
+            .and_then(|value| value.as_array())
+            .map(std::vec::Vec::len),
+        Some(1)
+    );
+
+    let rollback_router = Request::builder()
+        .method("POST")
+        .uri("/admin/config/rollback")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "version_id": bootstrap_version_id }).to_string(),
+        ))
+        .unwrap();
+    let rollback_router_response = app.clone().oneshot(rollback_router).await.unwrap();
+    assert_eq!(rollback_router_response.status(), StatusCode::OK);
+
+    let export_after_router_rollback = Request::builder()
+        .method("GET")
+        .uri("/admin/config/export?include_tokens=true")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let export_after_router_rollback_response = app
+        .clone()
+        .oneshot(export_after_router_rollback)
+        .await
+        .unwrap();
+    assert_eq!(
+        export_after_router_rollback_response.status(),
+        StatusCode::OK
+    );
+    let export_after_router_rollback_body = to_bytes(
+        export_after_router_rollback_response.into_body(),
+        usize::MAX,
+    )
+    .await
+    .unwrap();
+    let export_after_router_rollback_json: serde_json::Value =
+        serde_json::from_slice(&export_after_router_rollback_body)?;
+    assert_eq!(
+        export_after_router_rollback_json
+            .pointer("/router/rules")
+            .and_then(|value| value.as_array())
+            .map(std::vec::Vec::len),
+        Some(0)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_llm::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);

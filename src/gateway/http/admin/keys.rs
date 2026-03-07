@@ -4,14 +4,18 @@ async fn list_keys(
     Query(query): Query<ListKeysQuery>,
 ) -> Result<Json<Vec<VirtualKeyConfig>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
-    let gateway = state.gateway.lock().await;
-    let mut keys = gateway.list_virtual_keys();
+    let mut keys = state.list_virtual_keys_snapshot();
 
     if let Some(enabled) = query.enabled {
         keys.retain(|key| key.enabled == enabled);
     }
 
-    if let Some(prefix) = query.id_prefix.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+    if let Some(prefix) = query
+        .id_prefix
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         keys.retain(|key| key.id.starts_with(prefix));
     }
 
@@ -112,12 +116,13 @@ async fn upsert_key(
             format!("invalid guardrails config: {err}"),
         ));
     }
-    let (inserted, persisted_keys) = {
-        let mut gateway = state.gateway.lock().await;
+    let (inserted, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
         let inserted = gateway.upsert_virtual_key(key.clone());
-        (inserted, gateway.list_virtual_keys())
-    };
-    persist_virtual_keys(&state, &persisted_keys).await?;
+        let persisted_keys = gateway.list_virtual_keys();
+        (inserted, persisted_keys)
+    });
+    state.sync_control_plane_from_gateway();
+    let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.upsert").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -130,7 +135,12 @@ async fn upsert_key(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "admin.key.upsert",
@@ -181,12 +191,13 @@ async fn upsert_key_with_id(
             format!("invalid guardrails config: {err}"),
         ));
     }
-    let (inserted, persisted_keys) = {
-        let mut gateway = state.gateway.lock().await;
+    let (inserted, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
         let inserted = gateway.upsert_virtual_key(key.clone());
-        (inserted, gateway.list_virtual_keys())
-    };
-    persist_virtual_keys(&state, &persisted_keys).await?;
+        let persisted_keys = gateway.list_virtual_keys();
+        (inserted, persisted_keys)
+    });
+    state.sync_control_plane_from_gateway();
+    let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.upsert").await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -199,7 +210,12 @@ async fn upsert_key_with_id(
         }),
     );
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "admin.key.upsert",
@@ -228,8 +244,7 @@ async fn delete_key(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_write(&state, &headers)?;
-    let (removed, persisted_keys) = {
-        let mut gateway = state.gateway.lock().await;
+    let (removed, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
         if let Some(admin_tenant) = admin.tenant_id.as_deref() {
             let existing = gateway.list_virtual_keys();
             let Some(existing_key) = existing.iter().find(|key| key.id == id) else {
@@ -248,10 +263,12 @@ async fn delete_key(
             }
         }
         let removed = gateway.remove_virtual_key(&id).is_some();
-        (removed, gateway.list_virtual_keys())
-    };
+        let persisted_keys = gateway.list_virtual_keys();
+        Ok((removed, persisted_keys))
+    })?;
+    state.sync_control_plane_from_gateway();
     if removed {
-        persist_virtual_keys(&state, &persisted_keys).await?;
+        let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.delete").await?;
 
         #[cfg(feature = "sdk")]
         emit_devtools_log(
@@ -262,7 +279,12 @@ async fn delete_key(
             }),
         );
 
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
         append_admin_audit_log(
             &state,
             "admin.key.delete",

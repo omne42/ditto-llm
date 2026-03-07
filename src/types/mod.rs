@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::{DittoError, Result};
 
+mod provider_options_envelope;
 mod tool_call;
 
 #[cfg(any(
@@ -35,6 +36,39 @@ mod provider_options_support;
 pub(crate) use generate_request_support::{
     GenerateRequestSupport, warn_unsupported_generate_request_options,
 };
+pub use provider_options_envelope::ProviderOptionsEnvelope;
+
+pub fn select_provider_options_value(
+    provider_options: Option<&ProviderOptionsEnvelope>,
+    provider: &str,
+) -> Result<Option<Value>> {
+    provider_options_envelope::select_provider_options_value(provider_options, provider)
+}
+
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
+pub(crate) fn merge_provider_options_into_body(
+    body: &mut serde_json::Map<String, Value>,
+    options: Option<&Value>,
+    reserved_keys: &[&str],
+    feature: &str,
+    warnings: &mut Vec<Warning>,
+) {
+    provider_options_envelope::merge_provider_options_into_body(
+        body,
+        options,
+        reserved_keys,
+        feature,
+        warnings,
+    )
+}
 #[cfg(any(
     feature = "anthropic",
     feature = "bedrock",
@@ -273,182 +307,6 @@ impl ProviderOptions {
     }
 }
 
-const PROVIDER_OPTIONS_BUCKETS: &[&str] = &[
-    "*",
-    "openai",
-    "openai-compatible",
-    "openai_compatible",
-    "anthropic",
-    "google",
-    "cohere",
-    "bedrock",
-    "vertex",
-];
-
-fn is_bucketed_provider_options(obj: &Map<String, Value>) -> bool {
-    obj.keys()
-        .any(|key| PROVIDER_OPTIONS_BUCKETS.contains(&key.as_str()))
-}
-
-pub(crate) fn provider_options_object_is_bucketed(obj: &Map<String, Value>) -> bool {
-    is_bucketed_provider_options(obj)
-}
-
-pub(crate) fn select_provider_options<'a>(
-    provider_options: Option<&'a Value>,
-    provider: &str,
-) -> Option<&'a Value> {
-    let provider_options = provider_options?;
-    let Some(obj) = provider_options.as_object() else {
-        return Some(provider_options);
-    };
-
-    if is_bucketed_provider_options(obj) {
-        if let Some(bucket) = obj.get(provider) {
-            return Some(bucket);
-        }
-        if let Some(bucket) = provider_bucket_alias_key(provider).and_then(|key| obj.get(key)) {
-            return Some(bucket);
-        }
-        if let Some(bucket) = obj.get("*") {
-            return Some(bucket);
-        }
-        return None;
-    }
-
-    Some(provider_options)
-}
-
-fn provider_bucket_alias_key(provider: &str) -> Option<&str> {
-    match provider {
-        "openai-compatible" => Some("openai_compatible"),
-        "openai_compatible" => Some("openai-compatible"),
-        _ => None,
-    }
-}
-
-pub(crate) fn select_provider_options_value(
-    provider_options: Option<&Value>,
-    provider: &str,
-) -> Result<Option<Value>> {
-    let Some(provider_options) = provider_options else {
-        return Ok(None);
-    };
-
-    let Some(obj) = provider_options.as_object() else {
-        return Ok(Some(provider_options.clone()));
-    };
-
-    if !is_bucketed_provider_options(obj) {
-        return Ok(Some(provider_options.clone()));
-    }
-
-    let mut merged = Map::<String, Value>::new();
-    let mut has_any = false;
-
-    if let Some(value) = obj.get("*") {
-        let Some(bucket) = value.as_object() else {
-            return Err(DittoError::InvalidResponse(
-                "invalid provider_options: bucket \"*\" must be a JSON object".to_string(),
-            ));
-        };
-        for (key, value) in bucket {
-            merged.insert(key.clone(), value.clone());
-        }
-        has_any = true;
-    }
-
-    if let Some(value) = obj.get(provider) {
-        let Some(bucket) = value.as_object() else {
-            return Err(DittoError::InvalidResponse(format!(
-                "invalid provider_options: bucket {provider:?} must be a JSON object"
-            )));
-        };
-        for (key, value) in bucket {
-            merged.insert(key.clone(), value.clone());
-        }
-        has_any = true;
-    } else if let Some(alias) = provider_bucket_alias_key(provider) {
-        if let Some(value) = obj.get(alias) {
-            let Some(bucket) = value.as_object() else {
-                return Err(DittoError::InvalidResponse(format!(
-                    "invalid provider_options: bucket {alias:?} must be a JSON object"
-                )));
-            };
-            for (key, value) in bucket {
-                merged.insert(key.clone(), value.clone());
-            }
-            has_any = true;
-        }
-    }
-
-    if !has_any {
-        return Ok(None);
-    }
-
-    Ok(Some(Value::Object(merged)))
-}
-
-#[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
-))]
-pub(crate) fn merge_provider_options_into_body(
-    body: &mut Map<String, Value>,
-    options: Option<&Value>,
-    reserved_keys: &[&str],
-    feature: &str,
-    warnings: &mut Vec<Warning>,
-) {
-    let Some(options) = options else {
-        return;
-    };
-    let Some(obj) = options.as_object() else {
-        warnings.push(Warning::Unsupported {
-            feature: feature.to_string(),
-            details: Some("expected provider_options to be a JSON object".to_string()),
-        });
-        return;
-    };
-
-    for (key, value) in obj {
-        if reserved_keys.contains(&key.as_str()) {
-            continue;
-        }
-
-        if let Some(existing) = body.get_mut(key) {
-            match (existing.as_object_mut(), value.as_object()) {
-                (Some(existing_obj), Some(value_obj)) => {
-                    for (nested_key, nested_value) in value_obj {
-                        if existing_obj.contains_key(nested_key) {
-                            warnings.push(Warning::Compatibility {
-                                feature: feature.to_string(),
-                                details: format!(
-                                    "provider_options overrides {key}.{nested_key}; ignoring override"
-                                ),
-                            });
-                            continue;
-                        }
-                        existing_obj.insert(nested_key.clone(), nested_value.clone());
-                    }
-                }
-                _ => warnings.push(Warning::Compatibility {
-                    feature: feature.to_string(),
-                    details: format!("provider_options overrides {key}; ignoring override"),
-                }),
-            }
-            continue;
-        }
-
-        body.insert(key.clone(), value.clone());
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenerateRequest {
     pub messages: Vec<Message>,
@@ -482,42 +340,53 @@ pub struct GenerateRequest {
     pub tool_choice: Option<ToolChoice>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 impl GenerateRequest {
     pub fn with_provider_options(mut self, options: ProviderOptions) -> Result<Self> {
-        self.provider_options = Some(serde_json::to_value(options)?);
+        self.provider_options = Some(ProviderOptionsEnvelope::from_options(options)?);
+        Ok(self)
+    }
+
+    pub fn with_provider_response_format(
+        mut self,
+        provider: &str,
+        response_format: ResponseFormat,
+    ) -> Result<Self> {
+        self.provider_options = Some(ProviderOptionsEnvelope::merge_response_format_for_provider(
+            self.provider_options.take(),
+            provider,
+            response_format,
+        )?);
         Ok(self)
     }
 
     pub fn provider_options_for(&self, provider: &str) -> Option<&Value> {
-        select_provider_options(self.provider_options.as_ref(), provider)
+        self.provider_options
+            .as_ref()
+            .and_then(|options| options.provider_options_for(provider))
     }
 
     pub fn provider_options_value_for(&self, provider: &str) -> Result<Option<Value>> {
-        select_provider_options_value(self.provider_options.as_ref(), provider)
+        match self.provider_options.as_ref() {
+            Some(options) => options.provider_options_value_for(provider),
+            None => Ok(None),
+        }
     }
 
     pub fn parsed_provider_options_for(&self, provider: &str) -> Result<Option<ProviderOptions>> {
-        let selected = self.provider_options_value_for(provider)?;
-        selected
-            .as_ref()
-            .map(ProviderOptions::from_value)
-            .transpose()
+        match self.provider_options.as_ref() {
+            Some(options) => options.parsed_provider_options_for(provider),
+            None => Ok(None),
+        }
     }
 
     pub fn parsed_provider_options(&self) -> Result<Option<ProviderOptions>> {
-        self.provider_options
-            .as_ref()
-            .filter(|value| {
-                value
-                    .as_object()
-                    .map(|obj| !is_bucketed_provider_options(obj))
-                    .unwrap_or(true)
-            })
-            .map(ProviderOptions::from_value)
-            .transpose()
+        match self.provider_options.as_ref() {
+            Some(options) => options.parsed_provider_options(),
+            None => Ok(None),
+        }
     }
 }
 
@@ -602,7 +471,7 @@ pub struct ImageGenerationRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_format: Option<ImageResponseFormat>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -648,7 +517,7 @@ pub struct AudioTranscriptionRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -688,7 +557,7 @@ pub struct SpeechRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speed: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -717,7 +586,7 @@ pub struct ModerationRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -762,7 +631,7 @@ pub struct RerankRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_n: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -861,7 +730,7 @@ pub struct BatchCreateRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_options: Option<Value>,
+    pub provider_options: Option<ProviderOptionsEnvelope>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -923,16 +792,16 @@ mod tests {
 
     #[test]
     fn provider_options_bucketed_merges_provider_overrides_star() -> Result<()> {
-        let raw = json!({
+        let raw = ProviderOptionsEnvelope::from(json!({
             "*": { "parallel_tool_calls": false },
             "openai": { "parallel_tool_calls": true }
-        });
+        }));
 
-        let selected = select_provider_options_value(Some(&raw), "openai")?.unwrap();
+        let selected = raw.provider_options_value_for("openai")?.unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(true));
 
-        let selected = select_provider_options_value(Some(&raw), "anthropic")?.unwrap();
+        let selected = raw.provider_options_value_for("anthropic")?.unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(false));
         Ok(())
@@ -940,11 +809,13 @@ mod tests {
 
     #[test]
     fn provider_options_bucketed_supports_openai_compatible_alias_key() -> Result<()> {
-        let raw = json!({
+        let raw = ProviderOptionsEnvelope::from(json!({
             "openai_compatible": { "parallel_tool_calls": true }
-        });
+        }));
 
-        let selected = select_provider_options_value(Some(&raw), "openai-compatible")?.unwrap();
+        let selected = raw
+            .provider_options_value_for("openai-compatible")?
+            .unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(true));
         Ok(())
@@ -952,16 +823,16 @@ mod tests {
 
     #[test]
     fn provider_options_bucketed_supports_bedrock_and_vertex() -> Result<()> {
-        let raw = json!({
+        let raw = ProviderOptionsEnvelope::from(json!({
             "bedrock": { "parallel_tool_calls": true },
             "vertex": { "parallel_tool_calls": false }
-        });
+        }));
 
-        let selected = select_provider_options_value(Some(&raw), "bedrock")?.unwrap();
+        let selected = raw.provider_options_value_for("bedrock")?.unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(true));
 
-        let selected = select_provider_options_value(Some(&raw), "vertex")?.unwrap();
+        let selected = raw.provider_options_value_for("vertex")?.unwrap();
         let parsed = ProviderOptions::from_value(&selected)?;
         assert_eq!(parsed.parallel_tool_calls, Some(false));
         Ok(())
@@ -969,8 +840,9 @@ mod tests {
 
     #[test]
     fn provider_options_bucketed_rejects_non_object_bucket() {
-        let raw = json!({ "*": true });
-        let err = select_provider_options_value(Some(&raw), "openai")
+        let raw = ProviderOptionsEnvelope::from(json!({ "*": true }));
+        let err = raw
+            .provider_options_value_for("openai")
             .expect_err("should reject non-object buckets");
         match err {
             DittoError::InvalidResponse(_) => {}

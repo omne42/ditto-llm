@@ -12,24 +12,133 @@ use super::openai_like;
 use crate::embedding::EmbeddingModel;
 use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderConfig};
+use crate::profile::{Env, OpenAiProviderFamily, ProviderConfig, infer_openai_provider_quirks};
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, Tool, ToolChoice, Usage, Warning,
 };
-#[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OpenAICompatible {
     client: openai_like::OpenAiLikeClient,
+    request_quirks: OpenAiCompatibleRequestQuirks,
 }
+
+#[derive(Clone, Copy, Debug)]
+struct OpenAiCompatibleRequestQuirks {
+    family: OpenAiProviderFamily,
+    assistant_tool_call_requires_reasoning_content: bool,
+    assistant_tool_call_requires_thought_signature: bool,
+    allow_prompt_cache_key: bool,
+}
+
+impl Default for OpenAiCompatibleRequestQuirks {
+    fn default() -> Self {
+        Self::from_base_url("https://api.openai.com/v1")
+    }
+}
+
+impl OpenAiCompatibleRequestQuirks {
+    fn from_base_url(base_url: &str) -> Self {
+        let family = infer_openai_provider_quirks("", base_url).family;
+        let assistant_tool_call_requires_reasoning_content =
+            matches!(family, OpenAiProviderFamily::Kimi);
+        let base_url_lower = base_url.to_ascii_lowercase();
+        let assistant_tool_call_requires_thought_signature = base_url_lower.contains("litellm");
+        let allow_prompt_cache_key = false;
+        Self {
+            family,
+            assistant_tool_call_requires_reasoning_content,
+            assistant_tool_call_requires_thought_signature,
+            allow_prompt_cache_key,
+        }
+    }
+
+    fn should_send_prompt_cache_key(self) -> bool {
+        self.allow_prompt_cache_key
+            || env_flag_is_true("DITTO_OPENAI_COMPAT_SEND_PROMPT_CACHE_KEY")
+            || env_flag_is_true("OMNE_OPENAI_COMPAT_SEND_PROMPT_CACHE_KEY")
+    }
+
+    fn should_send_assistant_tool_call_thought_signature(self) -> bool {
+        self.assistant_tool_call_requires_thought_signature
+            || env_flag_is_true("DITTO_OPENAI_COMPAT_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
+            || env_flag_is_true("OMNE_OPENAI_COMPAT_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
+    }
+}
+
+fn env_flag_is_true(name: &str) -> bool {
+    let Ok(raw) = std::env::var(name) else {
+        return false;
+    };
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
+const OPENAI_COMPAT_DUMMY_THOUGHT_SIGNATURE: &str = "skip_thought_signature_validator";
+
+fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
+    let Some((base_id, hex)) = id.rsplit_once(TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR) else {
+        return (id.to_string(), None);
+    };
+    if hex.len() % 2 != 0 {
+        return (id.to_string(), None);
+    }
+    let mut bytes = Vec::<u8>::with_capacity(hex.len() / 2);
+    for chunk in hex.as_bytes().chunks_exact(2) {
+        let hex_pair = match std::str::from_utf8(chunk) {
+            Ok(value) => value,
+            Err(_) => return (id.to_string(), None),
+        };
+        let byte = match u8::from_str_radix(hex_pair, 16) {
+            Ok(value) => value,
+            Err(_) => return (id.to_string(), None),
+        };
+        bytes.push(byte);
+    }
+    let signature = match String::from_utf8(bytes) {
+        Ok(value) => value,
+        Err(_) => return (id.to_string(), None),
+    };
+    if signature.trim().is_empty() {
+        return (base_id.to_string(), None);
+    }
+    (base_id.to_string(), Some(signature))
+}
+
+fn encode_tool_call_id_with_thought_signature(id: &str, thought_signature: Option<&str>) -> String {
+    let (base_id, _) = split_tool_call_id_and_thought_signature(id);
+    let Some(signature) = thought_signature.map(str::trim).filter(|s| !s.is_empty()) else {
+        return base_id;
+    };
+    let mut hex = String::with_capacity(signature.len() * 2);
+    for byte in signature.as_bytes() {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{base_id}{TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR}{hex}")
+}
+
+const OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS: &[&str] = &[
+    "reasoning_effort",
+    "response_format",
+    "parallel_tool_calls",
+    "prompt_cache_key",
+];
 
 impl OpenAICompatible {
     pub fn new(api_key: impl Into<String>) -> Self {
+        let client = openai_like::OpenAiLikeClient::new(api_key);
+        let request_quirks = OpenAiCompatibleRequestQuirks::from_base_url(&client.base_url);
         Self {
-            client: openai_like::OpenAiLikeClient::new(api_key),
+            client,
+            request_quirks,
         }
     }
 
@@ -39,7 +148,9 @@ impl OpenAICompatible {
     }
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
-        self.client = self.client.with_base_url(base_url);
+        let base_url = base_url.into();
+        self.client = self.client.with_base_url(base_url.clone());
+        self.request_quirks = OpenAiCompatibleRequestQuirks::from_base_url(&base_url);
         self
     }
 
@@ -54,13 +165,13 @@ impl OpenAICompatible {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &[
-            "OPENAI_COMPAT_API_KEY",
-            "OPENAI_API_KEY",
-        ];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
+        let client =
+            openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS).await?;
+        let request_quirks = OpenAiCompatibleRequestQuirks::from_base_url(&client.base_url);
         Ok(Self {
-            client: openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS)
-                .await?,
+            client,
+            request_quirks,
         })
     }
 
@@ -173,7 +284,10 @@ impl OpenAICompatible {
         }
     }
 
-    fn messages_to_chat_messages(messages: &[Message]) -> (Vec<Value>, Vec<Warning>) {
+    fn messages_to_chat_messages(
+        messages: &[Message],
+        quirks: OpenAiCompatibleRequestQuirks,
+    ) -> (Vec<Value>, Vec<Warning>) {
         let mut out = Vec::<Value>::new();
         let mut warnings = Vec::<Warning>::new();
 
@@ -283,31 +397,45 @@ impl OpenAICompatible {
                 }
                 Role::Assistant => {
                     let mut text = String::new();
+                    let mut reasoning = String::new();
                     let mut tool_calls = Vec::<Value>::new();
                     for part in &message.content {
                         match part {
                             ContentPart::Text { text: chunk } => text.push_str(chunk),
+                            ContentPart::Reasoning { text: chunk } => reasoning.push_str(chunk),
                             ContentPart::ToolCall {
                                 id,
                                 name,
                                 arguments,
                             } => {
-                                tool_calls.push(serde_json::json!({
-                                    "id": id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": name,
-                                        "arguments": Self::tool_call_arguments_to_openai_string(arguments),
-                                    }
-                                }));
+                                let (tool_call_id, thought_signature) =
+                                    split_tool_call_id_and_thought_signature(id);
+                                let mut function = Map::<String, Value>::new();
+                                function.insert("name".to_string(), Value::String(name.clone()));
+                                function.insert(
+                                    "arguments".to_string(),
+                                    Value::String(Self::tool_call_arguments_to_openai_string(
+                                        arguments,
+                                    )),
+                                );
+                                if quirks.should_send_assistant_tool_call_thought_signature() {
+                                    let thought_signature = thought_signature
+                                        .as_deref()
+                                        .unwrap_or(OPENAI_COMPAT_DUMMY_THOUGHT_SIGNATURE);
+                                    function.insert(
+                                        "thought_signature".to_string(),
+                                        Value::String(thought_signature.to_string()),
+                                    );
+                                }
+                                let mut tool_call = Map::<String, Value>::new();
+                                tool_call.insert("id".to_string(), Value::String(tool_call_id));
+                                tool_call.insert(
+                                    "type".to_string(),
+                                    Value::String("function".to_string()),
+                                );
+                                tool_call.insert("function".to_string(), Value::Object(function));
+                                tool_calls.push(Value::Object(tool_call));
                             }
-                            ContentPart::Reasoning { .. } => warnings.push(Warning::Unsupported {
-                                feature: "reasoning".to_string(),
-                                details: Some(
-                                    "reasoning parts are not sent to openai-compatible messages"
-                                        .to_string(),
-                                ),
-                            }),
                             other => warnings.push(Warning::Unsupported {
                                 feature: "assistant_content_part".to_string(),
                                 details: Some(format!(
@@ -317,9 +445,13 @@ impl OpenAICompatible {
                         }
                     }
 
-                    if text.trim().is_empty() && tool_calls.is_empty() {
+                    if text.trim().is_empty()
+                        && tool_calls.is_empty()
+                        && reasoning.trim().is_empty()
+                    {
                         continue;
                     }
+                    let has_tool_calls = !tool_calls.is_empty();
 
                     let mut msg = Map::<String, Value>::new();
                     msg.insert("role".to_string(), Value::String("assistant".to_string()));
@@ -330,6 +462,14 @@ impl OpenAICompatible {
                     }
                     if !tool_calls.is_empty() {
                         msg.insert("tool_calls".to_string(), Value::Array(tool_calls));
+                    }
+                    if !reasoning.trim().is_empty()
+                        || (has_tool_calls && quirks.assistant_tool_call_requires_reasoning_content)
+                    {
+                        // Some OpenAI-compatible providers require reasoning_content to exist
+                        // on assistant tool-call messages in follow-up turns. If reasoning text
+                        // is absent, send an empty string to satisfy strict schema checks.
+                        msg.insert("reasoning_content".to_string(), Value::String(reasoning));
                     }
                     out.push(Value::Object(msg));
                 }
@@ -344,6 +484,8 @@ impl OpenAICompatible {
                                 if content.trim().is_empty() {
                                     continue;
                                 }
+                                let (tool_call_id, _) =
+                                    split_tool_call_id_and_thought_signature(tool_call_id);
                                 out.push(serde_json::json!({
                                     "role": "tool",
                                     "tool_call_id": tool_call_id,
@@ -366,12 +508,13 @@ impl OpenAICompatible {
     fn build_chat_completions_body(
         request: &GenerateRequest,
         model: &str,
+        quirks: OpenAiCompatibleRequestQuirks,
         provider_options: &crate::types::ProviderOptions,
         selected_provider_options: Option<&Value>,
         stream: bool,
         provider_options_context: &'static str,
     ) -> Result<(Map<String, Value>, Vec<Warning>)> {
-        let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages);
+        let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages, quirks);
 
         let mut body = Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));
@@ -434,7 +577,12 @@ impl OpenAICompatible {
                 body.insert("frequency_penalty".to_string(), Value::Number(value));
             }
         }
-        if let Some(user) = request.user.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(user) = request
+            .user
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             body.insert("user".to_string(), Value::String(user.to_string()));
         }
         match request.logprobs {
@@ -455,7 +603,9 @@ impl OpenAICompatible {
             } else if top_logprobs == 0 || top_logprobs > 20 {
                 warnings.push(Warning::Compatibility {
                     feature: "top_logprobs".to_string(),
-                    details: format!("top_logprobs must be between 1 and 20 (got {top_logprobs}); dropping"),
+                    details: format!(
+                        "top_logprobs must be between 1 and 20 (got {top_logprobs}); dropping"
+                    ),
                 });
             } else {
                 body.insert("logprobs".to_string(), Value::Bool(true));
@@ -466,7 +616,8 @@ impl OpenAICompatible {
             }
         }
         if let Some(stops) = request.stop_sequences.as_ref() {
-            let stops = crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
+            let stops =
+                crate::utils::params::sanitize_stop_sequences(stops, Some(4), &mut warnings);
             if !stops.is_empty() {
                 body.insert(
                     "stop".to_string(),
@@ -509,6 +660,20 @@ impl OpenAICompatible {
                 serde_json::to_value(effort)?,
             );
         }
+        if matches!(quirks.family, OpenAiProviderFamily::DeepSeek)
+            && provider_options.reasoning_effort.is_some()
+            && !body.contains_key("thinking")
+        {
+            body.remove("reasoning_effort");
+            body.insert(
+                "thinking".to_string(),
+                serde_json::json!({ "type": "enabled" }),
+            );
+            warnings.push(Warning::Compatibility {
+                feature: "reasoning_effort".to_string(),
+                details: "mapped to thinking.type=enabled for deepseek compatibility".to_string(),
+            });
+        }
         if let Some(response_format) = provider_options.response_format.as_ref() {
             body.insert(
                 "response_format".to_string(),
@@ -525,10 +690,24 @@ impl OpenAICompatible {
         crate::types::merge_provider_options_into_body(
             &mut body,
             selected_provider_options,
-            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
             provider_options_context,
             &mut warnings,
         );
+
+        if let Some(prompt_cache_key) = provider_options
+            .prompt_cache_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if quirks.should_send_prompt_cache_key() {
+                body.insert(
+                    "prompt_cache_key".to_string(),
+                    Value::String(prompt_cache_key.to_string()),
+                );
+            }
+        }
 
         Ok((body, warnings))
     }
@@ -548,7 +727,20 @@ impl OpenAICompatible {
     fn parse_usage(value: &Value) -> Usage {
         let mut usage = Usage::default();
         if let Some(obj) = value.as_object() {
-            usage.input_tokens = obj.get("prompt_tokens").and_then(Value::as_u64);
+            let deepseek_cache_hit_tokens =
+                obj.get("prompt_cache_hit_tokens").and_then(Value::as_u64);
+            let deepseek_cache_miss_tokens =
+                obj.get("prompt_cache_miss_tokens").and_then(Value::as_u64);
+
+            usage.input_tokens =
+                obj.get("prompt_tokens")
+                    .and_then(Value::as_u64)
+                    .or_else(
+                        || match (deepseek_cache_hit_tokens, deepseek_cache_miss_tokens) {
+                            (Some(hit), Some(miss)) => Some(hit.saturating_add(miss)),
+                            _ => None,
+                        },
+                    );
             usage.cache_input_tokens = obj
                 .get("cached_tokens")
                 .and_then(Value::as_u64)
@@ -556,10 +748,24 @@ impl OpenAICompatible {
                     obj.get("prompt_tokens_details")
                         .and_then(|details| details.get("cached_tokens"))
                         .and_then(Value::as_u64)
-                });
+                })
+                .or_else(|| {
+                    obj.get("prompt_tokens_details")
+                        .and_then(|details| details.get("cache_read_input_tokens"))
+                        .and_then(Value::as_u64)
+                })
+                .or_else(|| obj.get("cache_read_input_tokens").and_then(Value::as_u64))
+                .or_else(|| obj.get("cache_input_tokens").and_then(Value::as_u64))
+                .or(deepseek_cache_hit_tokens);
             usage.cache_creation_input_tokens = obj
                 .get("cache_creation_input_tokens")
-                .and_then(Value::as_u64);
+                .and_then(Value::as_u64)
+                .or_else(|| {
+                    obj.get("prompt_tokens_details")
+                        .and_then(|details| details.get("cache_creation_input_tokens"))
+                        .and_then(Value::as_u64)
+                })
+                .or_else(|| obj.get("cache_write_input_tokens").and_then(Value::as_u64));
             usage.output_tokens = obj.get("completion_tokens").and_then(Value::as_u64);
             usage.total_tokens = obj.get("total_tokens").and_then(Value::as_u64);
         }
@@ -596,7 +802,54 @@ mod client_tests {
     }
 
     #[test]
-    fn build_body_includes_prompt_cache_key_and_stream_usage() -> Result<()> {
+    fn parse_usage_reads_cache_read_input_tokens_alias() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "cache_read_input_tokens": 4,
+        }));
+        assert_eq!(usage.cache_input_tokens, Some(4));
+    }
+
+    #[test]
+    fn parse_usage_reads_cache_write_input_tokens_alias() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "cache_write_input_tokens": 3,
+        }));
+        assert_eq!(usage.cache_creation_input_tokens, Some(3));
+    }
+
+    #[test]
+    fn parse_usage_reads_deepseek_prompt_cache_hit_tokens_alias() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "prompt_tokens": 10,
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "prompt_cache_hit_tokens": 6,
+            "prompt_cache_miss_tokens": 4
+        }));
+        assert_eq!(usage.cache_input_tokens, Some(6));
+        assert_eq!(usage.input_tokens, Some(10));
+    }
+
+    #[test]
+    fn parse_usage_derives_prompt_tokens_from_deepseek_hit_miss_when_missing_prompt_tokens() {
+        let usage = OpenAICompatible::parse_usage(&json!({
+            "completion_tokens": 2,
+            "total_tokens": 12,
+            "prompt_cache_hit_tokens": 7,
+            "prompt_cache_miss_tokens": 3
+        }));
+        assert_eq!(usage.cache_input_tokens, Some(7));
+        assert_eq!(usage.input_tokens, Some(10));
+    }
+
+    #[test]
+    fn build_body_suppresses_prompt_cache_key_by_default_and_keeps_stream_usage() -> Result<()> {
         let request = GenerateRequest::from(vec![Message::user("hi")]);
         let provider_options = crate::types::ProviderOptions {
             prompt_cache_key: Some("thread-123".to_string()),
@@ -607,15 +860,16 @@ mod client_tests {
         let (body, _warnings) = OpenAICompatible::build_chat_completions_body(
             &request,
             "gpt-4.1",
+            OpenAiCompatibleRequestQuirks::default(),
             &provider_options,
             Some(&selected),
             true,
             "test.provider_options",
         )?;
 
-        assert_eq!(
-            body.get("prompt_cache_key").and_then(Value::as_str),
-            Some("thread-123")
+        assert!(
+            body.get("prompt_cache_key").is_none(),
+            "prompt_cache_key should be suppressed by default for compatibility"
         );
         assert_eq!(
             body.get("stream_options")
@@ -629,7 +883,7 @@ mod client_tests {
     }
 
     #[test]
-    fn build_body_includes_prompt_cache_key_for_non_streaming() -> Result<()> {
+    fn build_body_includes_prompt_cache_key_when_quirk_enables_it() -> Result<()> {
         let request = GenerateRequest::from(vec![Message::user("hi")]);
         let provider_options = crate::types::ProviderOptions {
             prompt_cache_key: Some("thread-123".to_string()),
@@ -640,6 +894,10 @@ mod client_tests {
         let (body, _warnings) = OpenAICompatible::build_chat_completions_body(
             &request,
             "gpt-4.1",
+            OpenAiCompatibleRequestQuirks {
+                allow_prompt_cache_key: true,
+                ..Default::default()
+            },
             &provider_options,
             Some(&selected),
             false,
@@ -657,5 +915,351 @@ mod client_tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn provider_options_schema_drops_unknown_keys_and_keeps_known_openai_fields() {
+        let selected = serde_json::json!({
+            "stream": true,
+            "unknown_private_flag": true
+        });
+        let schema = apply_openai_compatible_provider_options_schema(
+            OpenAiProviderFamily::Kimi,
+            Some(selected),
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+            "test.provider_options",
+        );
+
+        assert_eq!(
+            schema.selected_provider_options,
+            Some(serde_json::json!({ "stream": true }))
+        );
+        assert!(schema.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Unsupported { feature, details }
+                if feature == "test.provider_options"
+                    && details.as_deref().is_some_and(|msg| msg.contains("unknown_private_flag"))
+        )));
+    }
+
+    #[test]
+    fn provider_options_schema_maps_minimax_reasoning_split_alias() {
+        let selected = serde_json::json!({
+            "reasoningSplit": true
+        });
+        let schema = apply_openai_compatible_provider_options_schema(
+            OpenAiProviderFamily::MiniMax,
+            Some(selected),
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+            "test.provider_options",
+        );
+
+        assert_eq!(
+            schema.selected_provider_options,
+            Some(serde_json::json!({ "reasoning_split": true }))
+        );
+        assert!(schema.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, details }
+                if feature == "test.provider_options"
+                    && details.contains("\"reasoningSplit\"")
+                    && details.contains("reasoning_split")
+        )));
+    }
+
+    #[test]
+    fn provider_options_schema_keeps_openrouter_provider_object() {
+        let selected = serde_json::json!({
+            "provider": {
+                "order": ["Google AI Studio"],
+                "allow_fallbacks": false
+            }
+        });
+        let schema = apply_openai_compatible_provider_options_schema(
+            OpenAiProviderFamily::OpenRouter,
+            Some(selected),
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+            "test.provider_options",
+        );
+
+        assert_eq!(
+            schema.selected_provider_options,
+            Some(serde_json::json!({
+                "provider": {
+                    "order": ["Google AI Studio"],
+                    "allow_fallbacks": false
+                }
+            }))
+        );
+        assert!(schema.warnings.is_empty());
+    }
+
+    #[test]
+    fn provider_options_schema_drops_non_object_openrouter_provider() {
+        let selected = serde_json::json!({
+            "provider": "Google AI Studio"
+        });
+        let schema = apply_openai_compatible_provider_options_schema(
+            OpenAiProviderFamily::OpenRouter,
+            Some(selected),
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+            "test.provider_options",
+        );
+
+        assert_eq!(schema.selected_provider_options, None);
+        assert!(schema.warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, details }
+                if feature == "test.provider_options"
+                    && details.contains("\"provider\" for openrouter expects a JSON object")
+        )));
+    }
+
+    #[test]
+    fn build_body_maps_deepseek_reasoning_effort_to_thinking() -> Result<()> {
+        let request = GenerateRequest::from(vec![Message::user("hi")]);
+        let provider_options = crate::types::ProviderOptions {
+            reasoning_effort: Some(crate::types::ReasoningEffort::High),
+            ..Default::default()
+        };
+        let selected = serde_json::to_value(&provider_options)?;
+
+        let (body, warnings) = OpenAICompatible::build_chat_completions_body(
+            &request,
+            "deepseek-chat",
+            OpenAiCompatibleRequestQuirks {
+                family: OpenAiProviderFamily::DeepSeek,
+                ..Default::default()
+            },
+            &provider_options,
+            Some(&selected),
+            false,
+            "test.provider_options",
+        )?;
+
+        assert!(
+            body.get("reasoning_effort").is_none(),
+            "deepseek requests should not send reasoning_effort directly"
+        );
+        assert_eq!(
+            body.get("thinking"),
+            Some(&serde_json::json!({ "type": "enabled" }))
+        );
+        assert!(warnings.iter().any(|warning| matches!(
+            warning,
+            Warning::Compatibility { feature, details }
+                if feature == "reasoning_effort"
+                    && details.contains("deepseek")
+        )));
+        Ok(())
+    }
+
+    #[test]
+    fn messages_to_chat_messages_preserves_assistant_reasoning_for_tool_calls() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![
+                ContentPart::Reasoning {
+                    text: "chain-of-thought".to_string(),
+                },
+                ContentPart::ToolCall {
+                    id: "call_1".to_string(),
+                    name: "thread".to_string(),
+                    arguments: json!({"op":"state"}),
+                },
+            ],
+        };
+
+        let (messages, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+        assert_eq!(messages.len(), 1);
+        assert!(warnings
+                .iter()
+                .all(|warning| !matches!(warning, Warning::Unsupported { feature, .. } if feature == "reasoning")));
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        assert_eq!(msg.get("role").and_then(Value::as_str), Some("assistant"));
+        assert_eq!(
+            msg.get("reasoning_content").and_then(Value::as_str),
+            Some("chain-of-thought")
+        );
+        assert_eq!(msg.get("content"), Some(&Value::Null));
+        assert!(msg.get("tool_calls").is_some());
+    }
+
+    #[test]
+    fn messages_to_chat_messages_keeps_reasoning_only_assistant_message() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::Reasoning {
+                text: "thinking-only".to_string(),
+            }],
+        };
+
+        let (messages, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+        assert_eq!(messages.len(), 1);
+        assert!(warnings.is_empty());
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        assert_eq!(msg.get("role").and_then(Value::as_str), Some("assistant"));
+        assert_eq!(
+            msg.get("reasoning_content").and_then(Value::as_str),
+            Some("thinking-only")
+        );
+        assert_eq!(msg.get("content"), Some(&Value::Null));
+        assert!(msg.get("tool_calls").is_none());
+    }
+
+    #[test]
+    fn messages_to_chat_messages_skips_empty_reasoning_for_tool_calls_by_default() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "call_1".to_string(),
+                name: "workspace".to_string(),
+                arguments: json!({"op":"help"}),
+            }],
+        };
+
+        let (messages, warnings) =
+            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+        assert_eq!(messages.len(), 1);
+        assert!(warnings.is_empty());
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        assert_eq!(msg.get("role").and_then(Value::as_str), Some("assistant"));
+        assert_eq!(msg.get("content"), Some(&Value::Null));
+        assert!(msg.get("reasoning_content").is_none());
+        assert!(msg.get("tool_calls").is_some());
+    }
+
+    #[test]
+    fn messages_to_chat_messages_adds_empty_reasoning_for_kimi_tool_calls() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "call_1".to_string(),
+                name: "workspace".to_string(),
+                arguments: json!({"op":"help"}),
+            }],
+        };
+
+        let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
+            &[assistant],
+            OpenAiCompatibleRequestQuirks {
+                family: OpenAiProviderFamily::Kimi,
+                assistant_tool_call_requires_reasoning_content: true,
+                assistant_tool_call_requires_thought_signature: false,
+                allow_prompt_cache_key: false,
+            },
+        );
+        assert_eq!(messages.len(), 1);
+        assert!(warnings.is_empty());
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        assert_eq!(msg.get("role").and_then(Value::as_str), Some("assistant"));
+        assert_eq!(msg.get("content"), Some(&Value::Null));
+        assert_eq!(
+            msg.get("reasoning_content").and_then(Value::as_str),
+            Some("")
+        );
+        assert!(msg.get("tool_calls").is_some());
+    }
+
+    #[test]
+    fn messages_to_chat_messages_adds_dummy_thought_signature_for_litellm_tool_calls() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "call_1".to_string(),
+                name: "workspace".to_string(),
+                arguments: json!({"op":"help"}),
+            }],
+        };
+
+        let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
+            &[assistant],
+            OpenAiCompatibleRequestQuirks {
+                assistant_tool_call_requires_thought_signature: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(messages.len(), 1);
+        assert!(warnings.is_empty());
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        let tool_calls = msg
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .expect("tool calls array");
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(
+            tool_calls[0].get("id").and_then(Value::as_str),
+            Some("call_1")
+        );
+        assert_eq!(
+            tool_calls[0]
+                .get("function")
+                .and_then(Value::as_object)
+                .and_then(|function| function.get("thought_signature"))
+                .and_then(Value::as_str),
+            Some(OPENAI_COMPAT_DUMMY_THOUGHT_SIGNATURE)
+        );
+    }
+
+    #[test]
+    fn messages_to_chat_messages_replays_encoded_thought_signature_and_normalizes_ids() {
+        let encoded_id = encode_tool_call_id_with_thought_signature("call_abc", Some("hi"));
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: encoded_id.clone(),
+                name: "workspace".to_string(),
+                arguments: json!({"op":"help"}),
+            }],
+        };
+        let tool = Message {
+            role: Role::Tool,
+            content: vec![ContentPart::ToolResult {
+                tool_call_id: encoded_id,
+                content: "ok".to_string(),
+                is_error: None,
+            }],
+        };
+
+        let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
+            &[assistant, tool],
+            OpenAiCompatibleRequestQuirks {
+                assistant_tool_call_requires_thought_signature: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(messages.len(), 2);
+        assert!(warnings.is_empty());
+
+        let assistant_msg = messages[0].as_object().expect("assistant message object");
+        let tool_calls = assistant_msg
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .expect("tool calls array");
+        assert_eq!(
+            tool_calls[0].get("id").and_then(Value::as_str),
+            Some("call_abc")
+        );
+        assert_eq!(
+            tool_calls[0]
+                .get("function")
+                .and_then(Value::as_object)
+                .and_then(|function| function.get("thought_signature"))
+                .and_then(Value::as_str),
+            Some("hi")
+        );
+
+        let tool_msg = messages[1].as_object().expect("tool message object");
+        assert_eq!(
+            tool_msg.get("tool_call_id").and_then(Value::as_str),
+            Some("call_abc")
+        );
     }
 }

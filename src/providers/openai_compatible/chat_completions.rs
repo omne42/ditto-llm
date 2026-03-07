@@ -43,6 +43,8 @@ struct ChatFunctionCall {
 struct ChatToolCall {
     #[serde(default)]
     id: String,
+    #[serde(default, alias = "thoughtSignature")]
+    thought_signature: Option<String>,
     #[serde(default)]
     function: ChatToolFunction,
 }
@@ -53,6 +55,8 @@ struct ChatToolFunction {
     name: String,
     #[serde(default)]
     arguments: String,
+    #[serde(default, alias = "thoughtSignature")]
+    thought_signature: Option<String>,
 }
 
 #[cfg(feature = "streaming")]
@@ -106,6 +110,8 @@ struct ChatToolCallDelta {
     index: usize,
     #[serde(default)]
     id: Option<String>,
+    #[serde(default, alias = "thoughtSignature")]
+    thought_signature: Option<String>,
     #[serde(default)]
     function: Option<ChatToolFunctionDelta>,
 }
@@ -117,6 +123,8 @@ struct ChatToolFunctionDelta {
     name: Option<String>,
     #[serde(default)]
     arguments: Option<String>,
+    #[serde(default, alias = "thoughtSignature")]
+    thought_signature: Option<String>,
 }
 
 #[cfg(feature = "streaming")]
@@ -124,6 +132,7 @@ struct ChatToolFunctionDelta {
 struct StreamToolCallState {
     id: Option<String>,
     name: Option<String>,
+    thought_signature: Option<String>,
     started: bool,
     pending_arguments: String,
 }
@@ -169,6 +178,8 @@ fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
                 synthesized
             }
         };
+        let id = encode_tool_call_id_with_thought_signature(&id, slot.thought_signature.as_deref());
+        slot.id = Some(id.clone());
 
         if name.is_empty() {
             warnings.push(Warning::Compatibility {
@@ -255,9 +266,25 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
             if let Some(id) = tool_call.id.as_deref().filter(|v| !v.trim().is_empty()) {
                 slot.id = Some(id.to_string());
             }
+            if let Some(thought_signature) = tool_call
+                .thought_signature
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+            {
+                slot.thought_signature = Some(thought_signature.to_string());
+            }
             if let Some(function) = tool_call.function.as_ref() {
                 if let Some(name) = function.name.as_deref().filter(|v| !v.trim().is_empty()) {
                     slot.name = Some(name.to_string());
+                }
+                if let Some(thought_signature) = function
+                    .thought_signature
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                {
+                    slot.thought_signature = Some(thought_signature.to_string());
                 }
 
                 let arguments = function.arguments.as_deref().unwrap_or("");
@@ -277,14 +304,19 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
 
             if !slot.started {
                 if let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
+                    let id = encode_tool_call_id_with_thought_signature(
+                        id,
+                        slot.thought_signature.as_deref(),
+                    );
+                    slot.id = Some(id.clone());
                     out.push(StreamChunk::ToolCallStart {
-                        id: id.to_string(),
+                        id: id.clone(),
                         name: name.to_string(),
                     });
                     slot.started = true;
                     if !slot.pending_arguments.is_empty() {
                         out.push(StreamChunk::ToolCallDelta {
-                            id: id.to_string(),
+                            id,
                             arguments_delta: std::mem::take(&mut slot.pending_arguments),
                         });
                     }
@@ -376,20 +408,29 @@ impl LanguageModel for OpenAICompatible {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
-        let provider_options = selected_provider_options
+        let raw_selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let provider_options = raw_selected_provider_options
             .as_ref()
             .map(crate::types::ProviderOptions::from_value)
             .transpose()?
             .unwrap_or_default();
+        let schema = apply_openai_compatible_provider_options_schema(
+            self.request_quirks.family,
+            raw_selected_provider_options,
+            OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+            "generate.provider_options",
+        );
+        let selected_provider_options = schema.selected_provider_options;
         let (body, mut warnings) = Self::build_chat_completions_body(
             &request,
             model,
+            self.request_quirks,
             &provider_options,
             selected_provider_options.as_ref(),
             false,
             "generate.provider_options",
         )?;
+        warnings.extend(schema.warnings);
 
         let url = self.chat_completions_url();
         let mut req = self.client.http.post(url);
@@ -428,8 +469,19 @@ impl LanguageModel for OpenAICompatible {
                         &context,
                         &mut warnings,
                     );
+                    let thought_signature = tool_call
+                        .function
+                        .thought_signature
+                        .as_deref()
+                        .or(tool_call.thought_signature.as_deref())
+                        .map(str::trim)
+                        .filter(|v| !v.is_empty());
+                    let id = encode_tool_call_id_with_thought_signature(
+                        &tool_call.id,
+                        thought_signature,
+                    );
                     content.push(ContentPart::ToolCall {
-                        id: tool_call.id.clone(),
+                        id,
                         name: tool_call.function.name.clone(),
                         arguments,
                     });
@@ -445,18 +497,18 @@ impl LanguageModel for OpenAICompatible {
             });
 
                     let name = function_call.name.trim();
-                        if !name.is_empty() {
-                            let arguments_raw = function_call.arguments.as_str();
-                            let context = format!("name={name}");
-                            let arguments = crate::types::parse_tool_call_arguments_json_or_string(
-                                arguments_raw,
-                                &context,
-                                &mut warnings,
-                            );
-                            content.push(ContentPart::ToolCall {
-                                id: "call_0".to_string(),
-                                name: name.to_string(),
-                                arguments,
+                    if !name.is_empty() {
+                        let arguments_raw = function_call.arguments.as_str();
+                        let context = format!("name={name}");
+                        let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                            arguments_raw,
+                            &context,
+                            &mut warnings,
+                        );
+                        content.push(ContentPart::ToolCall {
+                            id: "call_0".to_string(),
+                            name: name.to_string(),
+                            arguments,
                         });
                     } else {
                         warnings.push(Warning::Compatibility {
@@ -497,20 +549,30 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
-            let provider_options = selected_provider_options
+            let raw_selected_provider_options =
+                request.provider_options_value_for(self.provider())?;
+            let provider_options = raw_selected_provider_options
                 .as_ref()
                 .map(crate::types::ProviderOptions::from_value)
                 .transpose()?
                 .unwrap_or_default();
-            let (body, warnings) = Self::build_chat_completions_body(
+            let schema = apply_openai_compatible_provider_options_schema(
+                self.request_quirks.family,
+                raw_selected_provider_options,
+                OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
+                "stream.provider_options",
+            );
+            let selected_provider_options = schema.selected_provider_options;
+            let (body, mut warnings) = Self::build_chat_completions_body(
                 &request,
                 model,
+                self.request_quirks,
                 &provider_options,
                 selected_provider_options.as_ref(),
                 true,
                 "stream.provider_options",
             )?;
+            warnings.extend(schema.warnings);
 
             let url = self.chat_completions_url();
             let req = self
@@ -593,9 +655,11 @@ mod chat_completions_tests {
         }"#;
         let (chunks1, done1) = parse_stream_data(&mut state, data1).unwrap();
         assert!(done1);
-        assert!(chunks1
-            .iter()
-            .any(|c| matches!(c, StreamChunk::FinishReason(FinishReason::Stop))));
+        assert!(
+            chunks1
+                .iter()
+                .any(|c| matches!(c, StreamChunk::FinishReason(FinishReason::Stop)))
+        );
         assert_eq!(state.finish_reason.as_deref(), Some("stop"));
 
         let data2 = r#"{
@@ -604,9 +668,11 @@ mod chat_completions_tests {
         }"#;
         let (chunks2, done2) = parse_stream_data(&mut state, data2).unwrap();
         assert!(!done2);
-        assert!(chunks2
-            .iter()
-            .any(|c| matches!(c, StreamChunk::TextDelta { text } if text == "OK")));
+        assert!(
+            chunks2
+                .iter()
+                .any(|c| matches!(c, StreamChunk::TextDelta { text } if text == "OK"))
+        );
     }
 
     #[test]
@@ -619,9 +685,44 @@ mod chat_completions_tests {
         }"#;
         let (chunks, done) = parse_stream_data(&mut state, data).unwrap();
         assert!(!done);
-        assert!(chunks
-            .iter()
-            .any(|c| matches!(c, StreamChunk::ReasoningDelta { text } if text == "thinking...")));
+        assert!(
+            chunks.iter().any(
+                |c| matches!(c, StreamChunk::ReasoningDelta { text } if text == "thinking...")
+            )
+        );
+    }
+
+    #[test]
+    fn streaming_tool_call_thought_signature_encodes_tool_call_id() {
+        let mut state = StreamState::default();
+
+        let data = r#"{
+            "id": "resp_1",
+            "choices": [{
+                "delta": {
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "call_1",
+                        "function": {
+                            "name": "workspace",
+                            "arguments": "{\"op\":\"help\"}",
+                            "thought_signature": "hi"
+                        }
+                    }]
+                }
+            }]
+        }"#;
+        let (chunks, done) = parse_stream_data(&mut state, data).unwrap();
+        assert!(!done);
+
+        let start_id = chunks.iter().find_map(|chunk| match chunk {
+            StreamChunk::ToolCallStart { id, .. } => Some(id.clone()),
+            _ => None,
+        });
+        let start_id = start_id.expect("tool call start id");
+        let (base_id, thought_signature) = split_tool_call_id_and_thought_signature(&start_id);
+        assert_eq!(base_id, "call_1");
+        assert_eq!(thought_signature.as_deref(), Some("hi"));
     }
 }
 
@@ -669,5 +770,44 @@ mod chat_completions_generate_tests {
             parts.get(1),
             Some(ContentPart::Text { text }) if text == "OK"
         ));
+    }
+
+    #[test]
+    fn message_tool_call_with_thought_signature_is_encoded_into_id() {
+        let raw = r#"{
+            "id": "resp_1",
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_9",
+                        "function": {
+                            "name": "workspace",
+                            "arguments": "{\"op\":\"help\"}",
+                            "thought_signature": "hi"
+                        }
+                    }]
+                }
+            }]
+        }"#;
+        let parsed = serde_json::from_str::<ChatCompletionsResponse>(raw).unwrap();
+        let choice = parsed.choices.first().unwrap();
+        let tool_call = choice
+            .message
+            .tool_calls
+            .as_ref()
+            .and_then(|calls| calls.first())
+            .expect("tool call");
+        let thought_signature = tool_call
+            .function
+            .thought_signature
+            .as_deref()
+            .or(tool_call.thought_signature.as_deref())
+            .map(str::trim)
+            .filter(|v| !v.is_empty());
+        let encoded_id =
+            encode_tool_call_id_with_thought_signature(&tool_call.id, thought_signature);
+        let (base_id, replayed_signature) = split_tool_call_id_and_thought_signature(&encoded_id);
+        assert_eq!(base_id, "call_9");
+        assert_eq!(replayed_signature.as_deref(), Some("hi"));
     }
 }

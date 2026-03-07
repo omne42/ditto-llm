@@ -1,4 +1,4 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 #[derive(Clone, Copy)]
 struct ProxyBudgetReservationParams<'a> {
     state: &'a GatewayHttpState,
@@ -14,7 +14,7 @@ struct ProxyBudgetReservationParams<'a> {
     charge_tokens: u32,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
 async fn reserve_proxy_token_budgets_for_request(
     params: ProxyBudgetReservationParams<'_>,
 ) -> Result<(bool, Vec<String>), (StatusCode, Json<OpenAiErrorResponse>)> {
@@ -35,227 +35,17 @@ async fn reserve_proxy_token_budgets_for_request(
     let token_budget_reserved = if use_persistent_budget {
         if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id, budget) {
             if let Some(limit) = budget.total_tokens {
-                #[cfg(feature = "gateway-store-sqlite")]
-                {
-                    if let Some(store) = state.sqlite_store.as_ref() {
-                        match store
-                            .reserve_budget_tokens(
-                                request_id,
-                                virtual_key_id,
-                                limit,
-                                u64::from(charge_tokens),
-                            )
-                            .await
-                        {
-                            Ok(()) => true,
-                            Err(SqliteStoreError::BudgetExceeded { limit, attempted }) => {
-                                let _ = store
-                                    .append_audit_log(
-                                        "proxy.blocked",
-                                        state.redactor.redact(serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "budget_exceeded",
-                                            "limit": limit,
-                                            "attempted": attempted,
-                                            "charge_tokens": charge_tokens,
-                                            "path": path_and_query,
-                                            "model": model,
-                                        })),
-                                    )
-                                    .await;
-                                emit_json_log(
-                                    state,
-                                    "proxy.blocked",
-                                    serde_json::json!({
-                                        "request_id": request_id,
-                                        "virtual_key_id": virtual_key_id,
-                                        "reason": "budget_exceeded",
-                                        "limit": limit,
-                                        "attempted": attempted,
-                                    }),
-                                );
-                                return Err(map_openai_gateway_error(GatewayError::BudgetExceeded {
-                                    limit,
-                                    attempted,
-                                }));
-                            }
-                            Err(err) => {
-                                let _ = store
-                                    .append_audit_log(
-                                        "proxy.blocked",
-                                        state.redactor.redact(serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "storage_error",
-                                            "error": err.to_string(),
-                                            "path": path_and_query,
-                                            "model": model,
-                                        })),
-                                    )
-                                    .await;
-                                return Err(openai_error(
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    "api_error",
-                                    Some("storage_error"),
-                                    err.to_string(),
-                                ));
-                            }
-                        }
-                    } else {
-                        #[cfg(feature = "gateway-store-redis")]
-                        {
-                            if let Some(store) = state.redis_store.as_ref() {
-                                match store
-                                    .reserve_budget_tokens(
-                                        request_id,
-                                        virtual_key_id,
-                                        limit,
-                                        u64::from(charge_tokens),
-                                    )
-                                    .await
-                                {
-                                    Ok(()) => true,
-                                    Err(RedisStoreError::BudgetExceeded { limit, attempted }) => {
-                                        let _ = store
-                                            .append_audit_log(
-                                                "proxy.blocked",
-                                                state.redactor.redact(serde_json::json!({
-                                                    "request_id": request_id,
-                                                    "virtual_key_id": virtual_key_id,
-                                                    "reason": "budget_exceeded",
-                                                    "limit": limit,
-                                                    "attempted": attempted,
-                                                    "charge_tokens": charge_tokens,
-                                                    "path": path_and_query,
-                                                    "model": model,
-                                                })),
-                                            )
-                                            .await;
-                                        emit_json_log(
-                                            state,
-                                            "proxy.blocked",
-                                            serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "budget_exceeded",
-                                                "limit": limit,
-                                                "attempted": attempted,
-                                            }),
-                                        );
-                                        return Err(map_openai_gateway_error(
-                                            GatewayError::BudgetExceeded { limit, attempted },
-                                        ));
-                                    }
-                                    Err(err) => {
-                                        let _ = store
-                                            .append_audit_log(
-                                                "proxy.blocked",
-                                                state.redactor.redact(serde_json::json!({
-                                                    "request_id": request_id,
-                                                    "virtual_key_id": virtual_key_id,
-                                                    "reason": "storage_error",
-                                                    "error": err.to_string(),
-                                                    "path": path_and_query,
-                                                    "model": model,
-                                                })),
-                                            )
-                                            .await;
-                                        return Err(openai_error(
-                                            StatusCode::INTERNAL_SERVER_ERROR,
-                                            "api_error",
-                                            Some("storage_error"),
-                                            err.to_string(),
-                                        ));
-                                    }
-                                }
-                            } else {
-                                false
-                            }
-                        }
-                        #[cfg(not(feature = "gateway-store-redis"))]
-                        {
-                            false
-                        }
-                    }
-                }
-                #[cfg(not(feature = "gateway-store-sqlite"))]
-                {
-                    #[cfg(feature = "gateway-store-redis")]
-                    {
-                        if let Some(store) = state.redis_store.as_ref() {
-                            match store
-                                .reserve_budget_tokens(
-                                    request_id,
-                                    virtual_key_id,
-                                    limit,
-                                    u64::from(charge_tokens),
-                                )
-                                .await
-                            {
-                                Ok(()) => true,
-                                Err(RedisStoreError::BudgetExceeded { limit, attempted }) => {
-                                    let _ = store
-                                        .append_audit_log(
-                                            "proxy.blocked",
-                                            state.redactor.redact(serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "budget_exceeded",
-                                                "limit": limit,
-                                                "attempted": attempted,
-                                                "charge_tokens": charge_tokens,
-                                                "path": path_and_query,
-                                                "model": model,
-                                            })),
-                                        )
-                                        .await;
-                                    emit_json_log(
-                                        state,
-                                        "proxy.blocked",
-                                        serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "budget_exceeded",
-                                            "limit": limit,
-                                            "attempted": attempted,
-                                        }),
-                                    );
-                                    return Err(map_openai_gateway_error(
-                                        GatewayError::BudgetExceeded { limit, attempted },
-                                    ));
-                                }
-                                Err(err) => {
-                                    let _ = store
-                                        .append_audit_log(
-                                            "proxy.blocked",
-                                            state.redactor.redact(serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "storage_error",
-                                                "error": err.to_string(),
-                                                "path": path_and_query,
-                                                "model": model,
-                                            })),
-                                        )
-                                        .await;
-                                    return Err(openai_error(
-                                        StatusCode::INTERNAL_SERVER_ERROR,
-                                        "api_error",
-                                        Some("storage_error"),
-                                        err.to_string(),
-                                    ));
-                                }
-                            }
-                        } else {
-                            false
-                        }
-                    }
-                    #[cfg(not(feature = "gateway-store-redis"))]
-                    {
-                        false
-                    }
-                }
+                let ctx = ProxyBudgetReservationContext {
+                    state,
+                    reservation_id: request_id,
+                    budget_scope: virtual_key_id,
+                    request_id,
+                    virtual_key_id,
+                    path_and_query,
+                    model,
+                };
+                reserve_proxy_token_budget(ctx, limit, charge_tokens).await?;
+                true
             } else {
                 false
             }
@@ -352,7 +142,7 @@ async fn reserve_proxy_token_budgets_for_request(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
 ))]
 async fn reserve_proxy_cost_budgets_for_request(
     params: ProxyBudgetReservationParams<'_>,
@@ -387,274 +177,23 @@ async fn reserve_proxy_cost_budgets_for_request(
                     ));
                 };
 
-                #[cfg(feature = "gateway-store-sqlite")]
+                let ctx = ProxyBudgetReservationContext {
+                    state,
+                    reservation_id: request_id,
+                    budget_scope: virtual_key_id,
+                    request_id,
+                    virtual_key_id,
+                    path_and_query,
+                    model,
+                };
+                if let Err(err) =
+                    reserve_proxy_cost_budget(ctx, limit_usd_micros, charge_cost_usd_micros).await
                 {
-                    if let Some(store) = state.sqlite_store.as_ref() {
-                        match store
-                            .reserve_cost_usd_micros(
-                                request_id,
-                                virtual_key_id,
-                                limit_usd_micros,
-                                charge_cost_usd_micros,
-                            )
-                            .await
-                        {
-                            Ok(()) => true,
-                            Err(SqliteStoreError::CostBudgetExceeded {
-                                limit_usd_micros,
-                                attempted_usd_micros,
-                            }) => {
-                                rollback_proxy_token_budget_reservations(
-                                    state,
-                                    token_budget_reservation_ids,
-                                )
-                                .await;
-                                let _ = store
-                                    .append_audit_log(
-                                        "proxy.blocked",
-                                        state.redactor.redact(serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "cost_budget_exceeded",
-                                            "limit_usd_micros": limit_usd_micros,
-                                            "attempted_usd_micros": attempted_usd_micros,
-                                            "charge_cost_usd_micros": charge_cost_usd_micros,
-                                            "path": path_and_query,
-                                            "model": model,
-                                        })),
-                                    )
-                                    .await;
-                                emit_json_log(
-                                    state,
-                                    "proxy.blocked",
-                                    serde_json::json!({
-                                        "request_id": request_id,
-                                        "virtual_key_id": virtual_key_id,
-                                        "reason": "cost_budget_exceeded",
-                                        "limit_usd_micros": limit_usd_micros,
-                                        "attempted_usd_micros": attempted_usd_micros,
-                                    }),
-                                );
-                                return Err(map_openai_gateway_error(
-                                    GatewayError::CostBudgetExceeded {
-                                        limit_usd_micros,
-                                        attempted_usd_micros,
-                                    },
-                                ));
-                            }
-                            Err(err) => {
-                                rollback_proxy_token_budget_reservations(
-                                    state,
-                                    token_budget_reservation_ids,
-                                )
-                                .await;
-                                let _ = store
-                                    .append_audit_log(
-                                        "proxy.blocked",
-                                        state.redactor.redact(serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "storage_error",
-                                            "error": err.to_string(),
-                                            "path": path_and_query,
-                                            "model": model,
-                                        })),
-                                    )
-                                    .await;
-                                return Err(openai_error(
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    "api_error",
-                                    Some("storage_error"),
-                                    err.to_string(),
-                                ));
-                            }
-                        }
-                    } else {
-                        #[cfg(feature = "gateway-store-redis")]
-                        {
-                            if let Some(store) = state.redis_store.as_ref() {
-                                match store
-                                    .reserve_cost_usd_micros(
-                                        request_id,
-                                        virtual_key_id,
-                                        limit_usd_micros,
-                                        charge_cost_usd_micros,
-                                    )
-                                    .await
-                                {
-                                    Ok(()) => true,
-                                    Err(RedisStoreError::CostBudgetExceeded {
-                                        limit_usd_micros,
-                                        attempted_usd_micros,
-                                    }) => {
-                                        rollback_proxy_token_budget_reservations(
-                                            state,
-                                            token_budget_reservation_ids,
-                                        )
-                                        .await;
-                                        let _ = store
-                                            .append_audit_log(
-                                                "proxy.blocked",
-                                                state.redactor.redact(serde_json::json!({
-                                                    "request_id": request_id,
-                                                    "virtual_key_id": virtual_key_id,
-                                                    "reason": "cost_budget_exceeded",
-                                                    "limit_usd_micros": limit_usd_micros,
-                                                    "attempted_usd_micros": attempted_usd_micros,
-                                                    "charge_cost_usd_micros": charge_cost_usd_micros,
-                                                    "path": path_and_query,
-                                                    "model": model,
-                                                })),
-                                            )
-                                            .await;
-                                        emit_json_log(
-                                            state,
-                                            "proxy.blocked",
-                                            serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "cost_budget_exceeded",
-                                                "limit_usd_micros": limit_usd_micros,
-                                                "attempted_usd_micros": attempted_usd_micros,
-                                            }),
-                                        );
-                                        return Err(map_openai_gateway_error(
-                                            GatewayError::CostBudgetExceeded {
-                                                limit_usd_micros,
-                                                attempted_usd_micros,
-                                            },
-                                        ));
-                                    }
-                                    Err(err) => {
-                                        rollback_proxy_token_budget_reservations(
-                                            state,
-                                            token_budget_reservation_ids,
-                                        )
-                                        .await;
-                                        let _ = store
-                                            .append_audit_log(
-                                                "proxy.blocked",
-                                                state.redactor.redact(serde_json::json!({
-                                                    "request_id": request_id,
-                                                    "virtual_key_id": virtual_key_id,
-                                                    "reason": "storage_error",
-                                                    "error": err.to_string(),
-                                                    "path": path_and_query,
-                                                    "model": model,
-                                                })),
-                                            )
-                                            .await;
-                                        return Err(openai_error(
-                                            StatusCode::INTERNAL_SERVER_ERROR,
-                                            "api_error",
-                                            Some("storage_error"),
-                                            err.to_string(),
-                                        ));
-                                    }
-                                }
-                            } else {
-                                false
-                            }
-                        }
-                        #[cfg(not(feature = "gateway-store-redis"))]
-                        {
-                            false
-                        }
-                    }
+                    rollback_proxy_token_budget_reservations(state, token_budget_reservation_ids)
+                        .await;
+                    return Err(err);
                 }
-                #[cfg(not(feature = "gateway-store-sqlite"))]
-                {
-                    #[cfg(feature = "gateway-store-redis")]
-                    {
-                        if let Some(store) = state.redis_store.as_ref() {
-                            match store
-                                .reserve_cost_usd_micros(
-                                    request_id,
-                                    virtual_key_id,
-                                    limit_usd_micros,
-                                    charge_cost_usd_micros,
-                                )
-                                .await
-                            {
-                                Ok(()) => true,
-                                Err(RedisStoreError::CostBudgetExceeded {
-                                    limit_usd_micros,
-                                    attempted_usd_micros,
-                                }) => {
-                                    rollback_proxy_token_budget_reservations(
-                                        state,
-                                        token_budget_reservation_ids,
-                                    )
-                                    .await;
-                                    let _ = store
-                                        .append_audit_log(
-                                            "proxy.blocked",
-                                            state.redactor.redact(serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "cost_budget_exceeded",
-                                                "limit_usd_micros": limit_usd_micros,
-                                                "attempted_usd_micros": attempted_usd_micros,
-                                                "charge_cost_usd_micros": charge_cost_usd_micros,
-                                                "path": path_and_query,
-                                                "model": model,
-                                            })),
-                                        )
-                                        .await;
-                                    emit_json_log(
-                                        state,
-                                        "proxy.blocked",
-                                        serde_json::json!({
-                                            "request_id": request_id,
-                                            "virtual_key_id": virtual_key_id,
-                                            "reason": "cost_budget_exceeded",
-                                            "limit_usd_micros": limit_usd_micros,
-                                            "attempted_usd_micros": attempted_usd_micros,
-                                        }),
-                                    );
-                                    return Err(map_openai_gateway_error(
-                                        GatewayError::CostBudgetExceeded {
-                                            limit_usd_micros,
-                                            attempted_usd_micros,
-                                        },
-                                    ));
-                                }
-                                Err(err) => {
-                                    rollback_proxy_token_budget_reservations(
-                                        state,
-                                        token_budget_reservation_ids,
-                                    )
-                                    .await;
-                                    let _ = store
-                                        .append_audit_log(
-                                            "proxy.blocked",
-                                            state.redactor.redact(serde_json::json!({
-                                                "request_id": request_id,
-                                                "virtual_key_id": virtual_key_id,
-                                                "reason": "storage_error",
-                                                "error": err.to_string(),
-                                                "path": path_and_query,
-                                                "model": model,
-                                            })),
-                                        )
-                                        .await;
-                                    return Err(openai_error(
-                                        StatusCode::INTERNAL_SERVER_ERROR,
-                                        "api_error",
-                                        Some("storage_error"),
-                                        err.to_string(),
-                                    ));
-                                }
-                            }
-                        } else {
-                            false
-                        }
-                    }
-                    #[cfg(not(feature = "gateway-store-redis"))]
-                    {
-                        false
-                    }
-                }
+                true
             } else {
                 false
             }

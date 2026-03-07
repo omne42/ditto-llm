@@ -10,14 +10,25 @@ use ditto_gateway::attach::{
 
 #[cfg(feature = "gateway")]
 use ditto_gateway::cli::{GatewayCliArgs, parse_gateway_cli_args, resolve_cli_secret};
+#[cfg(feature = "gateway")]
+use ditto_gateway::config_cli::maybe_run_config_cli;
 
 #[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     const DEFAULT_AUDIT_RETENTION_SECS: u64 = 30 * 24 * 60 * 60;
 
-    let cli = parse_gateway_cli_args(std::env::args().skip(1))?;
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    if maybe_run_config_cli(raw_args.clone()).await? {
+        return Ok(());
+    }
+    let cli = parse_gateway_cli_args(raw_args.into_iter())?;
     let GatewayCliArgs {
         path,
         listen,
@@ -32,10 +43,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dotenv_path,
         state_path,
         sqlite_path: _sqlite_path,
+        mut postgres_url,
+        postgres_url_env,
+        mut mysql_url,
+        mysql_url_env,
         mut redis_url,
         redis_url_env,
         redis_prefix,
         audit_retention_secs: _audit_retention_secs,
+        db_doctor,
         backend_specs,
         upstream_specs,
         json_logs,
@@ -55,6 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         prometheus_max_path_series,
         proxy_retry_enabled,
         proxy_retry_status_codes,
+        proxy_fallback_status_codes,
         proxy_retry_max_attempts,
         proxy_circuit_breaker_enabled,
         proxy_cb_failure_threshold,
@@ -68,7 +85,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         otel_endpoint,
         otel_json,
     } = cli;
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     let audit_retention_secs = _audit_retention_secs;
 
     let env = if let Some(path) = dotenv_path.as_deref() {
@@ -88,6 +110,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if redis_url.is_some() && redis_url_env.is_some() {
         return Err("--redis cannot be combined with --redis-env".into());
+    }
+    if postgres_url.is_some() && postgres_url_env.is_some() {
+        return Err("--pg/--postgres cannot be combined with --pg-env/--postgres-env".into());
+    }
+    if mysql_url.is_some() && mysql_url_env.is_some() {
+        return Err("--mysql cannot be combined with --mysql-env".into());
     }
 
     if let Some(key) = admin_token_env.as_deref() {
@@ -183,6 +211,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         redis_url = Some(url);
     }
+    if let Some(key) = postgres_url_env.as_deref() {
+        let url = env
+            .get(key)
+            .ok_or_else(|| format!("missing env var for --pg-env: {key}"))?;
+        if url.trim().is_empty() {
+            return Err(format!("postgres url env var is empty: {key}").into());
+        }
+        postgres_url = Some(url);
+    }
+    if let Some(key) = mysql_url_env.as_deref() {
+        let url = env
+            .get(key)
+            .ok_or_else(|| format!("missing env var for --mysql-env: {key}"))?;
+        if url.trim().is_empty() {
+            return Err(format!("mysql url env var is empty: {key}").into());
+        }
+        mysql_url = Some(url);
+    }
 
     if let Some(token) = admin_token.take() {
         admin_token = Some(resolve_cli_secret(token, &env, "admin token").await?);
@@ -201,11 +247,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(url) = redis_url.take() {
         redis_url = Some(resolve_cli_secret(url, &env, "redis url").await?);
     }
-
-    let storage_count =
-        state_path.is_some() as u8 + _sqlite_path.is_some() as u8 + redis_url.is_some() as u8;
-    if storage_count > 1 {
-        return Err("use only one of --state, --sqlite, or --redis".into());
+    if let Some(url) = postgres_url.take() {
+        postgres_url = Some(resolve_cli_secret(url, &env, "postgres url").await?);
+    }
+    if let Some(url) = mysql_url.take() {
+        mysql_url = Some(resolve_cli_secret(url, &env, "mysql url").await?);
     }
     if redis_prefix.is_some() && redis_url.is_none() {
         return Err("--redis-prefix requires --redis or --redis-env".into());
@@ -282,15 +328,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let existed = _sqlite_path_ref.exists();
             let store = ditto_llm::gateway::SqliteStore::new(_sqlite_path_ref);
             store.init().await?;
+            store.verify_schema().await?;
             if existed {
                 config.virtual_keys = store.load_virtual_keys().await?;
+                if let Some(router) = store.load_router_config().await? {
+                    config.router = router;
+                } else {
+                    store.replace_router_config(&config.router).await?;
+                }
             } else {
                 store.replace_virtual_keys(&config.virtual_keys).await?;
+                store.replace_router_config(&config.router).await?;
             }
         }
         #[cfg(not(feature = "gateway-store-sqlite"))]
         {
             return Err("sqlite store requires `--features gateway-store-sqlite`".into());
+        }
+    }
+
+    if let Some(_postgres_url_ref) = postgres_url.as_ref() {
+        #[cfg(feature = "gateway-store-postgres")]
+        {
+            let store = ditto_llm::gateway::PostgresStore::connect(_postgres_url_ref).await?;
+            store.ping().await?;
+            store.init().await?;
+            store.verify_schema().await?;
+
+            let loaded_keys = store.load_virtual_keys().await?;
+            let loaded_router = store.load_router_config().await?;
+            if loaded_router.is_some() || !loaded_keys.is_empty() {
+                config.virtual_keys = loaded_keys;
+                if let Some(router) = loaded_router {
+                    config.router = router;
+                } else {
+                    store.replace_router_config(&config.router).await?;
+                }
+            } else {
+                store.replace_router_config(&config.router).await?;
+                store.replace_virtual_keys(&config.virtual_keys).await?;
+            }
+        }
+        #[cfg(not(feature = "gateway-store-postgres"))]
+        {
+            return Err("postgres store requires `--features gateway-store-postgres`".into());
+        }
+    }
+
+    if let Some(_mysql_url_ref) = mysql_url.as_ref() {
+        #[cfg(feature = "gateway-store-mysql")]
+        {
+            let store = ditto_llm::gateway::MySqlStore::connect(_mysql_url_ref).await?;
+            store.ping().await?;
+            store.init().await?;
+            store.verify_schema().await?;
+
+            let loaded_keys = store.load_virtual_keys().await?;
+            let loaded_router = store.load_router_config().await?;
+            if loaded_router.is_some() || !loaded_keys.is_empty() {
+                config.virtual_keys = loaded_keys;
+                if let Some(router) = loaded_router {
+                    config.router = router;
+                } else {
+                    store.replace_router_config(&config.router).await?;
+                }
+            } else {
+                store.replace_router_config(&config.router).await?;
+                store.replace_virtual_keys(&config.virtual_keys).await?;
+            }
+        }
+        #[cfg(not(feature = "gateway-store-mysql"))]
+        {
+            return Err("mysql store requires `--features gateway-store-mysql`".into());
         }
     }
 
@@ -302,11 +411,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 store = store.with_prefix(prefix.clone());
             }
             store.ping().await?;
-            let loaded = store.load_virtual_keys().await?;
-            if !loaded.is_empty() {
-                config.virtual_keys = loaded;
+            let loaded_keys = store.load_virtual_keys().await?;
+            let loaded_router = store.load_router_config().await?;
+            if loaded_router.is_some() || !loaded_keys.is_empty() {
+                config.virtual_keys = loaded_keys;
+                if let Some(router) = loaded_router {
+                    config.router = router;
+                } else {
+                    store.replace_router_config(&config.router).await?;
+                }
             } else {
                 store.replace_virtual_keys(&config.virtual_keys).await?;
+                store.replace_router_config(&config.router).await?;
             }
         }
         #[cfg(not(feature = "gateway-store-redis"))]
@@ -315,13 +431,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    if db_doctor {
+        if _sqlite_path.is_none()
+            && postgres_url.is_none()
+            && mysql_url.is_none()
+            && redis_url.is_none()
+        {
+            return Err(
+                "--db-doctor requires at least one store flag (--sqlite/--pg/--mysql/--redis)"
+                    .into(),
+            );
+        }
+        println!("db doctor: schema checks passed");
+        return Ok(());
+    }
+
     if let Some(state_path) = state_path.as_ref() {
         if state_path.exists() {
             let state = ditto_llm::gateway::GatewayStateFile::load(state_path)?;
             config.virtual_keys = state.virtual_keys;
+            if let Some(router) = state.router {
+                config.router = router;
+            }
         } else {
             ditto_llm::gateway::GatewayStateFile {
                 virtual_keys: config.virtual_keys.clone(),
+                router: Some(config.router.clone()),
             }
             .save(state_path)?;
         }
@@ -537,6 +672,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ProxyRoutingCliOptions {
             retry_enabled: proxy_retry_enabled,
             retry_status_codes: proxy_retry_status_codes,
+            fallback_status_codes: proxy_fallback_status_codes,
             retry_max_attempts: proxy_retry_max_attempts,
             circuit_breaker_enabled: proxy_circuit_breaker_enabled,
             cb_failure_threshold: proxy_cb_failure_threshold,
@@ -547,11 +683,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             health_check_timeout_secs: proxy_health_check_timeout_secs,
         },
     )?;
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     let effective_audit_retention_secs = match audit_retention_secs {
         Some(0) => None,
         Some(secs) => Some(secs),
-        None if _sqlite_path.is_some() || redis_url.is_some() => Some(DEFAULT_AUDIT_RETENTION_SECS),
+        None if _sqlite_path.is_some()
+            || postgres_url.is_some()
+            || mysql_url.is_some()
+            || redis_url.is_some() =>
+        {
+            Some(DEFAULT_AUDIT_RETENTION_SECS)
+        }
         None => None,
     };
     if let Some(path) = state_path {
@@ -559,10 +706,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(path) = _sqlite_path {
-        state = state.with_sqlite_store(
-            ditto_llm::gateway::SqliteStore::new(path)
-                .with_audit_retention_secs(effective_audit_retention_secs),
-        );
+        let store = ditto_llm::gateway::SqliteStore::new(path)
+            .with_audit_retention_secs(effective_audit_retention_secs);
+        store.verify_schema().await?;
+        state = state.with_sqlite_store(store);
+    }
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(postgres_url) = postgres_url {
+        let store = ditto_llm::gateway::PostgresStore::connect(postgres_url)
+            .await?
+            .with_audit_retention_secs(effective_audit_retention_secs);
+        store.verify_schema().await?;
+        state = state.with_postgres_store(store);
+    }
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(mysql_url) = mysql_url {
+        let store = ditto_llm::gateway::MySqlStore::connect(mysql_url)
+            .await?
+            .with_audit_retention_secs(effective_audit_retention_secs);
+        store.verify_schema().await?;
+        state = state.with_mysql_store(store);
     }
     #[cfg(feature = "gateway-store-redis")]
     if let Some(redis_url) = redis_url {

@@ -493,9 +493,8 @@ fn stream_object_from_stream_with_config_and_limits(
                                     if let Some(arr) = value.as_array() {
                                         let complete_len = arr.len().saturating_sub(1);
                                         while state.last_emitted_element < complete_len {
-                                            new_elements.push(
-                                                arr[state.last_emitted_element].clone(),
-                                            );
+                                            new_elements
+                                                .push(arr[state.last_emitted_element].clone());
                                             state.last_emitted_element =
                                                 state.last_emitted_element.saturating_add(1);
                                         }
@@ -602,7 +601,9 @@ fn stream_object_from_stream_with_config_and_limits(
                     }
                 }
 
-                if should_emit_final && partial_enabled_now && partial_tx.send(Ok(value)).await.is_err()
+                if should_emit_final
+                    && partial_enabled_now
+                    && partial_tx.send(Ok(value)).await.is_err()
                 {
                     partial_enabled_task.store(false, Ordering::Relaxed);
                 }
@@ -643,9 +644,7 @@ fn stream_object_from_stream_with_config_and_limits(
         (partial_rx, aborter.clone(), partial_enabled.clone()),
         |(mut rx, aborter, enabled)| async move {
             enabled.store(true, Ordering::Release);
-            rx.recv()
-                .await
-                .map(|item| (item, (rx, aborter, enabled)))
+            rx.recv().await.map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
@@ -654,9 +653,7 @@ fn stream_object_from_stream_with_config_and_limits(
         (element_rx, aborter, element_enabled.clone()),
         |(mut rx, aborter, enabled)| async move {
             enabled.store(true, Ordering::Release);
-            rx.recv()
-                .await
-                .map(|item| (item, (rx, aborter, enabled)))
+            rx.recv().await.map(|item| (item, (rx, aborter, enabled)))
         },
     )
     .boxed();
@@ -727,18 +724,14 @@ fn parse_final_object(
 }
 
 fn request_with_json_schema(
-    mut request: GenerateRequest,
+    request: GenerateRequest,
     provider: &str,
     schema: JsonSchemaFormat,
 ) -> Result<GenerateRequest> {
     let response_format = ResponseFormat::JsonSchema {
         json_schema: schema,
     };
-
-    let existing = request.provider_options.take();
-    let merged = merge_response_format_into_provider_options(existing, provider, response_format)?;
-    request.provider_options = Some(merged);
-    Ok(request)
+    request.with_provider_response_format(provider, response_format)
 }
 
 fn resolve_object_strategy(provider: &str, requested: ObjectStrategy) -> ObjectStrategy {
@@ -900,40 +893,4 @@ fn extract_object_from_tool_calls(
     }
 
     Ok(None)
-}
-
-fn merge_response_format_into_provider_options(
-    provider_options: Option<Value>,
-    provider: &str,
-    response_format: ResponseFormat,
-) -> Result<Value> {
-    let response_format_value = serde_json::to_value(response_format)?;
-
-    match provider_options {
-        None => {
-            let mut obj = Map::<String, Value>::new();
-            obj.insert("response_format".to_string(), response_format_value);
-            Ok(Value::Object(obj))
-        }
-        Some(Value::Object(mut obj)) => {
-            if crate::types::provider_options_object_is_bucketed(&obj) {
-                let slot = obj
-                    .entry(provider.to_string())
-                    .or_insert_with(|| Value::Object(Map::new()));
-                let Value::Object(bucket) = slot else {
-                    return Err(DittoError::InvalidResponse(format!(
-                        "invalid provider_options: bucket {provider:?} must be a JSON object"
-                    )));
-                };
-                bucket.insert("response_format".to_string(), response_format_value);
-                Ok(Value::Object(obj))
-            } else {
-                obj.insert("response_format".to_string(), response_format_value);
-                Ok(Value::Object(obj))
-            }
-        }
-        Some(_) => Err(DittoError::InvalidResponse(
-            "provider_options must be a JSON object".to_string(),
-        )),
-    }
 }

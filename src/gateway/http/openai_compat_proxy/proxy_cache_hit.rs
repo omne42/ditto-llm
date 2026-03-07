@@ -51,10 +51,7 @@ async fn maybe_handle_proxy_cache_hit(
         cache.insert(cache_key.to_string(), cached.clone(), now_epoch_seconds);
     }
 
-    {
-        let mut gateway = state.gateway.lock().await;
-        gateway.observability.record_cache_hit();
-    }
+    state.record_cache_hit();
 
     emit_json_log(
         state,

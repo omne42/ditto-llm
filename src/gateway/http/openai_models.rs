@@ -12,35 +12,29 @@ async fn handle_openai_models_list(
     #[cfg(feature = "gateway-translation")]
     let created = now_epoch_seconds();
 
-    let (strip_authorization, key_route) = {
-        let gateway = state.gateway.lock().await;
-        let resolved = if gateway.config.virtual_keys.is_empty() {
-            (false, None)
-        } else {
-            let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+    let (strip_authorization, key_route) = if !state.uses_virtual_keys() {
+        (false, None)
+    } else {
+        let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+            openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "missing virtual key",
+            )
+        })?;
+        let key = state
+            .virtual_key_by_token(&token)
+            .filter(|key| key.enabled)
+            .ok_or_else(|| {
                 openai_error(
                     StatusCode::UNAUTHORIZED,
                     "authentication_error",
                     Some("invalid_api_key"),
-                    "missing virtual key",
+                    "unauthorized virtual key",
                 )
             })?;
-            let key = gateway
-                .virtual_key_by_token(&token)
-                .filter(|key| key.enabled)
-                .cloned()
-                .ok_or_else(|| {
-                    openai_error(
-                        StatusCode::UNAUTHORIZED,
-                        "authentication_error",
-                        Some("invalid_api_key"),
-                        "unauthorized virtual key",
-                    )
-                })?;
-            (true, key.route)
-        };
-        drop(gateway);
-        resolved
+        (true, key.route)
     };
 
     let mut base_headers = parts.headers.clone();

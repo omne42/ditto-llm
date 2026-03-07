@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use redis::AsyncCommands;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, VirtualKeyConfig};
+use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
 
 #[cfg(feature = "gateway-proxy-cache")]
 use super::CachedProxyResponse;
@@ -21,12 +23,14 @@ use serde::{Deserialize, Serialize};
 // Stale reservations should be reaped explicitly (e.g. via an admin
 // maintenance endpoint) based on their stored `ts_ms`.
 const DEFAULT_RESERVATION_TTL_SECS: u64 = 0;
+const AUDIT_RETENTION_REAP_INTERVAL_MS: i64 = 30_000;
 
 #[derive(Clone, Debug)]
 pub struct RedisStore {
     client: redis::Client,
     prefix: String,
     audit_retention_secs: Option<u64>,
+    audit_last_retention_reap_ms: Arc<AtomicI64>,
 }
 
 #[derive(Debug, Error)]
@@ -98,6 +102,7 @@ impl RedisStore {
             client: redis::Client::open(url.as_ref())?,
             prefix: "ditto".to_string(),
             audit_retention_secs: None,
+            audit_last_retention_reap_ms: Arc::new(AtomicI64::new(0)),
         })
     }
 
@@ -127,6 +132,10 @@ impl RedisStore {
 
     fn key_virtual_keys(&self) -> String {
         format!("{}:virtual_keys", self.prefix)
+    }
+
+    fn key_router_config(&self) -> String {
+        format!("{}:router_config", self.prefix)
     }
 
     fn key_budget_keys(&self) -> String {
@@ -168,5 +177,31 @@ impl RedisStore {
     #[cfg(feature = "gateway-proxy-cache")]
     fn key_proxy_cache_response(&self, cache_key: &str) -> String {
         format!("{}:proxy_cache:{cache_key}", self.prefix)
+    }
+}
+
+fn audit_cutoff_ms(retention_secs: Option<u64>, now_ms: u64) -> Option<u64> {
+    let retention_secs = retention_secs?;
+    let retention_ms = retention_secs.saturating_mul(1000);
+    Some(now_ms.saturating_sub(retention_ms))
+}
+
+fn should_run_retention_reap(last_reap_ms: &AtomicI64, now_ms: i64) -> bool {
+    let mut observed = last_reap_ms.load(Ordering::Relaxed);
+    loop {
+        if observed > 0
+            && now_ms.saturating_sub(observed) < AUDIT_RETENTION_REAP_INTERVAL_MS
+        {
+            return false;
+        }
+        match last_reap_ms.compare_exchange(
+            observed,
+            now_ms,
+            Ordering::AcqRel,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return true,
+            Err(actual) => observed = actual,
+        }
     }
 }

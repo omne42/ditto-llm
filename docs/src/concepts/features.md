@@ -4,7 +4,7 @@ Ditto-LLM 通过 Cargo features 控制体积与依赖：默认构建偏 SDK，Ga
 
 ## 常用组合
 
-- 只当 SDK 用（默认）：`openai` / `anthropic` / `openai-compatible` / `streaming` / `tools` / `embeddings`
+- 只当 SDK 用（默认）：`openai` / `streaming` / `tools` / `embeddings`
 - 全 provider：`--features all-providers`
 - 全能力：`--features all-capabilities`
 - 全部：`--features all`

@@ -5,6 +5,14 @@ Ditto-LLM is a small Rust SDK that provides a unified interface for calling mult
 Goal: become a superset of LiteLLM Proxy + Vercel AI SDK Core via layering + Cargo feature gating.
 See `COMPARED_TO_LITELLM_AI_SDK.md` and `TODO.md` for the parity notes and roadmap.
 
+Layered product plan (L0/L1/L2):
+
+- L0 (this repo): model adapters + protocol/shape conversion + direct SDK usage.
+- L1 (this repo): gateway/proxy platform (API surface, routing, budgets, observability, admin).
+- L2 (separate repo): enterprise closed-loop platform (prompt/eval/agent eval/org governance).
+- Boundary: L2 depends on L1 contracts; L1 remains independently deployable for SMB/mid-market.
+- Frozen L1 contract artifacts: `contracts/gateway-contract-v0.1.openapi.yaml` + `crates/ditto-gateway-contract-types`.
+
 Current scope:
 
 - Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
@@ -173,7 +181,7 @@ Routing (optional):
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
 - `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backends` when empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
-- With `--features gateway-routing-advanced`, proxying can also use retry/circuit breaker/active health checks (`--proxy-retry*` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
+- With `--features gateway-routing-advanced`, proxying can also use status-based retry/fallback, circuit breaker, and active health checks (`--proxy-retry*` / `--proxy-fallback-status-codes` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
 
 Endpoints:
 
@@ -187,9 +195,15 @@ Endpoints:
 - `GET /health`
 - `GET /metrics`
 - `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
+- `GET /admin/config/version`, `GET /admin/config/versions`, and `GET /admin/config/versions/:version_id` (current/history/detail for control-plane virtual-key config versions; detail supports `?include_tokens=true`).
+- `GET /admin/config/diff` (read-only or write admin token; compares two config versions via `from_version_id` + `to_version_id`; supports `include_tokens`).
+- `GET /admin/config/export` (read-only or write admin token; exports current config by default, or a specific version via `version_id`; supports `include_tokens`).
+- `POST /admin/config/validate` (read-only or write admin token; validates `virtual_keys` plus optional `router` payloads with optional expected hashes, without mutating runtime state).
+- `PUT /admin/config/router` (write admin token required; updates router config with backend-reference validation and creates a new config version; supports `dry_run`).
 - MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]`.
 - A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured).
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
+- `POST /admin/config/rollback` (requires the write admin token; restores virtual keys and router to a previous config version; supports `dry_run`).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
   - `/key/info` accepts `?key=...` (admin query) or defaults to the `Authorization: Bearer <virtual_key>` token when `?key` is omitted (self lookup).
 - `POST /admin/proxy_cache/purge` (requires the write admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
@@ -205,11 +219,15 @@ CLI options:
 - `--admin-read-token-env ENV` loads the read-only admin token from env (works with `--dotenv`).
 - `--backend name=url` adds/overrides a backend for `POST /v1/gateway` (the backend is a URL that accepts `GatewayRequest` JSON and returns `GatewayResponse` JSON).
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
-- `--state PATH` enables persistence for admin virtual-key mutations (writes a `GatewayStateFile` JSON with `virtual_keys`; if the file exists it is loaded on startup, otherwise it is created from `gateway.json`).
-- `--sqlite PATH` enables persistence for admin virtual-key mutations in a sqlite file (requires `--features gateway-store-sqlite`; loaded on startup; cannot be combined with `--state`).
-- `--redis URL` enables redis persistence (requires `--features gateway-store-redis`).
+- `--state PATH` enables persistence for admin config mutations (`virtual_keys` + `router` in `GatewayStateFile`; loaded on startup; created from `gateway.json` when missing).
+- `--sqlite PATH` enables sqlite persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-sqlite`; loaded on startup).
+- `--pg URL` / `--pg-env ENV` enables postgres persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-postgres`; loaded on startup).
+- `--mysql URL` / `--mysql-env ENV` enables mysql persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-mysql`; loaded on startup).
+- `--redis URL` enables redis persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-redis`).
 - `--redis-env ENV` loads the redis URL from env (works with `--dotenv`; requires `--features gateway-store-redis`).
 - `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis` and `--redis`/`--redis-env`).
+- `--audit-retention-secs SECS` sets audit retention for sqlite/pg/mysql/redis stores (`0` disables retention; default is 30 days when any persistent store is configured).
+- `--db-doctor` runs store schema checks and exits (startup also performs schema self-check and fails fast on mismatch).
 - `--json-logs` emits JSON log records to stderr.
 - `--proxy-max-in-flight N` limits concurrent in-flight proxy requests (rejects with 429 when exceeded). If omitted, default is `256`.
 - `--proxy-cache` enables a best-effort cache for non-streaming OpenAI-compatible responses (requires `--features gateway-proxy-cache`). When combined with `--redis`, responses are also cached in Redis (shared across instances).
@@ -219,6 +237,7 @@ CLI options:
 - `--proxy-cache-max-total-body-bytes N` sets the in-memory total cached body budget (implies `--proxy-cache`).
 - `--proxy-retry` enables retry on retryable statuses (requires `--features gateway-routing-advanced`).
 - `--proxy-retry-status-codes CODES` overrides retry status codes (comma-separated; implies `--proxy-retry`).
+- `--proxy-fallback-status-codes CODES` falls back to the next backend when a response status matches (comma-separated; works even when retry is disabled).
 - `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).
 - `--proxy-circuit-breaker` enables a simple circuit breaker (requires `--features gateway-routing-advanced`).
 - `--proxy-cb-failure-threshold N` sets circuit breaker failure threshold (implies `--proxy-circuit-breaker`).

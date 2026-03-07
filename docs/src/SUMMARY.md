@@ -50,6 +50,7 @@
   - [预算与成本（Tokens / USD）](./gateway/budgets-and-costing.md)
   - [缓存：Control-plane / Proxy Cache](./gateway/caching.md)
   - [存储：state / sqlite / redis](./gateway/storage.md)
+  - [存储基准（audit + reap）](./gateway/storage-bench.md)
   - [观测：logs / Prometheus / OTel](./gateway/observability.md)
   - [部署：多副本与分布式](./gateway/deployment.md)
   - [安全与加固](./gateway/security.md)
@@ -66,6 +67,7 @@
   - [从 Vercel AI SDK 迁移（概念对照）](./migration/from-ai-sdk.md)
 
 - [Roadmap](./roadmap/index.md)
+  - [Rust Native Provider Catalog](./roadmap/rust-native-provider-catalog.md)
   - [Superset Contract（兼容性口径）](./roadmap/contract.md)
   - [Gap Analysis（对标 LiteLLM + AI SDK）](./roadmap/gaps.md)
   - [Superset Roadmap（可执行切片）](./roadmap/superset.md)

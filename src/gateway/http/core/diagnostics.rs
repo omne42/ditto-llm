@@ -3,8 +3,7 @@ async fn health() -> Json<HealthResponse> {
 }
 
 async fn metrics(State(state): State<GatewayHttpState>) -> Json<ObservabilitySnapshot> {
-    let gateway = state.gateway.lock().await;
-    Json(gateway.observability())
+    Json(state.observability_snapshot())
 }
 
 #[cfg(feature = "gateway-proxy-cache")]

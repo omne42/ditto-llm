@@ -645,20 +645,17 @@ async fn enforce_mcp_auth(
     state: &GatewayHttpState,
     headers: &HeaderMap,
 ) -> Result<(), axum::response::Response> {
-    let mut gateway = state.gateway.lock().await;
-    if gateway.config.virtual_keys.is_empty() {
+    if !state.uses_virtual_keys() {
         return Ok(());
     }
     let token = extract_virtual_key(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
-    let key = gateway
+    let key = state
         .virtual_key_by_token(&token)
-        .cloned()
         .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
     if !key.enabled {
         return Err(StatusCode::UNAUTHORIZED.into_response());
     }
-    gateway.observability.record_request();
-    drop(gateway);
+    state.record_request();
     Ok(())
 }
 

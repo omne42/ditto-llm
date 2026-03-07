@@ -1,0 +1,903 @@
+# Generated from official Tencent Hunyuan / Tencent Cloud docs.
+# Edit via scripts/generate_hunyuan_model_catalog.py.
+# Sources:
+# - https://cloud.tencent.com/document/product/1729/104753
+# - https://cloud.tencent.com/document/product/1729/101848
+# - https://cloud.tencent.com/document/api/1729/105701
+# - https://cloud.tencent.com/document/api/1729/102832
+# - https://cloud.tencent.com/document/api/1729/118394
+# - https://cloud.tencent.com/document/api/1729/116923
+# - https://cloud.tencent.com/document/api/1729/113395
+# - https://cloud.tencent.com/document/api/1729/112207
+# - https://cloud.tencent.com/document/api/1729/105969
+# - https://cloud.tencent.com/document/api/1729/110428
+# - https://cloud.tencent.com/document/api/1729/108738
+# - https://cloud.tencent.com/document/product/1729/111007
+# - https://cloud.tencent.com/document/product/1729/127293
+# Generated at: 2026-03-06T22:44:29Z
+
+[provider]
+id = "hunyuan"
+display_name = "Tencent Hunyuan"
+base_url = "https://api.hunyuan.cloud.tencent.com/v1"
+protocol = "hunyuan"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+
+[provider.auth]
+type = "api_key_env"
+keys = ["HUNYUAN_API_KEY"]
+
+[models."hunyuan-2.0-instruct-20251111"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701", "https://cloud.tencent.com/document/product/1729/127293"]
+display_name = "Tencent HY 2.0 Instruct"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion", "anthropic.messages"]
+categories = ["文本模型"]
+summary = "发布特性： 1. 模型底座从 TurboS 升级为混元2.0，模型能力全面提升。 2. 显著增强模型的指令遵循、多轮及长文理解、文学创作、知识准确性、代码及推理能力。"
+latest_update = "2025-11-11"
+input_output = "最大输入128k 最大输出16k"
+context_window_tokens = 128000
+max_output_tokens = 16000
+
+[[models."hunyuan-2.0-instruct-20251111".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "Tencent HY 2.0 Instruct（hunyuan-2.0-instruct-20251111）", "2025-11-11", "发布特性： 1. 模型底座从 TurboS 升级为混元2.0，模型能力全面提升。 2. 显著增强模型的指令遵循、多轮及长文理解、文学创作、知识准确性、代码及推理能力。", "最大输入128k 最大输出16k", "调用示例 立即体验"]
+
+[[models."hunyuan-2.0-instruct-20251111".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[[models."hunyuan-2.0-instruct-20251111".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/127293"
+source_page = "anthropic_compatibility"
+section = "Anthropic 兼容接口 / /v1/messages"
+api_surface = "anthropic.messages"
+endpoint = "https://api.hunyuan.cloud.tencent.com/anthropic/v1/messages"
+notes = "Official Anthropic-compatible examples enumerate this model with the Hunyuan compatibility endpoint."
+
+[models."hunyuan-2.0-thinking-20251109"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701", "https://cloud.tencent.com/document/product/1729/127293"]
+display_name = "Tencent HY 2.0 Think"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion", "anthropic.messages"]
+categories = ["文本模型"]
+summary = "发布特性： 1. 模型底座从 TurboS 升级为混元2.0，模型能力全面提升。 2. 显著增强模型的复杂指令遵循、多轮及长文理解、代码、Agent、推理能力。"
+latest_update = "2025-11-09"
+input_output = "最大输入128k 最大输出64k"
+context_window_tokens = 128000
+max_output_tokens = 64000
+
+[[models."hunyuan-2.0-thinking-20251109".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["通用文生文", "Tencent HY 2.0 Think（hunyuan-2.0-thinking-20251109）", "2025-11-09", "发布特性： 1. 模型底座从 TurboS 升级为混元2.0，模型能力全面提升。 2. 显著增强模型的复杂指令遵循、多轮及长文理解、代码、Agent、推理能力。", "最大输入128k 最大输出64k", "调用示例 立即体验"]
+
+[[models."hunyuan-2.0-thinking-20251109".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[[models."hunyuan-2.0-thinking-20251109".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/127293"
+source_page = "anthropic_compatibility"
+section = "Anthropic 兼容接口 / /v1/messages"
+api_surface = "anthropic.messages"
+endpoint = "https://api.hunyuan.cloud.tencent.com/anthropic/v1/messages"
+notes = "Official Anthropic-compatible examples enumerate this model with the Hunyuan compatibility endpoint."
+
+[models."hunyuan-a13b"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "hunyuan-a13b"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["文本模型"]
+summary = "1. 适用场景：绝大部分场景，同时兼顾效果及推理性能。 2. 模型能力和特征：混元第一个混合推理模型，hunyuan-standard-256K 的升级版本，总参数80B，激活13B，默认是慢思考模式，支持通过参数或者指令进行快慢思考模式切换，快慢思考切换方式为 query 前加/ no_think ；整体能力相对上一代全面提升，特别是数学、科学、长文理解和 Agent 能力提升显著。 3. 模型结构：混元 MoE 结构。"
+latest_update = "2025-06-25"
+input_output = "最大输入224k 最大输出32k"
+context_window_tokens = 224000
+max_output_tokens = 32000
+
+[[models."hunyuan-a13b".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-a13b", "2025-06-25", "1. 适用场景：绝大部分场景，同时兼顾效果及推理性能。 2. 模型能力和特征：混元第一个混合推理模型，hunyuan-standard-256K 的升级版本，总参数80B，激活13B，默认是慢思考模式，支持通过参数或者指令进行快慢思考模式切换，快慢思考切换方式为 query 前加/ no_think ；整体能力相对上一代全面提升，特别是数学、科学、长文理解和 Agent 能力提升显著。 3. 模型结构：混元 MoE 结构。", "最大输入224k 最大输出32k", "调用示例 立即体验"]
+
+[[models."hunyuan-a13b".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-code"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-code"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "代码模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-code".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-code"]
+
+[[models."hunyuan-code".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-embedding"]
+source_url = "https://cloud.tencent.com/document/api/1729/102832"
+source_urls = ["https://cloud.tencent.com/document/api/1729/102832", "https://cloud.tencent.com/document/product/1729/111007"]
+display_name = "hunyuan-embedding"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["embedding"]
+categories = ["嵌入模型"]
+summary = "混元文本向量化能力对应的模型标识。原生 GetEmbedding 接口不暴露 model 参数，OpenAI 兼容 /v1/embeddings 固定使用 hunyuan-embedding。"
+embedding_dimensions = 1024
+
+[[models."hunyuan-embedding".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/102832"
+source_page = "get_embedding"
+section = "向量化"
+api_surface = "embedding"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "GetEmbedding"
+version = "2023-09-01"
+notes = "The native GetEmbedding API is fixed at 1024 dimensions and does not expose a model parameter."
+
+[[models."hunyuan-embedding".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / /v1/embeddings"
+api_surface = "embedding"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/embeddings"
+notes = "The OpenAI-compatible embedding surface fixes model=hunyuan-embedding and dimensions=1024."
+
+[models."hunyuan-functioncall"]
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_urls = ["https://cloud.tencent.com/document/product/1729/111007", "https://cloud.tencent.com/document/api/1729/112207"]
+display_name = "hunyuan-functioncall"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion", "thread.run"]
+categories = ["文本模型", "工具调用模型", "OpenAI兼容模型"]
+summary = "混元 OpenAI 兼容接口官方 Function Calling 示例使用的模型标识，同时仍出现在 RunThread 文档枚举中。"
+
+[[models."hunyuan-functioncall".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / Function Calling"
+api_surface = "chat.completion"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+notes = "Official OpenAI-compatible function-calling examples use hunyuan-functioncall."
+
+[[models."hunyuan-functioncall".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-functioncall"]
+
+[[models."hunyuan-functioncall".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "The RunThread API still enumerates hunyuan-functioncall in the current docs."
+
+[models."hunyuan-image"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105969"]
+display_name = "混元生图"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["image.generation.async"]
+categories = ["图片生成模型"]
+summary = "输入 prompt 文本，生成图像。 prompt 扩写：支持 prompt 自动扩写优化。 绘画风格：支持18种预置风格选项 + prompt 自定义风格。 分辨率：支持8种分辨率。 生成数量：支持1 - 4张。 随机种子：支持随机种子生成或自定义固定种子生成。"
+latest_update = "2024-09-11"
+input_output = "最大输入1024字符文本 最大输出4张图片"
+
+[[models."hunyuan-image".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元生图 / 当前能力"
+columns = ["模型类型", "模型名称", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["混元生图", "混元生图", "2024-09-11", "输入 prompt 文本，生成图像。 prompt 扩写：支持 prompt 自动扩写优化。 绘画风格：支持18种预置风格选项 + prompt 自定义风格。 分辨率：支持8种分辨率。 生成数量：支持1 - 4张。 随机种子：支持随机种子生成或自定义固定种子生成。", "最大输入1024字符文本 最大输出4张图片", "调用示例 立即体验"]
+
+[[models."hunyuan-image".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105969"
+source_page = "submit_hunyuan_image_job"
+section = "提交混元生图任务"
+api_surface = "image.generation.async"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "SubmitHunyuanImageJob"
+version = "2023-09-01"
+notes = "The native image generation API is job-based and does not expose a separate model parameter."
+
+[models."hunyuan-image-chat"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/110428"]
+display_name = "混元生图（多轮对话）"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["image.generation.async"]
+categories = ["图片生成模型"]
+summary = "输入 prompt 文本，生成图像，支持通过多轮对话的方式不断调整图像内容。"
+latest_update = "2024-08-28"
+input_output = "最大输入100轮对话文本 输出图片"
+
+[[models."hunyuan-image-chat".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元生图 / 当前能力"
+columns = ["模型类型", "模型名称", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "混元生图 （多轮对话）", "2024-08-28", "输入 prompt 文本，生成图像，支持通过多轮对话的方式不断调整图像内容。", "最大输入100轮对话文本 输出图片", "调用示例"]
+
+[[models."hunyuan-image-chat".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/110428"
+source_page = "submit_hunyuan_image_chat_job"
+section = "提交混元生图（多轮对话）任务"
+api_surface = "image.generation.async"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "SubmitHunyuanImageChatJob"
+version = "2023-09-01"
+notes = "The multi-turn image API is job-based and uses ChatId to continue editing the generated image."
+
+[models."hunyuan-image-lite"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/108738"]
+display_name = "文生图轻量版"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["image.generation"]
+categories = ["图片生成模型"]
+summary = "输入 prompt 文本，生成图像，支持更轻量的同步请求方式和更高的性能。"
+latest_update = "2024-07-15"
+input_output = "最大输入256字符文本 输出图片"
+
+[[models."hunyuan-image-lite".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元生图 / 当前能力"
+columns = ["模型类型", "模型名称", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "文生图轻量版", "2024-07-15", "输入 prompt 文本，生成图像，支持更轻量的同步请求方式和更高的性能。", "最大输入256字符文本 输出图片", "调用示例"]
+
+[[models."hunyuan-image-lite".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/108738"
+source_page = "text_to_image_lite"
+section = "文生图轻量版"
+api_surface = "image.generation"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "TextToImageLite"
+version = "2023-09-01"
+notes = "The lightweight text-to-image API is synchronous and returns the generated image directly."
+
+[models."hunyuan-large-role-group"]
+source_url = "https://cloud.tencent.com/document/api/1729/116923"
+display_name = "hunyuan-large-role-group"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["group.chat.completion"]
+categories = ["角色扮演模型", "群聊模型"]
+summary = "群聊角色扮演模型，来自腾讯云 GroupChatCompletions 接口的官方枚举值。"
+
+[[models."hunyuan-large-role-group".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/116923"
+source_page = "group_chat_completions"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-large-role-group"]
+
+[[models."hunyuan-large-role-group".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/116923"
+source_page = "group_chat_completions"
+section = "群聊"
+api_surface = "group.chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "GroupChatCompletions"
+version = "2023-09-01"
+notes = "The native GroupChatCompletions API explicitly enumerates hunyuan-large-role-group."
+
+[models."hunyuan-large-role-latest"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "hunyuan-large-role-latest"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["角色扮演模型"]
+summary = "1. 适用场景：AI 数字分身、AI 角色扮演、AI情感陪聊等 2. 特性说明：显著提升了角色一致性与对话深度。通过在大规模高质量角色对话数据上的强化训练，模型能深度理解并稳定维持角色设定，有效减少 OOC（脱离角色）问题。不仅在多轮互动中保持上下文连贯，更大幅提升了聊天的趣味性和沉浸感，使每次对话都生动而富有深度。"
+latest_update = "2025-09-24"
+input_output = "最大输入28k 最大输出4k"
+context_window_tokens = 28000
+max_output_tokens = 4000
+
+[[models."hunyuan-large-role-latest".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "角色扮演 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["角色扮演", "hunyuan-large-role-latest", "2025-09-24", "1. 适用场景：AI 数字分身、AI 角色扮演、AI情感陪聊等 2. 特性说明：显著提升了角色一致性与对话深度。通过在大规模高质量角色对话数据上的强化训练，模型能深度理解并稳定维持角色设定，有效减少 OOC（脱离角色）问题。不仅在多轮互动中保持上下文连贯，更大幅提升了聊天的趣味性和沉浸感，使每次对话都生动而富有深度。", "最大输入28k 最大输出4k", "调用示例 立即体验"]
+
+[[models."hunyuan-large-role-latest".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-lite"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701", "https://cloud.tencent.com/document/product/1729/111007"]
+display_name = "hunyuan-lite"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["文本模型", "OpenAI兼容模型"]
+summary = "升级为 MOE 结构，上下文窗口为 256k ，在 NLP，代码，数学，行业等多项评测集上领先众多开源模型。"
+latest_update = "2024-10-30"
+input_output = "最大输入250k 最大输出6k"
+context_window_tokens = 250000
+max_output_tokens = 6000
+
+[[models."hunyuan-lite".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-lite", "2024-10-30", "升级为 MOE 结构，上下文窗口为 256k ，在 NLP，代码，数学，行业等多项评测集上领先众多开源模型。", "最大输入250k 最大输出6k", "调用示例 立即体验"]
+
+[[models."hunyuan-lite".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[[models."hunyuan-lite".records]]
+table_kind = "compatibility_note"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / 混元自定义参数"
+api_surface = "chat.completion"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+notes = "The OpenAI compatibility docs explicitly note that hunyuan-lite does not support enhancement-related custom parameters."
+
+[models."hunyuan-pro"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-pro"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "文本模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-pro".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-pro"]
+
+[[models."hunyuan-pro".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-role"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-role"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "角色扮演模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-role".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-role"]
+
+[[models."hunyuan-role".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-standard"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-standard"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "文本模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-standard".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-standard"]
+
+[[models."hunyuan-standard".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-standard-256K"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-standard-256K"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "文本模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-standard-256K".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-standard-256K"]
+
+[[models."hunyuan-standard-256K".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-t1-latest"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "hunyuan-t1-latest"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["文本模型"]
+summary = "【推理模型】【最新版本】 业内首个超大规模 Hybrid-Transformer-Mamba 推理模型，扩展推理能力，超强解码速度，进一步对齐人类偏好。"
+latest_update = "2025-08-22"
+input_output = "最大输入32k 最大输出64k"
+context_window_tokens = 32000
+max_output_tokens = 64000
+
+[[models."hunyuan-t1-latest".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-t1-latest", "2025-08-22", "【推理模型】【最新版本】 业内首个超大规模 Hybrid-Transformer-Mamba 推理模型，扩展推理能力，超强解码速度，进一步对齐人类偏好。", "最大输入32k 最大输出64k", "调用示例 立即体验"]
+
+[[models."hunyuan-t1-latest".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-t1-vision-20250916"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "hunyuan-t1-vision-20250916"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["视觉理解模型"]
+summary = "混元最新版 t1-vision 视觉深度思考模型，相比上一版模型在通用图文问答、视觉定位、OCR、图表、拍题解题、看图创作等任务上全面提升，显著优化了英文和小语种能力。"
+latest_update = "2025-09-16"
+input_output = "最大输入28k 最大输出20k"
+context_window_tokens = 28000
+max_output_tokens = 20000
+
+[[models."hunyuan-t1-vision-20250916".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元图生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-t1-vision-20250916", "2025-09-16", "混元最新版 t1-vision 视觉深度思考模型，相比上一版模型在通用图文问答、视觉定位、OCR、图表、拍题解题、看图创作等任务上全面提升，显著优化了英文和小语种能力。", "最大输入28k 最大输出20k", "调用示例 立即体验"]
+
+[[models."hunyuan-t1-vision-20250916".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-translation"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/113395"]
+display_name = "hunyuan-translation"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.translation"]
+categories = ["翻译模型"]
+summary = "支持语种齐全，33种语言互译和5种民族语言互译； 同尺寸模型中效果最优，WMT25比赛30种语言获得第一，开源测试集Flores200效果领先； 支持语种：中文，英语，法语，葡萄牙语，西班牙语，日语，土耳其语，俄语，阿拉伯语，韩语，泰语，意大利语，德语，越南语，马来语，印尼语，菲律宾语，印地语，中文繁体，波兰语，捷克语，荷兰语，高棉语，缅甸语，波斯语，古吉拉特语，乌尔都语，泰卢固语，马拉地语，希伯来语，孟加拉语，泰米尔语，乌克兰语，藏语，哈萨克语，蒙古语，维吾尔语，粤语。"
+latest_update = "2025-10-14"
+input_output = "最大输入4k 最大输出4k"
+context_window_tokens = 4000
+max_output_tokens = 4000
+
+[[models."hunyuan-translation".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "翻译 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["翻译", "hunyuan-translation", "2025-10-14", "支持语种齐全，33种语言互译和5种民族语言互译； 同尺寸模型中效果最优，WMT25比赛30种语言获得第一，开源测试集Flores200效果领先； 支持语种：中文，英语，法语，葡萄牙语，西班牙语，日语，土耳其语，俄语，阿拉伯语，韩语，泰语，意大利语，德语，越南语，马来语，印尼语，菲律宾语，印地语，中文繁体，波兰语，捷克语，荷兰语，高棉语，缅甸语，波斯语，古吉拉特语，乌尔都语，泰卢固语，马拉地语，希伯来语，孟加拉语，泰米尔语，乌克兰语，藏语，哈萨克语，蒙古语，维吾尔语，粤语。", "最大输入4k 最大输出4k", "调用示例 立即体验"]
+
+[[models."hunyuan-translation".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/113395"
+source_page = "chat_translations"
+section = "输入参数 / Model"
+api_surface = "chat.translation"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatTranslations"
+version = "2023-09-01"
+notes = "The ChatTranslations API explicitly enumerates hunyuan-translation and hunyuan-translation-lite."
+
+[models."hunyuan-translation-lite"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/113395"]
+display_name = "hunyuan-translation-lite"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.translation"]
+categories = ["翻译模型"]
+summary = "混元翻译专项模型，基于混元2B-Dense 模型进行翻译能力专项优化，通过迭代高质量多语言SFT数据，强化多语种翻译能力。支持简体中文、繁体中文、粤语、日语、法语、葡萄牙语、西班牙语、土耳其语、俄语、阿拉伯语、韩语、意大利语、德语、越南语、马来语、印尼语等语言互译。"
+latest_update = "2025-06-06"
+input_output = "最大输入4k 最大输出4k"
+context_window_tokens = 4000
+max_output_tokens = 4000
+
+[[models."hunyuan-translation-lite".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "翻译 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-translation-lite", "2025-06-06", "混元翻译专项模型，基于混元2B-Dense 模型进行翻译能力专项优化，通过迭代高质量多语言SFT数据，强化多语种翻译能力。支持简体中文、繁体中文、粤语、日语、法语、葡萄牙语、西班牙语、土耳其语、俄语、阿拉伯语、韩语、意大利语、德语、越南语、马来语、印尼语等语言互译。", "最大输入4k 最大输出4k", "调用示例 立即体验"]
+
+[[models."hunyuan-translation-lite".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/113395"
+source_page = "chat_translations"
+section = "输入参数 / Model"
+api_surface = "chat.translation"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatTranslations"
+version = "2023-09-01"
+notes = "The ChatTranslations API explicitly enumerates hunyuan-translation and hunyuan-translation-lite."
+
+[models."hunyuan-turbo"]
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+display_name = "hunyuan-turbo"
+status = "historical"
+vendor = "tencent"
+api_surfaces = ["thread.run"]
+categories = ["历史线程模型", "文本模型"]
+summary = "该模型 ID 未出现在当前产品概述模型总表中，但仍由 RunThread 文档作为官方枚举值列出。"
+
+[[models."hunyuan-turbo".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-turbo"]
+
+[[models."hunyuan-turbo".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "Current Tencent Cloud RunThread docs still enumerate this legacy model id."
+
+[models."hunyuan-turbos"]
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+display_name = "hunyuan-turbos"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["文本模型", "OpenAI兼容模型"]
+summary = "该模型 ID 出现在混元 OpenAI 兼容接口参数说明中。文档同时提供了 hunyuan-turbos-latest 的直接示例调用。"
+
+[[models."hunyuan-turbos".records]]
+table_kind = "compatibility_note"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / 参数说明"
+api_surface = "chat.completion"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+notes = "The OpenAI compatibility docs reference this model id in tool-choice parameter notes."
+
+[models."hunyuan-turbos-latest"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701", "https://cloud.tencent.com/document/product/1729/111007"]
+display_name = "hunyuan-turbos-latest"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["文本模型"]
+aliases = ["hunyuan-turbos"]
+summary = "hunyuan-TurboS 混元旗舰大模型最新版本，具备更强的思考能力，更优的体验效果，已更新至最新版本。"
+latest_update = "2025-07-16"
+input_output = "最大输入32k 最大输出16k"
+context_window_tokens = 32000
+max_output_tokens = 16000
+
+[[models."hunyuan-turbos-latest".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "通用文生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["", "hunyuan-turbos-latest", "2025-07-16", "hunyuan-TurboS 混元旗舰大模型最新版本，具备更强的思考能力，更优的体验效果，已更新至最新版本。", "最大输入32k 最大输出16k", "调用示例 立即体验"]
+
+[[models."hunyuan-turbos-latest".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[[models."hunyuan-turbos-latest".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / chat.completions 示例"
+api_surface = "chat.completion"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+notes = "Official OpenAI-compatible examples use hunyuan-turbos-latest with the /v1/chat/completions surface."
+
+[models."hunyuan-turbos-vision-video"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "hunyuan-turbos-vision-video"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["视频理解模型"]
+summary = "适用于视频理解场景； 发布特性：基于混元turbos-vision的视频理解模型，支持视频描述、视频内容问答等基本的视频理解能力。"
+latest_update = "2025-07-28"
+input_output = "最大输入24k 最大输出8k"
+context_window_tokens = 24000
+max_output_tokens = 8000
+
+[[models."hunyuan-turbos-vision-video".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元视频生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["混元视频生文", "hunyuan-turbos-vision-video", "2025-07-28", "适用于视频理解场景； 发布特性：基于混元turbos-vision的视频理解模型，支持视频描述、视频内容问答等基本的视频理解能力。", "最大输入24k 最大输出8k", "调用示例 立即体验"]
+
+[[models."hunyuan-turbos-vision-video".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-vision"]
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_urls = ["https://cloud.tencent.com/document/product/1729/111007", "https://cloud.tencent.com/document/api/1729/112207"]
+display_name = "hunyuan-vision"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion", "thread.run"]
+categories = ["视觉理解模型", "OpenAI兼容模型"]
+summary = "混元 OpenAI 兼容接口官方图生文示例使用的视觉模型标识，同时仍出现在 RunThread 文档枚举中。"
+
+[[models."hunyuan-vision".records]]
+table_kind = "compatibility"
+source_url = "https://cloud.tencent.com/document/product/1729/111007"
+source_page = "openai_compatibility"
+section = "OpenAI 兼容接口 / 图生文"
+api_surface = "chat.completion"
+endpoint = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+notes = "Official OpenAI-compatible multimodal examples use hunyuan-vision."
+
+[[models."hunyuan-vision".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-vision"]
+
+[[models."hunyuan-vision".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/112207"
+source_page = "run_thread"
+section = "执行会话"
+api_surface = "thread.run"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "RunThread"
+version = "2023-09-01"
+notes = "The RunThread API still enumerates hunyuan-vision in the current docs."
+
+[models."hunyuan-vision-1.5-instruct"]
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_urls = ["https://cloud.tencent.com/document/product/1729/104753", "https://cloud.tencent.com/document/api/1729/105701"]
+display_name = "Tencent HY Vision 1.5 Instruct"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["chat.completion"]
+categories = ["视觉理解模型"]
+summary = "基于文本 TurboS 基座生成的图生文快思考模型，相比上一版本在图像基础识别、图像分析推理等维度都有明显的效果提升。"
+latest_update = "2025-12-17"
+input_output = "最大输入24k 最大输出16k"
+context_window_tokens = 24000
+max_output_tokens = 16000
+
+[[models."hunyuan-vision-1.5-instruct".records]]
+table_kind = "source_table"
+source_url = "https://cloud.tencent.com/document/product/1729/104753"
+source_page = "product_overview"
+section = "混元图生文 / 当前模型"
+columns = ["模型类型", "模型名称（API 调用名）", "版本更新时间", "能力和特征", "输入输出", "相关文档"]
+values = ["混元图生文", "Tencent HY Vision 1.5 Instruct（hunyuan-vision-1.5-instruct）", "2025-12-17", "基于文本 TurboS 基座生成的图生文快思考模型，相比上一版本在图像基础识别、图像分析推理等维度都有明显的效果提升。", "最大输入24k 最大输出16k", "调用示例 立即体验"]
+
+[[models."hunyuan-vision-1.5-instruct".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/105701"
+source_page = "chat_completions"
+section = "对话 / 输入参数 / Model"
+api_surface = "chat.completion"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ChatCompletions"
+version = "2023-09-01"
+notes = "Tencent Cloud native chat endpoint. The Model parameter references the current product overview model list."
+
+[models."hunyuan-vision-image-question"]
+source_url = "https://cloud.tencent.com/document/api/1729/118394"
+display_name = "hunyuan-vision-image-question"
+status = "active"
+vendor = "tencent"
+api_surfaces = ["image.question"]
+categories = ["图像理解模型", "拍照解题模型"]
+summary = "拍照解题专用图像理解模型，来自腾讯云 ImageQuestion 接口的官方枚举值。"
+
+[[models."hunyuan-vision-image-question".records]]
+table_kind = "api_enum"
+source_url = "https://cloud.tencent.com/document/api/1729/118394"
+source_page = "image_question"
+section = "输入参数 / Model"
+columns = ["Model"]
+values = ["hunyuan-vision-image-question"]
+
+[[models."hunyuan-vision-image-question".records]]
+table_kind = "api_reference"
+source_url = "https://cloud.tencent.com/document/api/1729/118394"
+source_page = "image_question"
+section = "拍照解题"
+api_surface = "image.question"
+endpoint = "https://hunyuan.tencentcloudapi.com"
+action = "ImageQuestion"
+version = "2023-09-01"
+notes = "The native ImageQuestion API explicitly enumerates hunyuan-vision-image-question."

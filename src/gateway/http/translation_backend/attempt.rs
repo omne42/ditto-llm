@@ -28,13 +28,13 @@ async fn attempt_translation_backend(
     let user_budget_scope = params.user_budget_scope;
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
     let token_budget_reservation_ids = params.token_budget_reservation_ids;
 
     let _cost_budget_reserved = params.cost_budget_reserved;
     #[cfg(all(
         feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+        any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
     ))]
     let cost_budget_reservation_ids = params.cost_budget_reservation_ids;
 
@@ -120,10 +120,7 @@ async fn attempt_translation_backend(
                 }
             };
 
-            {
-                let mut gateway = state.gateway.lock().await;
-                gateway.observability.record_backend_call();
-            }
+            state.record_backend_call();
 
             #[cfg(feature = "gateway-metrics-prometheus")]
             let backend_timer_start = std::time::Instant::now();

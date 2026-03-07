@@ -8,6 +8,13 @@
 - **Gateway（LiteLLM-like）**：覆盖 LiteLLM Proxy 的核心平台能力（OpenAI-compatible HTTP surface、virtual keys、limits/budget/cache/routing、日志/指标），并提供“passthrough/translation”两种模式。
 - **不变形直通（OpenAI Responses）**：对 OpenAI `/responses`（含 `/responses/compact`）提供 raw passthrough，保证 items round-trip。
 
+分层路线（L0/L1/L2）：
+
+- **L0（本仓库）**：互转内核与直接调用（SDK/adapters/protocol）。
+- **L1（本仓库）**：Gateway/Proxy 平台能力（API/routing/control-plane + 轻量治理补充）。
+- **L2（独立仓库）**：企业闭环平台（prompt/eval/agent eval/组织治理与审批流）。
+- **边界约束**：L2 依赖 L1 稳定契约；L1 可独立部署运行，不依赖 L2。
+
 本仓库内相关文档：
 
 - `README.md`（概览 + 用法）
@@ -143,6 +150,7 @@
   - 验证：
     - `cargo test --all-targets --all-features`
 - [ ] 路由：更丰富的策略（分级 fallback、按错误类型熔断、按路由 backpressure）
+  - [x] 新增按状态码 fallback 策略（`--proxy-fallback-status-codes`，可独立于 retry 启用）
   - DoD：
     - 路由策略可以表达“哪些错误才允许 fallback / retry”，并提供可解释的决策日志
     - 为路由策略补充回归测试（至少覆盖：网络错误、429/5xx、超时、熔断恢复）
@@ -162,8 +170,9 @@
     - `cargo test --all-targets --all-features`
 - [ ] 企业平台：配置版本化/灰度/回滚（以运维可控为第一优先级）
   - DoD：
-    - 配置有版本号与变更历史；支持灰度发布与一键回滚
-    - 关键变更（keys/budgets/router）具备审计记录与可复现性
+    - [x] L1 最小切片：virtual keys + router 配置版本历史、差异对比、导出校验与回滚（`GET /admin/config/version`、`GET /admin/config/versions`、`GET /admin/config/versions/:version_id`、`GET /admin/config/diff`、`GET /admin/config/export`、`POST /admin/config/validate`、`PUT /admin/config/router`、`POST /admin/config/rollback`，支持 `dry_run`）
+    - [ ] 配置灰度发布（按租户/流量/路由分批）与一键回滚
+    - [ ] 扩展版本覆盖面（keys 之外的 budgets/router/policy）与跨维度复现能力
   - 验证：
     - `cargo test --all-targets --all-features`
 

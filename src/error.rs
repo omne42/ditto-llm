@@ -15,6 +15,8 @@ pub enum DittoError {
     InvalidResponse(String),
     #[error("failed to run auth command: {0}")]
     AuthCommand(String),
+    #[error("config error: {0}")]
+    Config(String),
     #[error("failed to parse json: {0}")]
     Json(#[from] serde_json::Error),
 }

@@ -1,4 +1,7 @@
 /target/
+**/target/
+crates/ditto-gateway-contract-types/Cargo.lock
+crates/ditto-gateway-contract-guard/Cargo.lock
 **/*.rs.bk
 .DS_Store
 docs/book/

@@ -27,6 +27,23 @@ impl RedisStore {
         Ok(())
     }
 
+    pub async fn load_router_config(&self) -> Result<Option<RouterConfig>, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let redis_key = self.key_router_config();
+        let raw: Option<String> = conn.get(redis_key).await?;
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::from_str(&raw)?))
+    }
+
+    pub async fn replace_router_config(&self, router: &RouterConfig) -> Result<(), RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let redis_key = self.key_router_config();
+        let _: () = conn.set(redis_key, serde_json::to_string(router)?).await?;
+        Ok(())
+    }
+
     #[cfg(feature = "gateway-proxy-cache")]
     pub async fn get_proxy_cache_response(
         &self,

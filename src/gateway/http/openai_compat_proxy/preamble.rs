@@ -19,12 +19,12 @@ struct ProxyAttemptParams<'a> {
     project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     charge_cost_usd_micros: Option<u64>,
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
     token_budget_reservation_ids: &'a [String],
     cost_budget_reserved: bool,
     #[cfg(all(
         feature = "gateway-costing",
-        any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"),
+        any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
     ))]
     cost_budget_reservation_ids: &'a [String],
     max_attempts: usize,

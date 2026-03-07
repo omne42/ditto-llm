@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod batch;
+pub mod catalog;
 mod error;
 pub mod file;
 pub mod image;
@@ -29,14 +30,43 @@ pub mod sdk;
 
 pub use error::{DittoError, Result};
 pub use profile::{
-    Env, ModelConfig, OpenAiCompatibleClient, OpenAiModelsProvider, Provider, ProviderAuth,
-    ProviderCapabilities, ProviderConfig, ThinkingIntensity, filter_models_whitelist,
-    list_available_models, normalize_string_list, parse_dotenv, resolve_auth_token,
-    resolve_auth_token_with_default_keys, select_model_config,
+    AnthropicCatalogProvider, AnthropicModelCatalog, AnthropicModelCatalogEntry,
+    AnthropicModelPricing, AnthropicModelStatus, BuiltinProviderModelCandidate,
+    BuiltinProviderPreset, ConfigScope, Env, GoogleCatalogProvider, GoogleModelCatalog,
+    GoogleModelCatalogEntry, GoogleModelVersion, GoogleSupportedDataTypes, ModelConfig,
+    ModelDeleteReport, ModelDeleteRequest, ModelListReport, ModelListRequest, ModelShowReport,
+    ModelShowRequest, ModelSummary, ModelUpsertReport, ModelUpsertRequest, OpenAiCatalogProvider,
+    OpenAiCompatibleClient, OpenAiModalitySupport, OpenAiModelCatalog, OpenAiModelCatalogEntry,
+    OpenAiModelRevisions, OpenAiModelsProvider, OpenAiProviderFamily, OpenAiProviderQuirks,
+    PromptCacheUsageReporting, Provider, ProviderApi, ProviderAuth, ProviderAuthType,
+    ProviderCapabilities, ProviderConfig, ProviderDeleteReport, ProviderDeleteRequest,
+    ProviderListReport, ProviderListRequest, ProviderNamespace, ProviderRoutingConfig,
+    ProviderShowReport, ProviderShowRequest, ProviderSummary, ProviderUpsertReport,
+    ProviderUpsertRequest, ResolvedRoutingPlan, ResolvedRoutingTarget, RoutingConfigFormat,
+    RoutingContext, RoutingOverride, RoutingPhase, RoutingPolicy, RoutingPolicySource,
+    RoutingProviderProfile, RoutingStagePolicy, RoutingTarget, ThinkingIntensity,
+    anthropic_model_catalog, anthropic_model_catalog_entry, anthropic_model_catalog_entry_by_model,
+    builtin_models_for_provider, builtin_provider_candidates_for_model, builtin_provider_preset,
+    builtin_provider_presets, complete_model_upsert_request_interactive,
+    complete_provider_upsert_request_interactive, delete_model_config, delete_provider_config,
+    filter_models_whitelist, google_model_catalog, google_model_catalog_entry,
+    google_model_catalog_entry_by_model, infer_openai_provider_family,
+    infer_openai_provider_quirks, list_available_models, list_model_configs, list_provider_configs,
+    merge_provider_config, normalize_string_list, openai_model_catalog, openai_model_catalog_entry,
+    parse_dotenv, resolve_auth_token, resolve_auth_token_with_default_keys, select_model_config,
+    show_model_config, show_provider_config, upsert_model_config, upsert_provider_config,
 };
 
 pub use audio::{AudioTranscriptionModel, AudioTranslationModel, SpeechModel};
 pub use batch::BatchClient;
+pub use catalog::{
+    ApiSurfaceId, AuthMethodKind, CatalogRegistry, EndpointQueryParam, EndpointTemplate,
+    EvidenceLevel, EvidenceRef, HttpMethod, InvocationHints, ModelBinding, ModelSelector,
+    OperationKind, ProtocolQuirks, ProviderAuthHint, ProviderClass, ProviderModelDescriptor,
+    ProviderPluginDescriptor, ResolvedEndpoint, ResolvedInvocation, RuntimeRoute,
+    RuntimeRouteRequest, TransportKind, VerificationStatus, WireProtocol, builtin_provider_plugins,
+    builtin_registry,
+};
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};
 pub use file::{FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
 pub use image::ImageGenerationModel;

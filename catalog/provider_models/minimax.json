@@ -1,0 +1,2221 @@
+{
+  "provider": {
+    "id": "minimax",
+    "display_name": "MiniMax",
+    "base_url": "https://api.minimaxi.com",
+    "protocol": "minimax",
+    "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "MINIMAX_API_KEY"
+      ]
+    }
+  },
+  "models": {
+    "image-01": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/image-generation-t2i"
+      ],
+      "display_name": "image-01",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图片模型"
+      ],
+      "summary": "图像生成模型，画面表现细腻，支持文生图、图生图",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 图片模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "image-01",
+            "图像生成模型，画面表现细腻，支持文生图、图生图"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 图像生成（Image Generation） / 模型列表",
+          "api_surfaces": [
+            "image.generation"
+          ],
+          "columns": [
+            "模型名称",
+            "简介"
+          ],
+          "values": [
+            "image-01",
+            "图像生成模型，画面表现细腻，支持文生图、图生图（人物主体参考）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/image-generation-t2i",
+          "source_page": "model_list",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "endpoint": "https://api.minimaxi.com/v1/image_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "image-01-live": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/image-generation-t2i"
+      ],
+      "display_name": "image-01-live",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "image.generation"
+      ],
+      "categories": [
+        "图片模型"
+      ],
+      "summary": "图像生成模型，手绘、卡通等画风增强，支持文生图并进行画风设置",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 图片模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "image-01-live",
+            "图像生成模型，手绘、卡通等画风增强，支持文生图并进行画风设置"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 图像生成（Image Generation） / 模型列表",
+          "api_surfaces": [
+            "image.generation"
+          ],
+          "columns": [
+            "模型名称",
+            "简介"
+          ],
+          "values": [
+            "image-01-live",
+            "图像生成模型，在 image-01 基础上额外支持多种画风设置"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/image-generation-t2i",
+          "source_page": "model_list",
+          "section": "图像生成",
+          "api_surface": "image.generation",
+          "endpoint": "https://api.minimaxi.com/v1/image_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "M2-her": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/text-chat"
+      ],
+      "display_name": "M2-her",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "minimax.chatcompletion_v2"
+      ],
+      "categories": [
+        "文本模型",
+        "文本对话模型"
+      ],
+      "summary": "文本对话模型，专为角色扮演、多轮对话等场景设计",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "M2-her",
+            "文本对话模型，专为角色扮演、多轮对话等场景设计"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-chat",
+          "source_page": "model_list",
+          "section": "文本对话",
+          "api_surface": "minimax.chatcompletion_v2",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "MiniMax-Hailuo-02": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v"
+      ],
+      "display_name": "MiniMax-Hailuo-02",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "video.generation"
+      ],
+      "categories": [
+        "视频模型"
+      ],
+      "aliases": [
+        "MiniMax Hailuo 02"
+      ],
+      "summary": "新一代视频生成模型，1080p 原生，SOTA 指令遵循，极致物理表现",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 视频模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax Hailuo 02",
+            "新一代视频生成模型，1080p 原生，SOTA 指令遵循，极致物理表现"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 视频生成（Video Generation） / 支持模型",
+          "api_surfaces": [
+            "video.generation"
+          ],
+          "columns": [
+            "模型",
+            "功能"
+          ],
+          "values": [
+            "MiniMax-Hailuo-02",
+            "新一代视频生成模型，支持更高分辨率 (1080P) 和更长时长 (10s)，指令遵循能力更强"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v",
+          "source_page": "model_list",
+          "section": "视频生成",
+          "api_surface": "video.generation",
+          "endpoint": "https://api.minimaxi.com/v1/video_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "MiniMax-Hailuo-2.3": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v"
+      ],
+      "display_name": "MiniMax-Hailuo-2.3",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "video.generation"
+      ],
+      "categories": [
+        "视频模型"
+      ],
+      "aliases": [
+        "MiniMax Hailuo 2.3"
+      ],
+      "summary": "全新视频生成模型，肢体动作、面部表情、物理表现与指令遵循再度突破",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 视频模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax Hailuo 2.3",
+            "全新视频生成模型，肢体动作、面部表情、物理表现与指令遵循再度突破"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 视频生成（Video Generation） / 支持模型",
+          "api_surfaces": [
+            "video.generation"
+          ],
+          "columns": [
+            "模型",
+            "功能"
+          ],
+          "values": [
+            "MiniMax-Hailuo-2.3",
+            "全新视频生成模型，肢体动作、物理表现与指令遵循能力全面升级"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v",
+          "source_page": "model_list",
+          "section": "视频生成",
+          "api_surface": "video.generation",
+          "endpoint": "https://api.minimaxi.com/v1/video_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "MiniMax-Hailuo-2.3-Fast": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v"
+      ],
+      "display_name": "MiniMax-Hailuo-2.3-Fast",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "video.generation"
+      ],
+      "categories": [
+        "视频模型"
+      ],
+      "aliases": [
+        "MiniMax Hailuo 2.3 Fast"
+      ],
+      "summary": "全新图生视频模型，物理表现与指令遵循具佳，更快更优惠",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 视频模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax Hailuo 2.3 Fast",
+            "全新图生视频模型，物理表现与指令遵循具佳，更快更优惠"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 视频生成（Video Generation） / 支持模型",
+          "api_surfaces": [
+            "video.generation"
+          ],
+          "columns": [
+            "模型",
+            "功能"
+          ],
+          "values": [
+            "MiniMax-Hailuo-2.3-Fast",
+            "图生视频模型，生成速度大幅提升，以更高性价比兼顾画质与表现力"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/video-generation-t2v",
+          "source_page": "model_list",
+          "section": "视频生成",
+          "api_surface": "video.generation",
+          "endpoint": "https://api.minimaxi.com/v1/video_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "MiniMax-M2": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+        "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache"
+      ],
+      "display_name": "MiniMax-M2",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "anthropic.messages",
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "cache_modes": [
+        "passive",
+        "anthropic_active"
+      ],
+      "summary": "专为高效编码与Agent工作流而生",
+      "context_window_tokens": 204800,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax-M2",
+            "专为高效编码与Agent工作流而生"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 文本生成 / 支持模型",
+          "columns": [
+            "模型名称",
+            "输入输出总 token",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2",
+            "204800",
+            "专为高效编码与Agent工作流而生"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic",
+          "section": "text anthropic / 支持的模型",
+          "api_surfaces": [
+            "anthropic.messages"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2",
+            "204,800",
+            "专为高效编码与 Agent 工作流而生"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic_api",
+          "section": "text anthropic",
+          "api_surface": "anthropic.messages",
+          "endpoint": "https://api.minimaxi.com/anthropic/v1/messages",
+          "base_url": "https://api.minimaxi.com/anthropic",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai",
+          "section": "text openai / 支持的模型",
+          "api_surfaces": [
+            "chat.completion"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2",
+            "204,800",
+            "专为高效编码与 Agent 工作流而生"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai_api",
+          "section": "text openai",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "base_url": "https://api.minimaxi.com/v1",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+          "source_page": "prompt_cache",
+          "section": "Prompt 缓存 / Cache 对比",
+          "api_surface": "context.cache",
+          "cache_mode": "passive",
+          "notes": "Prompt 缓存（被动缓存）页面将 MiniMax-M2.5 / M2.1 / M2 系列列为支持模型。"
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surface": "context.cache",
+          "cache_mode": "anthropic_active",
+          "notes": "Anthropic 主动缓存页面将该模型列为支持模型。"
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surfaces": [
+            "context.cache",
+            "anthropic.messages"
+          ],
+          "cache_mode": "anthropic_active",
+          "columns": [
+            "模型",
+            "输入价格 元/百万 tokens",
+            "输出价格 元/百万 tokens",
+            "缓存读取 元/百万 tokens",
+            "缓存写入 元/百万 tokens"
+          ],
+          "values": [
+            "MiniMax-M2",
+            "2.1",
+            "8.4",
+            "0.21",
+            "2.625"
+          ]
+        }
+      ]
+    },
+    "MiniMax-M2.1": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+        "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache"
+      ],
+      "display_name": "MiniMax-M2.1",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "anthropic.messages",
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "cache_modes": [
+        "passive",
+        "anthropic_active"
+      ],
+      "summary": "强大多语言编程能力，全面升级代码工程体验",
+      "context_window_tokens": 204800,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1",
+            "强大多语言编程能力，全面升级代码工程体验"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 文本生成 / 支持模型",
+          "columns": [
+            "模型名称",
+            "输入输出总 token",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1",
+            "204800",
+            "强大多语言编程能力，全面升级编程体验 (输出速度约60tps)"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic",
+          "section": "text anthropic / 支持的模型",
+          "api_surfaces": [
+            "anthropic.messages"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1",
+            "204,800",
+            "强大多语言编程能力，全面升级编程体验 （输出速度约 60 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic_api",
+          "section": "text anthropic",
+          "api_surface": "anthropic.messages",
+          "endpoint": "https://api.minimaxi.com/anthropic/v1/messages",
+          "base_url": "https://api.minimaxi.com/anthropic",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai",
+          "section": "text openai / 支持的模型",
+          "api_surfaces": [
+            "chat.completion"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1",
+            "204,800",
+            "强大多语言编程能力，全面升级编程体验 （输出速度约 60 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai_api",
+          "section": "text openai",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "base_url": "https://api.minimaxi.com/v1",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+          "source_page": "prompt_cache",
+          "section": "Prompt 缓存 / Cache 对比",
+          "api_surface": "context.cache",
+          "cache_mode": "passive",
+          "notes": "Prompt 缓存（被动缓存）页面将 MiniMax-M2.5 / M2.1 / M2 系列列为支持模型。"
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surface": "context.cache",
+          "cache_mode": "anthropic_active",
+          "notes": "Anthropic 主动缓存页面将该模型列为支持模型。"
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surfaces": [
+            "context.cache",
+            "anthropic.messages"
+          ],
+          "cache_mode": "anthropic_active",
+          "columns": [
+            "模型",
+            "输入价格 元/百万 tokens",
+            "输出价格 元/百万 tokens",
+            "缓存读取 元/百万 tokens",
+            "缓存写入 元/百万 tokens"
+          ],
+          "values": [
+            "MiniMax-M2.1",
+            "2.1",
+            "8.4",
+            "0.21",
+            "2.625"
+          ]
+        }
+      ]
+    },
+    "MiniMax-M2.1-highspeed": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+        "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache"
+      ],
+      "display_name": "MiniMax-M2.1-highspeed",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "anthropic.messages",
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "cache_modes": [
+        "passive",
+        "anthropic_active"
+      ],
+      "summary": "与 M2.1 效果不变，速度大幅提升",
+      "context_window_tokens": 204800,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1-highspeed",
+            "与 M2.1 效果不变，速度大幅提升"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 文本生成 / 支持模型",
+          "columns": [
+            "模型名称",
+            "输入输出总 token",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1-highspeed",
+            "204800",
+            "M2.1 极速版：效果不变，更快，更敏捷 (输出速度约100tps)"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic",
+          "section": "text anthropic / 支持的模型",
+          "api_surfaces": [
+            "anthropic.messages"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1-highspeed",
+            "204,800",
+            "M2.1 极速版：效果不变，更快，更敏捷 （输出速度约 100 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic_api",
+          "section": "text anthropic",
+          "api_surface": "anthropic.messages",
+          "endpoint": "https://api.minimaxi.com/anthropic/v1/messages",
+          "base_url": "https://api.minimaxi.com/anthropic",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai",
+          "section": "text openai / 支持的模型",
+          "api_surfaces": [
+            "chat.completion"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.1-highspeed",
+            "204,800",
+            "M2.1 极速版：效果不变，更快，更敏捷 （输出速度约 100 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai_api",
+          "section": "text openai",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "base_url": "https://api.minimaxi.com/v1",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+          "source_page": "prompt_cache",
+          "section": "Prompt 缓存 / Cache 对比",
+          "api_surface": "context.cache",
+          "cache_mode": "passive",
+          "notes": "Prompt 缓存（被动缓存）页面将 MiniMax-M2.5 / M2.1 / M2 系列列为支持模型。"
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surface": "context.cache",
+          "cache_mode": "anthropic_active",
+          "notes": "Anthropic 主动缓存页面将该模型列为支持模型。"
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surfaces": [
+            "context.cache",
+            "anthropic.messages"
+          ],
+          "cache_mode": "anthropic_active",
+          "columns": [
+            "模型",
+            "输入价格 元/百万 tokens",
+            "输出价格 元/百万 tokens",
+            "缓存读取 元/百万 tokens",
+            "缓存写入 元/百万 tokens"
+          ],
+          "values": [
+            "MiniMax-M2.1-highspeed 更快，更高效",
+            "2.1",
+            "16.8",
+            "0.21",
+            "2.625"
+          ]
+        }
+      ]
+    },
+    "MiniMax-M2.5": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+        "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache"
+      ],
+      "display_name": "MiniMax-M2.5",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "anthropic.messages",
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "cache_modes": [
+        "passive",
+        "anthropic_active"
+      ],
+      "summary": "顶尖性能与极致性价比，轻松驾驭复杂任务",
+      "context_window_tokens": 204800,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5",
+            "顶尖性能与极致性价比，轻松驾驭复杂任务"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 文本生成 / 支持模型",
+          "columns": [
+            "模型名称",
+            "输入输出总 token",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5",
+            "204800",
+            "顶尖性能与极致性价比，轻松驾驭复杂任务 (输出速度约60tps)"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic",
+          "section": "text anthropic / 支持的模型",
+          "api_surfaces": [
+            "anthropic.messages"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5",
+            "204,800",
+            "顶尖性能与极致性价比，轻松驾驭复杂任务 （输出速度约 60 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic_api",
+          "section": "text anthropic",
+          "api_surface": "anthropic.messages",
+          "endpoint": "https://api.minimaxi.com/anthropic/v1/messages",
+          "base_url": "https://api.minimaxi.com/anthropic",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai",
+          "section": "text openai / 支持的模型",
+          "api_surfaces": [
+            "chat.completion"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5",
+            "204,800",
+            "顶尖性能与极致性价比，轻松驾驭复杂任务 （输出速度约 60 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai_api",
+          "section": "text openai",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "base_url": "https://api.minimaxi.com/v1",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+          "source_page": "prompt_cache",
+          "section": "Prompt 缓存 / Cache 对比",
+          "api_surface": "context.cache",
+          "cache_mode": "passive",
+          "notes": "Prompt 缓存（被动缓存）页面将 MiniMax-M2.5 / M2.1 / M2 系列列为支持模型。"
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surface": "context.cache",
+          "cache_mode": "anthropic_active",
+          "notes": "Anthropic 主动缓存页面将该模型列为支持模型。"
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surfaces": [
+            "context.cache",
+            "anthropic.messages"
+          ],
+          "cache_mode": "anthropic_active",
+          "columns": [
+            "模型",
+            "输入价格 元/百万 tokens",
+            "输出价格 元/百万 tokens",
+            "缓存读取 元/百万 tokens",
+            "缓存写入 元/百万 tokens"
+          ],
+          "values": [
+            "MiniMax-M2.5",
+            "2.1",
+            "8.4",
+            "0.21",
+            "2.625"
+          ]
+        }
+      ]
+    },
+    "MiniMax-M2.5-highspeed": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+        "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+        "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache"
+      ],
+      "display_name": "MiniMax-M2.5-highspeed",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "anthropic.messages",
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "cache_modes": [
+        "passive",
+        "anthropic_active"
+      ],
+      "summary": "与 M2.5 效果不变，速度大幅提升",
+      "context_window_tokens": 204800,
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5-highspeed",
+            "与 M2.5 效果不变，速度大幅提升"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 文本生成 / 支持模型",
+          "columns": [
+            "模型名称",
+            "输入输出总 token",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5-highspeed",
+            "204800",
+            "M2.5 极速版：效果不变，更快，更敏捷 (输出速度约100tps)"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic",
+          "section": "text anthropic / 支持的模型",
+          "api_surfaces": [
+            "anthropic.messages"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5-highspeed",
+            "204,800",
+            "M2.5 极速版：效果不变，更快，更敏捷 （输出速度约 100 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-anthropic-api",
+          "source_page": "text_anthropic_api",
+          "section": "text anthropic",
+          "api_surface": "anthropic.messages",
+          "endpoint": "https://api.minimaxi.com/anthropic/v1/messages",
+          "base_url": "https://api.minimaxi.com/anthropic",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai",
+          "section": "text openai / 支持的模型",
+          "api_surfaces": [
+            "chat.completion"
+          ],
+          "columns": [
+            "模型名称",
+            "上下文窗口",
+            "模型介绍"
+          ],
+          "values": [
+            "MiniMax-M2.5-highspeed",
+            "204,800",
+            "M2.5 极速版：效果不变，更快，更敏捷 （输出速度约 100 TPS）"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+          "source_page": "text_openai_api",
+          "section": "text openai",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.minimaxi.com/v1/text/chatcompletion_v2",
+          "base_url": "https://api.minimaxi.com/v1",
+          "notes": "Mapped from the official MiniMax OpenAI-compatible or Anthropic-compatible API references."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/text-prompt-caching",
+          "source_page": "prompt_cache",
+          "section": "Prompt 缓存 / Cache 对比",
+          "api_surface": "context.cache",
+          "cache_mode": "passive",
+          "notes": "Prompt 缓存（被动缓存）页面将 MiniMax-M2.5 / M2.1 / M2 系列列为支持模型。"
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surface": "context.cache",
+          "cache_mode": "anthropic_active",
+          "notes": "Anthropic 主动缓存页面将该模型列为支持模型。"
+        },
+        {
+          "table_kind": "pricing_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/anthropic-api-compatible-cache",
+          "source_page": "anthropic_cache",
+          "section": "Anthropic 主动缓存 / 支持的模型和定价",
+          "api_surfaces": [
+            "context.cache",
+            "anthropic.messages"
+          ],
+          "cache_mode": "anthropic_active",
+          "columns": [
+            "模型",
+            "输入价格 元/百万 tokens",
+            "输出价格 元/百万 tokens",
+            "缓存读取 元/百万 tokens",
+            "缓存写入 元/百万 tokens"
+          ],
+          "values": [
+            "MiniMax-M2.5-highspeed 效果不变，更快，更高效",
+            "2.1",
+            "16.8",
+            "0.21",
+            "2.625"
+          ]
+        }
+      ]
+    },
+    "music-2.0": {
+      "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/music-intro",
+        "https://platform.minimaxi.com/docs/api-reference/music-generation"
+      ],
+      "display_name": "music-2.0",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "music.generation"
+      ],
+      "categories": [
+        "音乐模型"
+      ],
+      "summary": "最新音乐生成模型，支持用户输入音乐灵感和歌词，生成 AI 音乐",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音乐生成 (Music Generation) / 支持模型",
+          "api_surfaces": [
+            "music.generation"
+          ],
+          "columns": [
+            "模型名称",
+            "使用方法"
+          ],
+          "values": [
+            "music-2.0",
+            "最新音乐生成模型，支持用户输入音乐灵感和歌词，生成 AI 音乐"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-intro",
+          "source_page": "music_intro",
+          "section": "音乐生成 / 支持模型",
+          "api_surfaces": [
+            "music.generation"
+          ],
+          "columns": [
+            "模型名称",
+            "使用方法"
+          ],
+          "values": [
+            "music-2.0",
+            "最新音乐生成模型，支持用户输入音乐灵感和歌词，生成 AI 音乐"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-generation",
+          "source_page": "model_list",
+          "section": "音乐生成",
+          "api_surface": "music.generation",
+          "endpoint": "https://api.minimaxi.com/v1/music_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "music-2.5": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/music-generation"
+      ],
+      "display_name": "music-2.5",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "music.generation"
+      ],
+      "categories": [
+        "音乐模型"
+      ],
+      "summary": "全维度突破，指挥细节，定义真实",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 音乐模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "music-2.5",
+            "全维度突破，指挥细节，定义真实"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-generation",
+          "source_page": "model_list",
+          "section": "音乐生成",
+          "api_surface": "music.generation",
+          "endpoint": "https://api.minimaxi.com/v1/music_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-generation",
+          "source_page": "model_list",
+          "section": "音乐生成",
+          "api_surface": "music.generation",
+          "endpoint": "https://api.minimaxi.com/v1/music_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "music-2.5+": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/music-generation"
+      ],
+      "display_name": "music-2.5+",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "music.generation"
+      ],
+      "categories": [
+        "音乐模型"
+      ],
+      "summary": "最新音乐生成模型，纯音乐解锁，突破风格边界",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 音乐模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "music-2.5+",
+            "最新音乐生成模型，纯音乐解锁，突破风格边界"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-generation",
+          "source_page": "model_list",
+          "section": "音乐生成",
+          "api_surface": "music.generation",
+          "endpoint": "https://api.minimaxi.com/v1/music_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/music-generation",
+          "source_page": "model_list",
+          "section": "音乐生成",
+          "api_surface": "music.generation",
+          "endpoint": "https://api.minimaxi.com/v1/music_generation",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-02-hd": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-02-hd",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-02-HD"
+      ],
+      "summary": "语音 HD 模型，拥有出色的韵律和稳定性，复刻相似度和音质表现突出",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-02-HD",
+            "语音 HD 模型，拥有出色的韵律和稳定性，复刻相似度和音质表现突出"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-hd",
+            "拥有出色的韵律、稳定性和复刻相似度，音质表现突出"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-hd",
+            "拥有出色的韵律、稳定性和复刻相似度，音质表现突出"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-hd",
+            "拥有出色的韵律、稳定性和复刻相似度，音质表现突出"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-hd",
+            "拥有出色的韵律、稳定性和复刻相似度，音质表现突出"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-02-turbo": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-02-turbo",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-02-Turbo"
+      ],
+      "summary": "语音 Turbo 模型，小语种能力增强，性能表现出色",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-02-Turbo",
+            "语音 Turbo 模型，小语种能力增强，性能表现出色"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-turbo",
+            "拥有出色的韵律和稳定性，小语种能力加强，性能表现出色"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-turbo",
+            "拥有出色的韵律和稳定性，小语种能力加强，性能表现出色"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-turbo",
+            "拥有出色的韵律和稳定性，小语种能力加强，性能表现出色"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-02-turbo",
+            "拥有出色的韵律和稳定性，小语种能力加强，性能表现出色"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-2.6-hd": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-2.6-hd",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-2.6-HD"
+      ],
+      "summary": "极致音质与韵律表现，生成更快更自然",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-2.6-HD",
+            "极致音质与韵律表现，生成更快更自然"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-hd",
+            "HD 模型，韵律表现出色，极致音质与韵律表现，生成更快更自然"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-hd",
+            "HD 模型，韵律表现出色，极致音质与韵律表现，生成更快更自然"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-hd",
+            "HD 模型，韵律表现出色，极致音质与韵律表现，生成更快更自然"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-hd",
+            "HD 模型，韵律表现出色，极致音质与韵律表现，生成更快更自然"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-2.6-turbo": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-2.6-turbo",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-2.6-Turbo"
+      ],
+      "summary": "音质优异，超低时延，响应更灵敏",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-2.6-Turbo",
+            "音质优异，超低时延，响应更灵敏"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-turbo",
+            "Turbo 模型，音质优异，超低时延，响应更灵敏"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-turbo",
+            "Turbo 模型，音质优异，超低时延，响应更灵敏"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-turbo",
+            "Turbo 模型，音质优异，超低时延，响应更灵敏"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.6-turbo",
+            "Turbo 模型，音质优异，超低时延，响应更灵敏"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-2.8-hd": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-2.8-hd",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-2.8-HD"
+      ],
+      "summary": "新一代语音 HD 模型，精准还原真实语气细节，全面提升音色相似度",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-2.8-HD",
+            "新一代语音 HD 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-hd",
+            "最新的 HD 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-hd",
+            "最新的 HD 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-hd",
+            "最新的 HD 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-hd",
+            "最新的 HD 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "speech-2.8-turbo": {
+      "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+      "source_urls": [
+        "https://platform.minimaxi.com/docs/guides/models-intro",
+        "https://platform.minimaxi.com/docs/api-reference/api-overview",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+        "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+        "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+        "https://platform.minimaxi.com/docs/api-reference/voice-design-design"
+      ],
+      "display_name": "speech-2.8-turbo",
+      "status": "active",
+      "vendor": "minimax",
+      "api_surfaces": [
+        "audio.speech",
+        "audio.speech.async",
+        "audio.voice_cloning",
+        "audio.voice_design"
+      ],
+      "categories": [
+        "语音模型"
+      ],
+      "aliases": [
+        "Speech-2.8-Turbo"
+      ],
+      "summary": "新一代语音 Turbo 模型，极速响应，语气表达生动自然",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/guides/models-intro",
+          "source_page": "models_intro",
+          "section": "旗舰模型 / 模型概览 / 语音模型",
+          "columns": [
+            "模型名称",
+            "介绍"
+          ],
+          "values": [
+            "Speech-2.8-Turbo",
+            "新一代语音 Turbo 模型，极速响应，语气表达生动自然"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 同步语音合成（T2A） / 支持模型",
+          "api_surfaces": [
+            "audio.speech"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-turbo",
+            "最新的 Turbo 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 异步长文本语音生成（T2A Async） / 支持模型",
+          "api_surfaces": [
+            "audio.speech.async"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-turbo",
+            "最新的 Turbo 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色快速复刻（Voice Cloning） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_cloning"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-turbo",
+            "最新的 Turbo 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "source_table",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/api-overview",
+          "source_page": "api_overview",
+          "section": "接口概览 / 音色设计（Voice Design） / 支持模型",
+          "api_surfaces": [
+            "audio.voice_design"
+          ],
+          "columns": [
+            "模型",
+            "特性"
+          ],
+          "values": [
+            "speech-2.8-turbo",
+            "最新的 Turbo 模型，精准还原真实语气细节，全面提升音色相似度"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-http",
+          "source_page": "model_list",
+          "section": "同步语音合成 HTTP",
+          "api_surface": "audio.speech",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/speech-t2a-async-create",
+          "source_page": "model_list",
+          "section": "异步长文本语音合成",
+          "api_surface": "audio.speech.async",
+          "endpoint": "https://api.minimaxi.com/v1/t2a_async_v2",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-cloning-clone",
+          "source_page": "model_list",
+          "section": "音色快速复刻",
+          "api_surface": "audio.voice_cloning",
+          "endpoint": "https://api.minimaxi.com/v1/voice_clone",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.minimaxi.com/docs/api-reference/voice-design-design",
+          "source_page": "model_list",
+          "section": "音色设计",
+          "api_surface": "audio.voice_design",
+          "endpoint": "https://api.minimaxi.com/v1/voice_design",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    }
+  }
+}

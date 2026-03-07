@@ -18,17 +18,102 @@ use crate::embedding::EmbeddingModel;
 use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::model::{LanguageModel, StreamResult};
 use crate::profile::{Env, ProviderConfig};
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::types::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, Tool, ToolChoice, Usage, Warning,
 };
-#[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OpenAI {
     client: openai_like::OpenAiLikeClient,
+}
+
+const OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS: &[&str] =
+    &["reasoning_effort", "response_format", "parallel_tool_calls"];
+
+const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
+    "instructions",
+    "max_output_tokens",
+    "previous_response_id",
+    "store",
+    "reasoning",
+    "stream",
+    "temperature",
+    "top_p",
+    "text",
+    "tools",
+    "tool_choice",
+    "max_tool_calls",
+    "metadata",
+    "include",
+    "service_tier",
+    "truncation",
+    "web_search_options",
+    "caching",
+    "expire_at",
+    "context_management",
+    "thinking",
+];
+
+const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
+const OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE: &str = "skip_thought_signature_validator";
+
+fn env_flag_is_true(name: &str) -> bool {
+    let Ok(raw) = std::env::var(name) else {
+        return false;
+    };
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
+    let Some((base_id, hex)) = id.rsplit_once(TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR) else {
+        return (id.to_string(), None);
+    };
+    if hex.len() % 2 != 0 {
+        return (id.to_string(), None);
+    }
+    let mut bytes = Vec::<u8>::with_capacity(hex.len() / 2);
+    for chunk in hex.as_bytes().chunks_exact(2) {
+        let hex_pair = match std::str::from_utf8(chunk) {
+            Ok(value) => value,
+            Err(_) => return (id.to_string(), None),
+        };
+        let byte = match u8::from_str_radix(hex_pair, 16) {
+            Ok(value) => value,
+            Err(_) => return (id.to_string(), None),
+        };
+        bytes.push(byte);
+    }
+    let signature = match String::from_utf8(bytes) {
+        Ok(value) => value,
+        Err(_) => return (id.to_string(), None),
+    };
+    if signature.trim().is_empty() {
+        return (base_id.to_string(), None);
+    }
+    (base_id.to_string(), Some(signature))
+}
+
+fn encode_tool_call_id_with_thought_signature(id: &str, thought_signature: Option<&str>) -> String {
+    let (base_id, _) = split_tool_call_id_and_thought_signature(id);
+    let Some(signature) = thought_signature
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return base_id;
+    };
+    let mut hex = String::with_capacity(signature.len() * 2);
+    for byte in signature.as_bytes() {
+        use std::fmt::Write as _;
+        let _ = write!(&mut hex, "{byte:02x}");
+    }
+    format!("{base_id}{TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR}{hex}")
 }
 
 impl OpenAI {
@@ -169,7 +254,26 @@ impl OpenAI {
         }
     }
 
+    fn should_send_function_call_thought_signature(&self, model: &str) -> bool {
+        env_flag_is_true("DITTO_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
+            || env_flag_is_true("OMNE_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
+            || (self
+                .client
+                .base_url
+                .to_ascii_lowercase()
+                .contains("litellm")
+                && model.to_ascii_lowercase().contains("gemini"))
+    }
+
+    #[cfg(test)]
     fn messages_to_input(messages: &[Message]) -> (Option<String>, Vec<Value>, Vec<Warning>) {
+        Self::messages_to_input_with_quirks(messages, false)
+    }
+
+    fn messages_to_input_with_quirks(
+        messages: &[Message],
+        include_function_call_thought_signature: bool,
+    ) -> (Option<String>, Vec<Value>, Vec<Warning>) {
         let mut input = Vec::<Value>::new();
         let mut instructions = Vec::<String>::new();
         let mut warnings = Vec::<Warning>::new();
@@ -273,16 +377,36 @@ impl OpenAI {
                                 name,
                                 arguments,
                             } => {
+                                let (call_id, thought_signature) =
+                                    split_tool_call_id_and_thought_signature(id);
                                 if !content.is_empty() {
                                     input.push(serde_json::json!({ "role": "assistant", "content": content }));
                                     content = Vec::new();
                                 }
-                                input.push(serde_json::json!({
-                                    "type": "function_call",
-                                    "call_id": id,
-                                    "name": name,
-                                    "arguments": Self::tool_call_arguments_to_openai_string(arguments),
-                                }));
+                                let mut function_call = Map::<String, Value>::new();
+                                function_call.insert(
+                                    "type".to_string(),
+                                    Value::String("function_call".to_string()),
+                                );
+                                function_call.insert("call_id".to_string(), Value::String(call_id));
+                                function_call
+                                    .insert("name".to_string(), Value::String(name.clone()));
+                                function_call.insert(
+                                    "arguments".to_string(),
+                                    Value::String(Self::tool_call_arguments_to_openai_string(
+                                        arguments,
+                                    )),
+                                );
+                                if include_function_call_thought_signature {
+                                    let thought_signature = thought_signature
+                                        .as_deref()
+                                        .unwrap_or(OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE);
+                                    function_call.insert(
+                                        "thought_signature".to_string(),
+                                        Value::String(thought_signature.to_string()),
+                                    );
+                                }
+                                input.push(Value::Object(function_call));
                             }
                             ContentPart::Reasoning { .. } => warnings.push(Warning::Unsupported {
                                 feature: "reasoning".to_string(),
@@ -310,6 +434,8 @@ impl OpenAI {
                                 content,
                                 ..
                             } => {
+                                let (tool_call_id, _) =
+                                    split_tool_call_id_and_thought_signature(tool_call_id);
                                 input.push(serde_json::json!({
                                     "type": "function_call_output",
                                     "call_id": tool_call_id,
@@ -341,10 +467,24 @@ impl OpenAI {
             usage.cache_input_tokens = obj
                 .get("input_tokens_details")
                 .and_then(|details| details.get("cached_tokens"))
-                .and_then(Value::as_u64);
+                .and_then(Value::as_u64)
+                .or_else(|| {
+                    obj.get("input_tokens_details")
+                        .and_then(|details| details.get("cache_read_input_tokens"))
+                        .and_then(Value::as_u64)
+                })
+                .or_else(|| obj.get("cached_tokens").and_then(Value::as_u64))
+                .or_else(|| obj.get("cache_read_input_tokens").and_then(Value::as_u64))
+                .or_else(|| obj.get("cache_input_tokens").and_then(Value::as_u64));
             usage.cache_creation_input_tokens = obj
                 .get("cache_creation_input_tokens")
-                .and_then(Value::as_u64);
+                .and_then(Value::as_u64)
+                .or_else(|| {
+                    obj.get("input_tokens_details")
+                        .and_then(|details| details.get("cache_creation_input_tokens"))
+                        .and_then(Value::as_u64)
+                })
+                .or_else(|| obj.get("cache_write_input_tokens").and_then(Value::as_u64));
             usage.output_tokens = obj.get("output_tokens").and_then(Value::as_u64);
             usage.total_tokens = obj.get("total_tokens").and_then(Value::as_u64);
         }
@@ -359,15 +499,17 @@ impl OpenAI {
         selected_provider_options: Option<&Value>,
         stream: bool,
         provider_options_context: &'static str,
+        include_function_call_thought_signature: bool,
     ) -> Result<(Map<String, Value>, Vec<Warning>)> {
-        let (instructions, input, mut warnings) = Self::messages_to_input(&request.messages);
+        let (instructions, input, mut warnings) = Self::messages_to_input_with_quirks(
+            &request.messages,
+            include_function_call_thought_signature,
+        );
 
         if request.stop_sequences.is_some() {
             warnings.push(Warning::Unsupported {
                 feature: "stop_sequences".to_string(),
-                details: Some(
-                    "OpenAI Responses API stop sequences are not supported".to_string(),
-                ),
+                details: Some("OpenAI Responses API stop sequences are not supported".to_string()),
             });
         }
         crate::types::warn_unsupported_generate_request_options(
@@ -444,7 +586,7 @@ impl OpenAI {
         crate::types::merge_provider_options_into_body(
             &mut body,
             selected_provider_options,
-            &["reasoning_effort", "response_format", "parallel_tool_calls"],
+            OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS,
             provider_options_context,
             &mut warnings,
         );
@@ -536,14 +678,7 @@ impl OpenAI {
             if !request.include.is_empty() {
                 body.insert(
                     "include".to_string(),
-                    Value::Array(
-                        request
-                            .include
-                            .iter()
-                            .cloned()
-                            .map(Value::String)
-                            .collect(),
-                    ),
+                    Value::Array(request.include.iter().cloned().map(Value::String).collect()),
                 );
             }
             if let Some(key) = request.prompt_cache_key.as_deref() {
@@ -597,4 +732,45 @@ fn apply_provider_options(
         );
     }
     Ok(())
+}
+
+fn sanitize_openai_responses_provider_options(
+    selected_provider_options: Option<Value>,
+    provider_options_context: &'static str,
+) -> (Option<Value>, Vec<Warning>) {
+    let Some(selected_provider_options) = selected_provider_options else {
+        return (None, Vec::new());
+    };
+
+    let Some(obj) = selected_provider_options.as_object() else {
+        // Keep old behavior for non-object values; downstream merge logic emits a warning.
+        return (Some(selected_provider_options), Vec::new());
+    };
+
+    let mut out = Map::<String, Value>::new();
+    let mut warnings = Vec::<Warning>::new();
+    for (key, value) in obj {
+        if OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS.contains(&key.as_str()) {
+            continue;
+        }
+        if OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS.contains(&key.as_str()) {
+            out.insert(key.clone(), value.clone());
+            continue;
+        }
+        warnings.push(Warning::Unsupported {
+            feature: provider_options_context.to_string(),
+            details: Some(format!(
+                "provider_options key {key:?} is not in the openai-responses schema; dropping"
+            )),
+        });
+    }
+
+    (
+        if out.is_empty() {
+            None
+        } else {
+            Some(Value::Object(out))
+        },
+        warnings,
+    )
 }

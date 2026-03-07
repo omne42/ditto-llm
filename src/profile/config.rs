@@ -25,6 +25,29 @@ pub enum ThinkingIntensity {
     XHigh,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderApi {
+    #[serde(alias = "chat_completions", alias = "/v1/chat/completions")]
+    OpenaiChatCompletions,
+    #[serde(alias = "responses", alias = "/v1/responses")]
+    OpenaiResponses,
+    #[serde(
+        alias = "google_generate_content",
+        alias = "gemini_generateContent",
+        alias = "generateContent"
+    )]
+    GeminiGenerateContent,
+    #[serde(alias = "messages", alias = "/v1/messages")]
+    AnthropicMessages,
+}
+
+impl ProviderApi {
+    pub const fn uses_openai_responses_client(self) -> bool {
+        matches!(self, Self::OpenaiResponses)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ModelConfig {
     #[serde(default)]
@@ -256,6 +279,12 @@ pub struct ProviderConfig {
     pub auth: Option<ProviderAuth>,
     #[serde(default)]
     pub capabilities: Option<ProviderCapabilities>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_api: Option<ProviderApi>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalize_to: Option<ProviderApi>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub normalize_endpoint: Option<String>,
 }
 
 pub fn normalize_string_list(values: Vec<String>) -> Vec<String> {

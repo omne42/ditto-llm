@@ -42,8 +42,112 @@ jobs:
         working-directory: ditto-llm
         run: pnpm run build
 
+  gateway-contract-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ditto-llm -> target
+
+      - name: Resolve base contract
+        id: base_contract
+        working-directory: ditto-llm
+        run: |
+          set -euo pipefail
+          BASE_OUT="${RUNNER_TEMP}/gateway-contract-base.openapi.yaml"
+          HAS_BASE=0
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="${{ github.base_ref }}"
+            git fetch --no-tags --prune --depth=1 origin "${BASE_REF}"
+            if git cat-file -e "origin/${BASE_REF}:contracts/gateway-contract-v0.1.openapi.yaml"; then
+              git show "origin/${BASE_REF}:contracts/gateway-contract-v0.1.openapi.yaml" > "${BASE_OUT}"
+              HAS_BASE=1
+            fi
+          else
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1 && git cat-file -e "HEAD^:contracts/gateway-contract-v0.1.openapi.yaml"; then
+              git show "HEAD^:contracts/gateway-contract-v0.1.openapi.yaml" > "${BASE_OUT}"
+              HAS_BASE=1
+            fi
+          fi
+          echo "has_base=${HAS_BASE}" >> "${GITHUB_OUTPUT}"
+          echo "base_path=${BASE_OUT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Contract guard (diff + semver gate)
+        if: steps.base_contract.outputs.has_base == '1'
+        working-directory: ditto-llm
+        run: |
+          cargo run --manifest-path crates/ditto-gateway-contract-guard/Cargo.toml -- \
+            --base "${{ steps.base_contract.outputs.base_path }}" \
+            --head ./contracts/gateway-contract-v0.1.openapi.yaml \
+            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
+            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml
+
+      - name: Contract guard (bootstrap mode)
+        if: steps.base_contract.outputs.has_base != '1'
+        working-directory: ditto-llm
+        run: |
+          cargo run --manifest-path crates/ditto-gateway-contract-guard/Cargo.toml -- \
+            --head ./contracts/gateway-contract-v0.1.openapi.yaml \
+            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
+            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml \
+            --allow-missing-base
+
   rust:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ditto
+          POSTGRES_PASSWORD: ditto
+          POSTGRES_DB: ditto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ditto -d ditto"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: ditto
+          MYSQL_USER: ditto
+          MYSQL_PASSWORD: ditto
+          MYSQL_ROOT_PASSWORD: ditto
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pditto"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DITTO_POSTGRES_URL: postgresql://ditto:ditto@127.0.0.1:5432/ditto
+      DITTO_MYSQL_URL: mysql://ditto:ditto@127.0.0.1:3306/ditto
+      DITTO_REDIS_URL: redis://127.0.0.1:6379
     steps:
       - name: Checkout ditto-llm
         uses: actions/checkout@v4
@@ -76,6 +180,10 @@ jobs:
       - name: llms.txt up to date
         working-directory: ditto-llm
         run: cargo run --bin ditto-llms-txt -- --check
+
+      - name: gateway contract types check
+        working-directory: ditto-llm
+        run: cargo test --manifest-path crates/ditto-gateway-contract-types/Cargo.toml
 
       - name: cargo clippy (all features)
         working-directory: ditto-llm
@@ -120,3 +228,161 @@ jobs:
       - name: cargo clippy (no default features + vertex)
         working-directory: ditto-llm
         run: cargo clippy -p ditto-llm --no-default-features --features vertex --all-targets -- -D warnings
+
+  gateway-store-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        store: [sqlite, postgres, mysql]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ditto
+          POSTGRES_PASSWORD: ditto
+          POSTGRES_DB: ditto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ditto -d ditto"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: ditto
+          MYSQL_USER: ditto
+          MYSQL_PASSWORD: ditto
+          MYSQL_ROOT_PASSWORD: ditto
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pditto"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DITTO_POSTGRES_URL: postgresql://ditto:ditto@127.0.0.1:5432/ditto
+      DITTO_MYSQL_URL: mysql://ditto:ditto@127.0.0.1:3306/ditto
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ditto-llm -> target
+
+      - name: Create CI gateway config
+        working-directory: ditto-llm
+        run: |
+          cat > gateway.ci.json <<'JSON'
+          {
+            "backends": [],
+            "virtual_keys": [],
+            "router": {
+              "default_backends": [],
+              "rules": []
+            }
+          }
+          JSON
+
+      - name: Run sqlite store tests
+        if: matrix.store == 'sqlite'
+        working-directory: ditto-llm
+        run: |
+          cargo test --features "gateway gateway-store-sqlite" sqlite_store_round_trips_virtual_keys
+          cargo run --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.ci.json --sqlite ./gateway.ci.sqlite --db-doctor
+
+      - name: Run postgres store tests
+        if: matrix.store == 'postgres'
+        working-directory: ditto-llm
+        run: |
+          cargo test --features "gateway gateway-store-postgres" postgres_store_round_trips_config_audit_and_ledgers
+          cargo run --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.ci.json --pg "${DITTO_POSTGRES_URL}" --db-doctor
+
+      - name: Run mysql store tests
+        if: matrix.store == 'mysql'
+        working-directory: ditto-llm
+        run: |
+          cargo test --features "gateway gateway-store-mysql" mysql_store_round_trips_config_audit_and_ledgers
+          cargo run --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.ci.json --mysql "${DITTO_MYSQL_URL}" --db-doctor
+
+  gateway-store-bench:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ditto
+          POSTGRES_PASSWORD: ditto
+          POSTGRES_DB: ditto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ditto -d ditto"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: ditto
+          MYSQL_USER: ditto
+          MYSQL_PASSWORD: ditto
+          MYSQL_ROOT_PASSWORD: ditto
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pditto"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DITTO_POSTGRES_URL: postgresql://ditto:ditto@127.0.0.1:5432/ditto
+      DITTO_MYSQL_URL: mysql://ditto:ditto@127.0.0.1:3306/ditto
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ditto-llm -> target
+
+      - name: Run store benchmark matrix
+        working-directory: ditto-llm
+        run: |
+          cargo run --features "gateway gateway-store-sqlite gateway-store-postgres gateway-store-mysql" --bin ditto-store-bench -- \
+            --sqlite ./target/ci-store-bench.sqlite \
+            --pg "${DITTO_POSTGRES_URL}" \
+            --mysql "${DITTO_MYSQL_URL}" \
+            --audit-ops 2500 \
+            --reap-ops 1200 \
+            --out ./target/store-bench.json
+          cat ./target/store-bench.json
+
+      - name: Upload store benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-store-bench
+          path: ditto-llm/target/store-bench.json
+          if-no-files-found: error

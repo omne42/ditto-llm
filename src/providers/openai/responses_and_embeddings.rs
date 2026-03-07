@@ -223,13 +223,12 @@ async fn process_raw_responses_sse<R>(
         };
         match next {
             Ok(data) => {
-                let event =
-                    serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
-                        DittoError::InvalidResponse(format!(
-                            "failed to parse responses SSE event: {err}; data_prefix={}",
-                            truncate_for_error(&data, 1024)
-                        ))
-                    });
+                let event = serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
+                    DittoError::InvalidResponse(format!(
+                        "failed to parse responses SSE event: {err}; data_prefix={}",
+                        truncate_for_error(&data, 1024)
+                    ))
+                });
                 match event.and_then(parse_raw_responses_event) {
                     Ok(Some(parsed)) => {
                         if tx_event.send(Ok(parsed)).await.is_err() {
@@ -477,9 +476,7 @@ mod tests {
 
         let task = tokio::spawn(process_raw_responses_sse(reader, tx_event));
         writer
-            .write_all(
-                b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ignored\"}\n\n",
-            )
+            .write_all(b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"ignored\"}\n\n")
             .await?;
         writer.flush().await?;
 
@@ -491,7 +488,9 @@ mod tests {
                 )
             })?
             .map_err(|err| {
-                DittoError::InvalidResponse(format!("raw responses SSE processor task failed: {err}"))
+                DittoError::InvalidResponse(format!(
+                    "raw responses SSE processor task failed: {err}"
+                ))
             })?;
 
         Ok(())
@@ -529,10 +528,7 @@ mod tests {
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([(
-                "DITTO_TEST_OPENAI_KEY".to_string(),
-                "sk-test".to_string(),
-            )]),
+            dotenv: BTreeMap::from([("DITTO_TEST_OPENAI_KEY".to_string(), "sk-test".to_string())]),
         };
 
         let client = OpenAI::from_config(&config, &env).await?;
@@ -578,10 +574,7 @@ mod tests {
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([(
-                "DITTO_TEST_OPENAI_KEY".to_string(),
-                "sk-test".to_string(),
-            )]),
+            dotenv: BTreeMap::from([("DITTO_TEST_OPENAI_KEY".to_string(), "sk-test".to_string())]),
         };
 
         let client = OpenAI::from_config(&config, &env).await?;
@@ -656,6 +649,27 @@ mod tests {
     }
 
     #[test]
+    fn messages_to_input_with_quirks_adds_dummy_thought_signature() {
+        let messages = vec![Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "c1".to_string(),
+                name: "add".to_string(),
+                arguments: json!({ "a": 1 }),
+            }],
+        }];
+
+        let (_instructions, input, warnings) =
+            OpenAI::messages_to_input_with_quirks(&messages, true);
+        assert!(warnings.is_empty());
+        assert_eq!(input.len(), 1);
+        assert_eq!(
+            input[0].get("thought_signature").and_then(Value::as_str),
+            Some(OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE)
+        );
+    }
+
+    #[test]
     fn converts_pdf_file_part_to_input_file() {
         let messages = vec![Message {
             role: Role::User,
@@ -721,6 +735,31 @@ mod tests {
     }
 
     #[test]
+    fn parses_function_call_with_thought_signature_into_encoded_call_id() {
+        let output = vec![serde_json::json!({
+            "type": "function_call",
+            "call_id": "c1",
+            "name": "add",
+            "arguments": "{\"a\":1}",
+            "thought_signature": "hi"
+        })];
+
+        let mut warnings = Vec::<Warning>::new();
+        let parsed = parse_openai_output(&output, &mut warnings);
+        assert_eq!(parsed.len(), 1);
+        assert!(warnings.is_empty());
+
+        match &parsed[0] {
+            ContentPart::ToolCall { id, .. } => {
+                let (base_id, thought_signature) = split_tool_call_id_and_thought_signature(id);
+                assert_eq!(base_id, "c1");
+                assert_eq!(thought_signature.as_deref(), Some("hi"));
+            }
+            other => panic!("unexpected part: {other:?}"),
+        }
+    }
+
+    #[test]
     fn preserves_invalid_tool_call_arguments_with_warning() {
         let output = vec![serde_json::json!({
             "type": "function_call",
@@ -777,6 +816,93 @@ mod tests {
         );
         assert_eq!(body.get("parallel_tool_calls"), Some(&json!(false)));
         Ok(())
+    }
+
+    #[test]
+    fn responses_provider_options_schema_drops_unknown_and_reserved_keys() {
+        let selected_provider_options = Some(json!({
+            "temperature": 0.4,
+            "service_tier": "default",
+            "parallel_tool_calls": false,
+            "unknown_vendor_knob": "x"
+        }));
+        let (sanitized, warnings) = sanitize_openai_responses_provider_options(
+            selected_provider_options,
+            "generate.provider_options",
+        );
+
+        let sanitized = sanitized
+            .as_ref()
+            .and_then(Value::as_object)
+            .expect("sanitized provider options should be an object");
+        assert_eq!(sanitized.get("temperature"), Some(&json!(0.4)));
+        assert_eq!(sanitized.get("service_tier"), Some(&json!("default")));
+        assert!(!sanitized.contains_key("parallel_tool_calls"));
+        assert!(!sanitized.contains_key("unknown_vendor_knob"));
+        assert!(warnings.iter().any(|w| matches!(
+            w,
+            Warning::Unsupported { feature, details }
+            if feature == "generate.provider_options"
+                && details.as_deref().is_some_and(|d| d.contains("unknown_vendor_knob"))
+        )));
+    }
+
+    #[test]
+    fn build_responses_body_merges_only_sanitized_provider_options() -> crate::Result<()> {
+        let request = GenerateRequest::from(vec![Message::user("hello")]);
+        let provider_options = crate::ProviderOptions::default();
+        let (sanitized_provider_options, mut schema_warnings) =
+            sanitize_openai_responses_provider_options(
+                Some(json!({
+                    "service_tier": "default",
+                    "parallel_tool_calls": true,
+                    "unknown_private": 1
+                })),
+                "generate.provider_options",
+            );
+        let (body, mut warnings) = OpenAI::build_responses_body(
+            &request,
+            "gpt-test",
+            &provider_options,
+            sanitized_provider_options.as_ref(),
+            false,
+            "generate.provider_options",
+            false,
+        )?;
+        warnings.append(&mut schema_warnings);
+
+        assert_eq!(body.get("service_tier"), Some(&json!("default")));
+        assert!(body.get("parallel_tool_calls").is_none());
+        assert!(body.get("unknown_private").is_none());
+        assert!(warnings.iter().any(|w| matches!(
+            w,
+            Warning::Unsupported { feature, details }
+            if feature == "generate.provider_options"
+                && details.as_deref().is_some_and(|d| d.contains("unknown_private"))
+        )));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_usage_reads_cache_read_input_tokens_alias() {
+        let usage = OpenAI::parse_usage(&json!({
+            "input_tokens": 12,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 7
+        }));
+        assert_eq!(usage.input_tokens, Some(12));
+        assert_eq!(usage.output_tokens, Some(3));
+        assert_eq!(usage.cache_input_tokens, Some(7));
+    }
+
+    #[test]
+    fn parse_usage_reads_cache_write_input_tokens_alias() {
+        let usage = OpenAI::parse_usage(&json!({
+            "input_tokens": 12,
+            "output_tokens": 3,
+            "cache_write_input_tokens": 5
+        }));
+        assert_eq!(usage.cache_creation_input_tokens, Some(5));
     }
 
     #[test]

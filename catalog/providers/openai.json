@@ -1,0 +1,5913 @@
+{
+  "schema_version": "ditto.provider_catalog.v1",
+  "normalized_from": "catalog/provider_models/openai.json",
+  "provider": {
+    "id": "openai",
+    "display_name": "OpenAI",
+    "base_url": "https://api.openai.com/v1",
+    "protocol": "openai",
+    "source_url": "https://developers.openai.com/api/docs/models",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "OPENAI_API_KEY"
+      ]
+    }
+  },
+  "interfaces": {
+    "response": {
+      "object": "response",
+      "display_name": "Responses API",
+      "protocol": "openai_responses",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/responses"
+    },
+    "chat.completion": {
+      "object": "chat.completion",
+      "display_name": "Chat Completions API",
+      "protocol": "openai_chat_completions",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/chat/completions"
+    },
+    "text.completion": {
+      "object": "text.completion",
+      "display_name": "Legacy Text Completions API",
+      "protocol": "openai_text_completions",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/completions"
+    },
+    "embedding": {
+      "object": "embedding",
+      "display_name": "Embeddings API",
+      "protocol": "openai_embeddings",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/embeddings"
+    },
+    "image.generation": {
+      "object": "image.generation",
+      "display_name": "Image Generation API",
+      "protocol": "openai_images",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/images/generations"
+    },
+    "audio.transcription": {
+      "object": "audio.transcription",
+      "display_name": "Audio Transcriptions API",
+      "protocol": "openai_audio_transcriptions",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/audio/transcriptions"
+    },
+    "audio.translation": {
+      "object": "audio.translation",
+      "display_name": "Audio Translations API",
+      "protocol": "openai_audio_translations",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/audio/translations"
+    },
+    "audio.speech": {
+      "object": "audio.speech",
+      "display_name": "Audio Speech API",
+      "protocol": "openai_audio_speech",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/audio/speech"
+    },
+    "realtime.session": {
+      "object": "realtime.session",
+      "display_name": "Realtime API",
+      "protocol": "openai_realtime",
+      "transport": "websocket",
+      "path": "/v1/realtime"
+    },
+    "moderation": {
+      "object": "moderation",
+      "display_name": "Moderations API",
+      "protocol": "openai_moderations",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/moderations"
+    },
+    "video.generation": {
+      "object": "video.generation",
+      "display_name": "Video Generation API",
+      "protocol": "openai_video_generation",
+      "transport": "http",
+      "method": "POST",
+      "path": "/v1/videos",
+      "notes": "Path is inferred from current Sora API naming and should be treated as provisional."
+    }
+  },
+  "models": {
+    "babbage-002": {
+      "identity": {
+        "catalog_id": "babbage-002",
+        "provider_model_id": "babbage-002",
+        "brand": "openai",
+        "family": "openai",
+        "snapshot_ids": [
+          "babbage-002"
+        ]
+      },
+      "display_name": "babbage-002",
+      "tagline": "Replacement for the GPT-3 ada and babbage base models",
+      "summary": "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 01, 2021"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "text.completion",
+      "supported_interface_ids": [
+        "text.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/babbage-002"
+      ],
+      "vendor_metadata": {
+        "performance": "low",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "babbage-002"
+          ]
+        }
+      }
+    },
+    "chatgpt-4o-latest": {
+      "identity": {
+        "catalog_id": "chatgpt-4o-latest",
+        "provider_model_id": "chatgpt-4o-latest",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "chatgpt-4o-latest"
+        ]
+      },
+      "display_name": "ChatGPT-4o",
+      "tagline": "GPT-4o model used in ChatGPT",
+      "summary": "Prompt example Math Tutor Prompt example Travel Assistant Prompt example Clothing Recommendation Prompt example Recipe Generation ChatGPT-4o points to the GPT-4o snapshot currently used in ChatGPT. We recommend using an API model like GPT-5 or GPT-4o for most API integrations, but feel free to use this ChatGPT-4o model to test our latest improvements for chat use cases.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": true,
+        "web_search": false,
+        "file_search": false,
+        "image_generation": false,
+        "code_interpreter": false,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": false,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/chatgpt-4o-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "chatgpt-4o-latest"
+          ]
+        }
+      }
+    },
+    "chatgpt-image-latest": {
+      "identity": {
+        "catalog_id": "chatgpt-image-latest",
+        "provider_model_id": "chatgpt-image-latest",
+        "brand": "openai",
+        "family": "image",
+        "snapshot_ids": [
+          "chatgpt-image-latest"
+        ]
+      },
+      "display_name": "chatgpt-image-latest",
+      "tagline": "Image model used in ChatGPT.",
+      "summary": "GPT Image Latest points to the image snapshot currently used in ChatGPT.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text",
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/chatgpt-image-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "highest",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Image, text",
+        "revisions": {
+          "snapshots": [
+            "chatgpt-image-latest"
+          ]
+        }
+      }
+    },
+    "codex-mini-latest": {
+      "identity": {
+        "catalog_id": "codex-mini-latest",
+        "provider_model_id": "codex-mini-latest",
+        "brand": "openai",
+        "family": "codex",
+        "snapshot_ids": [
+          "codex-mini-latest"
+        ]
+      },
+      "display_name": "codex-mini-latest",
+      "tagline": "Fast reasoning model optimized for the Codex CLI",
+      "summary": "codex-mini-latest is a fine-tuned version of o4-mini specifically for use in Codex CLI. For direct use in the API, we recommend starting with gpt-4.1.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/codex-mini-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "codex-mini-latest"
+          ]
+        }
+      }
+    },
+    "computer-use-preview": {
+      "identity": {
+        "catalog_id": "computer-use-preview",
+        "provider_model_id": "computer-use-preview",
+        "brand": "openai",
+        "family": "computer-use",
+        "snapshot_ids": [
+          "computer-use-preview",
+          "computer-use-preview-2025-03-11"
+        ]
+      },
+      "display_name": "computer-use-preview",
+      "tagline": "Specialized model for computer use tool",
+      "summary": "The computer-use-preview model is a specialized model for the computer use tool. It is trained to understand and execute computer tasks. See the computer use guide for more information. This model is only usable in the Responses API .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 8192,
+        "max_output_tokens": 1024
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/computer-use-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "slow",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "computer-use-preview",
+            "computer-use-preview-2025-03-11"
+          ]
+        }
+      }
+    },
+    "dall-e-2": {
+      "identity": {
+        "catalog_id": "dall-e-2",
+        "provider_model_id": "dall-e-2",
+        "brand": "openai",
+        "family": "dall-e",
+        "snapshot_ids": [
+          "dall-e-2"
+        ]
+      },
+      "display_name": "DALL·E 2",
+      "tagline": "Our first image generation model",
+      "summary": "DALL·E is an AI system that creates realistic images and art from a natural language description. Older than DALL·E 3, DALL·E 2 offers more control in prompting and more requests at once.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/dall-e-2"
+      ],
+      "vendor_metadata": {
+        "performance": "low",
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Image",
+        "revisions": {
+          "snapshots": [
+            "dall-e-2"
+          ]
+        }
+      }
+    },
+    "dall-e-3": {
+      "identity": {
+        "catalog_id": "dall-e-3",
+        "provider_model_id": "dall-e-3",
+        "brand": "openai",
+        "family": "dall-e",
+        "snapshot_ids": [
+          "dall-e-3"
+        ]
+      },
+      "display_name": "DALL·E 3",
+      "tagline": "Previous generation image generation model",
+      "summary": "DALL·E is an AI system that creates realistic images and art from a natural language description. DALL·E 3 currently supports the ability, given a prompt, to create a new image with a specific size.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/dall-e-3"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Image",
+        "revisions": {
+          "snapshots": [
+            "dall-e-3"
+          ]
+        }
+      }
+    },
+    "davinci-002": {
+      "identity": {
+        "catalog_id": "davinci-002",
+        "provider_model_id": "davinci-002",
+        "brand": "openai",
+        "family": "openai",
+        "snapshot_ids": [
+          "davinci-002"
+        ]
+      },
+      "display_name": "davinci-002",
+      "tagline": "Replacement for the GPT-3 curie and davinci base models",
+      "summary": "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 01, 2021"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "text.completion",
+      "supported_interface_ids": [
+        "text.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/davinci-002"
+      ],
+      "vendor_metadata": {
+        "performance": "low",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "davinci-002"
+          ]
+        }
+      }
+    },
+    "gpt-3.5-turbo": {
+      "identity": {
+        "catalog_id": "gpt-3.5-turbo",
+        "provider_model_id": "gpt-3.5-turbo",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-3.5-turbo",
+          "gpt-3.5-turbo-0125",
+          "gpt-3.5-turbo-1106",
+          "gpt-3.5-turbo-instruct"
+        ]
+      },
+      "display_name": "GPT-3.5 Turbo",
+      "tagline": "Legacy GPT model for cheaper chat and non-chat tasks",
+      "summary": "GPT-3.5 Turbo models can understand and generate natural language or code and have been optimized for chat using the Chat Completions API but work well for non-chat tasks as well. As of July 2024, use gpt-4o-mini in place of GPT-3.5 Turbo, as it is cheaper, more capable, multimodal, and just as fast. GPT-3.5 Turbo is still available for use in the API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 01, 2021"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 16385,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-3.5-turbo"
+      ],
+      "vendor_metadata": {
+        "performance": "low",
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-0125",
+            "gpt-3.5-turbo-1106",
+            "gpt-3.5-turbo-instruct"
+          ]
+        }
+      }
+    },
+    "gpt-4": {
+      "identity": {
+        "catalog_id": "gpt-4",
+        "provider_model_id": "gpt-4",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4",
+          "gpt-4-0613",
+          "gpt-4-0314"
+        ]
+      },
+      "display_name": "GPT-4",
+      "tagline": "An older high-intelligence GPT model",
+      "summary": "GPT-4 is an older version of a high-intelligence GPT model, usable in Chat Completions.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Dec 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 8192,
+        "max_output_tokens": 8192
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4",
+            "gpt-4-0613",
+            "gpt-4-0314"
+          ]
+        }
+      }
+    },
+    "gpt-4-turbo": {
+      "identity": {
+        "catalog_id": "gpt-4-turbo",
+        "provider_model_id": "gpt-4-turbo",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4-turbo",
+          "gpt-4-turbo-2024-04-09",
+          "gpt-4-turbo-preview",
+          "gpt-4-0125-preview",
+          "gpt-4-1106-vision-preview"
+        ]
+      },
+      "display_name": "GPT-4 Turbo",
+      "tagline": "An older high-intelligence GPT model",
+      "summary": "GPT-4 Turbo is the next generation of GPT-4, an older high-intelligence GPT model. It was designed to be a cheaper, better version of GPT-4. Today, we recommend using a newer model like GPT-4o.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Dec 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4-turbo"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4-turbo",
+            "gpt-4-turbo-2024-04-09",
+            "gpt-4-turbo-preview",
+            "gpt-4-0125-preview",
+            "gpt-4-1106-vision-preview"
+          ]
+        }
+      }
+    },
+    "gpt-4-turbo-preview": {
+      "identity": {
+        "catalog_id": "gpt-4-turbo-preview",
+        "provider_model_id": "gpt-4-turbo-preview",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4-turbo-preview",
+          "gpt-4-0125-preview",
+          "gpt-4-1106-vision-preview"
+        ]
+      },
+      "display_name": "GPT-4 Turbo Preview",
+      "tagline": "An older fast GPT model",
+      "summary": "This is a research preview of the GPT-4 Turbo model, an older high-intelligence GPT model.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Dec 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4-turbo-preview",
+            "gpt-4-0125-preview",
+            "gpt-4-1106-vision-preview"
+          ]
+        }
+      }
+    },
+    "gpt-4.1": {
+      "identity": {
+        "catalog_id": "gpt-4.1",
+        "provider_model_id": "gpt-4.1",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4.1",
+          "gpt-4.1-2025-04-14"
+        ]
+      },
+      "display_name": "GPT-4.1",
+      "tagline": "Smartest non-reasoning model",
+      "summary": "GPT-4.1 excels at instruction following and tool calling, with broad knowledge across domains. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 for complex tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 1047576,
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": true,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": true,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": true,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4.1",
+            "gpt-4.1-2025-04-14"
+          ]
+        }
+      }
+    },
+    "gpt-4.1-mini": {
+      "identity": {
+        "catalog_id": "gpt-4.1-mini",
+        "provider_model_id": "gpt-4.1-mini",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4.1-mini",
+          "gpt-4.1-mini-2025-04-14"
+        ]
+      },
+      "display_name": "GPT-4.1 mini",
+      "tagline": "Smaller, faster version of GPT-4.1",
+      "summary": "GPT-4.1 mini excels at instruction following and tool calling. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 mini for more complex tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 1047576,
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4.1-mini",
+            "gpt-4.1-mini-2025-04-14"
+          ]
+        }
+      }
+    },
+    "gpt-4.1-nano": {
+      "identity": {
+        "catalog_id": "gpt-4.1-nano",
+        "provider_model_id": "gpt-4.1-nano",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4.1-nano",
+          "gpt-4.1-nano-2025-04-14"
+        ]
+      },
+      "display_name": "GPT-4.1 nano",
+      "tagline": "Fastest, most cost-efficient version of GPT-4.1",
+      "summary": "GPT-4.1 nano excels at instruction following and tool calling. It features a 1M token context window, and low latency without a reasoning step. Note that we recommend starting with GPT-5 nano for more complex tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 1047576,
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4.1-nano"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "very_fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4.1-nano",
+            "gpt-4.1-nano-2025-04-14"
+          ]
+        }
+      }
+    },
+    "gpt-4.5-preview": {
+      "identity": {
+        "catalog_id": "gpt-4.5-preview",
+        "provider_model_id": "gpt-4.5-preview",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4.5-preview",
+          "gpt-4.5-preview-2025-02-27"
+        ]
+      },
+      "display_name": "GPT-4.5 Preview (Deprecated)",
+      "tagline": "Deprecated large model.",
+      "summary": "Deprecated - a research preview of GPT-4.5. We recommend using gpt-4.1 or o3 models instead for most use cases",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4.5-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4.5-preview",
+            "gpt-4.5-preview-2025-02-27"
+          ]
+        }
+      }
+    },
+    "gpt-4o": {
+      "identity": {
+        "catalog_id": "gpt-4o",
+        "provider_model_id": "gpt-4o",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4o",
+          "gpt-4o-2024-08-06",
+          "gpt-4o-2024-11-20",
+          "gpt-4o-2024-05-13"
+        ]
+      },
+      "display_name": "GPT-4o",
+      "tagline": "Fast, intelligent, flexible GPT model",
+      "summary": "Prompt example Math Tutor Prompt example Travel Assistant Prompt example Clothing Recommendation Prompt example Recipe Generation GPT-4o (“o” for “omni”) is our versatile, high-intelligence flagship model. It accepts both text and image inputs, and produces text outputs (including Structured Outputs). It is the best model for most tasks, and is our most capable model outside of our o-series models.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": true,
+        "predicted_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o",
+            "gpt-4o-2024-08-06",
+            "gpt-4o-2024-11-20",
+            "gpt-4o-2024-05-13"
+          ]
+        }
+      }
+    },
+    "gpt-4o-audio-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-audio-preview",
+        "provider_model_id": "gpt-4o-audio-preview",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-4o-audio-preview",
+          "gpt-4o-audio-preview-2025-06-03",
+          "gpt-4o-audio-preview-2024-12-17",
+          "gpt-4o-audio-preview-2024-10-01"
+        ]
+      },
+      "display_name": "GPT-4o Audio",
+      "tagline": "GPT-4o models capable of audio inputs and outputs",
+      "summary": "This is a preview release of the GPT-4o Audio models. These models accept audio inputs and outputs, and can be used in the Chat Completions REST API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-audio-preview",
+            "gpt-4o-audio-preview-2025-06-03",
+            "gpt-4o-audio-preview-2024-12-17",
+            "gpt-4o-audio-preview-2024-10-01"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini",
+        "provider_model_id": "gpt-4o-mini",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4o-mini",
+          "gpt-4o-mini-2024-07-18"
+        ]
+      },
+      "display_name": "GPT-4o mini",
+      "tagline": "Fast, affordable small model for focused tasks",
+      "summary": "Prompt example Intent Classification Prompt example Extract search keywords Prompt example Translate text Prompt example Generate tags GPT-4o mini (“o” for “omni”) is a fast, affordable small model for focused tasks. It accepts both text and image inputs, and produces text outputs (including Structured Outputs). It is ideal for fine-tuning, and model outputs from a larger model like GPT-4o can be distilled to GPT-4o-mini to produce similar results at lower cost and latency.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini",
+            "gpt-4o-mini-2024-07-18"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini-audio-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini-audio-preview",
+        "provider_model_id": "gpt-4o-mini-audio-preview",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-4o-mini-audio-preview",
+          "gpt-4o-mini-audio-preview-2024-12-17"
+        ]
+      },
+      "display_name": "GPT-4o mini Audio",
+      "tagline": "Smaller model capable of audio inputs and outputs",
+      "summary": "This is a preview release of the smaller GPT-4o Audio mini model. It's designed to input audio or create audio outputs via the REST API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "fast",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini-audio-preview",
+            "gpt-4o-mini-audio-preview-2024-12-17"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini-realtime-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini-realtime-preview",
+        "provider_model_id": "gpt-4o-mini-realtime-preview",
+        "brand": "openai",
+        "family": "realtime",
+        "snapshot_ids": [
+          "gpt-4o-mini-realtime-preview",
+          "gpt-4o-mini-realtime-preview-2024-12-17"
+        ]
+      },
+      "display_name": "GPT-4o mini Realtime",
+      "tagline": "Smaller realtime model for text and audio inputs and outputs",
+      "summary": "This is a preview release of the GPT-4o-mini Realtime model, capable of responding to audio and text inputs in realtime over WebRTC or a WebSocket interface.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 16000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "realtime.session",
+      "supported_interface_ids": [
+        "realtime.session"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini-realtime-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "very_fast",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini-realtime-preview",
+            "gpt-4o-mini-realtime-preview-2024-12-17"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini-search-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini-search-preview",
+        "provider_model_id": "gpt-4o-mini-search-preview",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4o-mini-search-preview",
+          "gpt-4o-mini-search-preview-2025-03-11"
+        ]
+      },
+      "display_name": "GPT-4o mini Search Preview",
+      "tagline": "Fast, affordable small model for web search",
+      "summary": "GPT-4o mini Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "fast",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini-search-preview",
+            "gpt-4o-mini-search-preview-2025-03-11"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini-transcribe": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini-transcribe",
+        "provider_model_id": "gpt-4o-mini-transcribe",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-4o-mini-transcribe",
+          "gpt-4o-mini-transcribe-2025-12-15",
+          "gpt-4o-mini-transcribe-2025-03-20"
+        ]
+      },
+      "display_name": "GPT-4o mini Transcribe",
+      "tagline": "Speech-to-text model powered by GPT-4o mini",
+      "summary": "GPT-4o mini Transcribe is a speech-to-text model that uses GPT-4o mini to transcribe audio. It offers improvements to word error rate and better language recognition and accuracy compared to original Whisper models. Use it for more accurate transcripts.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 16000,
+        "max_output_tokens": 2000
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "audio.transcription",
+      "supported_interface_ids": [
+        "audio.transcription"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "fast",
+        "input_summary": "Audio, text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini-transcribe",
+            "gpt-4o-mini-transcribe-2025-12-15",
+            "gpt-4o-mini-transcribe-2025-03-20"
+          ]
+        }
+      }
+    },
+    "gpt-4o-mini-tts": {
+      "identity": {
+        "catalog_id": "gpt-4o-mini-tts",
+        "provider_model_id": "gpt-4o-mini-tts",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4o-mini-tts",
+          "gpt-4o-mini-tts-2025-12-15",
+          "gpt-4o-mini-tts-2025-03-20"
+        ]
+      },
+      "display_name": "GPT-4o mini TTS",
+      "tagline": "Text-to-speech model powered by GPT-4o mini",
+      "summary": "GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, a fast and powerful language model. Use it to convert text to natural sounding spoken text. The maximum number of input tokens is 2000.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "audio.speech",
+      "supported_interface_ids": [
+        "audio.speech"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-mini-tts"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "fast",
+        "input_summary": "Text",
+        "output_summary": "Audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-mini-tts",
+            "gpt-4o-mini-tts-2025-12-15",
+            "gpt-4o-mini-tts-2025-03-20"
+          ]
+        }
+      }
+    },
+    "gpt-4o-realtime-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-realtime-preview",
+        "provider_model_id": "gpt-4o-realtime-preview",
+        "brand": "openai",
+        "family": "realtime",
+        "snapshot_ids": [
+          "gpt-4o-realtime-preview",
+          "gpt-4o-realtime-preview-2025-06-03",
+          "gpt-4o-realtime-preview-2024-12-17",
+          "gpt-4o-realtime-preview-2024-10-01"
+        ]
+      },
+      "display_name": "GPT-4o Realtime",
+      "tagline": "Model capable of realtime text and audio inputs and outputs",
+      "summary": "This is a preview release of the GPT-4o Realtime model, capable of responding to audio and text inputs in realtime over WebRTC or a WebSocket interface.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "realtime.session",
+      "supported_interface_ids": [
+        "realtime.session"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-realtime-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "fast",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-realtime-preview",
+            "gpt-4o-realtime-preview-2025-06-03",
+            "gpt-4o-realtime-preview-2024-12-17",
+            "gpt-4o-realtime-preview-2024-10-01"
+          ]
+        }
+      }
+    },
+    "gpt-4o-search-preview": {
+      "identity": {
+        "catalog_id": "gpt-4o-search-preview",
+        "provider_model_id": "gpt-4o-search-preview",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-4o-search-preview",
+          "gpt-4o-search-preview-2025-03-11"
+        ]
+      },
+      "display_name": "GPT-4o Search Preview",
+      "tagline": "GPT model for web search in Chat Completions",
+      "summary": "GPT-4o Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-search-preview"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-search-preview",
+            "gpt-4o-search-preview-2025-03-11"
+          ]
+        }
+      }
+    },
+    "gpt-4o-transcribe": {
+      "identity": {
+        "catalog_id": "gpt-4o-transcribe",
+        "provider_model_id": "gpt-4o-transcribe",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-4o-transcribe"
+        ]
+      },
+      "display_name": "GPT-4o Transcribe",
+      "tagline": "Speech-to-text model powered by GPT-4o",
+      "summary": "GPT-4o Transcribe is a speech-to-text model that uses GPT-4o to transcribe audio. It offers improvements to word error rate and better language recognition and accuracy compared to original Whisper models. Use it for more accurate transcripts.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 16000,
+        "max_output_tokens": 2000
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "audio.transcription",
+      "supported_interface_ids": [
+        "audio.transcription"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-transcribe"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Audio, text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-transcribe"
+          ]
+        }
+      }
+    },
+    "gpt-4o-transcribe-diarize": {
+      "identity": {
+        "catalog_id": "gpt-4o-transcribe-diarize",
+        "provider_model_id": "gpt-4o-transcribe-diarize",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-4o-transcribe-diarize"
+        ]
+      },
+      "display_name": "GPT-4o Transcribe Diarize",
+      "tagline": "Transcription model that identifies who's speaking when",
+      "summary": "GPT-4o Transcribe Diarize is an automatic speech recognition (ASR) model with built-in speaker diarization, meaning it associates audio segments with different speakers in a conversation. This model is only available in the Transcription API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 16000,
+        "max_output_tokens": 2000
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "audio.transcription",
+      "supported_interface_ids": [
+        "audio.transcription"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-4o-transcribe-diarize"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, audio",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-4o-transcribe-diarize"
+          ]
+        }
+      }
+    },
+    "gpt-5": {
+      "identity": {
+        "catalog_id": "gpt-5",
+        "provider_model_id": "gpt-5",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5",
+          "gpt-5-2025-08-07"
+        ]
+      },
+      "display_name": "GPT-5",
+      "tagline": "Previous intelligent reasoning model for coding and agentic tasks with configurable reasoning effort",
+      "summary": "GPT-5 is our previous model for coding, reasoning, and agentic tasks across domains. We recommend using the latest GPT-5.1 . Learn more in our latest model guide . Reasoning.effort supports: minimal, low, medium, and high.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": true,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": true,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": true,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5",
+            "gpt-5-2025-08-07"
+          ]
+        }
+      }
+    },
+    "gpt-5-chat-latest": {
+      "identity": {
+        "catalog_id": "gpt-5-chat-latest",
+        "provider_model_id": "gpt-5-chat-latest",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5-chat-latest"
+        ]
+      },
+      "display_name": "GPT-5 Chat",
+      "tagline": "GPT-5 model used in ChatGPT",
+      "summary": "GPT-5 Chat points to the GPT-5 snapshot previously used in ChatGPT. For the latest Chat model, please refer to our models page . We recommend leveraging our latest-model for most API usage.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": true,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": true,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5-chat-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5-chat-latest"
+          ]
+        }
+      }
+    },
+    "gpt-5-codex": {
+      "identity": {
+        "catalog_id": "gpt-5-codex",
+        "provider_model_id": "gpt-5-codex",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5-codex"
+        ]
+      },
+      "display_name": "GPT-5-Codex",
+      "tagline": "A version of GPT-5 optimized for agentic coding in Codex",
+      "summary": "GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments. It's available in the Responses API only and the underlying model snapshot will be regularly updated. If you want to learn more about prompting GPT-5-Codex, refer to our dedicated guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5-codex"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5-codex"
+          ]
+        }
+      }
+    },
+    "gpt-5-mini": {
+      "identity": {
+        "catalog_id": "gpt-5-mini",
+        "provider_model_id": "gpt-5-mini",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5-mini",
+          "gpt-5-mini-2025-08-07"
+        ]
+      },
+      "display_name": "GPT-5 mini",
+      "tagline": "A faster, cost-efficient version of GPT-5 for well-defined tasks",
+      "summary": "GPT-5 mini is a faster, more cost-efficient version of GPT-5. It's great for well-defined tasks and precise prompts. Learn more in our latest model guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "May 31, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": false,
+        "code_interpreter": true,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": true,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5-mini"
+      ],
+      "vendor_metadata": {
+        "speed": "fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5-mini",
+            "gpt-5-mini-2025-08-07"
+          ]
+        }
+      }
+    },
+    "gpt-5-nano": {
+      "identity": {
+        "catalog_id": "gpt-5-nano",
+        "provider_model_id": "gpt-5-nano",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5-nano",
+          "gpt-5-nano-2025-08-07"
+        ]
+      },
+      "display_name": "GPT-5 nano",
+      "tagline": "Fastest, most cost-efficient version of GPT-5",
+      "summary": "GPT-5 Nano is our fastest, cheapest version of GPT-5. It's great for summarization and classification tasks. Learn more in our latest model guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "May 31, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": true,
+        "hosted_shell": false,
+        "apply_patch": false,
+        "skills": false,
+        "computer_use": false,
+        "mcp": true,
+        "tool_search": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5-nano"
+      ],
+      "vendor_metadata": {
+        "speed": "very_fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5-nano",
+            "gpt-5-nano-2025-08-07"
+          ]
+        }
+      }
+    },
+    "gpt-5-pro": {
+      "identity": {
+        "catalog_id": "gpt-5-pro",
+        "provider_model_id": "gpt-5-pro",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5-pro",
+          "gpt-5-pro-2025-10-06"
+        ]
+      },
+      "display_name": "GPT-5 pro",
+      "tagline": "Version of GPT-5 that produces smarter and more precise responses",
+      "summary": "GPT-5 pro uses more compute to think harder and provide consistently better answers. GPT-5 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode . As our most advanced reasoning model, GPT-5 pro defaults to (and only supports) reasoning.effort: high . GPT-5 pro does not support code interpreter.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 272000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5-pro"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5-pro",
+            "gpt-5-pro-2025-10-06"
+          ]
+        }
+      }
+    },
+    "gpt-5.1": {
+      "identity": {
+        "catalog_id": "gpt-5.1",
+        "provider_model_id": "gpt-5.1",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.1",
+          "gpt-5.1-2025-11-13"
+        ]
+      },
+      "display_name": "GPT-5.1",
+      "tagline": "The best model for coding and agentic tasks with configurable reasoning effort",
+      "summary": "GPT-5.1 is our flagship model for coding and agentic tasks with configurable reasoning and non-reasoning effort. Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, and high.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": true,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.1",
+            "gpt-5.1-2025-11-13"
+          ]
+        }
+      }
+    },
+    "gpt-5.1-chat-latest": {
+      "identity": {
+        "catalog_id": "gpt-5.1-chat-latest",
+        "provider_model_id": "gpt-5.1-chat-latest",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.1-chat-latest"
+        ]
+      },
+      "display_name": "GPT-5.1 Chat",
+      "tagline": "GPT-5.1 model used in ChatGPT",
+      "summary": "GPT-5.1 Chat points to the GPT-5.1 snapshot currently used in ChatGPT. We recommend GPT-5.1 for most API usage, but feel free to use this GPT-5.1 Chat model to test our latest improvements for chat use cases.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.1-chat-latest"
+          ]
+        }
+      }
+    },
+    "gpt-5.1-codex": {
+      "identity": {
+        "catalog_id": "gpt-5.1-codex",
+        "provider_model_id": "gpt-5.1-codex",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.1-codex"
+        ]
+      },
+      "display_name": "GPT-5.1 Codex",
+      "tagline": "A version of GPT-5.1 optimized for agentic coding in Codex.",
+      "summary": "GPT-5.1-Codex is a version of GPT-5 optimized for agentic coding tasks in Codex or similar environments. It's available in the Responses API only and the underlying model snapshot will be regularly updated. If you want to learn more about prompting GPT-5-Codex, refer to our dedicated guide",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1-codex"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.1-codex"
+          ]
+        }
+      }
+    },
+    "gpt-5.1-codex-max": {
+      "identity": {
+        "catalog_id": "gpt-5.1-codex-max",
+        "provider_model_id": "gpt-5.1-codex-max",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.1-codex-max"
+        ]
+      },
+      "display_name": "GPT-5.1-Codex-Max",
+      "tagline": "A version of GPT-5.1-codex optimized for long running tasks.",
+      "summary": "GPT‑5.1-Codex-Max is purpose-built for agentic coding. It's only available in the Responses API . Learn how to get the most of GPT-5.1-Codex-Max in the prompting guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+      ],
+      "vendor_metadata": {
+        "speed": "fast",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.1-codex-max"
+          ]
+        }
+      }
+    },
+    "gpt-5.1-codex-mini": {
+      "identity": {
+        "catalog_id": "gpt-5.1-codex-mini",
+        "provider_model_id": "gpt-5.1-codex-mini",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.1-codex-mini"
+        ]
+      },
+      "display_name": "GPT-5.1 Codex mini",
+      "tagline": "Smaller, more cost-effective, less-capable version of GPT-5.1-Codex",
+      "summary": "GPT-5.1 Codex mini is a smaller, more cost-effective, less-capable version of GPT-5.1-Codex.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.1-codex-mini"
+          ]
+        }
+      }
+    },
+    "gpt-5.2": {
+      "identity": {
+        "catalog_id": "gpt-5.2",
+        "provider_model_id": "gpt-5.2",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.2",
+          "gpt-5.2-2025-12-11"
+        ]
+      },
+      "display_name": "GPT-5.2",
+      "tagline": "Previous frontier model for professional work with configurable reasoning effort",
+      "summary": "GPT-5.2 is our previous frontier model for complex professional work. We recommend using the latest GPT-5.4 . Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, high and xhigh.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": true,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.2",
+            "gpt-5.2-2025-12-11"
+          ]
+        }
+      }
+    },
+    "gpt-5.2-chat-latest": {
+      "identity": {
+        "catalog_id": "gpt-5.2-chat-latest",
+        "provider_model_id": "gpt-5.2-chat-latest",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.2-chat-latest"
+        ]
+      },
+      "display_name": "GPT-5.2 Chat",
+      "tagline": "GPT-5.2 model used in ChatGPT",
+      "summary": "GPT-5.2 Chat points to the GPT-5.2 snapshot currently used in ChatGPT. We recommend GPT-5.4 for most API usage, but feel free to use this GPT-5.2 Chat model to test our latest improvements for chat use cases.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.2-chat-latest"
+          ]
+        }
+      }
+    },
+    "gpt-5.2-codex": {
+      "identity": {
+        "catalog_id": "gpt-5.2-codex",
+        "provider_model_id": "gpt-5.2-codex",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.2-codex"
+        ]
+      },
+      "display_name": "GPT-5.2-Codex",
+      "tagline": "Our most intelligent coding model optimized for long-horizon, agentic coding tasks.",
+      "summary": "GPT-5.2-Codex is an upgraded version of GPT-5.2 optimized for agentic coding tasks in Codex or similar environments. GPT-5.2-Codex supports low medium high , and xhigh reasoning effort settings. If you want to learn more about prompting GPT-5.2-Codex, refer to our dedicated guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.2-codex"
+          ]
+        }
+      }
+    },
+    "gpt-5.2-pro": {
+      "identity": {
+        "catalog_id": "gpt-5.2-pro",
+        "provider_model_id": "gpt-5.2-pro",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.2-pro",
+          "gpt-5.2-pro-2025-12-11"
+        ]
+      },
+      "display_name": "GPT-5.2 pro",
+      "tagline": "Previous pro model for professional work that produces smarter and more precise responses.",
+      "summary": "GPT-5.2 pro is our previous pro model for complex professional work. We recommend using GPT-5.4 pro for the latest pro model. GPT-5.2 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5.2 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode. GPT-5.2 pro supports reasoning.effort: medium, high, xhigh.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.2-pro"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.2-pro",
+            "gpt-5.2-pro-2025-12-11"
+          ]
+        }
+      }
+    },
+    "gpt-5.3-chat-latest": {
+      "identity": {
+        "catalog_id": "gpt-5.3-chat-latest",
+        "provider_model_id": "gpt-5.3-chat-latest",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.3-chat-latest"
+        ]
+      },
+      "display_name": "GPT-5.3 Chat",
+      "tagline": "GPT-5.3 Instant model used in ChatGPT",
+      "summary": "GPT-5.3 Chat points to the GPT-5.3 Instant snapshot currently used in ChatGPT. We recommend GPT-5.2 for API usage, but feel free to use this GPT-5.3 Chat model to test our latest improvements for chat use cases.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.3-chat-latest"
+          ]
+        }
+      }
+    },
+    "gpt-5.3-codex": {
+      "identity": {
+        "catalog_id": "gpt-5.3-codex",
+        "provider_model_id": "gpt-5.3-codex",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.3-codex"
+        ]
+      },
+      "display_name": "GPT-5.3-Codex",
+      "tagline": "The most capable agentic coding model to date.",
+      "summary": "GPT-5.3-Codex is optimized for agentic coding tasks in Codex or similar environments. GPT-5.3-Codex supports low medium high , and xhigh reasoning effort settings. If you want to learn more about prompting GPT-5.3-Codex, refer to our dedicated guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 400000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.3-codex"
+          ]
+        }
+      }
+    },
+    "gpt-5.4": {
+      "identity": {
+        "catalog_id": "gpt-5.4",
+        "provider_model_id": "gpt-5.4",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.4",
+          "gpt-5.4-2026-03-05"
+        ]
+      },
+      "display_name": "GPT-5.4",
+      "tagline": "Our most capable model for professional work",
+      "summary": "GPT-5.4 is our frontier model for complex professional work. Learn more in our latest model guide . Reasoning.effort supports: none (default), low, medium, high and xhigh.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 1050000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": true,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": true,
+        "hosted_shell": true,
+        "apply_patch": true,
+        "skills": true,
+        "computer_use": true,
+        "mcp": true,
+        "tool_search": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.4",
+            "gpt-5.4-2026-03-05"
+          ]
+        }
+      }
+    },
+    "gpt-5.4-pro": {
+      "identity": {
+        "catalog_id": "gpt-5.4-pro",
+        "provider_model_id": "gpt-5.4-pro",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-5.4-pro",
+          "gpt-5.4-pro-2026-03-05"
+        ]
+      },
+      "display_name": "GPT-5.4 pro",
+      "tagline": "Version of GPT-5.4 that produces smarter and more precise responses.",
+      "summary": "GPT-5.4 pro uses more compute to think harder and provide consistently better answers. GPT-5.4 pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since GPT-5.4 pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode . GPT-5.4 pro supports reasoning.effort: medium, high, xhigh.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Aug 31, 2025"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 1050000,
+        "max_output_tokens": 128000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "web_search": true,
+        "file_search": true,
+        "image_generation": true,
+        "code_interpreter": false,
+        "hosted_shell": false,
+        "apply_patch": true,
+        "skills": false,
+        "computer_use": true,
+        "mcp": true,
+        "tool_search": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-5.4-pro"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-5.4-pro",
+            "gpt-5.4-pro-2026-03-05"
+          ]
+        }
+      }
+    },
+    "gpt-audio": {
+      "identity": {
+        "catalog_id": "gpt-audio",
+        "provider_model_id": "gpt-audio",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-audio",
+          "gpt-audio-2025-08-28"
+        ]
+      },
+      "display_name": "gpt-audio",
+      "tagline": "For audio inputs and outputs with Chat Completions API",
+      "summary": "The gpt-audio model is our first generally available audio model. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-audio"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-audio",
+            "gpt-audio-2025-08-28"
+          ]
+        }
+      }
+    },
+    "gpt-audio-1.5": {
+      "identity": {
+        "catalog_id": "gpt-audio-1.5",
+        "provider_model_id": "gpt-audio-1.5",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-audio-1.5"
+        ]
+      },
+      "display_name": "gpt-audio-1.5",
+      "tagline": "The best voice model for audio in, audio out with Chat Completions.",
+      "summary": "The gpt-audio model is our first generally available audio model. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-audio-1.5"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "medium",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-audio-1.5"
+          ]
+        }
+      }
+    },
+    "gpt-audio-mini": {
+      "identity": {
+        "catalog_id": "gpt-audio-mini",
+        "provider_model_id": "gpt-audio-mini",
+        "brand": "openai",
+        "family": "gpt-audio",
+        "snapshot_ids": [
+          "gpt-audio-mini",
+          "gpt-audio-mini-2025-12-15",
+          "gpt-audio-mini-2025-10-06"
+        ]
+      },
+      "display_name": "gpt-audio-mini",
+      "tagline": "A cost-efficient version of GPT Audio",
+      "summary": "A cost-efficient version of GPT Audio. It accepts audio inputs and outputs, and can be used in the Chat Completions REST API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 16384
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "chat.completion",
+      "supported_interface_ids": [
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-audio-mini"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "very_fast",
+        "input_summary": "Text, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-audio-mini",
+            "gpt-audio-mini-2025-12-15",
+            "gpt-audio-mini-2025-10-06"
+          ]
+        }
+      }
+    },
+    "gpt-image-1": {
+      "identity": {
+        "catalog_id": "gpt-image-1",
+        "provider_model_id": "gpt-image-1",
+        "brand": "openai",
+        "family": "image",
+        "snapshot_ids": [
+          "gpt-image-1"
+        ]
+      },
+      "display_name": "GPT Image 1",
+      "tagline": "Our previous image generation model",
+      "summary": "GPT Image 1 is a natively multimodal language model that accepts both text and image inputs, and produces image outputs.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-image-1"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Image",
+        "revisions": {
+          "snapshots": [
+            "gpt-image-1"
+          ]
+        }
+      }
+    },
+    "gpt-image-1-mini": {
+      "identity": {
+        "catalog_id": "gpt-image-1-mini",
+        "provider_model_id": "gpt-image-1-mini",
+        "brand": "openai",
+        "family": "image",
+        "snapshot_ids": [
+          "gpt-image-1-mini"
+        ]
+      },
+      "display_name": "gpt-image-1-mini",
+      "tagline": "A cost-efficient version of GPT Image 1",
+      "summary": "A cost-efficient version of GPT Image 1. It is a natively multimodal language model that accepts both text and image inputs, and produces image outputs.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-image-1-mini"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Image",
+        "revisions": {
+          "snapshots": [
+            "gpt-image-1-mini"
+          ]
+        }
+      }
+    },
+    "gpt-image-1.5": {
+      "identity": {
+        "catalog_id": "gpt-image-1.5",
+        "provider_model_id": "gpt-image-1.5",
+        "brand": "openai",
+        "family": "image",
+        "snapshot_ids": [
+          "gpt-image-1.5",
+          "gpt-image-1.5-2025-12-16"
+        ]
+      },
+      "display_name": "GPT Image 1.5",
+      "tagline": "State-of-the-art image generation model.",
+      "summary": "GPT Image 1.5 is our latest image generation model, with better instruction following and adherence to prompts. Learn more in our GPT Image 1.5 usage guide .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text",
+          "image"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": true,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "image.generation",
+      "supported_interface_ids": [
+        "image.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-image-1.5"
+      ],
+      "vendor_metadata": {
+        "performance": "highest",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Image, text",
+        "revisions": {
+          "snapshots": [
+            "gpt-image-1.5",
+            "gpt-image-1.5-2025-12-16"
+          ]
+        }
+      }
+    },
+    "gpt-oss-120b": {
+      "identity": {
+        "catalog_id": "gpt-oss-120b",
+        "provider_model_id": "gpt-oss-120b",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-oss-120b"
+        ]
+      },
+      "display_name": "gpt-oss-120b",
+      "tagline": "Most powerful open-weight model, fits into an H100 GPU",
+      "summary": "gpt-oss-120b is our most powerful open-weight model, which fits into a single H100 GPU (117B parameters with 5.1B active parameters). Download gpt-oss-120b on HuggingFace . Key features Permissive Apache 2.0 license: Build freely without copyleft restrictions or patent risk—ideal for experimentation, customization, and commercial deployment. Configurable reasoning effort: Easily adjust the reasoning effort (low, medium, high) based on your specific use case and latency needs. Full chain-of-thought: Gain complete access to the model's reasoning process, facilitating easier debugging and increased trust in outputs. Fine-tunable: Fully customize models to your specific use case through parameter fine-tuning. Agentic capabilities: Use the models' native capabilities for function calling, web browsing, Python code execution, and structured outputs.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 131072,
+        "max_output_tokens": 131072
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-oss-120b"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-oss-120b"
+          ]
+        }
+      }
+    },
+    "gpt-oss-20b": {
+      "identity": {
+        "catalog_id": "gpt-oss-20b",
+        "provider_model_id": "gpt-oss-20b",
+        "brand": "openai",
+        "family": "gpt",
+        "snapshot_ids": [
+          "gpt-oss-20b"
+        ]
+      },
+      "display_name": "gpt-oss-20b",
+      "tagline": "Medium-sized open-weight model for low latency",
+      "summary": "gpt-oss-20b is our medium-sized open-weight model for low latency, local, or specialized use-cases (21B parameters with 3.6B active parameters). Download gpt-oss-20b on HuggingFace . Key features Permissive Apache 2.0 license: Build freely without copyleft restrictions or patent risk—ideal for experimentation, customization, and commercial deployment. Configurable reasoning effort: Easily adjust the reasoning effort (low, medium, high) based on your specific use case and latency needs. Full chain-of-thought: Gain complete access to the model's reasoning process, facilitating easier debugging and increased trust in outputs. Fine-tunable: Fully customize models to your specific use case through parameter fine-tuning. Agentic capabilities: Use the models' native capabilities for function calling, web browsing, Python code execution, and structured outputs.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 131072,
+        "max_output_tokens": 131072
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response",
+        "chat.completion"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-oss-20b"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "gpt-oss-20b"
+          ]
+        }
+      }
+    },
+    "gpt-realtime": {
+      "identity": {
+        "catalog_id": "gpt-realtime",
+        "provider_model_id": "gpt-realtime",
+        "brand": "openai",
+        "family": "realtime",
+        "snapshot_ids": [
+          "gpt-realtime",
+          "gpt-realtime-2025-08-28"
+        ]
+      },
+      "display_name": "gpt-realtime",
+      "tagline": "Model capable of realtime text and audio inputs and outputs",
+      "summary": "This is our first general-availability realtime model, capable of responding to audio and text inputs in realtime over WebRTC, WebSocket, or SIP connections.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "realtime.session",
+      "supported_interface_ids": [
+        "realtime.session"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-realtime"
+      ],
+      "vendor_metadata": {
+        "performance": "highest",
+        "speed": "fast",
+        "input_summary": "Text, audio, image",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-realtime",
+            "gpt-realtime-2025-08-28"
+          ]
+        }
+      }
+    },
+    "gpt-realtime-1.5": {
+      "identity": {
+        "catalog_id": "gpt-realtime-1.5",
+        "provider_model_id": "gpt-realtime-1.5",
+        "brand": "openai",
+        "family": "realtime",
+        "snapshot_ids": [
+          "gpt-realtime-1.5"
+        ]
+      },
+      "display_name": "gpt-realtime-1.5",
+      "tagline": "The best voice model for audio in, audio out.",
+      "summary": "GPT-Reatime-1.5 is our flagship audio model for voice agents & customer support.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 30, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "realtime.session",
+      "supported_interface_ids": [
+        "realtime.session"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-realtime-1.5"
+      ],
+      "vendor_metadata": {
+        "performance": "highest",
+        "speed": "fast",
+        "input_summary": "Text, audio, image",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-realtime-1.5"
+          ]
+        }
+      }
+    },
+    "gpt-realtime-mini": {
+      "identity": {
+        "catalog_id": "gpt-realtime-mini",
+        "provider_model_id": "gpt-realtime-mini",
+        "brand": "openai",
+        "family": "realtime",
+        "snapshot_ids": [
+          "gpt-realtime-mini",
+          "gpt-realtime-mini-2025-12-15",
+          "gpt-realtime-mini-2025-10-06"
+        ]
+      },
+      "display_name": "gpt-realtime-mini",
+      "tagline": "A cost-efficient version of GPT Realtime",
+      "summary": "A cost-efficient version of GPT Realtime - capable of responding to audio and text inputs in realtime over WebRTC, WebSocket, or SIP connections.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text",
+          "audio"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 32000,
+        "max_output_tokens": 4096
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "realtime.session",
+      "supported_interface_ids": [
+        "realtime.session"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/gpt-realtime-mini"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "very_fast",
+        "input_summary": "Text, image, audio",
+        "output_summary": "Text, audio",
+        "revisions": {
+          "snapshots": [
+            "gpt-realtime-mini",
+            "gpt-realtime-mini-2025-12-15",
+            "gpt-realtime-mini-2025-10-06"
+          ]
+        }
+      }
+    },
+    "o1": {
+      "identity": {
+        "catalog_id": "o1",
+        "provider_model_id": "o1",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o1",
+          "o1-2024-12-17",
+          "o1-preview",
+          "o1-preview-2024-09-12"
+        ]
+      },
+      "display_name": "o1",
+      "tagline": "Previous full o-series reasoning model",
+      "summary": "The o1 series of models are trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o1"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o1",
+            "o1-2024-12-17",
+            "o1-preview",
+            "o1-preview-2024-09-12"
+          ]
+        }
+      }
+    },
+    "o1-mini": {
+      "identity": {
+        "catalog_id": "o1-mini",
+        "provider_model_id": "o1-mini",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o1-mini",
+          "o1-mini-2024-09-12"
+        ]
+      },
+      "display_name": "o1-mini",
+      "tagline": "A small model alternative to o1",
+      "summary": "The o1 reasoning model is designed to solve hard problems across domains. o1-mini is a faster and more affordable reasoning model, but we recommend using the newer o3-mini model that features higher intelligence at the same latency and price as o1-mini.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 65536
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o1-mini"
+      ],
+      "vendor_metadata": {
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o1-mini",
+            "o1-mini-2024-09-12"
+          ]
+        }
+      }
+    },
+    "o1-preview": {
+      "identity": {
+        "catalog_id": "o1-preview",
+        "provider_model_id": "o1-preview",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o1-preview",
+          "o1-preview-2024-09-12"
+        ]
+      },
+      "display_name": "o1 Preview",
+      "tagline": "Preview of our first o-series reasoning model",
+      "summary": "Research preview of the o1 series of models, trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 128000,
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o1-preview"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o1-preview",
+            "o1-preview-2024-09-12"
+          ]
+        }
+      }
+    },
+    "o1-pro": {
+      "identity": {
+        "catalog_id": "o1-pro",
+        "provider_model_id": "o1-pro",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o1-pro",
+          "o1-pro-2025-03-19"
+        ]
+      },
+      "display_name": "o1-pro",
+      "tagline": "Version of o1 with more compute for better responses",
+      "summary": "The o1 series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o1-pro model uses more compute to think harder and provide consistently better answers. o1-pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o1-pro"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o1-pro",
+            "o1-pro-2025-03-19"
+          ]
+        }
+      }
+    },
+    "o3": {
+      "identity": {
+        "catalog_id": "o3",
+        "provider_model_id": "o3",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o3",
+          "o3-2025-04-16"
+        ]
+      },
+      "display_name": "o3",
+      "tagline": "Reasoning model for complex tasks, succeeded by GPT-5",
+      "summary": "o3 is a well-rounded and powerful model across domains. It sets a new standard for math, science, coding, and visual reasoning tasks. It also excels at technical writing and instruction-following. Use it to think through multi-step problems that involve analysis across text, code, and images. o3 is succeeded by GPT-5 . Learn more about how to use our reasoning models in our reasoning guide.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o3"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o3",
+            "o3-2025-04-16"
+          ]
+        }
+      }
+    },
+    "o3-deep-research": {
+      "identity": {
+        "catalog_id": "o3-deep-research",
+        "provider_model_id": "o3-deep-research",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o3-deep-research",
+          "o3-deep-research-2025-06-26"
+        ]
+      },
+      "display_name": "o3-deep-research",
+      "tagline": "Our most powerful deep research model",
+      "summary": "o3-deep-research is our most advanced model for deep research, designed to tackle complex, multi-step research tasks. It can search and synthesize information from across the internet as well as from your own data—brought in through MCP connectors. Learn more about getting started with this model in our deep research guide.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o3-deep-research"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o3-deep-research",
+            "o3-deep-research-2025-06-26"
+          ]
+        }
+      }
+    },
+    "o3-mini": {
+      "identity": {
+        "catalog_id": "o3-mini",
+        "provider_model_id": "o3-mini",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o3-mini",
+          "o3-mini-2025-01-31"
+        ]
+      },
+      "display_name": "o3-mini",
+      "tagline": "A small model alternative to o3",
+      "summary": "Prompt example Landing Page Generation Prompt example Analyze Return Policy Prompt example Text to SQL Prompt example Graph Entity Extraction o3-mini is our newest small reasoning model, providing high intelligence at the same cost and latency targets of o1-mini. o3-mini supports key developer features, like Structured Outputs, function calling, and Batch API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Oct 01, 2023"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o3-mini"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o3-mini",
+            "o3-mini-2025-01-31"
+          ]
+        }
+      }
+    },
+    "o3-pro": {
+      "identity": {
+        "catalog_id": "o3-pro",
+        "provider_model_id": "o3-pro",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o3-pro",
+          "o3-pro-2025-06-10"
+        ]
+      },
+      "display_name": "o3-pro",
+      "tagline": "Version of o3 with more compute for better responses",
+      "summary": "The o-series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o3-pro model uses more compute to think harder and provide consistently better answers. o3-pro is available in the Responses API only to enable support for multi-turn model interactions before responding to API requests, and other advanced API features in the future. Since o3-pro is designed to tackle tough problems, some requests may take several minutes to finish. To avoid timeouts, try using background mode .",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o3-pro"
+      ],
+      "vendor_metadata": {
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o3-pro",
+            "o3-pro-2025-06-10"
+          ]
+        }
+      }
+    },
+    "o4-mini": {
+      "identity": {
+        "catalog_id": "o4-mini",
+        "provider_model_id": "o4-mini",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o4-mini",
+          "o4-mini-2025-04-16"
+        ]
+      },
+      "display_name": "o4-mini",
+      "tagline": "Fast, cost-efficient reasoning model, succeeded by GPT-5 mini",
+      "summary": "o4-mini is our latest small o-series model. It's optimized for fast, effective reasoning with exceptionally efficient performance in coding and visual tasks. It's succeeded by GPT-5 mini . Learn more about how to use our reasoning models in our reasoning guide.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "fine_tuning": true,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o4-mini"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o4-mini",
+            "o4-mini-2025-04-16"
+          ]
+        }
+      }
+    },
+    "o4-mini-deep-research": {
+      "identity": {
+        "catalog_id": "o4-mini-deep-research",
+        "provider_model_id": "o4-mini-deep-research",
+        "brand": "openai",
+        "family": "o",
+        "snapshot_ids": [
+          "o4-mini-deep-research",
+          "o4-mini-deep-research-2025-06-26"
+        ]
+      },
+      "display_name": "o4-mini-deep-research",
+      "tagline": "Faster, more affordable deep research model",
+      "summary": "o4-mini-deep-research is our faster, more affordable deep research model—ideal for tackling complex, multi-step research tasks. It can search and synthesize information from across the internet as well as from your own data, brought in through MCP connectors. Learn more about how to use this model in our deep research guide.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Jun 01, 2024"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "context_window_tokens": 200000,
+        "max_output_tokens": 100000
+      },
+      "capabilities": {
+        "streaming": true,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "response",
+      "supported_interface_ids": [
+        "response"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/o4-mini-deep-research"
+      ],
+      "vendor_metadata": {
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "o4-mini-deep-research",
+            "o4-mini-deep-research-2025-06-26"
+          ]
+        }
+      }
+    },
+    "omni-moderation-latest": {
+      "identity": {
+        "catalog_id": "omni-moderation-latest",
+        "provider_model_id": "omni-moderation-latest",
+        "brand": "openai",
+        "family": "moderation",
+        "snapshot_ids": [
+          "omni-moderation",
+          "omni-moderation-latest",
+          "omni-moderation-2024-09-26"
+        ]
+      },
+      "display_name": "omni-moderation",
+      "tagline": "Identify potentially harmful content in text and images",
+      "summary": "Moderation models are free models designed to detect harmful content. This model is our most capable moderation model, accepting images as input as well.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "function_calling": false,
+        "structured_outputs": false,
+        "fine_tuning": false,
+        "distillation": false,
+        "predicted_outputs": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "moderation",
+      "supported_interface_ids": [
+        "moderation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/omni-moderation-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text, image",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "omni-moderation",
+            "omni-moderation-latest",
+            "omni-moderation-2024-09-26"
+          ]
+        }
+      }
+    },
+    "sora-2": {
+      "identity": {
+        "catalog_id": "sora-2",
+        "provider_model_id": "sora-2",
+        "brand": "openai",
+        "family": "sora",
+        "snapshot_ids": [
+          "sora-2",
+          "sora-2-2025-12-08",
+          "sora-2-2025-10-06"
+        ]
+      },
+      "display_name": "Sora 2",
+      "tagline": "Flagship video generation with synced audio",
+      "summary": "Sora 2 is our new powerful media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "audio",
+          "video"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": true,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "video.generation",
+      "supported_interface_ids": [
+        "video.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/sora-2"
+      ],
+      "vendor_metadata": {
+        "performance": "higher",
+        "speed": "slow",
+        "input_summary": "Text, image",
+        "output_summary": "Video, audio",
+        "revisions": {
+          "snapshots": [
+            "sora-2",
+            "sora-2-2025-12-08",
+            "sora-2-2025-10-06"
+          ]
+        }
+      }
+    },
+    "sora-2-pro": {
+      "identity": {
+        "catalog_id": "sora-2-pro",
+        "provider_model_id": "sora-2-pro",
+        "brand": "openai",
+        "family": "sora",
+        "snapshot_ids": [
+          "sora-2-pro",
+          "sora-2-pro-2025-10-06"
+        ]
+      },
+      "display_name": "Sora 2 Pro",
+      "tagline": "Most advanced synced-audio video generation",
+      "summary": "Sora 2 Pro is our state-of-the-art, most advanced media generation model, generating videos with synced audio. It can create richly detailed, dynamic clips from natural language or images.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "audio",
+          "video"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": true,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": true,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "video.generation",
+      "supported_interface_ids": [
+        "video.generation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/sora-2-pro"
+      ],
+      "vendor_metadata": {
+        "performance": "highest",
+        "speed": "slowest",
+        "input_summary": "Text, image",
+        "output_summary": "Video, audio",
+        "revisions": {
+          "snapshots": [
+            "sora-2-pro",
+            "sora-2-pro-2025-10-06"
+          ]
+        }
+      }
+    },
+    "text-embedding-3-large": {
+      "identity": {
+        "catalog_id": "text-embedding-3-large",
+        "provider_model_id": "text-embedding-3-large",
+        "brand": "openai",
+        "family": "embedding",
+        "snapshot_ids": [
+          "text-embedding-3-large"
+        ]
+      },
+      "display_name": "text-embedding-3-large",
+      "tagline": "Most capable embedding model",
+      "summary": "text-embedding-3-large is our most capable embedding model for both english and non-english tasks. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "embedding",
+      "supported_interface_ids": [
+        "embedding"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/text-embedding-3-large"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "text-embedding-3-large"
+          ]
+        }
+      }
+    },
+    "text-embedding-3-small": {
+      "identity": {
+        "catalog_id": "text-embedding-3-small",
+        "provider_model_id": "text-embedding-3-small",
+        "brand": "openai",
+        "family": "embedding",
+        "snapshot_ids": [
+          "text-embedding-3-small"
+        ]
+      },
+      "display_name": "text-embedding-3-small",
+      "tagline": "Small embedding model",
+      "summary": "text-embedding-3-small is our improved, more performant version of our ada embedding model. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "embedding",
+      "supported_interface_ids": [
+        "embedding"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/text-embedding-3-small"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "text-embedding-3-small"
+          ]
+        }
+      }
+    },
+    "text-embedding-ada-002": {
+      "identity": {
+        "catalog_id": "text-embedding-ada-002",
+        "provider_model_id": "text-embedding-ada-002",
+        "brand": "openai",
+        "family": "embedding",
+        "snapshot_ids": [
+          "text-embedding-ada-002"
+        ]
+      },
+      "display_name": "text-embedding-ada-002",
+      "tagline": "Older embedding model",
+      "summary": "text-embedding-ada-002 is our improved, more performant version of our ada embedding model. Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "embedding",
+      "supported_interface_ids": [
+        "embedding"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/text-embedding-ada-002"
+      ],
+      "vendor_metadata": {
+        "performance": "low",
+        "speed": "slow",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "text-embedding-ada-002"
+          ]
+        }
+      }
+    },
+    "text-moderation-latest": {
+      "identity": {
+        "catalog_id": "text-moderation-latest",
+        "provider_model_id": "text-moderation-latest",
+        "brand": "openai",
+        "family": "moderation",
+        "snapshot_ids": [
+          "text-moderation",
+          "text-moderation-latest",
+          "text-moderation-007",
+          "text-moderation-stable"
+        ]
+      },
+      "display_name": "text-moderation",
+      "tagline": "Previous generation text-only moderation model",
+      "summary": "Moderation models are free models designed to detect harmful content. This is our text only moderation model; we expect omni-moderation-* models to be the best default moving forward.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 01, 2021"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "moderation",
+      "supported_interface_ids": [
+        "moderation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/text-moderation-latest"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "text-moderation",
+            "text-moderation-latest",
+            "text-moderation-007",
+            "text-moderation-stable"
+          ]
+        }
+      }
+    },
+    "text-moderation-stable": {
+      "identity": {
+        "catalog_id": "text-moderation-stable",
+        "provider_model_id": "text-moderation-stable",
+        "brand": "openai",
+        "family": "moderation",
+        "snapshot_ids": [
+          "text-moderation-stable",
+          "text-moderation-007"
+        ]
+      },
+      "display_name": "text-moderation-stable",
+      "tagline": "Previous generation text-only moderation model",
+      "summary": "Moderation models are free models designed to detect harmful content. This is our text only moderation model; we expect omni-moderation-* models to be the best default moving forward.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default",
+        "knowledge_cutoff": "Sep 01, 2021"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limits": {
+        "max_output_tokens": 32768
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "moderation",
+      "supported_interface_ids": [
+        "moderation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/text-moderation-stable"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "text-moderation-stable",
+            "text-moderation-007"
+          ]
+        }
+      }
+    },
+    "tts-1": {
+      "identity": {
+        "catalog_id": "tts-1",
+        "provider_model_id": "tts-1",
+        "brand": "openai",
+        "family": "tts",
+        "snapshot_ids": [
+          "tts-1"
+        ]
+      },
+      "display_name": "TTS-1",
+      "tagline": "Text-to-speech model optimized for speed",
+      "summary": "TTS is a model that converts text to natural sounding spoken text. The tts-1 model is optimized for realtime text-to-speech use cases. Use it with the Speech endpoint in the Audio API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "audio.speech",
+      "supported_interface_ids": [
+        "audio.speech"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/tts-1"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "fast",
+        "input_summary": "Text",
+        "output_summary": "Audio",
+        "revisions": {
+          "snapshots": [
+            "tts-1"
+          ]
+        }
+      }
+    },
+    "tts-1-hd": {
+      "identity": {
+        "catalog_id": "tts-1-hd",
+        "provider_model_id": "tts-1-hd",
+        "brand": "openai",
+        "family": "tts",
+        "snapshot_ids": [
+          "tts-1-hd"
+        ]
+      },
+      "display_name": "TTS-1 HD",
+      "tagline": "Text-to-speech model optimized for quality",
+      "summary": "TTS is a model that converts text to natural sounding spoken text. The tts-1-hd model is optimized for high quality text-to-speech use cases. Use it with the Speech endpoint in the Audio API.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "audio"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": true,
+        "text_output": false,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": false,
+        "audio_output": true,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": false,
+        "multimodal_output": true
+      },
+      "primary_interface_id": "audio.speech",
+      "supported_interface_ids": [
+        "audio.speech"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/tts-1-hd"
+      ],
+      "vendor_metadata": {
+        "performance": "high",
+        "speed": "medium",
+        "input_summary": "Text",
+        "output_summary": "Audio",
+        "revisions": {
+          "snapshots": [
+            "tts-1-hd"
+          ]
+        }
+      }
+    },
+    "whisper-1": {
+      "identity": {
+        "catalog_id": "whisper-1",
+        "provider_model_id": "whisper-1",
+        "brand": "openai",
+        "family": "whisper",
+        "snapshot_ids": [
+          "whisper-1"
+        ]
+      },
+      "display_name": "Whisper",
+      "tagline": "General-purpose speech recognition model",
+      "summary": "Whisper is a general-purpose speech recognition model, trained on a large dataset of diverse audio. You can also use it as a multitask model to perform multilingual speech recognition as well as speech translation and language identification.",
+      "release_channel": "default",
+      "lifecycle": {
+        "status": "active",
+        "stage": "default"
+      },
+      "modalities": {
+        "input": [
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "capabilities": {
+        "streaming": false,
+        "text_input": false,
+        "text_output": true,
+        "image_input": false,
+        "image_output": false,
+        "audio_input": true,
+        "audio_output": false,
+        "video_input": false,
+        "video_output": false,
+        "pdf_input": false,
+        "pdf_output": false,
+        "embeddings_input": false,
+        "embeddings_output": false,
+        "multimodal_input": true,
+        "multimodal_output": false
+      },
+      "primary_interface_id": "audio.transcription",
+      "supported_interface_ids": [
+        "audio.transcription",
+        "audio.translation"
+      ],
+      "source_urls": [
+        "https://developers.openai.com/api/docs/models/whisper-1"
+      ],
+      "vendor_metadata": {
+        "performance": "average",
+        "speed": "medium",
+        "input_summary": "Audio",
+        "output_summary": "Text",
+        "revisions": {
+          "snapshots": [
+            "whisper-1"
+          ]
+        }
+      }
+    }
+  }
+}

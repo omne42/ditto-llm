@@ -10,8 +10,8 @@ async fn attempt_proxy_backend(
     let body = params.body;
     let parsed_json = params.parsed_json;
     let model = params.model;
-    let protocol = extract_header(&parts.headers, "x-ditto-protocol")
-        .unwrap_or_else(|| "openai".to_string());
+    let protocol =
+        extract_header(&parts.headers, "x-ditto-protocol").unwrap_or_else(|| "openai".to_string());
     let service_tier = params.service_tier;
     let request_id = params.request_id.to_string();
     let path_and_query = params.path_and_query;
@@ -28,10 +28,23 @@ async fn attempt_proxy_backend(
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
     let _cost_budget_reserved = params.cost_budget_reserved;
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     let token_budget_reservation_ids = params.token_budget_reservation_ids;
 
-    #[cfg(all(feature = "gateway-costing", any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
+    #[cfg(all(
+        feature = "gateway-costing",
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        )
+    ))]
     let cost_budget_reservation_ids = params.cost_budget_reservation_ids;
 
     let max_attempts = params.max_attempts;
@@ -46,7 +59,15 @@ async fn attempt_proxy_backend(
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_timer_start = params.metrics_timer_start;
 
-    #[cfg(not(feature = "gateway-costing"))]
+    #[cfg(not(all(
+        feature = "gateway-costing",
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        )
+    )))]
     let _ = use_persistent_budget;
     #[cfg(not(feature = "gateway-routing-advanced"))]
     let _ = idx;
@@ -72,100 +93,324 @@ async fn attempt_proxy_backend(
         }
     };
 
-    let backend_model_map: BTreeMap<String, String> = {
-        let mut gateway = state.gateway.lock().await;
-        gateway.observability.record_backend_call();
-        gateway
-            .config
-            .backends
-            .iter()
-            .find(|backend| backend.name == backend_name)
-            .map(|backend| backend.model_map.clone())
-            .unwrap_or_default()
+    state.record_backend_call();
+    let backend_model_map: BTreeMap<String, String> = state.backend_model_map(&backend_name);
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let backend_timer_start = Instant::now();
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        let mut metrics = metrics.lock().await;
+        metrics.record_proxy_backend_attempt(&backend_name);
+        metrics.record_proxy_backend_in_flight_inc(&backend_name);
+    }
+
+    let mut outgoing_headers = parts.headers.clone();
+    sanitize_proxy_headers(&mut outgoing_headers, strip_authorization);
+    apply_backend_headers(&mut outgoing_headers, backend.headers());
+    insert_request_id(&mut outgoing_headers, &request_id);
+
+    let (outgoing_body, upstream_model) = if let (Some(request_model), Some(parsed_json)) =
+        (model.as_deref(), parsed_json.as_ref())
+    {
+        let mapped_model = backend_model_map
+            .get(request_model)
+            .or_else(|| backend_model_map.get("*"))
+            .cloned();
+
+        match mapped_model {
+            Some(mapped_model) => {
+                let mut value = parsed_json.clone();
+                if let Some(obj) = value.as_object_mut() {
+                    obj.insert(
+                        "model".to_string(),
+                        serde_json::Value::String(mapped_model.clone()),
+                    );
+                    match serde_json::to_vec(&value) {
+                        Ok(bytes) => (Bytes::from(bytes), Some(mapped_model)),
+                        Err(_) => (body.clone(), Some(request_model.to_string())),
+                    }
+                } else {
+                    (body.clone(), Some(request_model.to_string()))
+                }
+            }
+            None => (body.clone(), Some(request_model.to_string())),
+        }
+    } else {
+        (body.clone(), model.clone())
     };
 
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        let backend_timer_start = Instant::now();
+    #[cfg(feature = "sdk")]
+    emit_devtools_log(
+        state,
+        "proxy.request",
+        serde_json::json!({
+            "request_id": &request_id,
+            "method": parts.method.as_str(),
+            "path": path_and_query,
+            "backend": &backend_name,
+            "provider": &protocol,
+            "model": &model,
+            "upstream_model": upstream_model.as_deref(),
+            "virtual_key_id": virtual_key_id.as_deref(),
+            "body_len": body.len(),
+        }),
+    );
 
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            let mut metrics = metrics.lock().await;
-            metrics.record_proxy_backend_attempt(&backend_name);
-            metrics.record_proxy_backend_in_flight_inc(&backend_name);
-        }
-
-        let mut outgoing_headers = parts.headers.clone();
-        sanitize_proxy_headers(&mut outgoing_headers, strip_authorization);
-        apply_backend_headers(&mut outgoing_headers, backend.headers());
-        insert_request_id(&mut outgoing_headers, &request_id);
-
-        let (outgoing_body, upstream_model) =
-            if let (Some(request_model), Some(parsed_json)) = (model.as_deref(), parsed_json.as_ref())
+    let upstream_response = match backend
+        .request(
+            parts.method.clone(),
+            path_and_query,
+            outgoing_headers,
+            Some(outgoing_body),
+        )
+        .await
+    {
+        Ok(response) => response,
+        Err(err) => {
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let mut metrics = metrics.lock().await;
+                metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                metrics.observe_proxy_backend_request_duration(
+                    &backend_name,
+                    backend_timer_start.elapsed(),
+                );
+            }
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                metrics
+                    .lock()
+                    .await
+                    .record_proxy_backend_failure(&backend_name);
+            }
+            #[cfg(feature = "gateway-routing-advanced")]
+            record_proxy_backend_failure(
+                state,
+                &backend_name,
+                _now_epoch_seconds,
+                FailureKind::Network,
+                err.to_string(),
+            )
+            .await;
+            let mapped = map_openai_gateway_error(err);
+            #[cfg(feature = "gateway-routing-advanced")]
             {
-                let mapped_model = backend_model_map
-                    .get(request_model)
-                    .or_else(|| backend_model_map.get("*"))
-                    .cloned();
+                let will_fallback = idx + 1 < max_attempts;
+                emit_json_log(
+                    state,
+                    "proxy.fallback",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "backend": &backend_name,
+                        "reason": "network_error",
+                        "will_fallback": will_fallback,
+                        "attempted_backends": &attempted_backends,
+                    }),
+                );
 
-                match mapped_model {
-                    Some(mapped_model) => {
-                        let mut value = parsed_json.clone();
-                        if let Some(obj) = value.as_object_mut() {
-                            obj.insert(
-                                "model".to_string(),
-                                serde_json::Value::String(mapped_model.clone()),
-                            );
-                            match serde_json::to_vec(&value) {
-                                Ok(bytes) => (Bytes::from(bytes), Some(mapped_model)),
-                                Err(_) => (body.clone(), Some(request_model.to_string())),
-                            }
-                        } else {
-                            (body.clone(), Some(request_model.to_string()))
-                        }
-                    }
-                    None => (body.clone(), Some(request_model.to_string())),
-                }
-            } else {
-                (body.clone(), model.clone())
+                #[cfg(feature = "sdk")]
+                emit_devtools_log(
+                    state,
+                    "proxy.fallback",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "backend": &backend_name,
+                        "reason": "network_error",
+                        "will_fallback": will_fallback,
+                        "path": path_and_query,
+                    }),
+                );
+            }
+            return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
+        }
+    };
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        let mut metrics = metrics.lock().await;
+        metrics.record_proxy_backend_in_flight_dec(&backend_name);
+        metrics
+            .observe_proxy_backend_request_duration(&backend_name, backend_timer_start.elapsed());
+    }
+
+    let status = upstream_response.status();
+
+    if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
+        if let Some(parsed_json) = parsed_json.as_ref() {
+            let _ = proxy_permits.take();
+            let Some(mut chat_body) =
+                responses_shim::responses_request_to_chat_completions(parsed_json)
+            else {
+                return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
+                    StatusCode::BAD_GATEWAY,
+                    "api_error",
+                    Some("invalid_responses_request"),
+                    "responses request cannot be mapped to chat/completions",
+                ))));
             };
 
-        #[cfg(feature = "sdk")]
-        emit_devtools_log(
-            state,
-            "proxy.request",
-            serde_json::json!({
-                "request_id": &request_id,
-                "method": parts.method.as_str(),
-                "path": path_and_query,
-                "backend": &backend_name,
-                "provider": &protocol,
-                "model": &model,
-                "upstream_model": upstream_model.as_deref(),
-                "virtual_key_id": virtual_key_id.as_deref(),
-                "body_len": body.len(),
-            }),
-        );
-
-        let upstream_response = match backend
-            .request(
-                parts.method.clone(),
-                path_and_query,
-                outgoing_headers,
-                Some(outgoing_body),
-            )
-            .await
-        {
-            Ok(response) => response,
-            Err(err) => {
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_backend_in_flight_dec(&backend_name);
-                    metrics.observe_proxy_backend_request_duration(
-                        &backend_name,
-                        backend_timer_start.elapsed(),
-                    );
+            if let Some(mapped_model) = chat_body
+                .get("model")
+                .and_then(|value| value.as_str())
+                .and_then(|model| {
+                    backend_model_map
+                        .get(model)
+                        .or_else(|| backend_model_map.get("*"))
+                })
+                .cloned()
+            {
+                if let Some(obj) = chat_body.as_object_mut() {
+                    obj.insert("model".to_string(), serde_json::Value::String(mapped_model));
                 }
+            }
+
+            emit_json_log(
+                state,
+                "proxy.responses_shim",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "backend": &backend_name,
+                    "path": path_and_query,
+                    "shim": "responses_via_chat_completions",
+                }),
+            );
+
+            #[cfg(feature = "sdk")]
+            emit_devtools_log(
+                state,
+                "proxy.responses_shim",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "backend": &backend_name,
+                    "path": path_and_query,
+                }),
+            );
+
+            let chat_body_bytes = match serde_json::to_vec(&chat_body) {
+                Ok(bytes) => Bytes::from(bytes),
+                Err(err) => {
+                    return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
+                        StatusCode::BAD_GATEWAY,
+                        "api_error",
+                        Some("invalid_responses_request"),
+                        format!("failed to serialize shim chat/completions request: {err}"),
+                    ))));
+                }
+            };
+
+            let mut shim_headers = parts.headers.clone();
+            sanitize_proxy_headers(&mut shim_headers, strip_authorization);
+            apply_backend_headers(&mut shim_headers, backend.headers());
+            insert_request_id(&mut shim_headers, &request_id);
+            if _stream_requested {
+                shim_headers.insert(
+                    axum::http::header::ACCEPT,
+                    axum::http::HeaderValue::from_static("text/event-stream"),
+                );
+            }
+
+            let shim_permits = match try_acquire_proxy_permits(state, &backend_name)? {
+                ProxyPermitOutcome::Acquired(permits) => permits,
+                ProxyPermitOutcome::BackendRateLimited(err) => {
+                    return Ok(BackendAttemptOutcome::Continue(Some(err)));
+                }
+            };
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            let shim_timer_start = Instant::now();
+
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let mut metrics = metrics.lock().await;
+                metrics.record_proxy_backend_attempt(&backend_name);
+                metrics.record_proxy_backend_in_flight_inc(&backend_name);
+            }
+
+            let shim_response = match backend
+                .request(
+                    parts.method.clone(),
+                    "/v1/chat/completions",
+                    shim_headers,
+                    Some(chat_body_bytes),
+                )
+                .await
+            {
+                Ok(response) => response,
+                Err(err) => {
+                    #[cfg(feature = "gateway-metrics-prometheus")]
+                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                        metrics.observe_proxy_backend_request_duration(
+                            &backend_name,
+                            shim_timer_start.elapsed(),
+                        );
+                        metrics.record_proxy_backend_failure(&backend_name);
+                    }
+                    #[cfg(feature = "gateway-routing-advanced")]
+                    record_proxy_backend_failure(
+                        state,
+                        &backend_name,
+                        _now_epoch_seconds,
+                        FailureKind::Network,
+                        err.to_string(),
+                    )
+                    .await;
+                    let mapped = map_openai_gateway_error(err);
+                    #[cfg(feature = "gateway-routing-advanced")]
+                    {
+                        let will_fallback = idx + 1 < max_attempts;
+                        emit_json_log(
+                            state,
+                            "proxy.fallback",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "backend": &backend_name,
+                                "reason": "network_error",
+                                "will_fallback": will_fallback,
+                                "attempted_backends": &attempted_backends,
+                            }),
+                        );
+
+                        #[cfg(feature = "sdk")]
+                        emit_devtools_log(
+                            state,
+                            "proxy.fallback",
+                            serde_json::json!({
+                                "request_id": &request_id,
+                                "backend": &backend_name,
+                                "reason": "network_error",
+                                "will_fallback": will_fallback,
+                                "path": path_and_query,
+                            }),
+                        );
+                    }
+                    return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
+                }
+            };
+
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let mut metrics = metrics.lock().await;
+                metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                metrics.observe_proxy_backend_request_duration(
+                    &backend_name,
+                    shim_timer_start.elapsed(),
+                );
+            }
+
+            let status = shim_response.status();
+
+            #[cfg(feature = "gateway-routing-advanced")]
+            let status_code = status.as_u16();
+            #[cfg(feature = "gateway-routing-advanced")]
+            let should_retry_status = retry_config.should_retry_status(status_code);
+            #[cfg(feature = "gateway-routing-advanced")]
+            let should_fallback_status = retry_config.should_fallback_status(status_code);
+
+            #[cfg(feature = "gateway-routing-advanced")]
+            if should_fallback_status && idx + 1 < max_attempts {
                 #[cfg(feature = "gateway-metrics-prometheus")]
                 if let Some(metrics) = state.prometheus_metrics.as_ref() {
                     metrics
@@ -173,502 +418,332 @@ async fn attempt_proxy_backend(
                         .await
                         .record_proxy_backend_failure(&backend_name);
                 }
-                #[cfg(feature = "gateway-routing-advanced")]
                 record_proxy_backend_failure(
                     state,
                     &backend_name,
                     _now_epoch_seconds,
-                    FailureKind::Network,
-                    err.to_string(),
+                    FailureKind::RetryableStatus(status_code),
+                    format!("status {}", status_code),
                 )
                 .await;
-                let mapped = map_openai_gateway_error(err);
-                return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
-            }
-        };
-
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            let mut metrics = metrics.lock().await;
-            metrics.record_proxy_backend_in_flight_dec(&backend_name);
-            metrics.observe_proxy_backend_request_duration(
-                &backend_name,
-                backend_timer_start.elapsed(),
-            );
-        }
-
-        let status = upstream_response.status();
-
-        if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
-            if let Some(parsed_json) = parsed_json.as_ref() {
-                let _ = proxy_permits.take();
-                let Some(mut chat_body) =
-                    responses_shim::responses_request_to_chat_completions(parsed_json)
-                else {
-                    return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                        StatusCode::BAD_GATEWAY,
-                        "api_error",
-                        Some("invalid_responses_request"),
-                        "responses request cannot be mapped to chat/completions",
-                    ))));
-                };
-
-                if let Some(mapped_model) = chat_body
-                    .get("model")
-                    .and_then(|value| value.as_str())
-                    .and_then(|model| backend_model_map.get(model).or_else(|| backend_model_map.get("*")))
-                    .cloned()
-                {
-                    if let Some(obj) = chat_body.as_object_mut() {
-                        obj.insert("model".to_string(), serde_json::Value::String(mapped_model));
-                    }
-                }
 
                 emit_json_log(
                     state,
-                    "proxy.responses_shim",
+                    if should_retry_status {
+                        "proxy.retry"
+                    } else {
+                        "proxy.fallback"
+                    },
                     serde_json::json!({
                         "request_id": &request_id,
                         "backend": &backend_name,
-                        "path": path_and_query,
-                        "shim": "responses_via_chat_completions",
+                        "status": status_code,
+                        "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
+                        "attempted_backends": &attempted_backends,
                     }),
                 );
 
                 #[cfg(feature = "sdk")]
                 emit_devtools_log(
                     state,
-                    "proxy.responses_shim",
+                    if should_retry_status {
+                        "proxy.retry"
+                    } else {
+                        "proxy.fallback"
+                    },
                     serde_json::json!({
                         "request_id": &request_id,
                         "backend": &backend_name,
+                        "status": status_code,
+                        "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
                         "path": path_and_query,
                     }),
                 );
 
-                let chat_body_bytes = match serde_json::to_vec(&chat_body) {
-                    Ok(bytes) => Bytes::from(bytes),
-                    Err(err) => {
-                        return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                            StatusCode::BAD_GATEWAY,
-                            "api_error",
-                            Some("invalid_responses_request"),
-                            format!("failed to serialize shim chat/completions request: {err}"),
-                        ))));
+                return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
+                    status,
+                    "api_error",
+                    Some("backend_error"),
+                    format!(
+                        "{} status {}",
+                        if should_retry_status {
+                            "retryable"
+                        } else {
+                            "fallback"
+                        },
+                        status_code
+                    ),
+                ))));
+            }
+
+            #[cfg(feature = "gateway-routing-advanced")]
+            if retry_config.is_failure_status(status_code) {
+                record_proxy_backend_failure(
+                    state,
+                    &backend_name,
+                    _now_epoch_seconds,
+                    FailureKind::RetryableStatus(status_code),
+                    format!("status {}", status_code),
+                )
+                .await;
+            } else {
+                record_proxy_backend_success(state, &backend_name).await;
+            }
+
+            let spend_tokens = status.is_success();
+
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                let is_failure_status = {
+                    #[cfg(feature = "gateway-routing-advanced")]
+                    {
+                        retry_config.is_failure_status(status.as_u16())
+                    }
+                    #[cfg(not(feature = "gateway-routing-advanced"))]
+                    {
+                        status.is_server_error()
                     }
                 };
-
-                let mut shim_headers = parts.headers.clone();
-                sanitize_proxy_headers(&mut shim_headers, strip_authorization);
-                apply_backend_headers(&mut shim_headers, backend.headers());
-                insert_request_id(&mut shim_headers, &request_id);
-                if _stream_requested {
-                    shim_headers.insert(
-                        axum::http::header::ACCEPT,
-                        axum::http::HeaderValue::from_static("text/event-stream"),
-                    );
-                }
-
-                let shim_permits = match try_acquire_proxy_permits(state, &backend_name)? {
-                    ProxyPermitOutcome::Acquired(permits) => permits,
-                    ProxyPermitOutcome::BackendRateLimited(err) => {
-                        return Ok(BackendAttemptOutcome::Continue(Some(err)));
-                    }
-                };
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                let shim_timer_start = Instant::now();
-
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_backend_attempt(&backend_name);
-                    metrics.record_proxy_backend_in_flight_inc(&backend_name);
-                }
-
-                let shim_response = match backend
-                    .request(
-                        parts.method.clone(),
-                        "/v1/chat/completions",
-                        shim_headers,
-                        Some(chat_body_bytes),
-                    )
-                    .await
-                {
-                    Ok(response) => response,
-                    Err(err) => {
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                            let mut metrics = metrics.lock().await;
-                            metrics.record_proxy_backend_in_flight_dec(&backend_name);
-                            metrics.observe_proxy_backend_request_duration(
-                                &backend_name,
-                                shim_timer_start.elapsed(),
-                            );
-                            metrics.record_proxy_backend_failure(&backend_name);
-                        }
-                        #[cfg(feature = "gateway-routing-advanced")]
-                        record_proxy_backend_failure(
-                            state,
-                            &backend_name,
-                            _now_epoch_seconds,
-                            FailureKind::Network,
-                            err.to_string(),
-                        )
-                        .await;
-                        let mapped = map_openai_gateway_error(err);
-                        return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
-                    }
-                };
-
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_backend_in_flight_dec(&backend_name);
-                    metrics.observe_proxy_backend_request_duration(
-                        &backend_name,
-                        shim_timer_start.elapsed(),
-                    );
-                }
-
-                let status = shim_response.status();
-
-                #[cfg(feature = "gateway-routing-advanced")]
-                if retry_config.enabled
-                    && retry_config.retry_status_codes.contains(&status.as_u16())
-                    && idx + 1 < max_attempts
-                {
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                        metrics
-                            .lock()
-                            .await
-                            .record_proxy_backend_failure(&backend_name);
-                    }
-                    record_proxy_backend_failure(
-                        state,
-                        &backend_name,
-                        _now_epoch_seconds,
-                        FailureKind::RetryableStatus(status.as_u16()),
-                        format!("retryable status {}", status.as_u16()),
-                    )
-                    .await;
-
-                    emit_json_log(
-                        state,
-                        "proxy.retry",
-                        serde_json::json!({
-                            "request_id": &request_id,
-                            "backend": &backend_name,
-                            "status": status.as_u16(),
-                            "attempted_backends": &attempted_backends,
-                        }),
-                    );
-
-                    #[cfg(feature = "sdk")]
-                    emit_devtools_log(
-                        state,
-                        "proxy.retry",
-                        serde_json::json!({
-                            "request_id": &request_id,
-                            "backend": &backend_name,
-                            "status": status.as_u16(),
-                            "path": path_and_query,
-                        }),
-                    );
-
-                    return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                        status,
-                        "api_error",
-                        Some("backend_error"),
-                        format!("retryable status {}", status.as_u16()),
-                    ))));
-                }
-
-                #[cfg(feature = "gateway-routing-advanced")]
-                if retry_config.retry_status_codes.contains(&status.as_u16()) {
-                    record_proxy_backend_failure(
-                        state,
-                        &backend_name,
-                        _now_epoch_seconds,
-                        FailureKind::RetryableStatus(status.as_u16()),
-                        format!("status {}", status.as_u16()),
-                    )
-                    .await;
+                let duration = metrics_timer_start.elapsed();
+                let mut metrics = metrics.lock().await;
+                if is_failure_status {
+                    metrics.record_proxy_backend_failure(&backend_name);
                 } else {
-                    record_proxy_backend_success(state, &backend_name).await;
+                    metrics.record_proxy_backend_success(&backend_name);
                 }
-
-                let spend_tokens = status.is_success();
-
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    let is_failure_status = {
-                        #[cfg(feature = "gateway-routing-advanced")]
-                        {
-                            retry_config.retry_status_codes.contains(&status.as_u16())
-                        }
-                        #[cfg(not(feature = "gateway-routing-advanced"))]
-                        {
-                            status.is_server_error()
-                        }
-                    };
-                    let duration = metrics_timer_start.elapsed();
-                    let mut metrics = metrics.lock().await;
-                    if is_failure_status {
-                        metrics.record_proxy_backend_failure(&backend_name);
-                    } else {
-                        metrics.record_proxy_backend_success(&backend_name);
-                    }
-                    metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
-                    metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
-                    if let Some(model) = model.as_deref() {
-                        metrics.record_proxy_response_status_by_model(model, status.as_u16());
-                        metrics.observe_proxy_request_duration_by_model(model, duration);
-                    }
-                    metrics.observe_proxy_request_duration(metrics_path, duration);
+                metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
+                metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
+                if let Some(model) = model.as_deref() {
+                    metrics.record_proxy_response_status_by_model(model, status.as_u16());
+                    metrics.observe_proxy_request_duration_by_model(model, duration);
                 }
+                metrics.observe_proxy_request_duration(metrics_path, duration);
+            }
 
-                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-                if !token_budget_reservation_ids.is_empty() {
-                    settle_proxy_token_budget_reservations(
-                        state,
-                        token_budget_reservation_ids,
-                        spend_tokens,
-                        u64::MAX,
-                    )
-                    .await;
-                } else if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
-                    if spend_tokens {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway
-                            .budget
-                            .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
-                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
-                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
-                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
-
-                        #[cfg(feature = "gateway-costing")]
-                        if !use_persistent_budget {
-                            if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                                gateway.budget.spend_cost_usd_micros(
-                                    &virtual_key_id,
-                                    &budget,
-                                    charge_cost_usd_micros,
-                                );
-                                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                                    gateway.budget.spend_cost_usd_micros(
-                                        scope,
-                                        budget,
-                                        charge_cost_usd_micros,
-                                    );
-                                }
-                                if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                                    gateway.budget.spend_cost_usd_micros(
-                                        scope,
-                                        budget,
-                                        charge_cost_usd_micros,
-                                    );
-                                }
-                                if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                                    gateway.budget.spend_cost_usd_micros(
-                                        scope,
-                                        budget,
-                                        charge_cost_usd_micros,
-                                    );
-                                }
-                            }
-                        }
+            #[cfg(any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-postgres",
+                feature = "gateway-store-mysql",
+                feature = "gateway-store-redis"
+            ))]
+            if !token_budget_reservation_ids.is_empty() {
+                settle_proxy_token_budget_reservations(
+                    state,
+                    token_budget_reservation_ids,
+                    spend_tokens,
+                    u64::MAX,
+                )
+                .await;
+            } else if let (Some(virtual_key_id), Some(budget)) =
+                (virtual_key_id.clone(), budget.clone())
+            {
+                if spend_tokens {
+                    state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
                     }
-                }
-                #[cfg(not(any(
-                    feature = "gateway-store-sqlite",
-                    feature = "gateway-store-redis"
-                )))]
-                if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
-                    if spend_tokens {
-                        let mut gateway = state.gateway.lock().await;
-                        gateway
-                            .budget
-                            .spend(&virtual_key_id, &budget, u64::from(charge_tokens));
-                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
-                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
-                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            gateway
-                                .budget
-                                .spend(scope, budget, u64::from(charge_tokens));
-                        }
+                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    }
+                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    }
 
-                        #[cfg(feature = "gateway-costing")]
+                    #[cfg(feature = "gateway-costing")]
+                    if !use_persistent_budget {
                         if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                            gateway.budget.spend_cost_usd_micros(
-                                &virtual_key_id,
-                                &budget,
-                                charge_cost_usd_micros,
-                            );
+                            state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
                             if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                                gateway.budget.spend_cost_usd_micros(
-                                    scope,
-                                    budget,
-                                    charge_cost_usd_micros,
-                                );
+                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                                gateway.budget.spend_cost_usd_micros(
-                                    scope,
-                                    budget,
-                                    charge_cost_usd_micros,
-                                );
+                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                                gateway.budget.spend_cost_usd_micros(
-                                    scope,
-                                    budget,
-                                    charge_cost_usd_micros,
-                                );
+                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                             }
                         }
                     }
                 }
+            }
+            #[cfg(not(any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-postgres",
+                feature = "gateway-store-mysql",
+                feature = "gateway-store-redis"
+            )))]
+            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
+                if spend_tokens {
+                    state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    }
+                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    }
+                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    }
 
-                #[cfg(all(feature = "gateway-costing", any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
-                if !cost_budget_reservation_ids.is_empty() {
-                    settle_proxy_cost_budget_reservations(
-                        state,
-                        cost_budget_reservation_ids,
-                        spend_tokens,
-                        u64::MAX,
-                    )
-                    .await;
-                }
-
-                #[cfg(all(feature = "gateway-costing", any(feature = "gateway-store-sqlite", feature = "gateway-store-redis")))]
-                if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
-                    if let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
-                        (virtual_key_id.as_deref(), charge_cost_usd_micros)
-                    {
-                        #[cfg(feature = "gateway-store-sqlite")]
-                        if let Some(store) = state.sqlite_store.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(
-                                    virtual_key_id,
-                                    charge_cost_usd_micros,
-                                )
-                                .await;
+                    #[cfg(feature = "gateway-costing")]
+                    if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+                        state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
+                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                         }
-                        #[cfg(feature = "gateway-store-redis")]
-                        if let Some(store) = state.redis_store.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(
-                                    virtual_key_id,
-                                    charge_cost_usd_micros,
-                                )
-                                .await;
+                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
+                        }
+                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                         }
                     }
                 }
+            }
 
-                #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
-                {
-                    let payload = serde_json::json!({
-                        "request_id": &request_id,
-                        "provider": &protocol,
-                        "virtual_key_id": virtual_key_id.as_deref(),
-                        "backend": &backend_name,
-                        "attempted_backends": &attempted_backends,
-                        "method": parts.method.as_str(),
-                        "path": path_and_query,
-                        "model": &model,
-                        "upstream_model": upstream_model.as_deref(),
-                        "status": status.as_u16(),
-                        "charge_tokens": charge_tokens,
-                        "charge_cost_usd_micros": charge_cost_usd_micros,
-                        "body_len": body.len(),
-                        "shim": "responses_via_chat_completions",
-                    });
-
-                    append_audit_log(state, "proxy", payload).await;
-                }
-
-                emit_json_log(
+            #[cfg(all(
+                feature = "gateway-costing",
+                any(
+                    feature = "gateway-store-sqlite",
+                    feature = "gateway-store-postgres",
+                    feature = "gateway-store-mysql",
+                    feature = "gateway-store-redis"
+                )
+            ))]
+            if !cost_budget_reservation_ids.is_empty() {
+                settle_proxy_cost_budget_reservations(
                     state,
-                    "proxy.response",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "provider": &protocol,
-                        "backend": &backend_name,
-                        "status": status.as_u16(),
-                        "attempted_backends": &attempted_backends,
-                        "model": &model,
-                        "upstream_model": upstream_model.as_deref(),
-                    }),
-                );
+                    cost_budget_reservation_ids,
+                    spend_tokens,
+                    u64::MAX,
+                )
+                .await;
+            }
 
-                #[cfg(feature = "sdk")]
-                emit_devtools_log(
-                    state,
-                    "proxy.response",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "status": status.as_u16(),
-                        "path": path_and_query,
-                        "backend": &backend_name,
-                    }),
-                );
-
-                #[cfg(feature = "gateway-otel")]
+            #[cfg(all(
+                feature = "gateway-costing",
+                any(
+                    feature = "gateway-store-sqlite",
+                    feature = "gateway-store-postgres",
+                    feature = "gateway-store-mysql",
+                    feature = "gateway-store-redis"
+                )
+            ))]
+            if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
+                if let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
+                    (virtual_key_id.as_deref(), charge_cost_usd_micros)
                 {
-                    tracing::Span::current().record("cache", tracing::field::display("miss"));
-                    tracing::Span::current().record("backend", tracing::field::display(&backend_name));
-                    tracing::Span::current().record("status", tracing::field::display(status.as_u16()));
-                }
-
-                if status.is_success() {
-                    match responses_shim_response(
-                        state,
-                        shim_response,
-                        backend_name.clone(),
-                        request_id.clone(),
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        metrics_path,
-                        #[cfg(feature = "gateway-proxy-cache")]
-                        proxy_cache_key.as_deref(),
-                        #[cfg(not(feature = "gateway-proxy-cache"))]
-                        None,
-                        shim_permits,
-                    )
-                    .await
-                    {
-                        Ok(response) => return Ok(BackendAttemptOutcome::Response(response)),
-                        Err(err) => {
-                            return Ok(BackendAttemptOutcome::Continue(Some(err)));
-                        }
+                    #[cfg(feature = "gateway-store-sqlite")]
+                    if let Some(store) = state.sqlite_store.as_ref() {
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
                     }
-                } else {
-                    return Ok(BackendAttemptOutcome::Response(proxy_response(
+                    #[cfg(feature = "gateway-store-postgres")]
+                    if let Some(store) = state.postgres_store.as_ref() {
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
+                    }
+                    #[cfg(feature = "gateway-store-mysql")]
+                    if let Some(store) = state.mysql_store.as_ref() {
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
+                    }
+                    #[cfg(feature = "gateway-store-redis")]
+                    if let Some(store) = state.redis_store.as_ref() {
+                        let _ = store
+                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                            .await;
+                    }
+                }
+            }
+
+            #[cfg(any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-postgres",
+                feature = "gateway-store-mysql",
+                feature = "gateway-store-redis"
+            ))]
+            {
+                let payload = serde_json::json!({
+                    "request_id": &request_id,
+                    "provider": &protocol,
+                    "virtual_key_id": virtual_key_id.as_deref(),
+                    "backend": &backend_name,
+                    "attempted_backends": &attempted_backends,
+                    "method": parts.method.as_str(),
+                    "path": path_and_query,
+                    "model": &model,
+                    "upstream_model": upstream_model.as_deref(),
+                    "status": status.as_u16(),
+                    "charge_tokens": charge_tokens,
+                    "charge_cost_usd_micros": charge_cost_usd_micros,
+                    "body_len": body.len(),
+                    "shim": "responses_via_chat_completions",
+                });
+
+                append_audit_log(state, "proxy", payload).await;
+            }
+
+            emit_json_log(
+                state,
+                "proxy.response",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "provider": &protocol,
+                    "backend": &backend_name,
+                    "status": status.as_u16(),
+                    "attempted_backends": &attempted_backends,
+                    "model": &model,
+                    "upstream_model": upstream_model.as_deref(),
+                }),
+            );
+
+            #[cfg(feature = "sdk")]
+            emit_devtools_log(
+                state,
+                "proxy.response",
+                serde_json::json!({
+                    "request_id": &request_id,
+                    "status": status.as_u16(),
+                    "path": path_and_query,
+                    "backend": &backend_name,
+                }),
+            );
+
+            #[cfg(feature = "gateway-otel")]
+            {
+                tracing::Span::current().record("cache", tracing::field::display("miss"));
+                tracing::Span::current().record("backend", tracing::field::display(&backend_name));
+                tracing::Span::current().record("status", tracing::field::display(status.as_u16()));
+            }
+
+            if status.is_success() {
+                match responses_shim_response(
+                    state,
+                    shim_response,
+                    backend_name.clone(),
+                    request_id.clone(),
+                    #[cfg(feature = "gateway-metrics-prometheus")]
+                    metrics_path,
+                    #[cfg(feature = "gateway-proxy-cache")]
+                    proxy_cache_key.as_deref(),
+                    #[cfg(not(feature = "gateway-proxy-cache"))]
+                    None,
+                    shim_permits,
+                )
+                .await
+                {
+                    Ok(response) => return Ok(BackendAttemptOutcome::Response(response)),
+                    Err(err) => {
+                        return Ok(BackendAttemptOutcome::Continue(Some(err)));
+                    }
+                }
+            } else {
+                return Ok(BackendAttemptOutcome::Response(
+                    proxy_response(
                         state,
                         shim_response,
                         backend_name,
@@ -681,113 +756,128 @@ async fn attempt_proxy_backend(
                         None,
                         shim_permits,
                     )
-                    .await));
-                }
+                    .await,
+                ));
             }
         }
+    }
 
-        #[cfg(feature = "gateway-routing-advanced")]
-        if retry_config.enabled
-            && retry_config.retry_status_codes.contains(&status.as_u16())
-            && idx + 1 < max_attempts
-        {
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                metrics
-                    .lock()
-                    .await
-                    .record_proxy_backend_failure(&backend_name);
-            }
-            record_proxy_backend_failure(
-                state,
-                &backend_name,
-                _now_epoch_seconds,
-                FailureKind::RetryableStatus(status.as_u16()),
-                format!("retryable status {}", status.as_u16()),
-            )
-            .await;
+    #[cfg(feature = "gateway-routing-advanced")]
+    let status_code = status.as_u16();
+    #[cfg(feature = "gateway-routing-advanced")]
+    let should_retry_status = retry_config.should_retry_status(status_code);
+    #[cfg(feature = "gateway-routing-advanced")]
+    let should_fallback_status = retry_config.should_fallback_status(status_code);
 
-            emit_json_log(
-                state,
-                "proxy.retry",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "backend": &backend_name,
-                    "status": status.as_u16(),
-                    "attempted_backends": &attempted_backends,
-                }),
-            );
-
-            #[cfg(feature = "sdk")]
-            emit_devtools_log(
-                state,
-                "proxy.retry",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "backend": &backend_name,
-                    "status": status.as_u16(),
-                    "path": path_and_query,
-                }),
-            );
-
-            return Ok(BackendAttemptOutcome::Continue(None));
-        }
-
-        #[cfg(feature = "gateway-routing-advanced")]
-        if retry_config.retry_status_codes.contains(&status.as_u16()) {
-            record_proxy_backend_failure(
-                state,
-                &backend_name,
-                _now_epoch_seconds,
-                FailureKind::RetryableStatus(status.as_u16()),
-                format!("status {}", status.as_u16()),
-            )
-            .await;
-        } else {
-            record_proxy_backend_success(state, &backend_name).await;
-        }
-
-        let spend_tokens = status.is_success();
-
+    #[cfg(feature = "gateway-routing-advanced")]
+    if should_fallback_status && idx + 1 < max_attempts {
         #[cfg(feature = "gateway-metrics-prometheus")]
         if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            let is_failure_status = {
-                #[cfg(feature = "gateway-routing-advanced")]
-                {
-                    retry_config.retry_status_codes.contains(&status.as_u16())
-                }
-                #[cfg(not(feature = "gateway-routing-advanced"))]
-                {
-                    status.is_server_error()
-                }
-            };
-            let duration = metrics_timer_start.elapsed();
-            let mut metrics = metrics.lock().await;
-            if is_failure_status {
-                metrics.record_proxy_backend_failure(&backend_name);
+            metrics
+                .lock()
+                .await
+                .record_proxy_backend_failure(&backend_name);
+        }
+        record_proxy_backend_failure(
+            state,
+            &backend_name,
+            _now_epoch_seconds,
+            FailureKind::RetryableStatus(status_code),
+            format!("status {}", status_code),
+        )
+        .await;
+
+        emit_json_log(
+            state,
+            if should_retry_status {
+                "proxy.retry"
             } else {
-                metrics.record_proxy_backend_success(&backend_name);
+                "proxy.fallback"
+            },
+            serde_json::json!({
+                "request_id": &request_id,
+                "backend": &backend_name,
+                "status": status_code,
+                "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
+                "attempted_backends": &attempted_backends,
+            }),
+        );
+
+        #[cfg(feature = "sdk")]
+        emit_devtools_log(
+            state,
+            if should_retry_status {
+                "proxy.retry"
+            } else {
+                "proxy.fallback"
+            },
+            serde_json::json!({
+                "request_id": &request_id,
+                "backend": &backend_name,
+                "status": status_code,
+                "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
+                "path": path_and_query,
+            }),
+        );
+
+        return Ok(BackendAttemptOutcome::Continue(None));
+    }
+
+    #[cfg(feature = "gateway-routing-advanced")]
+    if retry_config.is_failure_status(status_code) {
+        record_proxy_backend_failure(
+            state,
+            &backend_name,
+            _now_epoch_seconds,
+            FailureKind::RetryableStatus(status_code),
+            format!("status {}", status_code),
+        )
+        .await;
+    } else {
+        record_proxy_backend_success(state, &backend_name).await;
+    }
+
+    let spend_tokens = status.is_success();
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        let is_failure_status = {
+            #[cfg(feature = "gateway-routing-advanced")]
+            {
+                retry_config.is_failure_status(status.as_u16())
             }
-            metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
-            metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
-            if let Some(model) = model.as_deref() {
-                metrics.record_proxy_response_status_by_model(model, status.as_u16());
-                metrics.observe_proxy_request_duration_by_model(model, duration);
+            #[cfg(not(feature = "gateway-routing-advanced"))]
+            {
+                status.is_server_error()
             }
-            metrics.observe_proxy_request_duration(metrics_path, duration);
+        };
+        let duration = metrics_timer_start.elapsed();
+        let mut metrics = metrics.lock().await;
+        if is_failure_status {
+            metrics.record_proxy_backend_failure(&backend_name);
+        } else {
+            metrics.record_proxy_backend_success(&backend_name);
         }
-
-        let upstream_headers = upstream_response.headers().clone();
-        let content_type = upstream_headers
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        let is_event_stream = content_type.starts_with("text/event-stream");
-
-        if is_event_stream {
-            include!("proxy_backend/stream.rs");
+        metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
+        metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
+        if let Some(model) = model.as_deref() {
+            metrics.record_proxy_response_status_by_model(model, status.as_u16());
+            metrics.observe_proxy_request_duration_by_model(model, duration);
         }
+        metrics.observe_proxy_request_duration(metrics_path, duration);
+    }
 
-        include!("proxy_backend/nonstream.rs")
+    let upstream_headers = upstream_response.headers().clone();
+    let content_type = upstream_headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let is_event_stream = content_type.starts_with("text/event-stream");
+
+    if is_event_stream {
+        include!("proxy_backend/stream.rs");
+    }
+
+    include!("proxy_backend/nonstream.rs")
 }

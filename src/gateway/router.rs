@@ -96,7 +96,7 @@ impl RouteRule {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Router {
     config: RouterConfig,
 }

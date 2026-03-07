@@ -1,0 +1,507 @@
+{
+  "provider": {
+    "id": "kimi",
+    "display_name": "Kimi by Moonshot AI",
+    "base_url": "https://api.moonshot.cn/v1",
+    "protocol": "openai",
+    "source_url": "https://platform.moonshot.cn/docs/introduction",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "MOONSHOT_API_KEY"
+      ]
+    }
+  },
+  "models": {
+    "kimi-k2.5": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/kimi-k2-5-quickstart",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "display_name": "Kimi K2.5",
+      "stage": "default",
+      "summary": "Kimi's current flagship multimodal model for coding, vision understanding, reasoning, chat, and agent workflows. Supports both thinking and non-thinking modes.",
+      "input": "Text, image, video",
+      "output": "Text",
+      "context_window": 262144,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "input_only",
+        "audio": "not_supported",
+        "video": "input_only"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": true,
+        "video_understanding": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "kimi-k2-0905-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Kimi K2 0905 Preview",
+      "stage": "preview",
+      "summary": "Latest Kimi K2 preview model with stronger agentic coding, better front-end code quality, and improved long-context understanding.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 262144,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "kimi-k2-0711-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Kimi K2 0711 Preview",
+      "stage": "preview",
+      "summary": "Original Kimi K2 preview release: a 1T-parameter MoE text model focused on coding and agent tasks.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 131072,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "kimi-k2-turbo-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/kimi-k2-quickstart",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Kimi K2 Turbo Preview",
+      "stage": "preview",
+      "summary": "High-speed Kimi K2 variant aligned to the latest K2 preview, optimized for lower latency and higher tokens-per-second output.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 262144,
+      "speed": "60-100_tokens_per_second",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": false,
+        "vision": false
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "kimi-k2-thinking": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Kimi K2 Thinking",
+      "stage": "default",
+      "summary": "Long-thinking K2 model for deep reasoning, complex problem solving, and multi-step tool use.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 262144,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": false
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "kimi-k2-thinking-turbo": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model",
+      "pricing_source_url": "https://platform.moonshot.cn/docs/pricing/chat",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Kimi K2 Thinking Turbo",
+      "stage": "default",
+      "summary": "High-speed K2 thinking model for deep reasoning workloads that also need lower latency.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 262144,
+      "speed": "60-100_tokens_per_second",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "function_calling": true,
+        "structured_outputs": true,
+        "context_caching": true,
+        "partial_mode": true,
+        "web_search": true,
+        "reasoning": true,
+        "vision": false
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-8k": {
+      "source_url": "https://platform.moonshot.cn/docs/introduction",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "display_name": "Moonshot v1 8K",
+      "stage": "default",
+      "summary": "Text generation model for short prompts and responses.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 8192,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-32k": {
+      "source_url": "https://platform.moonshot.cn/docs/introduction",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "display_name": "Moonshot v1 32K",
+      "stage": "default",
+      "summary": "Text generation model for longer text workloads.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 32768,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-128k": {
+      "source_url": "https://platform.moonshot.cn/docs/introduction",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "display_name": "Moonshot v1 128K",
+      "stage": "default",
+      "summary": "Text generation model for very long-context workloads.",
+      "input": "Text",
+      "output": "Text",
+      "context_window": 131072,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-auto": {
+      "source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Moonshot v1 Auto",
+      "stage": "default",
+      "summary": "Auto-routed Moonshot v1 text model alias listed in the current Chat Completion docs. The official docs do not currently document its routing behavior beyond availability.",
+      "input": "Text",
+      "output": "Text",
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "not_supported",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-8k-vision-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Moonshot v1 8K Vision Preview",
+      "stage": "preview",
+      "summary": "Preview vision model that understands image content and responds with text.",
+      "input": "Text, image",
+      "output": "Text",
+      "context_window": 8192,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "input_only",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "vision": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-32k-vision-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Moonshot v1 32K Vision Preview",
+      "stage": "preview",
+      "summary": "Preview vision model that understands image content and responds with text for longer contexts.",
+      "input": "Text, image",
+      "output": "Text",
+      "context_window": 32768,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "input_only",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "vision": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    },
+    "moonshot-v1-128k-vision-preview": {
+      "source_url": "https://platform.moonshot.cn/docs/guide/use-kimi-vision-model",
+      "availability_source_url": "https://platform.moonshot.cn/docs/api/chat",
+      "release_notes_url": "https://platform.moonshot.cn/blog/posts/changelog",
+      "display_name": "Moonshot v1 128K Vision Preview",
+      "stage": "preview",
+      "summary": "Preview vision model that understands image content and responds with text for the largest Moonshot v1 context window.",
+      "input": "Text, image",
+      "output": "Text",
+      "context_window": 131072,
+      "api_surfaces": [
+        "chat.completion"
+      ],
+      "modalities": {
+        "text": "input_and_output",
+        "image": "input_only",
+        "audio": "not_supported",
+        "video": "not_supported"
+      },
+      "features": {
+        "streaming": true,
+        "vision": true
+      },
+      "records": [
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://platform.moonshot.cn/docs/api/chat",
+          "source_page": "chat_completion",
+          "section": "Chat Completions",
+          "api_surface": "chat.completion",
+          "endpoint": "https://api.moonshot.cn/v1/chat/completions",
+          "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        }
+      ]
+    }
+  }
+}

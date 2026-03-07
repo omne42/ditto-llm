@@ -409,7 +409,14 @@ impl LanguageModel for Google {
                                                     .get("args")
                                                     .cloned()
                                                     .unwrap_or(Value::Null);
-                                                let id = format!("call_{}", tool_call_seq);
+                                                let thought_signature =
+                                                    genai::extract_google_part_thought_signature(
+                                                        &part, call,
+                                                    );
+                                                let id = genai::build_google_tool_call_id(
+                                                    tool_call_seq,
+                                                    thought_signature,
+                                                );
                                                 tool_call_seq = tool_call_seq.saturating_add(1);
                                                 has_tool_calls = true;
                                                 buffer.push_back(Ok(StreamChunk::ToolCallStart {

@@ -3,6 +3,7 @@
 Admin API 用于“管理与观测控制面状态”：
 
 - virtual keys：list / upsert / delete
+- config versions：current / history / detail / diff / export / validate / router upsert / rollback
 - proxy cache：purge（可选）
 - backend health：list / reset（可选）
 - audit / budgets / costs：查询（可选，需要 store）
@@ -11,7 +12,8 @@ Admin API 用于“管理与观测控制面状态”：
 
 - 路由挂载：`src/gateway/http/core.rs`
 - 鉴权：`src/gateway/http/admin/auth.rs`
-- handlers：`src/gateway/http/admin/handlers.rs`
+- config versions handlers：`src/gateway/http/admin/config_versions.rs`
+- other handlers：`src/gateway/http/admin/handlers.rs`
 
 仓库内也提供一个最小 Admin UI（React）用于快速试用与演示：
 
@@ -86,20 +88,179 @@ Admin API 用于“管理与观测控制面状态”：
 upsert/delete 后 Ditto 会尝试持久化 keys：
 
 - `--sqlite`：写入 sqlite
+- `--pg` / `--pg-env`：写入 postgres
+- `--mysql` / `--mysql-env`：写入 mysql
 - `--redis`：写入 redis
 - `--state`：写入 state file
 - 都没有：只在内存生效（重启丢失）
 
 ---
 
-## 2) Proxy cache：清理缓存（可选）
+## 2) Config Versions：配置版本与回滚（virtual keys）
+
+### 2.1 `GET /admin/config/version`
+
+返回当前配置版本（virtual keys 维度），包括：
+
+- `version_id`
+- `created_at_ms`
+- `reason`
+- `virtual_key_count`
+- `virtual_keys_sha256`
+- `router_default_backend_count`
+- `router_rule_count`
+- `router_sha256`
+
+权限：read-only admin token 或 write admin token。
+
+### 2.2 `GET /admin/config/versions`
+
+返回版本历史（新 -> 旧）。
+
+Query 参数：
+
+- `limit`（默认不限制，最大 1000）
+- `offset`
+
+权限：read-only admin token 或 write admin token。
+
+### 2.3 `GET /admin/config/versions/:version_id`
+
+返回指定版本的 virtual keys 快照。
+
+返回体还包含 `router`（`RouterConfig`）。
+
+Query 参数：
+
+- `include_tokens=true`：返回真实 token（默认脱敏为 `redacted`）
+
+权限：read-only admin token 或 write admin token。
+
+### 2.4 `GET /admin/config/diff`
+
+对比两个版本的 virtual keys 差异，返回：
+
+- `summary`：`added`/`removed`/`changed`/`unchanged` 计数
+- `added`：仅在目标版本存在的 key
+- `removed`：仅在起始版本存在的 key
+- `changed`：同一个 `id` 下内容变化的 key（包含 `before` / `after`）
+- `summary.router_changed`：router 是否变化
+- `router_before` / `router_after`：仅在 router 变化时返回
+
+Query 参数：
+
+- `from_version_id`（必填）
+- `to_version_id`（必填）
+- `include_tokens=true`：返回真实 token（默认脱敏为 `redacted`）
+
+权限：read-only admin token 或 write admin token。
+
+### 2.5 `GET /admin/config/export`
+
+导出配置快照（默认导出当前版本），响应结构与 `GET /admin/config/versions/:version_id` 一致（顶层包含 `version_id` / `created_at_ms` / `reason` / `virtual_key_count` / `virtual_keys_sha256` / `router_default_backend_count` / `router_rule_count` / `router_sha256`、以及 `virtual_keys` 与 `router`）。
+
+Query 参数：
+
+- `version_id`（可选；不传时导出当前版本）
+- `include_tokens=true`：返回真实 token（默认脱敏为 `redacted`）
+
+权限：read-only admin token 或 write admin token。
+
+### 2.6 `POST /admin/config/validate`
+
+用于离线导入前校验配置 payload（`virtual_keys` + 可选 `router`），不修改当前配置。
+
+请求体：
+
+```json
+{
+  "virtual_keys": [],
+  "router": {
+    "default_backends": [{ "backend": "primary", "weight": 1.0 }],
+    "rules": []
+  },
+  "expected_virtual_keys_sha256": "optional-hash",
+  "expected_router_sha256": "optional-hash"
+}
+```
+
+返回：
+
+- `valid`：是否通过校验
+- `virtual_key_count`
+- `computed_virtual_keys_sha256`
+- `router_default_backend_count`（仅传入 `router` 时返回）
+- `router_rule_count`（仅传入 `router` 时返回）
+- `computed_router_sha256`（仅传入 `router` 时返回）
+- `issues[]`：`invalid_id` / `invalid_token` / `duplicate_id` / `duplicate_token` / `hash_mismatch` / `invalid_router` / `router_hash_mismatch`
+
+说明：
+
+- `router` 校验会基于当前 gateway 已注册 backend 名称检查引用合法性。
+
+权限：read-only admin token 或 write admin token。
+
+### 2.7 `PUT /admin/config/router`
+
+更新 router 配置（`RouterConfig`），会生成新的 config version。
+
+请求体：
+
+```json
+{
+  "router": {
+    "default_backends": [{ "backend": "primary", "weight": 1.0 }],
+    "rules": []
+  },
+  "dry_run": false
+}
+```
+
+行为：
+
+- 校验 router 中引用的 backend 是否存在
+- `dry_run=true` 时只返回预览，不修改配置
+
+当前限制：
+
+- 仅 router 会更新；virtual keys 不变
+- router 会写入已启用的持久层（`--state` / `--sqlite` / `--pg` / `--mysql` / `--redis`）
+
+权限：需要 write admin token。
+
+### 2.8 `POST /admin/config/rollback`
+
+请求体：
+
+```json
+{ "version_id": "cfgv-00000000000000000001" }
+```
+
+可选 dry-run：
+
+```json
+{ "version_id": "cfgv-00000000000000000001", "dry_run": true }
+```
+
+行为：
+
+- 将当前 virtual keys 恢复到指定历史版本
+- 同时恢复该版本的 router 配置
+- 成功后会生成一个新的“回滚结果版本”（方便继续前滚/回滚）
+- `dry_run=true` 时只返回预览，不修改当前配置
+
+权限：需要 write admin token。
+
+---
+
+## 3) Proxy cache：清理缓存（可选）
 
 启用条件：
 
 - admin token 已启用（read 或 write）
 - proxy cache 已启用（`--proxy-cache` 且编译启用 `gateway-proxy-cache`）
 
-### 2.1 `POST /admin/proxy_cache/purge`
+### 3.1 `POST /admin/proxy_cache/purge`
 
 权限：需要 write admin token。
 
@@ -122,14 +283,14 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 ---
 
-## 3) Backends：查看/重置健康状态（可选）
+## 4) Backends：查看/重置健康状态（可选）
 
 启用条件：
 
 - 编译启用 `gateway-routing-advanced`
 - admin token 已启用（read 或 write）
 
-### 3.1 `GET /admin/backends`
+### 4.1 `GET /admin/backends`
 
 权限：read-only admin token 或 write admin token。
 
@@ -139,7 +300,7 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 - `unhealthy_until_epoch_seconds`
 - `health_check_healthy` / `health_check_last_error`
 
-### 3.2 `POST /admin/backends/:name/reset`
+### 4.2 `POST /admin/backends/:name/reset`
 
 清除某个 backend 的健康状态（把它恢复为默认健康）。
 
@@ -147,15 +308,15 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 ---
 
-## 4) Audit：查询审计日志（可选，需要 store）
+## 5) Audit：查询审计日志（可选，需要 store）
 
 启用条件：
 
-- 编译启用 `gateway-store-sqlite` 或 `gateway-store-redis`
-- 运行时启用 `--sqlite` 或 `--redis`
+- 编译启用 `gateway-store-sqlite` / `gateway-store-postgres` / `gateway-store-mysql` / `gateway-store-redis`
+- 运行时启用任一对应 store（`--sqlite` / `--pg` / `--mysql` / `--redis`）
 - admin token 已启用（read 或 write）
 
-### 4.1 `GET /admin/audit`
+### 5.1 `GET /admin/audit`
 
 权限：read-only admin token 或 write admin token。
 
@@ -175,7 +336,7 @@ Query 参数：
 }
 ```
 
-### 4.2 `GET /admin/audit/export`
+### 5.2 `GET /admin/audit/export`
 
 返回带防篡改 hash-chain 的审计导出流（JSONL/CSV）。
 
@@ -190,7 +351,7 @@ Query 参数：
 
 JSONL 输出每行是一个 `AuditExportRecord`（包含 `prev_hash`/`hash`，用 SHA-256 串起来；用于离线校验与合规留存）。
 
-### 4.3 离线校验与对象存储导出
+### 5.3 离线校验与对象存储导出
 
 仓库内提供两个 CLI：
 
@@ -228,9 +389,9 @@ WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object L
 
 ---
 
-## 5) Budgets：查看 token 预算 ledger（可选，需要 store）
+## 6) Budgets：查看 token 预算 ledger（可选，需要 store）
 
-### 5.1 `GET /admin/budgets`
+### 6.1 `GET /admin/budgets`
 
 返回 `BudgetLedgerRecord[]`，其中 `key_id` 既可能是：
 
@@ -242,7 +403,7 @@ WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object L
 - `key_prefix=tenant:` / `key_prefix=project:` / `key_prefix=user:`：按 ledger `key_id` 前缀过滤（便于大规模部署按 scope 查看）。
 - `limit` / `offset`：分页（默认不限制；`limit` 最大 10000）。
 
-### 5.2 `GET /admin/budgets/tenants` / `GET /admin/budgets/projects` / `GET /admin/budgets/users`
+### 6.2 `GET /admin/budgets/tenants` / `GET /admin/budgets/projects` / `GET /admin/budgets/users`
 
 这是“按 virtual key 的 `tenant_id` / `project_id` / `user_id` 字段做聚合”的视图：
 
@@ -251,12 +412,12 @@ WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object L
 
 ---
 
-## 6) Costs：查看美元预算 ledger（可选，需要 store + costing）
+## 7) Costs：查看美元预算 ledger（可选，需要 store + costing）
 
 启用条件：
 
 - 编译启用 `gateway-costing`
-- 启用 sqlite/redis store
+- 启用 sqlite / pg / mysql / redis store
 
 端点与 budgets 类似：
 
@@ -272,13 +433,13 @@ WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object L
 
 ---
 
-## 7) Maintenance：回收陈旧预算预留（可选，需要 store）
+## 8) Maintenance：回收陈旧预算预留（可选，需要 store）
 
 > 用途：当进程崩溃/异常中断导致“预留未结算”时，ledger 的 `reserved_*` 可能长期不归零。该端点用于运维回收陈旧预留。
 
 权限：需要 write admin token。
 
-### 7.1 `POST /admin/reservations/reap`
+### 8.1 `POST /admin/reservations/reap`
 
 请求体：
 
@@ -308,13 +469,13 @@ WORM（不可变/保留期）建议在对象存储侧开启（例如 S3 Object L
 
 实现与注意事项：
 
-- 当前仅支持 redis store（`--redis` + feature `gateway-store-redis`）；sqlite store 会返回 501（后续会补齐）。
-- 该操作会扫描 `redis-prefix` 下的 reservation keys（O(N)）；建议在离峰时以较小 `limit` 分批执行。
+- 当前支持 sqlite / pg / mysql / redis（按 store 优先级选择一个执行）。
+- redis 下该操作会扫描 `redis-prefix` 下的 reservation keys（O(N)）；建议在离峰时以较小 `limit` 分批执行。
 - 建议把 `older_than_secs` 设得足够保守，避免误伤超长 streaming 请求。
 
 ---
 
-## 8) 常见错误与排障
+## 9) 常见错误与排障
 
 - 401 `unauthorized`：admin token 未配置或不匹配
 - 404：

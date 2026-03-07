@@ -1,0 +1,307 @@
+{
+  "provider": {
+    "id": "deepseek",
+    "display_name": "DeepSeek API",
+    "base_url": "https://api.deepseek.com",
+    "protocol": "openai",
+    "source_url": "https://api-docs.deepseek.com/",
+    "auth": {
+      "type": "api_key_env",
+      "keys": [
+        "DEEPSEEK_API_KEY"
+      ]
+    }
+  },
+  "models": {
+    "deepseek-chat": {
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "source_urls": [
+        "https://api-docs.deepseek.com/quick_start/pricing/",
+        "https://api-docs.deepseek.com/",
+        "https://api-docs.deepseek.com/api/list-models/",
+        "https://api-docs.deepseek.com/api/create-chat-completion",
+        "https://api-docs.deepseek.com/guides/thinking_mode/",
+        "https://api-docs.deepseek.com/guides/tool_calls/",
+        "https://api-docs.deepseek.com/guides/chat_prefix_completion/",
+        "https://api-docs.deepseek.com/api/create-completion",
+        "https://api-docs.deepseek.com/guides/fim_completion/",
+        "https://api-docs.deepseek.com/guides/json_mode/",
+        "https://api-docs.deepseek.com/guides/kv_cache",
+        "https://api-docs.deepseek.com/updates/"
+      ],
+      "display_name": "deepseek-chat",
+      "status": "active",
+      "vendor": "deepseek",
+      "api_surfaces": [
+        "chat.completion",
+        "completion.fim.beta",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型"
+      ],
+      "summary": "Default DeepSeek API alias for DeepSeek-V3.2 non-thinking mode. It also supports thinking via the thinking parameter, plus JSON output, tool calls, context caching, beta chat prefix completion, and beta FIM completion.",
+      "model_version": "DeepSeek-V3.2 (Non-thinking Mode)",
+      "context_window_tokens": 128000,
+      "default_max_output_tokens": 4000,
+      "max_output_tokens": 8000,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "json_output",
+        "tool_calls",
+        "context_caching",
+        "thinking_parameter",
+        "streaming"
+      ],
+      "beta_features": [
+        "chat_prefix_completion",
+        "fim_completion",
+        "strict_tool_calls"
+      ],
+      "latest_upgrade_date": "2025-12-01",
+      "pricing_input_cache_hit_per_million": "$0.028",
+      "pricing_input_cache_miss_per_million": "$0.28",
+      "pricing_output_per_million": "$0.42",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "source_page": "pricing",
+          "section": "Models & Pricing / Model Details",
+          "columns": [
+            "MODEL",
+            "BASE URL",
+            "MODEL VERSION",
+            "CONTEXT LENGTH",
+            "MAX OUTPUT",
+            "FEATURES"
+          ],
+          "values": [
+            "deepseek-chat",
+            "https://api.deepseek.com",
+            "DeepSeek-V3.2 (Non-thinking Mode)",
+            "128K",
+            "DEFAULT: 4K MAXIMUM: 8K",
+            "Json Output / Tool Calls / Chat Prefix Completion (Beta) / FIM Completion (Beta)"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://api-docs.deepseek.com/api/list-models/",
+          "source_page": "list_models",
+          "section": "Lists Models",
+          "api_surface": "model.list",
+          "method": "GET",
+          "endpoint": "https://api.deepseek.com/models",
+          "notes": "Listed as a current model in the official /models example."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://api-docs.deepseek.com/api/create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://api.deepseek.com/chat/completions",
+          "notes": "Primary OpenAI-compatible chat endpoint."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://api-docs.deepseek.com/api/create-completion",
+          "source_page": "create_fim_completion",
+          "section": "Create FIM Completion (Beta)",
+          "api_surface": "completion.fim.beta",
+          "method": "POST",
+          "endpoint": "https://api.deepseek.com/completions",
+          "base_url": "https://api.deepseek.com/beta",
+          "notes": "FIM Completion is beta-only and available only for deepseek-chat."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/thinking_mode/",
+          "source_page": "thinking_mode",
+          "section": "Thinking Mode",
+          "feature": "thinking_parameter",
+          "support": "supported",
+          "notes": "deepseek-chat can enter thinking mode via extra_body.thinking.type=enabled."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/chat_prefix_completion/",
+          "source_page": "chat_prefix_completion",
+          "section": "Chat Prefix Completion (Beta)",
+          "feature": "chat_prefix_completion_beta",
+          "support": "supported",
+          "base_url": "https://api.deepseek.com/beta",
+          "notes": "The last assistant message must set prefix=true."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/kv_cache",
+          "source_page": "kv_cache",
+          "section": "Context Caching",
+          "feature": "context_caching",
+          "support": "enabled_by_default",
+          "notes": "Context caching is enabled by default for all users and bills repeated prefixes as cache hits."
+        },
+        {
+          "table_kind": "release_note",
+          "source_url": "https://api-docs.deepseek.com/updates/",
+          "source_page": "updates",
+          "section": "DeepSeek-V3.2",
+          "release_date": "2025-12-01",
+          "notes": "deepseek-chat now maps to DeepSeek-V3.2 non-thinking mode."
+        }
+      ]
+    },
+    "deepseek-reasoner": {
+      "source_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "source_urls": [
+        "https://api-docs.deepseek.com/quick_start/pricing/",
+        "https://api-docs.deepseek.com/",
+        "https://api-docs.deepseek.com/api/list-models/",
+        "https://api-docs.deepseek.com/api/create-chat-completion",
+        "https://api-docs.deepseek.com/guides/thinking_mode/",
+        "https://api-docs.deepseek.com/guides/tool_calls/",
+        "https://api-docs.deepseek.com/guides/chat_prefix_completion/",
+        "https://api-docs.deepseek.com/guides/json_mode/",
+        "https://api-docs.deepseek.com/guides/kv_cache",
+        "https://api-docs.deepseek.com/updates/"
+      ],
+      "display_name": "deepseek-reasoner",
+      "status": "active",
+      "vendor": "deepseek",
+      "api_surfaces": [
+        "chat.completion",
+        "context.cache"
+      ],
+      "categories": [
+        "文本模型",
+        "推理模型"
+      ],
+      "summary": "Default DeepSeek API alias for DeepSeek-V3.2 thinking mode. It exposes reasoning_content, supports JSON output, tool calls, context caching, and beta chat prefix completion, but does not support FIM.",
+      "model_version": "DeepSeek-V3.2 (Thinking Mode)",
+      "context_window_tokens": 128000,
+      "default_max_output_tokens": 32000,
+      "max_output_tokens": 64000,
+      "input_modalities": [
+        "text"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "supported_features": [
+        "json_output",
+        "tool_calls",
+        "context_caching",
+        "streaming",
+        "reasoning_content"
+      ],
+      "beta_features": [
+        "chat_prefix_completion",
+        "strict_tool_calls"
+      ],
+      "not_supported_features": [
+        "fim_completion"
+      ],
+      "latest_upgrade_date": "2025-12-01",
+      "pricing_input_cache_hit_per_million": "$0.028",
+      "pricing_input_cache_miss_per_million": "$0.28",
+      "pricing_output_per_million": "$0.42",
+      "records": [
+        {
+          "table_kind": "source_table",
+          "source_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+          "source_page": "pricing",
+          "section": "Models & Pricing / Model Details",
+          "columns": [
+            "MODEL",
+            "BASE URL",
+            "MODEL VERSION",
+            "CONTEXT LENGTH",
+            "MAX OUTPUT",
+            "FEATURES"
+          ],
+          "values": [
+            "deepseek-reasoner",
+            "https://api.deepseek.com",
+            "DeepSeek-V3.2 (Thinking Mode)",
+            "128K",
+            "DEFAULT: 32K MAXIMUM: 64K",
+            "Json Output / Tool Calls / Chat Prefix Completion (Beta)"
+          ]
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://api-docs.deepseek.com/api/list-models/",
+          "source_page": "list_models",
+          "section": "Lists Models",
+          "api_surface": "model.list",
+          "method": "GET",
+          "endpoint": "https://api.deepseek.com/models",
+          "notes": "Listed as a current model in the official /models example."
+        },
+        {
+          "table_kind": "api_reference",
+          "source_url": "https://api-docs.deepseek.com/api/create-chat-completion",
+          "source_page": "create_chat_completion",
+          "section": "Create Chat Completion",
+          "api_surface": "chat.completion",
+          "method": "POST",
+          "endpoint": "https://api.deepseek.com/chat/completions",
+          "notes": "Primary OpenAI-compatible chat endpoint for thinking mode."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/thinking_mode/",
+          "source_page": "thinking_mode",
+          "section": "Thinking Mode",
+          "feature": "reasoning_content",
+          "support": "supported",
+          "notes": "Returns reasoning_content and requires it to be passed back correctly during thinking-mode tool loops."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/tool_calls/",
+          "source_page": "tool_calls",
+          "section": "Tool Calls / Thinking Mode",
+          "feature": "tool_calls",
+          "support": "supported",
+          "notes": "From DeepSeek-V3.2, tool use is supported in thinking mode."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/chat_prefix_completion/",
+          "source_page": "chat_prefix_completion",
+          "section": "Chat Prefix Completion (Beta)",
+          "feature": "chat_prefix_completion_beta",
+          "support": "supported",
+          "base_url": "https://api.deepseek.com/beta",
+          "notes": "Chat prefix completion is supported in thinking mode; FIM remains unsupported."
+        },
+        {
+          "table_kind": "feature_support",
+          "source_url": "https://api-docs.deepseek.com/guides/kv_cache",
+          "source_page": "kv_cache",
+          "section": "Context Caching",
+          "feature": "context_caching",
+          "support": "enabled_by_default",
+          "notes": "Context caching is enabled by default for all users and bills repeated prefixes as cache hits."
+        },
+        {
+          "table_kind": "release_note",
+          "source_url": "https://api-docs.deepseek.com/updates/",
+          "source_page": "updates",
+          "section": "DeepSeek-V3.2",
+          "release_date": "2025-12-01",
+          "notes": "deepseek-reasoner now maps to DeepSeek-V3.2 thinking mode."
+        }
+      ]
+    }
+  }
+}

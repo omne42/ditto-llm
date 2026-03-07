@@ -16,7 +16,7 @@ fn safe_fs_ctx(
     max_write_bytes: u64,
     max_results: usize,
 ) -> std::result::Result<safe_fs_tools::Context, safe_fs_tools::Error> {
-    let mut policy = SandboxPolicy::single_root(SAFE_FS_ROOT_ID, root, RootMode::ReadWrite);
+    let mut policy = SandboxPolicy::single_root(SAFE_FS_ROOT_ID, root, RootMode::WorkspaceWrite);
     policy.paths.allow_absolute = false;
     policy.permissions.read = true;
     policy.permissions.glob = true;
@@ -94,7 +94,11 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_read_file join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!(
+                "fs_read_file join error: {err}"
+            )))
+        })?;
 
         let resp = match read {
             Ok(resp) => resp,
@@ -159,7 +163,11 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_write_file join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!(
+                "fs_write_file join error: {err}"
+            )))
+        })?;
 
         let resp = match write {
             Ok(resp) => resp,
@@ -219,7 +227,11 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_list_dir join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!(
+                "fs_list_dir join error: {err}"
+            )))
+        })?;
 
         let resp = match list {
             Ok(resp) => resp,
@@ -347,7 +359,9 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_find join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!("fs_find join error: {err}")))
+        })?;
 
         let resp = match glob {
             Ok(resp) => resp,
@@ -486,7 +500,9 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_grep join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!("fs_grep join error: {err}")))
+        })?;
 
         let resp = match grep {
             Ok(resp) => resp,
@@ -556,7 +572,9 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_stat join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!("fs_stat join error: {err}")))
+        })?;
 
         let resp = match stat_value {
             Ok(resp) => resp,

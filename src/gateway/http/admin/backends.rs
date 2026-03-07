@@ -66,7 +66,7 @@ async fn reset_backend(
     health.remove(name.as_str());
     drop(health);
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-redis"))]
+    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
     append_admin_audit_log(
         &state,
         "admin.backend.reset",
