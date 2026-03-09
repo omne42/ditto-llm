@@ -43,6 +43,7 @@ pub mod gateway;
 #[cfg(feature = "sdk")]
 pub mod sdk;
 
+#[doc(hidden)]
 pub use apps::{
     ConfigScope, ModelDeleteReport, ModelDeleteRequest, ModelListReport, ModelListRequest,
     ModelShowReport, ModelShowRequest, ModelSummary, ModelUpsertReport, ModelUpsertRequest,
@@ -53,6 +54,7 @@ pub use apps::{
     delete_model_config, delete_provider_config, list_model_configs, list_provider_configs,
     show_model_config, show_provider_config, upsert_model_config, upsert_provider_config,
 };
+#[doc(hidden)]
 pub use capabilities::{
     BatchClient, ContextCacheMode, ContextCacheModel, ContextCacheProfile, EmbeddingModel,
     EmbeddingModelExt, FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
@@ -62,6 +64,7 @@ pub use capabilities::{
     RerankModel, SpeechModel, StreamObjectFinal, StreamObjectHandle, StreamObjectResult,
     StreamTextFinal, StreamTextHandle, StreamTextResult, VideoGenerationModel,
 };
+#[doc(hidden)]
 pub use catalog::{
     ApiSurfaceId, AssistantToolFollowupRequirement, AuthMethodKind, BehaviorSupport,
     CacheUsageReportingKind, CapabilityImplementationStatus, CapabilityKind,
@@ -81,6 +84,7 @@ pub use catalog::{
     WireProtocol, builtin_provider_plugins, builtin_registry, capability_for_operation,
     core_provider_reference_catalog_expectations,
 };
+#[doc(hidden)]
 pub use config::{
     Env, ModelConfig, ProviderApi, ProviderAuth, ProviderCapabilities, ProviderConfig,
     ProviderRoutingConfig, ResolvedRoutingPlan, ResolvedRoutingTarget, RoutingConfigFormat,
@@ -95,21 +99,6 @@ pub use core::{
     Result, StreamAbortHandle, StreamResult, abortable_stream, collect_stream,
 };
 #[doc(hidden)]
-pub use profile::{
-    AnthropicCatalogProvider, AnthropicModelCatalog, AnthropicModelCatalogEntry,
-    AnthropicModelPricing, AnthropicModelStatus, GoogleCatalogProvider, GoogleModelCatalog,
-    GoogleModelCatalogEntry, GoogleModelVersion, GoogleSupportedDataTypes, OpenAiCatalogProvider,
-    OpenAiCompatibleClient, OpenAiModalitySupport, OpenAiModelCatalog, OpenAiModelCatalogEntry,
-    OpenAiModelRevisions, OpenAiModelsProvider, Provider, anthropic_model_catalog,
-    anthropic_model_catalog_entry, anthropic_model_catalog_entry_by_model, google_model_catalog,
-    google_model_catalog_entry, google_model_catalog_entry_by_model, list_available_models,
-    openai_model_catalog, openai_model_catalog_entry,
-};
-pub use providers::openai_compatible_family::{
-    OpenAiProviderFamily, OpenAiProviderQuirks, PromptCacheUsageReporting,
-    infer_openai_provider_family, infer_openai_provider_quirks,
-};
-
 pub use runtime::{
     BuiltinProviderCapabilitySummary, BuiltinProviderModelCandidate, BuiltinProviderPreset,
     ResolvedProviderCapabilityProfile, ResolvedProviderConfigSemantics, RuntimeCatalogResolver,
@@ -119,8 +108,7 @@ pub use runtime::{
     resolve_openai_compatible_provider_capability_profile, resolve_provider_config_semantics,
 };
 
-#[cfg(feature = "sdk")]
-pub use sdk::cache::CacheLayer;
+#[doc(hidden)]
 pub use types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchRequestCounts, BatchResponse, BatchStatus, ContentPart, FileSource,
@@ -137,56 +125,80 @@ pub use types::{
 };
 
 #[cfg(feature = "anthropic")]
+#[doc(hidden)]
 pub use providers::Anthropic;
 #[cfg(feature = "bedrock")]
+#[doc(hidden)]
 pub use providers::Bedrock;
 #[cfg(feature = "cohere")]
+#[doc(hidden)]
 pub use providers::Cohere;
 #[cfg(all(feature = "cohere", feature = "embeddings"))]
+#[doc(hidden)]
 pub use providers::CohereEmbeddings;
 #[cfg(all(feature = "cohere", feature = "rerank"))]
+#[doc(hidden)]
 pub use providers::CohereRerank;
 #[cfg(feature = "google")]
+#[doc(hidden)]
 pub use providers::Google;
 #[cfg(all(feature = "google", feature = "embeddings"))]
+#[doc(hidden)]
 pub use providers::GoogleEmbeddings;
 #[cfg(all(feature = "google", feature = "images"))]
+#[doc(hidden)]
 pub use providers::GoogleImages;
 #[cfg(all(feature = "google", feature = "realtime"))]
+#[doc(hidden)]
 pub use providers::GoogleRealtime;
 #[cfg(all(feature = "google", feature = "videos"))]
+#[doc(hidden)]
 pub use providers::GoogleVideos;
 #[cfg(feature = "openai")]
+#[doc(hidden)]
 pub use providers::OpenAI;
 #[cfg(all(feature = "openai", feature = "batches"))]
+#[doc(hidden)]
 pub use providers::OpenAIBatches;
-#[cfg(all(feature = "openai", feature = "openai-compatible"))]
-pub use providers::OpenAIChatCompletions;
 #[cfg(feature = "openai-compatible")]
+#[doc(hidden)]
 pub use providers::OpenAICompatible;
 #[cfg(all(feature = "openai-compatible", feature = "batches"))]
+#[doc(hidden)]
 pub use providers::OpenAICompatibleBatches;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+#[doc(hidden)]
 pub use providers::OpenAICompatibleEmbeddings;
 #[cfg(all(feature = "openai-compatible", feature = "moderations"))]
+#[doc(hidden)]
 pub use providers::OpenAICompatibleModerations;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
+#[doc(hidden)]
 pub use providers::OpenAIEmbeddings;
 #[cfg(all(feature = "openai", feature = "moderations"))]
+#[doc(hidden)]
 pub use providers::OpenAIModerations;
 #[cfg(all(feature = "openai", feature = "realtime"))]
+#[doc(hidden)]
 pub use providers::OpenAIRealtime;
+#[cfg(feature = "openai")]
+#[doc(hidden)]
+pub use providers::OpenAITextModel;
 #[cfg(all(feature = "openai", feature = "videos"))]
+#[doc(hidden)]
 pub use providers::OpenAIVideos;
 #[cfg(feature = "vertex")]
+#[doc(hidden)]
 pub use providers::Vertex;
 #[cfg(all(feature = "openai", feature = "audio"))]
+#[doc(hidden)]
 pub use providers::{OpenAIAudioTranscription, OpenAISpeech};
 #[cfg(all(feature = "openai-compatible", feature = "audio"))]
+#[doc(hidden)]
 pub use providers::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
 #[cfg(all(feature = "openai-compatible", feature = "images"))]
+#[doc(hidden)]
 pub use providers::{OpenAICompatibleImageEdits, OpenAICompatibleImages};
-#[cfg(feature = "openai")]
-pub use providers::{OpenAICompletionsLegacy, OpenAITextModel};
 #[cfg(all(feature = "openai", feature = "images"))]
+#[doc(hidden)]
 pub use providers::{OpenAIImageEdits, OpenAIImages};
