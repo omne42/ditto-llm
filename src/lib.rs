@@ -1,12 +1,17 @@
+pub mod apps;
 pub mod audio;
 pub mod batch;
 pub mod capabilities;
 pub mod catalog;
+pub mod compat;
 pub mod config;
 pub mod context_cache;
+pub mod contracts;
+#[doc(hidden)]
 pub mod core;
 mod error;
 pub mod file;
+pub mod foundation;
 pub mod image;
 pub mod image_edit;
 pub mod moderation;
@@ -23,6 +28,7 @@ pub mod video;
 
 pub mod embedding;
 pub mod layer;
+pub mod llm_core;
 pub mod model;
 pub mod providers;
 pub mod types;
@@ -37,9 +43,19 @@ pub mod gateway;
 #[cfg(feature = "sdk")]
 pub mod sdk;
 
+pub use apps::{
+    ConfigScope, ModelDeleteReport, ModelDeleteRequest, ModelListReport, ModelListRequest,
+    ModelShowReport, ModelShowRequest, ModelSummary, ModelUpsertReport, ModelUpsertRequest,
+    ProviderAuthType, ProviderDeleteReport, ProviderDeleteRequest, ProviderListReport,
+    ProviderListRequest, ProviderNamespace, ProviderShowReport, ProviderShowRequest,
+    ProviderSummary, ProviderUpsertReport, ProviderUpsertRequest,
+    complete_model_upsert_request_interactive, complete_provider_upsert_request_interactive,
+    delete_model_config, delete_provider_config, list_model_configs, list_provider_configs,
+    show_model_config, show_provider_config, upsert_model_config, upsert_provider_config,
+};
 pub use capabilities::{
-    ContextCacheMode, ContextCacheModel, ContextCacheProfile, EmbeddingModel, EmbeddingModelExt,
-    FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
+    BatchClient, ContextCacheMode, ContextCacheModel, ContextCacheProfile, EmbeddingModel,
+    EmbeddingModelExt, FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
     GenerateObjectResponse, GenerateTextResponse, ImageEditModel, ImageGenerationModel,
     LanguageModelObjectExt, LanguageModelTextExt, ModerationModel, ObjectOptions, ObjectOutput,
     ObjectStrategy, RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
@@ -66,20 +82,12 @@ pub use catalog::{
     core_provider_reference_catalog_expectations,
 };
 pub use config::{
-    ConfigScope, Env, ModelConfig, ModelDeleteReport, ModelDeleteRequest, ModelListReport,
-    ModelListRequest, ModelShowReport, ModelShowRequest, ModelSummary, ModelUpsertReport,
-    ModelUpsertRequest, ProviderApi, ProviderAuth, ProviderAuthType, ProviderCapabilities,
-    ProviderConfig, ProviderDeleteReport, ProviderDeleteRequest, ProviderListReport,
-    ProviderListRequest, ProviderNamespace, ProviderRoutingConfig, ProviderShowReport,
-    ProviderShowRequest, ProviderSummary, ProviderUpsertReport, ProviderUpsertRequest,
-    ResolvedRoutingPlan, ResolvedRoutingTarget, RoutingConfigFormat, RoutingContext,
-    RoutingOverride, RoutingPhase, RoutingPolicy, RoutingPolicySource, RoutingProviderProfile,
-    RoutingStagePolicy, RoutingTarget, ThinkingIntensity,
-    complete_model_upsert_request_interactive, complete_provider_upsert_request_interactive,
-    delete_model_config, delete_provider_config, filter_models_whitelist, list_model_configs,
-    list_provider_configs, merge_provider_config, normalize_string_list, parse_dotenv,
+    Env, ModelConfig, ProviderApi, ProviderAuth, ProviderCapabilities, ProviderConfig,
+    ProviderRoutingConfig, ResolvedRoutingPlan, ResolvedRoutingTarget, RoutingConfigFormat,
+    RoutingContext, RoutingOverride, RoutingPhase, RoutingPolicy, RoutingPolicySource,
+    RoutingProviderProfile, RoutingStagePolicy, RoutingTarget, ThinkingIntensity,
+    filter_models_whitelist, merge_provider_config, normalize_string_list, parse_dotenv,
     resolve_auth_token, resolve_auth_token_with_default_keys, select_model_config,
-    show_model_config, show_provider_config, upsert_model_config, upsert_provider_config,
 };
 pub use core::{
     AbortableStream, CollectedStream, DittoError, LanguageModel, LanguageModelExt,
@@ -101,6 +109,7 @@ pub use providers::openai_compatible_family::{
     OpenAiProviderFamily, OpenAiProviderQuirks, PromptCacheUsageReporting,
     infer_openai_provider_family, infer_openai_provider_quirks,
 };
+
 pub use runtime::{
     BuiltinProviderCapabilitySummary, BuiltinProviderModelCandidate, BuiltinProviderPreset,
     ResolvedProviderCapabilityProfile, ResolvedProviderConfigSemantics, RuntimeCatalogResolver,

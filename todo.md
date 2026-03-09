@@ -1,5 +1,16 @@
 # ditto-llm 重构推进 TODO
 
+## 架构重构状态（2026-03-09）
+
+- [x] `foundation` / `contracts` / `llm_core` 已落地，旧 `core` 仅保留兼容 shim。
+- [x] `capabilities/` 已从单文件 facade 改成真实目录模块。
+- [x] `config/editor.rs` 已迁出到 `apps/config_editor.rs`，`config` 仅保留 schema / parsing / auth 解析边界。
+- [x] `profile` 已降级为 `src/profile.rs` 兼容 shim，真实实现位于 `src/compat/profile/`，旧 `src/profile/` 目录已删除。
+- [x] `catalog` 的共享契约已下沉到 `src/contracts/`，`catalog <-> config` 的直接环依赖已被打断。
+- [x] `gateway` 已物理落位到 `domain/`、`application/`、`adapters/`、`transport/http/`；根目录旧模块仅保留兼容 shim。
+- [x] `gateway` 已不再依赖 `include!` 做模块拼装。
+- [x] `gateway` 根导出已改为优先指向新层级路径，旧平铺模块以 `#[doc(hidden)]` 兼容形式保留。
+
 ## 我们在做什么
 
 我们正在把 `ditto-llm` 收敛到一个更清晰、可维护、可扩展的方向：

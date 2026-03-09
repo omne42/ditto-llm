@@ -1,100 +1,10 @@
-use std::collections::BTreeMap;
-
+use crate::contracts::{
+    CapabilityKind, InvocationHints, OperationKind, ProviderId, ResolvedInvocation,
+    RuntimeProviderApi, RuntimeProviderHints, RuntimeRoute, RuntimeRouteRequest, TransportKind,
+};
 use crate::{ProviderResolutionError, Result};
 
-use super::{
-    CapabilityKind, CatalogRegistry, HttpMethod, InvocationHints, OperationKind, ProviderId,
-    ProviderPluginDescriptor, ResolvedInvocation, TransportKind,
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RuntimeProviderApi {
-    OpenaiChatCompletions,
-    OpenaiResponses,
-    GeminiGenerateContent,
-    AnthropicMessages,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RuntimeProviderHints<'a> {
-    pub configured_provider: Option<&'a str>,
-    pub base_url: Option<&'a str>,
-    pub default_model: Option<&'a str>,
-    pub enabled_capabilities: &'a [String],
-    pub http_query_params: Option<&'a BTreeMap<String, String>>,
-    pub upstream_api: Option<RuntimeProviderApi>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RuntimeRouteRequest<'a> {
-    pub provider: &'a str,
-    pub model: Option<&'a str>,
-    pub operation: OperationKind,
-    pub provider_hints: RuntimeProviderHints<'a>,
-    pub hints: InvocationHints,
-    pub required_capability: Option<CapabilityKind>,
-}
-
-impl<'a> RuntimeRouteRequest<'a> {
-    pub fn new(provider: &'a str, model: Option<&'a str>, operation: OperationKind) -> Self {
-        Self {
-            provider,
-            model,
-            operation,
-            provider_hints: RuntimeProviderHints::default(),
-            hints: InvocationHints::default(),
-            required_capability: None,
-        }
-    }
-
-    pub fn with_runtime_hints(mut self, provider_hints: RuntimeProviderHints<'a>) -> Self {
-        self.provider_hints = provider_hints;
-        self
-    }
-
-    pub fn with_hints(mut self, hints: InvocationHints) -> Self {
-        self.hints = hints;
-        self
-    }
-
-    pub fn with_required_capability(mut self, capability: CapabilityKind) -> Self {
-        self.required_capability = Some(capability);
-        self
-    }
-
-    pub fn provider_id(self) -> ProviderId<'a> {
-        ProviderId::new(self.provider)
-    }
-}
-
-impl Default for RuntimeRouteRequest<'_> {
-    fn default() -> Self {
-        Self::new("", None, OperationKind::CHAT_COMPLETION)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeRoute {
-    pub invocation: ResolvedInvocation,
-    pub base_url: String,
-    pub url: String,
-    pub query_params: Vec<(String, String)>,
-}
-
-impl RuntimeRoute {
-    pub fn transport(&self) -> TransportKind {
-        self.invocation.endpoint.transport
-    }
-
-    pub fn http_method(&self) -> Option<HttpMethod> {
-        self.invocation.endpoint.http_method
-    }
-
-    pub fn path(&self) -> &str {
-        self.invocation.endpoint.path.as_str()
-    }
-}
-
+use super::{CatalogRegistry, ProviderPluginDescriptor};
 impl CatalogRegistry {
     pub fn plugin_for_runtime_request(
         &self,
@@ -522,9 +432,9 @@ mod tests {
 
     use super::*;
     use crate::catalog::{
-        ApiSurfaceId, AuthMethodKind, EndpointQueryParam, EndpointTemplate, ModelBinding,
-        ModelSelector, ProtocolQuirks, ProviderClass, ProviderPluginDescriptor, TransportKind,
-        VerificationStatus, WireProtocol, capability_for_operation,
+        ApiSurfaceId, AuthMethodKind, EndpointQueryParam, EndpointTemplate, HttpMethod,
+        ModelBinding, ModelSelector, ProtocolQuirks, ProviderClass, ProviderPluginDescriptor,
+        TransportKind, VerificationStatus, WireProtocol, capability_for_operation,
     };
     use crate::config::ProviderConfig;
 

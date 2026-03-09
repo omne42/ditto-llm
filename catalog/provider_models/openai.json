@@ -558,7 +558,8 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Sep 01, 2021",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -634,7 +635,8 @@
       "max_output_tokens": 8192,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -709,7 +711,8 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -786,7 +789,8 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -1685,7 +1689,8 @@
       "max_output_tokens": 16384,
       "knowledge_cutoff": "Oct 01, 2023",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -1893,7 +1898,8 @@
       "max_output_tokens": 16384,
       "knowledge_cutoff": "Oct 01, 2023",
       "api_surfaces": [
-        "chat.completion"
+        "chat.completion",
+        "responses"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -2878,11 +2884,11 @@
         {
           "table_kind": "api_reference",
           "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max",
-          "source_page": "chat_completions_api",
-          "section": "Chat Completions",
-          "api_surface": "chat.completion",
-          "endpoint": "https://api.openai.com/v1/chat/completions",
-          "notes": "This model family is documented for OpenAI chat completions-compatible request/response flows."
+          "source_page": "responses_api",
+          "section": "Responses API",
+          "api_surface": "responses",
+          "endpoint": "https://api.openai.com/v1/responses",
+          "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
         },
         {
           "table_kind": "api_reference",

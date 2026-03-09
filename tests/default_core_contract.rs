@@ -4,43 +4,90 @@ use ditto_llm::{
     builtin_provider_presets, upsert_provider_config,
 };
 
+fn is_default_core_build() -> bool {
+    !(cfg!(feature = "provider-openai")
+        || cfg!(feature = "provider-anthropic")
+        || cfg!(feature = "provider-google")
+        || cfg!(feature = "provider-cohere")
+        || cfg!(feature = "provider-bedrock")
+        || cfg!(feature = "provider-vertex")
+        || cfg!(feature = "provider-bailian")
+        || cfg!(feature = "provider-deepseek")
+        || cfg!(feature = "provider-doubao")
+        || cfg!(feature = "provider-hunyuan")
+        || cfg!(feature = "provider-kimi")
+        || cfg!(feature = "provider-minimax")
+        || cfg!(feature = "provider-openrouter")
+        || cfg!(feature = "provider-qianfan")
+        || cfg!(feature = "provider-xai")
+        || cfg!(feature = "provider-zhipu")
+        || cfg!(feature = "embeddings")
+        || cfg!(feature = "images")
+        || cfg!(feature = "audio")
+        || cfg!(feature = "moderations")
+        || cfg!(feature = "rerank")
+        || cfg!(feature = "batches")
+        || cfg!(feature = "realtime"))
+}
+
 #[test]
 fn default_core_exposes_only_generic_openai_compatible_llm_surface() {
     let presets = builtin_provider_presets();
-    assert_eq!(presets.len(), 1);
-    assert_eq!(presets[0].provider, "openai-compatible");
+    let preset = presets
+        .iter()
+        .find(|preset| preset.provider == "openai-compatible")
+        .expect("openai-compatible preset should exist");
+    assert_eq!(preset.provider, "openai-compatible");
 
     let summaries = builtin_provider_capability_summaries();
-    assert_eq!(summaries.len(), 1);
-    assert_eq!(summaries[0].provider, "openai-compatible");
-    assert_eq!(summaries[0].capabilities.len(), 1);
-    assert_eq!(summaries[0].capabilities[0].as_str(), "llm");
+    let summary = summaries
+        .iter()
+        .find(|summary| summary.provider == "openai-compatible")
+        .expect("openai-compatible summary should exist");
+    assert!(
+        summary
+            .capabilities
+            .iter()
+            .any(|capability| capability.as_str() == "llm")
+    );
+
+    if is_default_core_build() {
+        assert_eq!(presets.len(), 1);
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summary.capabilities.len(), 1);
+    }
 }
 
 #[test]
 fn default_core_rejects_non_llm_runtime_routes() {
-    let err = ditto_llm::builtin_registry()
-        .resolve_runtime_route(
-            RuntimeRouteRequest::new(
-                "openai-compatible",
-                Some("text-embedding-3-small"),
-                OperationKind::EMBEDDING,
-            )
-            .with_provider_config(&ditto_llm::ProviderConfig {
-                base_url: Some("https://proxy.example/v1".to_string()),
-                default_model: Some("text-embedding-3-small".to_string()),
-                ..ditto_llm::ProviderConfig::default()
-            })
-            .with_required_capability(ditto_llm::CapabilityKind::EMBEDDING),
+    let result = ditto_llm::builtin_registry().resolve_runtime_route(
+        RuntimeRouteRequest::new(
+            "openai-compatible",
+            Some("text-embedding-3-small"),
+            OperationKind::EMBEDDING,
         )
-        .expect_err("default core should not expose embedding routes");
+        .with_provider_config(&ditto_llm::ProviderConfig {
+            base_url: Some("https://proxy.example/v1".to_string()),
+            default_model: Some("text-embedding-3-small".to_string()),
+            ..ditto_llm::ProviderConfig::default()
+        })
+        .with_required_capability(ditto_llm::CapabilityKind::EMBEDDING),
+    );
 
-    assert!(matches!(
-        err,
-        DittoError::ProviderResolution(
-            ditto_llm::ProviderResolutionError::RuntimeRouteCapabilityUnsupported { .. }
-        )
-    ));
+    if cfg!(feature = "embeddings") {
+        assert!(
+            result.is_ok(),
+            "embedding-enabled builds should expose embedding routes"
+        );
+    } else {
+        let err = result.expect_err("default core should not expose embedding routes");
+        assert!(matches!(
+            err,
+            DittoError::ProviderResolution(
+                ditto_llm::ProviderResolutionError::RuntimeRouteCapabilityUnsupported { .. }
+            )
+        ));
+    }
 }
 
 #[tokio::test]
@@ -147,7 +194,7 @@ async fn default_core_provider_template_rejects_unsupported_enabled_capability()
     let config_path = temp.path().join("config_local.toml");
     tokio::fs::write(&config_path, "[project_config]\nenabled = true\n").await?;
 
-    let err = upsert_provider_config(ProviderUpsertRequest {
+    let result = upsert_provider_config(ProviderUpsertRequest {
         name: "openai-compatible".to_string(),
         config_path: Some(config_path),
         root: None,
@@ -179,15 +226,22 @@ async fn default_core_provider_template_rejects_unsupported_enabled_capability()
         register_models: false,
         model_limit: None,
     })
-    .await
-    .expect_err("default core should reject unsupported capabilities");
+    .await;
 
-    assert!(matches!(
-        err,
-        DittoError::ProviderResolution(
-            ditto_llm::ProviderResolutionError::ConfiguredCapabilityUnsupported { ref provider, ref capability }
-        ) if provider == "openai-compatible" && capability == "embedding"
-    ));
+    if cfg!(feature = "embeddings") {
+        assert!(
+            result.is_ok(),
+            "embedding-enabled builds should accept embedding capability"
+        );
+    } else {
+        let err = result.expect_err("default core should reject unsupported capabilities");
+        assert!(matches!(
+            err,
+            DittoError::ProviderResolution(
+                ditto_llm::ProviderResolutionError::ConfiguredCapabilityUnsupported { ref provider, ref capability }
+            ) if provider == "openai-compatible" && capability == "embedding"
+        ));
+    }
 
     Ok(())
 }

@@ -3,8 +3,8 @@ use async_trait::async_trait;
 #[cfg(feature = "openai-compatible")]
 use super::OpenAIChatCompletions;
 use super::{OpenAI, OpenAICompletionsLegacy};
-use crate::catalog::OperationKind;
 use crate::config::{Env, ProviderApi, ProviderConfig};
+use crate::contracts::OperationKind;
 use crate::model::{LanguageModel, StreamResult};
 use crate::{DittoError, GenerateRequest, GenerateResponse, Result, builtin_registry};
 
@@ -218,7 +218,7 @@ mod tests {
         );
         assert_eq!(
             model.surface_for_model("gpt-4")?,
-            OpenAITextSurface::ChatCompletions
+            OpenAITextSurface::Responses
         );
         assert_eq!(
             model.surface_for_model("davinci-002")?,

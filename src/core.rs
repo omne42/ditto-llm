@@ -1,31 +1,5 @@
-//! Core L0 facade.
+//! Backward-compatible facade for the old `core` namespace.
 //!
-//! This namespace exposes the provider-agnostic primitives that sit below any
-//! specific capability or transport adapter.
+//! Prefer `crate::llm_core` for new code.
 
-pub mod error {
-    pub use crate::error::{DittoError, ProviderResolutionError, Result};
-}
-
-pub mod layer {
-    pub use crate::layer::{LanguageModelLayer, LanguageModelLayerExt, LayeredLanguageModel};
-}
-
-pub mod model {
-    pub use crate::model::{LanguageModel, StreamResult};
-}
-
-pub mod stream {
-    pub use crate::stream::{
-        AbortableStream, CollectedStream, LanguageModelExt, StreamAbortHandle, abortable_stream,
-        collect_stream,
-    };
-}
-
-pub use error::{DittoError, ProviderResolutionError, Result};
-pub use layer::{LanguageModelLayer, LanguageModelLayerExt, LayeredLanguageModel};
-pub use model::{LanguageModel, StreamResult};
-pub use stream::{
-    AbortableStream, CollectedStream, LanguageModelExt, StreamAbortHandle, abortable_stream,
-    collect_stream,
-};
+pub use crate::llm_core::*;

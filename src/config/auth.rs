@@ -3,7 +3,7 @@ use std::time::Duration;
 use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
-use crate::secrets::resolve_secret_string;
+use crate::foundation::secrets::{DefaultSecretResolver, SecretResolver};
 use crate::{DittoError, Result};
 
 use super::env::Env;
@@ -211,10 +211,11 @@ pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String
     resolve_auth_token_with_default_keys(auth, env, DEFAULT_KEYS).await
 }
 
-pub async fn resolve_auth_token_with_default_keys(
+pub async fn resolve_auth_token_with_default_keys_and_resolver(
     auth: &ProviderAuth,
     env: &Env,
     default_keys: &[&str],
+    resolver: &dyn SecretResolver,
 ) -> Result<String> {
     match auth {
         ProviderAuth::ApiKeyEnv { keys }
@@ -223,7 +224,7 @@ pub async fn resolve_auth_token_with_default_keys(
             if keys.is_empty() {
                 for key in default_keys {
                     if let Some(value) = env.get(key) {
-                        return resolve_secret_if_needed(value, env).await;
+                        return resolve_secret_if_needed_with_resolver(value, env, resolver).await;
                     }
                 }
                 return Err(DittoError::AuthCommand(format!(
@@ -233,7 +234,7 @@ pub async fn resolve_auth_token_with_default_keys(
             }
             for key in keys {
                 if let Some(value) = env.get(key.as_str()) {
-                    return resolve_secret_if_needed(value, env).await;
+                    return resolve_secret_if_needed_with_resolver(value, env, resolver).await;
                 }
             }
             Err(DittoError::AuthCommand(format!(
@@ -246,7 +247,7 @@ pub async fn resolve_auth_token_with_default_keys(
         | ProviderAuth::QueryParamCommand { command, .. } => {
             let stdout = run_auth_command(command, env).await?;
             let token = parse_auth_command_token(stdout.as_str())?;
-            resolve_secret_if_needed(token, env).await
+            resolve_secret_if_needed_with_resolver(token, env, resolver).await
         }
         ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
             Err(DittoError::InvalidResponse(
@@ -256,10 +257,28 @@ pub async fn resolve_auth_token_with_default_keys(
     }
 }
 
-async fn resolve_secret_if_needed(raw: String, env: &Env) -> Result<String> {
+pub async fn resolve_auth_token_with_default_keys(
+    auth: &ProviderAuth,
+    env: &Env,
+    default_keys: &[&str],
+) -> Result<String> {
+    resolve_auth_token_with_default_keys_and_resolver(
+        auth,
+        env,
+        default_keys,
+        &DefaultSecretResolver,
+    )
+    .await
+}
+
+async fn resolve_secret_if_needed_with_resolver(
+    raw: String,
+    env: &Env,
+    resolver: &dyn SecretResolver,
+) -> Result<String> {
     let raw = raw.trim().to_string();
     if raw.starts_with("secret://") {
-        return resolve_secret_string(raw.as_str(), env).await;
+        return resolver.resolve_secret_string(raw.as_str(), env).await;
     }
     Ok(raw)
 }

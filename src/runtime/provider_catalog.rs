@@ -1,11 +1,9 @@
-use crate::catalog::{
-    AuthMethodKind, CapabilityKind, ProviderAuthHint, ProviderCapabilityResolution, ProviderClass,
-    ProviderId, ProviderPluginDescriptor, builtin_registry,
+use crate::catalog::{ProviderCapabilityResolution, ProviderPluginDescriptor, builtin_registry};
+use crate::config::{ProviderApi, ProviderCapabilities, ProviderConfig};
+use crate::contracts::{
+    AuthMethodKind, CapabilityKind, OperationKind, ProviderAuthHint, ProviderClass, ProviderId,
 };
 use crate::{ProviderResolutionError, Result};
-
-use crate::catalog::OperationKind;
-use crate::config::{ProviderApi, ProviderCapabilities, ProviderConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltinProviderPreset {

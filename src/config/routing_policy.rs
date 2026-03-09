@@ -3,7 +3,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::{CapabilityKind, OperationKind, RuntimeRouteRequest, builtin_registry};
+use crate::catalog::builtin_registry;
+use crate::contracts::{CapabilityKind, OperationKind, RuntimeRouteRequest};
 
 use super::provider_config::{ProviderConfig, normalize_string_list};
 

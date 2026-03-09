@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::catalog::{RuntimeProviderApi, RuntimeProviderHints, RuntimeRouteRequest};
+use crate::contracts::{RuntimeProviderApi, RuntimeProviderHints, RuntimeRouteRequest};
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {

@@ -120,7 +120,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "GPT-3.5 Turbo models can understand and generate natural language or code and have been optimized for chat using the Chat Completions API but work well for non-chat tasks as well. As of July 2024, use gpt-4o-mini in place of GPT-3.5 Turbo, as it is cheaper, more capable, multimodal, and just as fast. GPT-3.5 Turbo is still available for use in the API.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
@@ -132,7 +132,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "GPT-4 is an older version of a high-intelligence GPT model, usable in Chat Completions.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
@@ -144,7 +144,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "GPT-4 Turbo is the next generation of GPT-4, an older high-intelligence GPT model. It was designed to be a cheaper, better version of GPT-4. Today, we recommend using a newer model like GPT-4o.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
@@ -156,7 +156,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "This is a research preview of the GPT-4 Turbo model, an older high-intelligence GPT model.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
@@ -278,7 +278,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "GPT-4o mini Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
@@ -332,7 +332,7 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         summary: Some(
             "GPT-4o Search Preview is a specialized model trained to understand and execute web search queries with the Chat Completions API. In addition to token fees, web search queries have a fee per tool call. Learn more in the pricing page.",
         ),
-        supported_operations: &[OperationKind::CHAT_COMPLETION],
+        supported_operations: &[OperationKind::CHAT_COMPLETION, OperationKind::RESPONSE],
         capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {

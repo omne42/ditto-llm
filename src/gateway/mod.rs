@@ -2,47 +2,64 @@
 
 pub mod adapters;
 pub mod application;
+#[doc(hidden)]
 pub mod budget;
+#[doc(hidden)]
 pub mod cache;
 pub mod config;
 #[cfg(feature = "gateway-costing")]
 pub mod costing;
 pub mod domain;
+#[doc(hidden)]
 pub mod guardrails;
+#[doc(hidden)]
 pub mod http;
+#[doc(hidden)]
 pub mod http_backend;
 mod interop;
+#[doc(hidden)]
 pub mod limits;
 #[cfg(feature = "gateway-config-yaml")]
 pub mod litellm_config;
 #[cfg(feature = "gateway-metrics-prometheus")]
+#[doc(hidden)]
 pub mod metrics_prometheus;
 mod multipart;
 #[cfg(feature = "gateway-store-mysql")]
+#[doc(hidden)]
 pub mod mysql_store;
 pub mod observability;
 #[cfg(feature = "gateway-otel")]
 pub mod otel;
 pub mod passthrough;
 #[cfg(feature = "gateway-store-postgres")]
+#[doc(hidden)]
 pub mod postgres_store;
+#[doc(hidden)]
 pub mod proxy_backend;
 #[cfg(feature = "gateway-proxy-cache")]
+#[doc(hidden)]
 pub mod proxy_cache;
 #[cfg(feature = "gateway-routing-advanced")]
 pub mod proxy_routing;
 mod redaction;
 #[cfg(feature = "gateway-store-redis")]
+#[doc(hidden)]
 pub mod redis_store;
 mod responses_shim;
+#[doc(hidden)]
 pub mod router;
 #[cfg(feature = "gateway-store-sqlite")]
+#[doc(hidden)]
 pub mod sqlite_store;
+#[doc(hidden)]
 pub mod state_file;
+#[doc(hidden)]
 pub mod store_types;
 #[cfg(feature = "gateway-tokenizer")]
 pub mod token_count;
 #[cfg(feature = "gateway-translation")]
+#[doc(hidden)]
 pub mod translation;
 pub mod transport;
 
@@ -53,11 +70,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use budget::BudgetTracker;
-use cache::ResponseCache;
-use limits::RateLimiter;
+use domain::RateLimiter;
+use domain::{BudgetTracker, ResponseCache, Router};
 use observability::{Observability, ObservabilitySnapshot};
-use router::Router;
 
 pub(crate) fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poison| poison.into_inner())
@@ -71,42 +86,39 @@ pub(crate) fn write_unpoisoned<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
     lock.write().unwrap_or_else(|poison| poison.into_inner())
 }
 
-pub use budget::BudgetConfig;
-pub use cache::CacheConfig;
+pub use adapters::backend::{HttpBackend, ProxyBackend};
+#[cfg(feature = "gateway-proxy-cache")]
+pub use adapters::cache::{
+    CachedProxyResponse, ProxyCacheConfig, ProxyCacheEntryMetadata, ProxyCachePurgeSelector,
+    ProxyCacheStoredResponse, ProxyResponseCache,
+};
+pub use adapters::state::{GatewayStateFile, GatewayStateFileError};
+#[cfg(feature = "gateway-store-mysql")]
+pub use adapters::store::{MySqlStore, MySqlStoreError};
+#[cfg(feature = "gateway-store-postgres")]
+pub use adapters::store::{PostgresStore, PostgresStoreError};
+#[cfg(feature = "gateway-store-redis")]
+pub use adapters::store::{RedisStore, RedisStoreError};
+#[cfg(feature = "gateway-store-sqlite")]
+pub use adapters::store::{SqliteStore, SqliteStoreError};
+#[cfg(feature = "gateway-translation")]
+pub use application::translation::TranslationBackend;
 pub use config::{
     BackendConfig, GatewayConfig, GatewayObservabilityConfig, GatewayRedactionConfig,
     GatewaySamplingConfig, VirtualKeyConfig,
 };
 #[cfg(feature = "gateway-costing")]
 pub use costing::{PricingTable, PricingTableError};
-pub use guardrails::GuardrailsConfig;
-pub use http::GatewayHttpState;
-pub use http_backend::HttpBackend;
-pub use limits::LimitsConfig;
-#[cfg(feature = "gateway-store-mysql")]
-pub use mysql_store::{MySqlStore, MySqlStoreError};
-pub use passthrough::PassthroughConfig;
-#[cfg(feature = "gateway-store-postgres")]
-pub use postgres_store::{PostgresStore, PostgresStoreError};
-pub use proxy_backend::ProxyBackend;
-#[cfg(feature = "gateway-proxy-cache")]
-pub use proxy_cache::{
-    CachedProxyResponse, ProxyCacheConfig, ProxyCacheEntryMetadata, ProxyCachePurgeSelector,
-    ProxyCacheStoredResponse, ProxyResponseCache,
+pub use domain::{
+    AuditLogRecord, BudgetConfig, BudgetLedgerRecord, CacheConfig, CostLedgerRecord,
+    GuardrailsConfig, LimitsConfig, RouteBackend, RouteRule, RouterConfig,
 };
+pub use passthrough::PassthroughConfig;
 #[cfg(feature = "gateway-routing-advanced")]
 pub use proxy_routing::{
     BackendHealthSnapshot, ProxyCircuitBreakerConfig, ProxyRetryConfig, ProxyRoutingConfig,
 };
-#[cfg(feature = "gateway-store-redis")]
-pub use redis_store::{RedisStore, RedisStoreError};
-pub use router::{RouteBackend, RouteRule, RouterConfig};
-#[cfg(feature = "gateway-store-sqlite")]
-pub use sqlite_store::{SqliteStore, SqliteStoreError};
-pub use state_file::{GatewayStateFile, GatewayStateFileError};
-pub use store_types::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord};
-#[cfg(feature = "gateway-translation")]
-pub use translation::TranslationBackend;
+pub use transport::http::GatewayHttpState;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GatewayRequest {

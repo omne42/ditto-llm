@@ -1,3 +1,5 @@
-// This file is intentionally split to keep each staged Rust file under the pre-commit size limit.
-include!("metrics_prometheus/core.rs");
-include!("metrics_prometheus/render.rs");
+//! Compatibility shim for the legacy `gateway::metrics_prometheus` namespace.
+//!
+//! Prefer `crate::gateway::adapters::telemetry::prometheus` for new code.
+
+pub use crate::gateway::adapters::telemetry::prometheus::*;

@@ -167,7 +167,7 @@ fn openai_text_model_routes_and_behaviors_match_official_catalog() {
     assert!(
         registry
             .resolve("openai", "gpt-4", OperationKind::RESPONSE)
-            .is_none()
+            .is_some()
     );
     assert!(
         registry

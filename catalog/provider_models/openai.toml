@@ -488,7 +488,7 @@ context_window = 16385
 max_output_tokens = 4096
 knowledge_cutoff = "Sep 01, 2021"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-3.5-turbo".modalities]
 text = "input_and_output"
 image = "not_supported"
@@ -554,7 +554,7 @@ context_window = 8192
 max_output_tokens = 8192
 knowledge_cutoff = "Dec 01, 2023"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-4".modalities]
 text = "input_and_output"
 image = "not_supported"
@@ -620,7 +620,7 @@ context_window = 128000
 max_output_tokens = 4096
 knowledge_cutoff = "Dec 01, 2023"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-4-turbo".modalities]
 text = "input_and_output"
 image = "input_only"
@@ -686,7 +686,7 @@ context_window = 128000
 max_output_tokens = 4096
 knowledge_cutoff = "Dec 01, 2023"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-4-turbo-preview".modalities]
 text = "input_and_output"
 image = "not_supported"
@@ -1460,7 +1460,7 @@ context_window = 128000
 max_output_tokens = 16384
 knowledge_cutoff = "Oct 01, 2023"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-4o-mini-search-preview".modalities]
 text = "input_and_output"
 image = "not_supported"
@@ -1630,7 +1630,7 @@ context_window = 128000
 max_output_tokens = 16384
 knowledge_cutoff = "Oct 01, 2023"
 
-api_surfaces = ["chat.completion"]
+api_surfaces = ["chat.completion", "responses"]
 [models."gpt-4o-search-preview".modalities]
 text = "input_and_output"
 image = "not_supported"
@@ -2483,11 +2483,11 @@ snapshots = ["gpt-5.1-codex-max"]
 [[models."gpt-5.1-codex-max".records]]
 table_kind = "api_reference"
 source_url = "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
-source_page = "chat_completions_api"
-section = "Chat Completions"
-api_surface = "chat.completion"
-endpoint = "https://api.openai.com/v1/chat/completions"
-notes = "This model family is documented for OpenAI chat completions-compatible request/response flows."
+source_page = "responses_api"
+section = "Responses API"
+api_surface = "responses"
+endpoint = "https://api.openai.com/v1/responses"
+notes = "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
 
 [[models."gpt-5.1-codex-max".records]]
 table_kind = "api_reference"

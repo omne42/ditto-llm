@@ -87,16 +87,17 @@ fn resolve_builder_plugin(
         return Some(plugin);
     }
 
-    if let Some(plugin) = builder_plugin_from_upstream_api(config) {
-        return Some(plugin);
+    if let Some(canonical) = canonical_builder_provider_from_hint(provider) {
+        if canonical == "openai-compatible" {
+            return registry
+                .plugin(canonical)
+                .or_else(|| registry.plugin("openai"));
+        }
+        return registry.plugin(canonical);
     }
 
-    if let Some(canonical) = canonical_builder_provider_from_hint(provider) {
-        return registry.plugin(canonical).or_else(|| {
-            (canonical == "openai-compatible")
-                .then(|| registry.plugin("openai"))
-                .flatten()
-        });
+    if let Some(plugin) = builder_plugin_from_upstream_api(config) {
+        return Some(plugin);
     }
 
     registry
@@ -182,10 +183,9 @@ fn default_builder_runtime(
         ));
     }
 
-    let plugin = resolve_builder_plugin(provider, config).ok_or_else(|| {
-        DittoError::InvalidResponse(format!("unsupported provider backend: {provider}"))
-    })?;
-    let builder_provider = canonical_builder_provider_from_plugin(plugin)
+    let plugin = resolve_builder_plugin(provider, config);
+    let builder_provider = plugin
+        .and_then(canonical_builder_provider_from_plugin)
         .or_else(|| canonical_builder_provider_from_hint(provider))
         .ok_or_else(|| {
             DittoError::InvalidResponse(format!("unsupported provider backend: {provider}"))
@@ -193,7 +193,9 @@ fn default_builder_runtime(
 
     let mut runtime_config = config.clone();
     if runtime_config.base_url.is_none() {
-        runtime_config.base_url = plugin.default_base_url.map(str::to_string);
+        if let Some(plugin) = plugin {
+            runtime_config.base_url = plugin.default_base_url.map(str::to_string);
+        }
     }
 
     Ok(BuilderRuntimeResolution {
@@ -208,9 +210,9 @@ fn resolve_builder_runtime_for_capability(
     capability: crate::CapabilityKind,
 ) -> crate::Result<BuilderRuntimeResolution> {
     let fallback = default_builder_runtime(provider, config)?;
-    let plugin = resolve_builder_plugin(provider, config).ok_or_else(|| {
-        DittoError::InvalidResponse(format!("unsupported provider backend: {}", provider.trim()))
-    })?;
+    let Some(plugin) = resolve_builder_plugin(provider, config) else {
+        return Ok(fallback);
+    };
 
     let requested_model = if capability == crate::CapabilityKind::BATCH {
         None
