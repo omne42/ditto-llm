@@ -144,12 +144,10 @@ async fn handle_anthropic_messages(
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
-            parts
-                .headers
-                .insert(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static("text/event-stream"),
-                );
+            parts.headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/event-stream"),
+            );
             parts.headers.remove("content-length");
 
             let data_stream = body
@@ -266,12 +264,10 @@ async fn handle_anthropic_messages(
 
     let mut response = axum::response::Response::new(Body::from(out_bytes));
     *response.status_mut() = status;
-    response
-        .headers_mut()
-        .insert(
-            axum::http::header::CONTENT_TYPE,
-            axum::http::HeaderValue::from_static("application/json"),
-        );
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
     if let Some(value) = request_id_header {
         response.headers_mut().insert("x-ditto-request-id", value);
     }

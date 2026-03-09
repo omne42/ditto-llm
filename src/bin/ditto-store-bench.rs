@@ -205,47 +205,51 @@ async fn run_sqlite(
 
     run_store_workload(
         "sqlite",
-        audit_ops,
-        reap_ops,
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_budget_tokens(&request_id, &key_id, limit, value)
-                    .await
-            }
+        StoreWorkloadSize {
+            audit_ops,
+            reap_ops,
         },
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
-                    .await
-            }
-        },
-        |kind, payload| {
-            let store = store.clone();
-            async move { store.append_audit_log(kind, payload).await }
-        },
-        |cutoff_ts_ms| {
-            let store = store.clone();
-            async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_budget_reservations(u64::MAX, limit, false)
-                    .await
-            }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_cost_reservations(u64::MAX, limit, false)
-                    .await
-            }
+        StoreWorkloadOps {
+            reserve_budget: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_budget_tokens(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            reserve_cost: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            append_audit: |kind, payload| {
+                let store = store.clone();
+                async move { store.append_audit_log(kind, payload).await }
+            },
+            reap_audit: |cutoff_ts_ms| {
+                let store = store.clone();
+                async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
+            },
+            reap_budget: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_budget_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
+            reap_cost: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_cost_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
         },
     )
     .await
@@ -268,47 +272,51 @@ async fn run_postgres(
 
     run_store_workload(
         "postgres",
-        audit_ops,
-        reap_ops,
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_budget_tokens(&request_id, &key_id, limit, value)
-                    .await
-            }
+        StoreWorkloadSize {
+            audit_ops,
+            reap_ops,
         },
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
-                    .await
-            }
-        },
-        |kind, payload| {
-            let store = store.clone();
-            async move { store.append_audit_log(kind, payload).await }
-        },
-        |cutoff_ts_ms| {
-            let store = store.clone();
-            async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_budget_reservations(u64::MAX, limit, false)
-                    .await
-            }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_cost_reservations(u64::MAX, limit, false)
-                    .await
-            }
+        StoreWorkloadOps {
+            reserve_budget: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_budget_tokens(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            reserve_cost: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            append_audit: |kind, payload| {
+                let store = store.clone();
+                async move { store.append_audit_log(kind, payload).await }
+            },
+            reap_audit: |cutoff_ts_ms| {
+                let store = store.clone();
+                async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
+            },
+            reap_budget: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_budget_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
+            reap_cost: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_cost_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
         },
     )
     .await
@@ -331,50 +339,80 @@ async fn run_mysql(
 
     run_store_workload(
         "mysql",
-        audit_ops,
-        reap_ops,
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_budget_tokens(&request_id, &key_id, limit, value)
-                    .await
-            }
+        StoreWorkloadSize {
+            audit_ops,
+            reap_ops,
         },
-        |request_id, key_id, limit, value| {
-            let store = store.clone();
-            async move {
-                store
-                    .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
-                    .await
-            }
-        },
-        |kind, payload| {
-            let store = store.clone();
-            async move { store.append_audit_log(kind, payload).await }
-        },
-        |cutoff_ts_ms| {
-            let store = store.clone();
-            async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_budget_reservations(u64::MAX, limit, false)
-                    .await
-            }
-        },
-        |limit| {
-            let store = store.clone();
-            async move {
-                store
-                    .reap_stale_cost_reservations(u64::MAX, limit, false)
-                    .await
-            }
+        StoreWorkloadOps {
+            reserve_budget: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_budget_tokens(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            reserve_cost: |request_id: String, key_id: String, limit, value| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reserve_cost_usd_micros(&request_id, &key_id, limit, value)
+                        .await
+                }
+            },
+            append_audit: |kind, payload| {
+                let store = store.clone();
+                async move { store.append_audit_log(kind, payload).await }
+            },
+            reap_audit: |cutoff_ts_ms| {
+                let store = store.clone();
+                async move { store.reap_audit_logs_before(cutoff_ts_ms).await }
+            },
+            reap_budget: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_budget_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
+            reap_cost: |limit| {
+                let store = store.clone();
+                async move {
+                    store
+                        .reap_stale_cost_reservations(u64::MAX, limit, false)
+                        .await
+                }
+            },
         },
     )
     .await
+}
+
+#[cfg(feature = "gateway")]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+))]
+struct StoreWorkloadSize {
+    audit_ops: usize,
+    reap_ops: usize,
+}
+
+#[cfg(feature = "gateway")]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+))]
+struct StoreWorkloadOps<FB, FC, FA, FRA, FRB, FRC> {
+    reserve_budget: FB,
+    reserve_cost: FC,
+    append_audit: FA,
+    reap_audit: FRA,
+    reap_budget: FRB,
+    reap_cost: FRC,
 }
 
 #[cfg(feature = "gateway")]
@@ -404,14 +442,8 @@ async fn run_store_workload<
     RCE,
 >(
     store_name: &str,
-    audit_ops: usize,
-    reap_ops: usize,
-    reserve_budget: FB,
-    reserve_cost: FC,
-    append_audit: FA,
-    reap_audit: FRA,
-    reap_budget: FRB,
-    reap_cost: FRC,
+    workload: StoreWorkloadSize,
+    ops: StoreWorkloadOps<FB, FC, FA, FRA, FRB, FRC>,
 ) -> Result<StoreBenchResult, Box<dyn std::error::Error>>
 where
     FB: Fn(String, String, u64, u64) -> FutB,
@@ -433,6 +465,19 @@ where
     RBE: std::error::Error + Send + Sync + 'static,
     RCE: std::error::Error + Send + Sync + 'static,
 {
+    let StoreWorkloadSize {
+        audit_ops,
+        reap_ops,
+    } = workload;
+    let StoreWorkloadOps {
+        reserve_budget,
+        reserve_cost,
+        append_audit,
+        reap_audit,
+        reap_budget,
+        reap_cost,
+    } = ops;
+
     let base_ms = now_millis_u64();
     let key_id = format!("bench-key-{store_name}-{base_ms}");
     let limit = u64::try_from(reap_ops)

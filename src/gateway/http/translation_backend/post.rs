@@ -1,6 +1,6 @@
             {
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_backend_in_flight_dec(backend_name);
                 metrics.observe_proxy_backend_request_duration(
@@ -28,7 +28,7 @@
             let _ = spent_cost_usd_micros;
 
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let duration = metrics_timer_start.elapsed();
                 let mut metrics = metrics.lock().await;
                 if spend_tokens {
@@ -128,25 +128,25 @@
                     (virtual_key_id.as_deref(), spent_cost_usd_micros)
                 {
                     #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.sqlite_store.as_ref() {
+                    if let Some(store) = state.stores.sqlite.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-postgres")]
-                    if let Some(store) = state.postgres_store.as_ref() {
+                    if let Some(store) = state.stores.postgres.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-mysql")]
-                    if let Some(store) = state.mysql_store.as_ref() {
+                    if let Some(store) = state.stores.mysql.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.redis_store.as_ref() {
+                    if let Some(store) = state.stores.redis.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                             .await;

@@ -6,17 +6,17 @@
 
         #[cfg(feature = "gateway-proxy-cache")]
         let should_attempt_buffer_for_cache =
-            status.is_success() && proxy_cache_key.is_some() && state.proxy_cache_config.is_some();
+            status.is_success() && proxy_cache_key.is_some() && state.proxy.cache_config.is_some();
 
         let should_attempt_buffer_for_usage =
-            content_type.starts_with("application/json") && state.proxy_usage_max_body_bytes > 0;
+            content_type.starts_with("application/json") && state.proxy.usage_max_body_bytes > 0;
 
         let cache_max_buffer_bytes = {
             #[cfg(feature = "gateway-proxy-cache")]
             {
                 if should_attempt_buffer_for_cache {
                     state
-                        .proxy_cache_config
+                        .proxy.cache_config
                         .as_ref()
                         .map(|config| config.max_body_bytes)
                         .unwrap_or(1024 * 1024)
@@ -31,7 +31,7 @@
         };
 
         let usage_max_buffer_bytes = if should_attempt_buffer_for_usage {
-            state.proxy_usage_max_body_bytes
+            state.proxy.usage_max_body_bytes
         } else {
             0
         };
@@ -142,7 +142,7 @@
                         .unwrap_or(request_model)
                 })
                 .and_then(|cost_model| {
-                    state.pricing.as_ref().and_then(|pricing| {
+                    state.proxy.pricing.as_ref().and_then(|pricing| {
                         let usage = observed_usage?;
                         let input = usage.input_tokens?;
                         let output = usage.output_tokens?;
@@ -264,25 +264,25 @@
                 (virtual_key_id.as_deref(), spent_cost_usd_micros)
             {
                 #[cfg(feature = "gateway-store-sqlite")]
-                if let Some(store) = state.sqlite_store.as_ref() {
+                if let Some(store) = state.stores.sqlite.as_ref() {
                     let _ = store
                         .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                         .await;
                 }
                 #[cfg(feature = "gateway-store-postgres")]
-                if let Some(store) = state.postgres_store.as_ref() {
+                if let Some(store) = state.stores.postgres.as_ref() {
                     let _ = store
                         .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                         .await;
                 }
                 #[cfg(feature = "gateway-store-mysql")]
-                if let Some(store) = state.mysql_store.as_ref() {
+                if let Some(store) = state.stores.mysql.as_ref() {
                     let _ = store
                         .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                         .await;
                 }
                 #[cfg(feature = "gateway-store-redis")]
-                if let Some(store) = state.redis_store.as_ref() {
+                if let Some(store) = state.stores.redis.as_ref() {
                     let _ = store
                         .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                         .await;
@@ -366,7 +366,9 @@
 
         #[cfg(feature = "gateway-proxy-cache")]
         if should_attempt_buffer_for_cache && status.is_success() {
-            if let Some(cache_key) = proxy_cache_key.as_deref() {
+            if let (Some(cache_key), Some(cache_metadata)) =
+                (proxy_cache_key.as_deref(), proxy_cache_metadata.as_ref())
+            {
                 if let ProxyResponseBody::Bytes(bytes) = &response_body {
                     let cached = CachedProxyResponse {
                         status: status.as_u16(),
@@ -374,7 +376,14 @@
                         body: bytes.clone(),
                         backend: backend_name.clone(),
                     };
-                    store_proxy_cache_response(state, cache_key, cached, now_epoch_seconds()).await;
+                    store_proxy_cache_response(
+                        state,
+                        cache_key,
+                        cached,
+                        cache_metadata,
+                        now_epoch_seconds(),
+                    )
+                    .await;
                 }
             }
         }

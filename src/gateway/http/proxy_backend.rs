@@ -53,6 +53,8 @@ async fn attempt_proxy_backend(
 
     #[cfg(feature = "gateway-proxy-cache")]
     let proxy_cache_key = params.proxy_cache_key;
+    #[cfg(feature = "gateway-proxy-cache")]
+    let proxy_cache_metadata = params.proxy_cache_metadata;
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_path = params.metrics_path;
@@ -74,7 +76,7 @@ async fn attempt_proxy_backend(
     #[cfg(not(feature = "gateway-routing-advanced"))]
     let _ = max_attempts;
 
-    let backend = match state.proxy_backends.get(&backend_name) {
+    let backend = match state.backends.proxy_backends.get(&backend_name) {
         Some(backend) => backend.clone(),
         None => {
             return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
@@ -100,7 +102,7 @@ async fn attempt_proxy_backend(
     let backend_timer_start = Instant::now();
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
         let mut metrics = metrics.lock().await;
         metrics.record_proxy_backend_attempt(&backend_name);
         metrics.record_proxy_backend_in_flight_inc(&backend_name);
@@ -170,7 +172,7 @@ async fn attempt_proxy_backend(
         Ok(response) => response,
         Err(err) => {
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_backend_in_flight_dec(&backend_name);
                 metrics.observe_proxy_backend_request_duration(
@@ -179,56 +181,55 @@ async fn attempt_proxy_backend(
                 );
             }
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 metrics
                     .lock()
                     .await
                     .record_proxy_backend_failure(&backend_name);
             }
             #[cfg(feature = "gateway-routing-advanced")]
-            record_proxy_backend_failure(
-                state,
-                &backend_name,
-                _now_epoch_seconds,
-                FailureKind::Network,
-                err.to_string(),
-            )
-            .await;
+            let failure_kind = classify_proxy_backend_transport_failure(&err);
+            #[cfg(feature = "gateway-routing-advanced")]
+            let failure_message = err.to_string();
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-routing-advanced")]
             {
-                let will_fallback = idx + 1 < max_attempts;
-                emit_json_log(
+                let decision = retry_config.decision_for_failure(failure_kind);
+                record_proxy_backend_failure(
                     state,
-                    "proxy.fallback",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "backend": &backend_name,
-                        "reason": "network_error",
-                        "will_fallback": will_fallback,
-                        "attempted_backends": &attempted_backends,
-                    }),
-                );
-
-                #[cfg(feature = "sdk")]
-                emit_devtools_log(
+                    &backend_name,
+                    _now_epoch_seconds,
+                    failure_kind,
+                    failure_message,
+                )
+                .await;
+                emit_proxy_backend_decision_logs(
                     state,
-                    "proxy.fallback",
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "backend": &backend_name,
-                        "reason": "network_error",
-                        "will_fallback": will_fallback,
-                        "path": path_and_query,
-                    }),
-                );
+                    decision,
+                    ProxyDecisionLogContext {
+                        request_id: &request_id,
+                        backend_name: &backend_name,
+                        path_and_query,
+                        attempted_backends,
+                        idx,
+                        max_attempts,
+                        status_code: None,
+                    },
+                )
+                .await;
+                return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
+                    BackendAttemptOutcome::Continue(Some(mapped))
+                } else {
+                    BackendAttemptOutcome::Stop(mapped)
+                });
             }
+            #[cfg(not(feature = "gateway-routing-advanced"))]
             return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
         }
     };
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
         let mut metrics = metrics.lock().await;
         metrics.record_proxy_backend_in_flight_dec(&backend_name);
         metrics
@@ -321,7 +322,7 @@ async fn attempt_proxy_backend(
             let shim_timer_start = Instant::now();
 
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_backend_attempt(&backend_name);
                 metrics.record_proxy_backend_in_flight_inc(&backend_name);
@@ -339,7 +340,7 @@ async fn attempt_proxy_backend(
                 Ok(response) => response,
                 Err(err) => {
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let mut metrics = metrics.lock().await;
                         metrics.record_proxy_backend_in_flight_dec(&backend_name);
                         metrics.observe_proxy_backend_request_duration(
@@ -349,49 +350,48 @@ async fn attempt_proxy_backend(
                         metrics.record_proxy_backend_failure(&backend_name);
                     }
                     #[cfg(feature = "gateway-routing-advanced")]
-                    record_proxy_backend_failure(
-                        state,
-                        &backend_name,
-                        _now_epoch_seconds,
-                        FailureKind::Network,
-                        err.to_string(),
-                    )
-                    .await;
+                    let failure_kind = classify_proxy_backend_transport_failure(&err);
+                    #[cfg(feature = "gateway-routing-advanced")]
+                    let failure_message = err.to_string();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-routing-advanced")]
                     {
-                        let will_fallback = idx + 1 < max_attempts;
-                        emit_json_log(
+                        let decision = retry_config.decision_for_failure(failure_kind);
+                        record_proxy_backend_failure(
                             state,
-                            "proxy.fallback",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "backend": &backend_name,
-                                "reason": "network_error",
-                                "will_fallback": will_fallback,
-                                "attempted_backends": &attempted_backends,
-                            }),
-                        );
-
-                        #[cfg(feature = "sdk")]
-                        emit_devtools_log(
+                            &backend_name,
+                            _now_epoch_seconds,
+                            failure_kind,
+                            failure_message,
+                        )
+                        .await;
+                        emit_proxy_backend_decision_logs(
                             state,
-                            "proxy.fallback",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "backend": &backend_name,
-                                "reason": "network_error",
-                                "will_fallback": will_fallback,
-                                "path": path_and_query,
-                            }),
-                        );
+                            decision,
+                            ProxyDecisionLogContext {
+                                request_id: &request_id,
+                                backend_name: &backend_name,
+                                path_and_query,
+                                attempted_backends,
+                                idx,
+                                max_attempts,
+                                status_code: None,
+                            },
+                        )
+                        .await;
+                        return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
+                            BackendAttemptOutcome::Continue(Some(mapped))
+                        } else {
+                            BackendAttemptOutcome::Stop(mapped)
+                        });
                     }
+                    #[cfg(not(feature = "gateway-routing-advanced"))]
                     return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
                 }
             };
 
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let mut metrics = metrics.lock().await;
                 metrics.record_proxy_backend_in_flight_dec(&backend_name);
                 metrics.observe_proxy_backend_request_duration(
@@ -405,99 +405,56 @@ async fn attempt_proxy_backend(
             #[cfg(feature = "gateway-routing-advanced")]
             let status_code = status.as_u16();
             #[cfg(feature = "gateway-routing-advanced")]
-            let should_retry_status = retry_config.should_retry_status(status_code);
+            let failure_kind = FailureKind::Status(status_code);
             #[cfg(feature = "gateway-routing-advanced")]
-            let should_fallback_status = retry_config.should_fallback_status(status_code);
+            let decision = retry_config.decision_for_failure(failure_kind);
+            #[cfg(feature = "gateway-routing-advanced")]
+            let should_record_status_failure =
+                should_record_proxy_status_failure(state, retry_config, failure_kind, status);
 
             #[cfg(feature = "gateway-routing-advanced")]
-            if should_fallback_status && idx + 1 < max_attempts {
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
-                    metrics
-                        .lock()
-                        .await
-                        .record_proxy_backend_failure(&backend_name);
-                }
+            if should_record_status_failure {
                 record_proxy_backend_failure(
                     state,
                     &backend_name,
                     _now_epoch_seconds,
-                    FailureKind::RetryableStatus(status_code),
+                    failure_kind,
                     format!("status {}", status_code),
                 )
                 .await;
-
-                emit_json_log(
+                emit_proxy_backend_decision_logs(
                     state,
-                    if should_retry_status {
-                        "proxy.retry"
-                    } else {
-                        "proxy.fallback"
+                    decision,
+                    ProxyDecisionLogContext {
+                        request_id: &request_id,
+                        backend_name: &backend_name,
+                        path_and_query,
+                        attempted_backends,
+                        idx,
+                        max_attempts,
+                        status_code: Some(status_code),
                     },
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "backend": &backend_name,
-                        "status": status_code,
-                        "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
-                        "attempted_backends": &attempted_backends,
-                    }),
-                );
-
-                #[cfg(feature = "sdk")]
-                emit_devtools_log(
-                    state,
-                    if should_retry_status {
-                        "proxy.retry"
-                    } else {
-                        "proxy.fallback"
-                    },
-                    serde_json::json!({
-                        "request_id": &request_id,
-                        "backend": &backend_name,
-                        "status": status_code,
-                        "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
-                        "path": path_and_query,
-                    }),
-                );
-
-                return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                    status,
-                    "api_error",
-                    Some("backend_error"),
-                    format!(
-                        "{} status {}",
-                        if should_retry_status {
-                            "retryable"
-                        } else {
-                            "fallback"
-                        },
-                        status_code
-                    ),
-                ))));
-            }
-
-            #[cfg(feature = "gateway-routing-advanced")]
-            if retry_config.is_failure_status(status_code) {
-                record_proxy_backend_failure(
-                    state,
-                    &backend_name,
-                    _now_epoch_seconds,
-                    FailureKind::RetryableStatus(status_code),
-                    format!("status {}", status_code),
                 )
                 .await;
             } else {
                 record_proxy_backend_success(state, &backend_name).await;
             }
 
+            #[cfg(feature = "gateway-routing-advanced")]
+            if decision.should_attempt_next_backend(idx, max_attempts) {
+                return Ok(BackendAttemptOutcome::Continue(Some(
+                    openai_status_routing_error(status, decision),
+                )));
+            }
+
             let spend_tokens = status.is_success();
 
             #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.prometheus_metrics.as_ref() {
+            if let Some(metrics) = state.proxy.metrics.as_ref() {
                 let is_failure_status = {
                     #[cfg(feature = "gateway-routing-advanced")]
                     {
-                        retry_config.is_failure_status(status.as_u16())
+                        should_record_status_failure
                     }
                     #[cfg(not(feature = "gateway-routing-advanced"))]
                     {
@@ -552,7 +509,11 @@ async fn attempt_proxy_backend(
                     #[cfg(feature = "gateway-costing")]
                     if !use_persistent_budget {
                         if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                            state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
+                            state.spend_budget_cost(
+                                &virtual_key_id,
+                                &budget,
+                                charge_cost_usd_micros,
+                            );
                             if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
                                 state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                             }
@@ -634,25 +595,25 @@ async fn attempt_proxy_backend(
                     (virtual_key_id.as_deref(), charge_cost_usd_micros)
                 {
                     #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.sqlite_store.as_ref() {
+                    if let Some(store) = state.stores.sqlite.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-postgres")]
-                    if let Some(store) = state.postgres_store.as_ref() {
+                    if let Some(store) = state.stores.postgres.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-mysql")]
-                    if let Some(store) = state.mysql_store.as_ref() {
+                    if let Some(store) = state.stores.mysql.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
                             .await;
                     }
                     #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.redis_store.as_ref() {
+                    if let Some(store) = state.stores.redis.as_ref() {
                         let _ = store
                             .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
                             .await;
@@ -722,16 +683,26 @@ async fn attempt_proxy_backend(
 
             if status.is_success() {
                 match responses_shim_response(
-                    state,
+                    ProxyResponseContext {
+                        state,
+                        backend: &backend_name,
+                        request_id: &request_id,
+                        #[cfg(feature = "gateway-metrics-prometheus")]
+                        metrics_path,
+                        cache_key: {
+                            #[cfg(feature = "gateway-proxy-cache")]
+                            {
+                                proxy_cache_key.as_deref()
+                            }
+                            #[cfg(not(feature = "gateway-proxy-cache"))]
+                            {
+                                None
+                            }
+                        },
+                        #[cfg(feature = "gateway-proxy-cache")]
+                        cache_metadata: proxy_cache_metadata.as_ref(),
+                    },
                     shim_response,
-                    backend_name.clone(),
-                    request_id.clone(),
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    metrics_path,
-                    #[cfg(feature = "gateway-proxy-cache")]
-                    proxy_cache_key.as_deref(),
-                    #[cfg(not(feature = "gateway-proxy-cache"))]
-                    None,
                     shim_permits,
                 )
                 .await
@@ -744,16 +715,26 @@ async fn attempt_proxy_backend(
             } else {
                 return Ok(BackendAttemptOutcome::Response(
                     proxy_response(
-                        state,
+                        ProxyResponseContext {
+                            state,
+                            backend: &backend_name,
+                            request_id: &request_id,
+                            #[cfg(feature = "gateway-metrics-prometheus")]
+                            metrics_path,
+                            cache_key: {
+                                #[cfg(feature = "gateway-proxy-cache")]
+                                {
+                                    proxy_cache_key.as_deref()
+                                }
+                                #[cfg(not(feature = "gateway-proxy-cache"))]
+                                {
+                                    None
+                                }
+                            },
+                            #[cfg(feature = "gateway-proxy-cache")]
+                            cache_metadata: proxy_cache_metadata.as_ref(),
+                        },
                         shim_response,
-                        backend_name,
-                        request_id.clone(),
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        metrics_path,
-                        #[cfg(feature = "gateway-proxy-cache")]
-                        proxy_cache_key.as_deref(),
-                        #[cfg(not(feature = "gateway-proxy-cache"))]
-                        None,
                         shim_permits,
                     )
                     .await,
@@ -765,86 +746,56 @@ async fn attempt_proxy_backend(
     #[cfg(feature = "gateway-routing-advanced")]
     let status_code = status.as_u16();
     #[cfg(feature = "gateway-routing-advanced")]
-    let should_retry_status = retry_config.should_retry_status(status_code);
+    let failure_kind = FailureKind::Status(status_code);
     #[cfg(feature = "gateway-routing-advanced")]
-    let should_fallback_status = retry_config.should_fallback_status(status_code);
+    let decision = retry_config.decision_for_failure(failure_kind);
+    #[cfg(feature = "gateway-routing-advanced")]
+    let should_record_status_failure =
+        should_record_proxy_status_failure(state, retry_config, failure_kind, status);
 
     #[cfg(feature = "gateway-routing-advanced")]
-    if should_fallback_status && idx + 1 < max_attempts {
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
-            metrics
-                .lock()
-                .await
-                .record_proxy_backend_failure(&backend_name);
-        }
+    if should_record_status_failure {
         record_proxy_backend_failure(
             state,
             &backend_name,
             _now_epoch_seconds,
-            FailureKind::RetryableStatus(status_code),
+            failure_kind,
             format!("status {}", status_code),
         )
         .await;
-
-        emit_json_log(
+        emit_proxy_backend_decision_logs(
             state,
-            if should_retry_status {
-                "proxy.retry"
-            } else {
-                "proxy.fallback"
+            decision,
+            ProxyDecisionLogContext {
+                request_id: &request_id,
+                backend_name: &backend_name,
+                path_and_query,
+                attempted_backends,
+                idx,
+                max_attempts,
+                status_code: Some(status_code),
             },
-            serde_json::json!({
-                "request_id": &request_id,
-                "backend": &backend_name,
-                "status": status_code,
-                "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
-                "attempted_backends": &attempted_backends,
-            }),
-        );
-
-        #[cfg(feature = "sdk")]
-        emit_devtools_log(
-            state,
-            if should_retry_status {
-                "proxy.retry"
-            } else {
-                "proxy.fallback"
-            },
-            serde_json::json!({
-                "request_id": &request_id,
-                "backend": &backend_name,
-                "status": status_code,
-                "reason": if should_retry_status { "retry_status" } else { "fallback_status" },
-                "path": path_and_query,
-            }),
-        );
-
-        return Ok(BackendAttemptOutcome::Continue(None));
-    }
-
-    #[cfg(feature = "gateway-routing-advanced")]
-    if retry_config.is_failure_status(status_code) {
-        record_proxy_backend_failure(
-            state,
-            &backend_name,
-            _now_epoch_seconds,
-            FailureKind::RetryableStatus(status_code),
-            format!("status {}", status_code),
         )
         .await;
     } else {
         record_proxy_backend_success(state, &backend_name).await;
     }
 
+    #[cfg(feature = "gateway-routing-advanced")]
+    if decision.should_attempt_next_backend(idx, max_attempts) {
+        return Ok(BackendAttemptOutcome::Continue(Some(
+            openai_status_routing_error(status, decision),
+        )));
+    }
+
     let spend_tokens = status.is_success();
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
         let is_failure_status = {
             #[cfg(feature = "gateway-routing-advanced")]
             {
-                retry_config.is_failure_status(status.as_u16())
+                should_record_status_failure
             }
             #[cfg(not(feature = "gateway-routing-advanced"))]
             {
@@ -880,4 +831,101 @@ async fn attempt_proxy_backend(
     }
 
     include!("proxy_backend/nonstream.rs")
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn classify_proxy_backend_transport_failure(err: &GatewayError) -> FailureKind {
+    match err {
+        GatewayError::BackendTimeout { .. } => FailureKind::Timeout,
+        _ => FailureKind::Network,
+    }
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn should_record_proxy_status_failure(
+    state: &GatewayHttpState,
+    retry_config: &crate::gateway::ProxyRetryConfig,
+    kind: FailureKind,
+    status: StatusCode,
+) -> bool {
+    status.is_server_error()
+        || retry_config.action_for_failure(kind)
+            != crate::gateway::proxy_routing::ProxyFailureAction::None
+        || state
+            .proxy
+            .routing
+            .as_ref()
+            .map(|config| config.circuit_breaker.should_count_failure(kind))
+            .unwrap_or(false)
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+struct ProxyDecisionLogContext<'a> {
+    request_id: &'a str,
+    backend_name: &'a str,
+    path_and_query: &'a str,
+    attempted_backends: &'a [String],
+    idx: usize,
+    max_attempts: usize,
+    status_code: Option<u16>,
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+async fn emit_proxy_backend_decision_logs(
+    state: &GatewayHttpState,
+    decision: crate::gateway::proxy_routing::ProxyFailureDecision,
+    ctx: ProxyDecisionLogContext<'_>,
+) {
+    let will_attempt_next_backend = decision.should_attempt_next_backend(ctx.idx, ctx.max_attempts);
+    emit_json_log(
+        state,
+        decision.event_name(),
+        serde_json::json!({
+            "request_id": ctx.request_id,
+            "backend": ctx.backend_name,
+            "action": decision.action.as_str(),
+            "failure_kind": decision.kind.as_str(),
+            "reason": decision.reason_code(),
+            "status": ctx.status_code.or_else(|| decision.kind.status_code()),
+            "path": ctx.path_and_query,
+            "will_attempt_next_backend": will_attempt_next_backend,
+            "attempted_backends": ctx.attempted_backends,
+        }),
+    );
+
+    #[cfg(feature = "sdk")]
+    emit_devtools_log(
+        state,
+        decision.event_name(),
+        serde_json::json!({
+            "request_id": ctx.request_id,
+            "backend": ctx.backend_name,
+            "action": decision.action.as_str(),
+            "failure_kind": decision.kind.as_str(),
+            "reason": decision.reason_code(),
+            "status": ctx.status_code.or_else(|| decision.kind.status_code()),
+            "will_attempt_next_backend": will_attempt_next_backend,
+            "path": ctx.path_and_query,
+        }),
+    );
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn openai_status_routing_error(
+    status: StatusCode,
+    decision: crate::gateway::proxy_routing::ProxyFailureDecision,
+) -> (StatusCode, Json<OpenAiErrorResponse>) {
+    let message = match decision.action {
+        crate::gateway::proxy_routing::ProxyFailureAction::Retry => {
+            format!("retryable upstream status {}", status.as_u16())
+        }
+        crate::gateway::proxy_routing::ProxyFailureAction::Fallback => {
+            format!("fallbackable upstream status {}", status.as_u16())
+        }
+        crate::gateway::proxy_routing::ProxyFailureAction::None => {
+            format!("upstream status {}", status.as_u16())
+        }
+    };
+
+    openai_error(status, "api_error", Some("backend_error"), message)
 }

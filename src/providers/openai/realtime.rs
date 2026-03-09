@@ -1,0 +1,229 @@
+use std::collections::BTreeMap;
+
+use async_trait::async_trait;
+
+use crate::providers::openai_like;
+
+use crate::config::{Env, ProviderConfig, RequestAuth};
+use crate::realtime::{RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest};
+use crate::{DittoError, Result};
+
+const OPENAI_REALTIME_BETA_HEADER: &str = "realtime=v1";
+
+#[derive(Clone)]
+pub struct OpenAIRealtime {
+    client: openai_like::OpenAiLikeClient,
+}
+
+impl OpenAIRealtime {
+    pub fn new(api_key: impl Into<String>) -> Self {
+        Self {
+            client: openai_like::OpenAiLikeClient::new(api_key),
+        }
+    }
+
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.client = self.client.with_http_client(http);
+        self
+    }
+
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.client = self.client.with_base_url(base_url);
+        self
+    }
+
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.client = self.client.with_model(model);
+        self
+    }
+
+    pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY"];
+        Ok(Self {
+            client: openai_like::OpenAiLikeClient::from_config_required(config, env, DEFAULT_KEYS)
+                .await?,
+        })
+    }
+
+    fn resolve_model<'a>(&'a self, request: &'a RealtimeSessionRequest) -> Result<&'a str> {
+        if let Some(model) = request
+            .model
+            .as_deref()
+            .filter(|model| !model.trim().is_empty())
+        {
+            return Ok(model);
+        }
+        if !self.client.model.trim().is_empty() {
+            return Ok(self.client.model.as_str());
+        }
+        Err(DittoError::InvalidResponse(
+            "openai realtime model is not set (set request.model or OpenAIRealtime::with_model)"
+                .to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl RealtimeSessionModel for OpenAIRealtime {
+    fn provider(&self) -> &str {
+        "openai"
+    }
+
+    fn model_id(&self) -> &str {
+        self.client.model.as_str()
+    }
+
+    async fn prepare_session(
+        &self,
+        request: RealtimeSessionRequest,
+    ) -> Result<RealtimeSessionConnection> {
+        let model = self.resolve_model(&request)?.to_string();
+        let mut query_params = BTreeMap::from([("model".to_string(), model.clone())]);
+        query_params.extend(self.client.http_query_params.clone());
+        query_params.extend(request.query_params);
+
+        let mut headers = BTreeMap::from([(
+            "openai-beta".to_string(),
+            OPENAI_REALTIME_BETA_HEADER.to_string(),
+        )]);
+        if let Some(auth) = self.client.auth.as_ref() {
+            match auth {
+                RequestAuth::Http(http) => {
+                    let value = http.value.to_str().map_err(|err| {
+                        DittoError::InvalidResponse(format!(
+                            "invalid realtime auth header value for {}: {err}",
+                            http.header.as_str()
+                        ))
+                    })?;
+                    headers.insert(http.header.as_str().to_string(), value.to_string());
+                }
+                RequestAuth::QueryParam(auth) => {
+                    query_params.insert(auth.param.clone(), auth.value.clone());
+                }
+            }
+        }
+
+        let base_url = crate::utils::http::to_websocket_base_url(&self.client.base_url);
+        let mut url = reqwest::Url::parse(&openai_like::join_endpoint(&base_url, "realtime"))
+            .map_err(|err| {
+                DittoError::InvalidResponse(format!(
+                    "invalid realtime websocket url {base_url:?}: {err}"
+                ))
+            })?;
+        {
+            let mut pairs = url.query_pairs_mut();
+            for (name, value) in &query_params {
+                pairs.append_pair(name, value);
+            }
+        }
+
+        Ok(RealtimeSessionConnection {
+            url: url.to_string(),
+            headers,
+            setup_payload: None,
+            provider_metadata: Some(serde_json::json!({
+                "provider": self.provider(),
+                "model": model,
+                "transport": "websocket"
+            })),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn from_config_resolves_auth_and_model() -> Result<()> {
+        let config = ProviderConfig {
+            base_url: Some("https://api.openai.com/v1".to_string()),
+            default_model: Some("gpt-realtime".to_string()),
+            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+                keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env::parse_dotenv("DITTO_TEST_OPENAI_KEY=sk-test\n");
+
+        let client = OpenAIRealtime::from_config(&config, &env).await?;
+        assert_eq!(client.provider(), "openai");
+        assert_eq!(client.model_id(), "gpt-realtime");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prepare_session_builds_websocket_url_and_headers() -> Result<()> {
+        let client = OpenAIRealtime::new("sk-test")
+            .with_base_url("https://api.openai.com/v1")
+            .with_model("gpt-realtime");
+
+        let session = client
+            .prepare_session(RealtimeSessionRequest::default())
+            .await?;
+
+        assert_eq!(
+            session.url,
+            "wss://api.openai.com/v1/realtime?model=gpt-realtime"
+        );
+        assert_eq!(
+            session.headers.get("authorization").map(String::as_str),
+            Some("Bearer sk-test")
+        );
+        assert_eq!(
+            session.headers.get("openai-beta").map(String::as_str),
+            Some("realtime=v1")
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prepare_session_preserves_query_auth_and_extra_params() -> Result<()> {
+        let config = ProviderConfig {
+            base_url: Some("https://proxy.example/v1".to_string()),
+            default_model: Some("gpt-realtime-mini".to_string()),
+            auth: Some(crate::ProviderAuth::QueryParamEnv {
+                param: "api_key".to_string(),
+                keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
+                prefix: None,
+            }),
+            http_query_params: std::collections::BTreeMap::from([(
+                "region".to_string(),
+                "us".to_string(),
+            )]),
+            ..ProviderConfig::default()
+        };
+        let env = Env::parse_dotenv("DITTO_TEST_OPENAI_KEY=sk-test\n");
+        let client = OpenAIRealtime::from_config(&config, &env).await?;
+
+        let session = client
+            .prepare_session(RealtimeSessionRequest {
+                model: None,
+                query_params: BTreeMap::from([("trace".to_string(), "1".to_string())]),
+            })
+            .await?;
+
+        let parsed = reqwest::Url::parse(&session.url)
+            .expect("realtime session url should remain a valid websocket url");
+        assert_eq!(parsed.scheme(), "wss");
+        assert_eq!(parsed.host_str(), Some("proxy.example"));
+        assert_eq!(parsed.path(), "/v1/realtime");
+        let params = parsed
+            .query_pairs()
+            .into_owned()
+            .collect::<std::collections::BTreeMap<String, String>>();
+        assert_eq!(
+            params.get("model").map(String::as_str),
+            Some("gpt-realtime-mini")
+        );
+        assert_eq!(params.get("region").map(String::as_str), Some("us"));
+        assert_eq!(params.get("trace").map(String::as_str), Some("1"));
+        assert_eq!(params.get("api_key").map(String::as_str), Some("sk-test"));
+        assert_eq!(session.headers.get("authorization"), None);
+        assert_eq!(
+            session.headers.get("openai-beta").map(String::as_str),
+            Some("realtime=v1")
+        );
+        Ok(())
+    }
+}

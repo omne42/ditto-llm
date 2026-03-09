@@ -9,12 +9,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(feature = "gateway-metrics-prometheus")]
 use std::time::Instant;
 
+use axum::Json;
 use axum::body::{Body, to_bytes};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{any, get, post, put};
-use axum::{Json, Router};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use futures_util::stream;
@@ -40,7 +39,10 @@ use crate::sdk::devtools::DevtoolsLogger;
 use super::costing::PricingTable;
 
 #[cfg(feature = "gateway-proxy-cache")]
-use super::proxy_cache::{CachedProxyResponse, ProxyCacheConfig, ProxyResponseCache};
+use super::proxy_cache::{
+    CachedProxyResponse, ProxyCacheConfig, ProxyCacheEntryMetadata, ProxyCachePurgeSelector,
+    ProxyCacheStreamRecorder, ProxyResponseCache,
+};
 
 #[cfg(feature = "gateway-metrics-prometheus")]
 use super::metrics_prometheus::{PrometheusMetrics, PrometheusMetricsConfig};
@@ -93,7 +95,7 @@ use super::CostLedgerRecord;
 use super::budget::BudgetTracker;
 use super::interop;
 use super::limits::RateLimiter;
-use super::observability::Observability;
+use super::observability::{GatewayObservabilityPolicy, GatewayObservabilitySink, Observability};
 use super::redaction::GatewayRedactor;
 use super::responses_shim;
 #[cfg(feature = "gateway-translation")]
@@ -239,6 +241,97 @@ fn hex_lower_bytes(bytes: &[u8]) -> String {
     out
 }
 
+#[derive(Clone, Default)]
+struct GatewayAdminState {
+    admin_token: Option<String>,
+    admin_read_token: Option<String>,
+    admin_tenant_tokens: Vec<AdminTenantToken>,
+    state_file: Option<PathBuf>,
+    json_logs: bool,
+    #[cfg(feature = "sdk")]
+    devtools: Option<DevtoolsLogger>,
+}
+
+#[derive(Clone)]
+struct GatewayRuntimeBackends {
+    proxy_backends: Arc<HashMap<String, ProxyBackend>>,
+    a2a_agents: Arc<HashMap<String, A2aAgentState>>,
+    mcp_servers: Arc<HashMap<String, McpServerState>>,
+    #[cfg(feature = "gateway-translation")]
+    translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
+}
+
+impl Default for GatewayRuntimeBackends {
+    fn default() -> Self {
+        Self {
+            proxy_backends: Arc::new(HashMap::new()),
+            a2a_agents: Arc::new(HashMap::new()),
+            mcp_servers: Arc::new(HashMap::new()),
+            #[cfg(feature = "gateway-translation")]
+            translation_backends: Arc::new(HashMap::new()),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+struct GatewayPersistenceState {
+    #[cfg(feature = "gateway-store-sqlite")]
+    sqlite: Option<SqliteStore>,
+    #[cfg(feature = "gateway-store-postgres")]
+    postgres: Option<PostgresStore>,
+    #[cfg(feature = "gateway-store-mysql")]
+    mysql: Option<MySqlStore>,
+    #[cfg(feature = "gateway-store-redis")]
+    redis: Option<RedisStore>,
+}
+
+#[derive(Clone)]
+struct GatewayProxyRuntimeState {
+    #[cfg(feature = "gateway-costing")]
+    pricing: Option<Arc<PricingTable>>,
+    #[cfg(feature = "gateway-proxy-cache")]
+    cache: Option<Arc<Mutex<ProxyResponseCache>>>,
+    #[cfg(feature = "gateway-proxy-cache")]
+    cache_config: Option<ProxyCacheConfig>,
+    max_body_bytes: usize,
+    usage_max_body_bytes: usize,
+    backpressure: Option<Arc<Semaphore>>,
+    backend_backpressure: Arc<HashMap<String, Arc<Semaphore>>>,
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    metrics: Option<Arc<Mutex<PrometheusMetrics>>>,
+    #[cfg(feature = "gateway-routing-advanced")]
+    routing: Option<ProxyRoutingConfig>,
+    #[cfg(feature = "gateway-routing-advanced")]
+    backend_health: Option<Arc<Mutex<HashMap<String, BackendHealth>>>>,
+    #[cfg(feature = "gateway-routing-advanced")]
+    health_check_task: Option<Arc<AbortOnDrop>>,
+}
+
+impl GatewayProxyRuntimeState {
+    fn new(backend_backpressure: HashMap<String, Arc<Semaphore>>) -> Self {
+        Self {
+            #[cfg(feature = "gateway-costing")]
+            pricing: None,
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache: None,
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_config: None,
+            max_body_bytes: 64 * 1024 * 1024,
+            usage_max_body_bytes: 1024 * 1024,
+            backpressure: None,
+            backend_backpressure: Arc::new(backend_backpressure),
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            metrics: None,
+            #[cfg(feature = "gateway-routing-advanced")]
+            routing: None,
+            #[cfg(feature = "gateway-routing-advanced")]
+            backend_health: None,
+            #[cfg(feature = "gateway-routing-advanced")]
+            health_check_task: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GatewayHttpState {
     gateway: Arc<Gateway>,
@@ -248,44 +341,11 @@ pub struct GatewayHttpState {
     observability: Arc<StdMutex<Observability>>,
     config_versions: Arc<Mutex<ConfigVersionHistory>>,
     redactor: Arc<GatewayRedactor>,
-    proxy_backends: Arc<HashMap<String, ProxyBackend>>,
-    a2a_agents: Arc<HashMap<String, A2aAgentState>>,
-    mcp_servers: Arc<HashMap<String, McpServerState>>,
-    #[cfg(feature = "gateway-translation")]
-    translation_backends: Arc<HashMap<String, super::TranslationBackend>>,
-    admin_token: Option<String>,
-    admin_read_token: Option<String>,
-    admin_tenant_tokens: Vec<AdminTenantToken>,
-    state_file: Option<PathBuf>,
-    #[cfg(feature = "gateway-store-sqlite")]
-    sqlite_store: Option<SqliteStore>,
-    #[cfg(feature = "gateway-store-postgres")]
-    postgres_store: Option<PostgresStore>,
-    #[cfg(feature = "gateway-store-mysql")]
-    mysql_store: Option<MySqlStore>,
-    #[cfg(feature = "gateway-store-redis")]
-    redis_store: Option<RedisStore>,
-    #[cfg(feature = "gateway-costing")]
-    pricing: Option<Arc<PricingTable>>,
-    #[cfg(feature = "gateway-proxy-cache")]
-    proxy_cache: Option<Arc<Mutex<ProxyResponseCache>>>,
-    #[cfg(feature = "gateway-proxy-cache")]
-    proxy_cache_config: Option<ProxyCacheConfig>,
-    proxy_max_body_bytes: usize,
-    proxy_usage_max_body_bytes: usize,
-    proxy_backpressure: Option<Arc<Semaphore>>,
-    proxy_backend_backpressure: Arc<HashMap<String, Arc<Semaphore>>>,
-    #[cfg(feature = "gateway-metrics-prometheus")]
-    prometheus_metrics: Option<Arc<Mutex<PrometheusMetrics>>>,
-    #[cfg(feature = "gateway-routing-advanced")]
-    proxy_routing: Option<ProxyRoutingConfig>,
-    #[cfg(feature = "gateway-routing-advanced")]
-    proxy_backend_health: Option<Arc<Mutex<HashMap<String, BackendHealth>>>>,
-    #[cfg(feature = "gateway-routing-advanced")]
-    proxy_health_check_task: Option<Arc<AbortOnDrop>>,
-    json_logs: bool,
-    #[cfg(feature = "sdk")]
-    devtools: Option<DevtoolsLogger>,
+    observability_policy: Arc<GatewayObservabilityPolicy>,
+    backends: GatewayRuntimeBackends,
+    admin: GatewayAdminState,
+    stores: GatewayPersistenceState,
+    proxy: GatewayProxyRuntimeState,
 }
 
 impl GatewayHttpState {
@@ -299,6 +359,10 @@ impl GatewayHttpState {
         let observability = gateway.observability.clone();
         let redactor = Arc::new(GatewayRedactor::from_config(
             &initial_config.observability.redaction,
+        ));
+        let observability_policy = Arc::new(GatewayObservabilityPolicy::new(
+            redactor.clone(),
+            &initial_config.observability.sampling,
         ));
         let mut proxy_backend_backpressure: HashMap<String, Arc<Semaphore>> = HashMap::new();
         for backend in &initial_config.backends {
@@ -322,44 +386,11 @@ impl GatewayHttpState {
                 initial_router,
             ))),
             redactor,
-            proxy_backends: Arc::new(HashMap::new()),
-            a2a_agents: Arc::new(HashMap::new()),
-            mcp_servers: Arc::new(HashMap::new()),
-            #[cfg(feature = "gateway-translation")]
-            translation_backends: Arc::new(HashMap::new()),
-            admin_token: None,
-            admin_read_token: None,
-            admin_tenant_tokens: Vec::new(),
-            state_file: None,
-            #[cfg(feature = "gateway-store-sqlite")]
-            sqlite_store: None,
-            #[cfg(feature = "gateway-store-postgres")]
-            postgres_store: None,
-            #[cfg(feature = "gateway-store-mysql")]
-            mysql_store: None,
-            #[cfg(feature = "gateway-store-redis")]
-            redis_store: None,
-            #[cfg(feature = "gateway-costing")]
-            pricing: None,
-            #[cfg(feature = "gateway-proxy-cache")]
-            proxy_cache: None,
-            #[cfg(feature = "gateway-proxy-cache")]
-            proxy_cache_config: None,
-            proxy_max_body_bytes: 64 * 1024 * 1024,
-            proxy_usage_max_body_bytes: 1024 * 1024,
-            proxy_backpressure: None,
-            proxy_backend_backpressure: Arc::new(proxy_backend_backpressure),
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            prometheus_metrics: None,
-            #[cfg(feature = "gateway-routing-advanced")]
-            proxy_routing: None,
-            #[cfg(feature = "gateway-routing-advanced")]
-            proxy_backend_health: None,
-            #[cfg(feature = "gateway-routing-advanced")]
-            proxy_health_check_task: None,
-            json_logs: false,
-            #[cfg(feature = "sdk")]
-            devtools: None,
+            observability_policy,
+            backends: GatewayRuntimeBackends::default(),
+            admin: GatewayAdminState::default(),
+            stores: GatewayPersistenceState::default(),
+            proxy: GatewayProxyRuntimeState::new(proxy_backend_backpressure),
         }
     }
 
@@ -390,6 +421,19 @@ impl GatewayHttpState {
 
     pub(crate) fn observability_snapshot(&self) -> ObservabilitySnapshot {
         lock_unpoisoned(&self.observability).snapshot()
+    }
+
+    pub(crate) fn prepare_observability_event(
+        &self,
+        sink: GatewayObservabilitySink,
+        payload: Value,
+    ) -> Option<Value> {
+        self.observability_policy.prepare_event(sink, payload)
+    }
+
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    pub(crate) fn redact_observability_prometheus_metrics(&self, rendered: &str) -> String {
+        self.observability_policy.redact_prometheus_render(rendered)
     }
 
     pub(crate) fn check_and_consume_rate_limit(
@@ -441,26 +485,27 @@ impl GatewayHttpState {
     }
 
     fn has_any_admin_tokens(&self) -> bool {
-        self.admin_token.is_some()
-            || self.admin_read_token.is_some()
-            || !self.admin_tenant_tokens.is_empty()
+        self.admin.admin_token.is_some()
+            || self.admin.admin_read_token.is_some()
+            || !self.admin.admin_tenant_tokens.is_empty()
     }
 
     fn has_admin_write_tokens(&self) -> bool {
-        self.admin_token.is_some()
+        self.admin.admin_token.is_some()
             || self
+                .admin
                 .admin_tenant_tokens
                 .iter()
                 .any(|binding| !binding.read_only)
     }
 
     pub fn with_admin_token(mut self, token: impl Into<String>) -> Self {
-        self.admin_token = Some(token.into());
+        self.admin.admin_token = Some(token.into());
         self
     }
 
     pub fn with_admin_read_token(mut self, token: impl Into<String>) -> Self {
-        self.admin_read_token = Some(token.into());
+        self.admin.admin_read_token = Some(token.into());
         self
     }
 
@@ -469,7 +514,7 @@ impl GatewayHttpState {
         tenant_id: impl Into<String>,
         token: impl Into<String>,
     ) -> Self {
-        self.admin_tenant_tokens.push(AdminTenantToken {
+        self.admin.admin_tenant_tokens.push(AdminTenantToken {
             tenant_id: tenant_id.into(),
             token: token.into(),
             read_only: false,
@@ -482,7 +527,7 @@ impl GatewayHttpState {
         tenant_id: impl Into<String>,
         token: impl Into<String>,
     ) -> Self {
-        self.admin_tenant_tokens.push(AdminTenantToken {
+        self.admin.admin_tenant_tokens.push(AdminTenantToken {
             tenant_id: tenant_id.into(),
             token: token.into(),
             read_only: true,
@@ -491,27 +536,27 @@ impl GatewayHttpState {
     }
 
     pub fn with_proxy_backends(mut self, backends: HashMap<String, ProxyBackend>) -> Self {
-        self.proxy_backends = Arc::new(backends);
+        self.backends.proxy_backends = Arc::new(backends);
         self
     }
 
     pub fn with_a2a_agents(mut self, agents: HashMap<String, A2aAgentState>) -> Self {
-        self.a2a_agents = Arc::new(agents);
+        self.backends.a2a_agents = Arc::new(agents);
         self
     }
 
     pub fn with_mcp_servers(mut self, servers: HashMap<String, McpServerState>) -> Self {
-        self.mcp_servers = Arc::new(servers);
+        self.backends.mcp_servers = Arc::new(servers);
         self
     }
 
     pub fn with_proxy_max_body_bytes(mut self, max_body_bytes: usize) -> Self {
-        self.proxy_max_body_bytes = max_body_bytes.max(1);
+        self.proxy.max_body_bytes = max_body_bytes.max(1);
         self
     }
 
     pub fn with_proxy_usage_max_body_bytes(mut self, max_body_bytes: usize) -> Self {
-        self.proxy_usage_max_body_bytes = max_body_bytes;
+        self.proxy.usage_max_body_bytes = max_body_bytes;
         self
     }
 
@@ -520,80 +565,80 @@ impl GatewayHttpState {
         mut self,
         backends: HashMap<String, super::TranslationBackend>,
     ) -> Self {
-        self.translation_backends = Arc::new(backends);
+        self.backends.translation_backends = Arc::new(backends);
         self
     }
 
     pub fn with_state_file(mut self, path: impl Into<PathBuf>) -> Self {
-        self.state_file = Some(path.into());
+        self.admin.state_file = Some(path.into());
         self
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
     pub fn with_sqlite_store(mut self, store: SqliteStore) -> Self {
-        self.sqlite_store = Some(store);
+        self.stores.sqlite = Some(store);
         self
     }
 
     #[cfg(feature = "gateway-store-postgres")]
     pub fn with_postgres_store(mut self, store: PostgresStore) -> Self {
-        self.postgres_store = Some(store);
+        self.stores.postgres = Some(store);
         self
     }
 
     #[cfg(feature = "gateway-store-mysql")]
     pub fn with_mysql_store(mut self, store: MySqlStore) -> Self {
-        self.mysql_store = Some(store);
+        self.stores.mysql = Some(store);
         self
     }
 
     #[cfg(feature = "gateway-store-redis")]
     pub fn with_redis_store(mut self, store: RedisStore) -> Self {
-        self.redis_store = Some(store);
+        self.stores.redis = Some(store);
         self
     }
 
     #[cfg(feature = "gateway-costing")]
     pub fn with_pricing_table(mut self, pricing: PricingTable) -> Self {
-        self.pricing = Some(Arc::new(pricing));
+        self.proxy.pricing = Some(Arc::new(pricing));
         self
     }
 
     pub fn with_json_logs(mut self) -> Self {
-        self.json_logs = true;
+        self.admin.json_logs = true;
         self
     }
 
     #[cfg(feature = "gateway-proxy-cache")]
     pub fn with_proxy_cache(mut self, config: ProxyCacheConfig) -> Self {
-        self.proxy_cache = Some(Arc::new(Mutex::new(ProxyResponseCache::new(
+        self.proxy.cache = Some(Arc::new(Mutex::new(ProxyResponseCache::new(
             config.clone(),
         ))));
-        self.proxy_cache_config = Some(config);
+        self.proxy.cache_config = Some(config);
         self
     }
 
     pub fn with_proxy_max_in_flight(mut self, max_in_flight: usize) -> Self {
-        self.proxy_backpressure = Some(Arc::new(Semaphore::new(max_in_flight.max(1))));
+        self.proxy.backpressure = Some(Arc::new(Semaphore::new(max_in_flight.max(1))));
         self
     }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     pub fn with_prometheus_metrics(mut self, config: PrometheusMetricsConfig) -> Self {
-        self.prometheus_metrics = Some(Arc::new(Mutex::new(PrometheusMetrics::new(config))));
+        self.proxy.metrics = Some(Arc::new(Mutex::new(PrometheusMetrics::new(config))));
         self
     }
 
     #[cfg(feature = "gateway-routing-advanced")]
     pub fn with_proxy_routing(mut self, config: ProxyRoutingConfig) -> Self {
-        self.proxy_routing = Some(config);
-        self.proxy_backend_health = Some(Arc::new(Mutex::new(HashMap::new())));
+        self.proxy.routing = Some(config);
+        self.proxy.backend_health = Some(Arc::new(Mutex::new(HashMap::new())));
         self
     }
 
     #[cfg(feature = "sdk")]
     pub fn with_devtools_logger(mut self, logger: DevtoolsLogger) -> Self {
-        self.devtools = Some(logger);
+        self.admin.devtools = Some(logger);
         self
     }
 }
@@ -626,177 +671,13 @@ struct HealthResponse {
     status: &'static str,
 }
 
-pub fn router(state: GatewayHttpState) -> Router {
-    #[cfg(feature = "gateway-routing-advanced")]
-    let mut state = state;
-    #[cfg(not(feature = "gateway-routing-advanced"))]
-    let state = state;
-    let mut router = Router::new()
-        .route("/health", get(health))
-        .route("/metrics", get(metrics))
-        .route("/v1/gateway", post(handle_gateway))
-        .route(
-            "/a2a/:agent_id/.well-known/agent-card.json",
-            get(handle_a2a_agent_card),
-        )
-        .route("/a2a/:agent_id", post(handle_a2a_invoke))
-        .route("/a2a/:agent_id/message/send", post(handle_a2a_invoke))
-        .route("/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
-        .route("/v1/a2a/:agent_id/message/send", post(handle_a2a_invoke))
-        .route("/v1/a2a/:agent_id/message/stream", post(handle_a2a_invoke))
-        .route("/mcp/tools/list", any(handle_mcp_tools_list))
-        .route("/mcp/tools/call", any(handle_mcp_tools_call))
-        .route("/mcp", any(handle_mcp_root))
-        .route("/mcp/", any(handle_mcp_root))
-        .route("/mcp/*subpath", any(handle_mcp_subpath))
-        .route("/:mcp_servers/mcp", any(handle_mcp_namespaced_root))
-        .route(
-            "/:mcp_servers/mcp/*path",
-            any(handle_mcp_namespaced_subpath),
-        )
-        .route("/chat/completions", any(handle_openai_compat_proxy_root))
-        .route("/completions", any(handle_openai_compat_proxy_root))
-        .route("/embeddings", any(handle_openai_compat_proxy_root))
-        .route("/moderations", any(handle_openai_compat_proxy_root))
-        .route("/images/generations", any(handle_openai_compat_proxy_root))
-        .route(
-            "/audio/transcriptions",
-            any(handle_openai_compat_proxy_root),
-        )
-        .route("/audio/translations", any(handle_openai_compat_proxy_root))
-        .route("/audio/speech", any(handle_openai_compat_proxy_root))
-        .route("/files", any(handle_openai_compat_proxy_root))
-        .route("/files/*path", any(handle_openai_compat_proxy))
-        .route("/rerank", any(handle_openai_compat_proxy_root))
-        .route("/batches", any(handle_openai_compat_proxy_root))
-        .route("/batches/*path", any(handle_openai_compat_proxy))
-        .route("/models", get(handle_openai_models_list))
-        .route("/models/*path", any(handle_openai_compat_proxy))
-        .route("/v1/models", get(handle_openai_models_list))
-        .route("/responses", any(handle_openai_compat_proxy_root))
-        .route("/responses/compact", any(handle_openai_compat_proxy_root))
-        .route("/responses/*path", any(handle_openai_compat_proxy))
-        .route("/messages", post(handle_anthropic_messages))
-        .route(
-            "/messages/count_tokens",
-            post(handle_anthropic_count_tokens),
-        )
-        .route("/v1/messages", post(handle_anthropic_messages))
-        .route(
-            "/v1/messages/count_tokens",
-            post(handle_anthropic_count_tokens),
-        )
-        .route("/v1beta/models/*path", post(handle_google_genai))
-        .route("/v1/*path", any(handle_openai_compat_proxy))
-        .fallback(handle_fallback);
-
-    #[cfg(feature = "gateway-metrics-prometheus")]
-    {
-        router = router.route("/metrics/prometheus", get(metrics_prometheus));
-    }
-
-    if state.has_any_admin_tokens() {
-        if state.admin_token.is_some() || state.admin_read_token.is_some() {
-            router = router
-                .route("/admin/config/version", get(get_config_version))
-                .route("/admin/config/versions", get(list_config_versions))
-                .route("/admin/config/export", get(export_config))
-                .route("/admin/config/validate", post(validate_config_payload))
-                .route("/admin/config/diff", get(diff_config_versions))
-                .route(
-                    "/admin/config/versions/:version_id",
-                    get(get_config_version_by_id),
-                );
-        }
-        if state.admin_token.is_some() {
-            router = router
-                .route("/admin/config/router", put(upsert_config_router))
-                .route("/admin/config/rollback", post(rollback_config_version));
-        }
-
-        let mut keys_router = get(list_keys);
-        if state.has_admin_write_tokens() {
-            keys_router = keys_router.post(upsert_key);
-        }
-        router = router.route("/admin/keys", keys_router);
-
-        if state.has_admin_write_tokens() {
-            router = router.route(
-                "/admin/keys/:id",
-                put(upsert_key_with_id).delete(delete_key),
-            );
-        }
-
-        #[cfg(feature = "gateway-proxy-cache")]
-        if state.proxy_cache.is_some() && state.admin_token.is_some() {
-            router = router.route("/admin/proxy_cache/purge", post(purge_proxy_cache));
-        }
-
-        #[cfg(feature = "gateway-routing-advanced")]
-        {
-            router = router.route("/admin/backends", get(list_backends));
-            if state.admin_token.is_some() {
-                router = router.route("/admin/backends/:name/reset", post(reset_backend));
-            }
-        }
-
-        #[cfg(any(
-            feature = "gateway-store-sqlite",
-            feature = "gateway-store-postgres",
-            feature = "gateway-store-mysql",
-            feature = "gateway-store-redis"
-        ))]
-        {
-            router = router
-                .route("/admin/audit", get(list_audit_logs))
-                .route("/admin/audit/export", get(export_audit_logs));
-        }
-
-        #[cfg(any(
-            feature = "gateway-store-sqlite",
-            feature = "gateway-store-postgres",
-            feature = "gateway-store-mysql",
-            feature = "gateway-store-redis"
-        ))]
-        {
-            router = router
-                .route("/admin/budgets", get(list_budget_ledgers))
-                .route("/admin/budgets/tenants", get(list_tenant_budget_ledgers))
-                .route("/admin/budgets/projects", get(list_project_budget_ledgers))
-                .route("/admin/budgets/users", get(list_user_budget_ledgers));
-
-            #[cfg(feature = "gateway-costing")]
-            {
-                router = router
-                    .route("/admin/costs", get(list_cost_ledgers))
-                    .route("/admin/costs/tenants", get(list_tenant_cost_ledgers))
-                    .route("/admin/costs/projects", get(list_project_cost_ledgers))
-                    .route("/admin/costs/users", get(list_user_cost_ledgers));
-            }
-
-            if state.admin_token.is_some() {
-                router = router.route("/admin/reservations/reap", post(reap_reservations));
-            }
-        }
-
-        router = router.merge(litellm_key_router());
-    }
-
-    #[cfg(feature = "gateway-routing-advanced")]
-    {
-        state.proxy_health_check_task = start_proxy_health_checks(&state);
-    }
-
-    router.with_state(state)
-}
-
 include!("core/diagnostics.rs");
 
 #[cfg(feature = "gateway-metrics-prometheus")]
 async fn metrics_prometheus(
     State(state): State<GatewayHttpState>,
 ) -> Result<(StatusCode, HeaderMap, String), (StatusCode, Json<ErrorResponse>)> {
-    let Some(metrics) = state.prometheus_metrics.as_ref() else {
+    let Some(metrics) = state.proxy.metrics.as_ref() else {
         return Err(error_response(
             StatusCode::NOT_FOUND,
             "not_configured",
@@ -804,7 +685,11 @@ async fn metrics_prometheus(
         ));
     };
 
-    let rendered = { metrics.lock().await.render() };
+    let rendered = {
+        let metrics = metrics.lock().await;
+        metrics.render()
+    };
+    let rendered = state.redact_observability_prometheus_metrics(&rendered);
     let mut headers = HeaderMap::new();
     headers.insert(
         axum::http::header::CONTENT_TYPE,
@@ -889,7 +774,7 @@ async fn handle_gateway(
             .map(|response| input_tokens.saturating_add(u64::from(response.output_tokens)));
         if let Some(spent_tokens) = spent_tokens {
             #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.sqlite_store.as_ref() {
+            if let Some(store) = state.stores.sqlite.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
                     if let Err(err) = store
                         .record_spent_tokens(virtual_key_id, spent_tokens)
@@ -911,7 +796,7 @@ async fn handle_gateway(
             }
 
             #[cfg(feature = "gateway-store-postgres")]
-            if let Some(store) = state.postgres_store.as_ref() {
+            if let Some(store) = state.stores.postgres.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
                     if let Err(err) = store
                         .record_spent_tokens(virtual_key_id, spent_tokens)
@@ -933,7 +818,7 @@ async fn handle_gateway(
             }
 
             #[cfg(feature = "gateway-store-mysql")]
-            if let Some(store) = state.mysql_store.as_ref() {
+            if let Some(store) = state.stores.mysql.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
                     if let Err(err) = store
                         .record_spent_tokens(virtual_key_id, spent_tokens)
@@ -955,7 +840,7 @@ async fn handle_gateway(
             }
 
             #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.redis_store.as_ref() {
+            if let Some(store) = state.stores.redis.as_ref() {
                 if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
                     if let Err(err) = store
                         .record_spent_tokens(virtual_key_id, spent_tokens)

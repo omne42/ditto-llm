@@ -169,6 +169,8 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 它们默认基于 Ditto 的 `ditto_gateway_proxy_*` 指标族（见 `GET /metrics/prometheus` 输出），你可以按自己平台的 label/job 约定做小幅调整。
 
+Prometheus label 值会应用 `observability.redaction` 的统一脱敏策略；这包括 `virtual_key_id` / `model` / `backend` / `path` 等标签，但不会对指标本身做采样。
+
 ---
 
 ## 4) 结构化 JSON 日志（轻量）
@@ -178,6 +180,7 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 注意：
 
 - 日志 payload 会应用 `observability.redaction` 的统一脱敏策略（见「Gateway → 配置文件」的 `observability`）。
+- `observability.sampling.json_logs_rate` 控制 JSON logs 的采样率；默认是 `1.0`，即全部保留。
 - 默认会替换 `authorization`/`token`/`api_key` 等字段，并对 `path/url/base_url/endpoint` 中的敏感 query 参数做 value 脱敏。
 
 事件示例（概念）：
@@ -225,6 +228,6 @@ cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.jso
 
 > Devtools 日志包含敏感信息的风险更高；生产环境务必配合脱敏/权限控制。
 
-Ditto Gateway 写入 devtools 前同样会应用 `observability.redaction`（与 JSON logs / audit 一致），但这不等于你可以忽略生产的权限与留存策略。
+Ditto Gateway 写入 devtools 前同样会应用 `observability.redaction`（与 JSON logs / audit / Prometheus labels 一致）；`observability.sampling.devtools_rate` 可以单独控制 devtools 的采样率，但这不等于你可以忽略生产的权限与留存策略。
 
 更多格式与用法见「SDK → Devtools（JSONL 日志）」。

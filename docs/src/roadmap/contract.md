@@ -91,11 +91,14 @@ Ditto 的策略不是“把差异藏起来”，而是：
 
 ## 5) 验证（Stop Gate）
 
-本仓库建议的最小验证集：
+下面这些不是“建议做一下”的检查，而是新的结构演进门槛。涉及核心结构、feature、provider、catalog、gateway 主路径的改动，默认都应把这些 gate 维持为绿色：
 
 ```bash
 cargo fmt -- --check
 cargo run --bin ditto-llms-txt -- --check
+cargo check
+cargo test --all-targets                # default core: provider-openai-compatible + cap-llm
+cargo check --examples                  # default examples must stay generic openai-compatible
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 
@@ -103,11 +106,26 @@ cargo check --no-default-features
 cargo clippy --no-default-features -- -D warnings
 ```
 
-Node/前端（如改动涉及 `packages/*` 或 `apps/*`）：
+feature matrix（至少覆盖 CI 当前维护的 provider-only 组合）：
 
 ```bash
-pnpm -r run typecheck
-pnpm -r run build
+cargo clippy -p ditto-llm --no-default-features --features openai --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features openai-compatible --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features anthropic --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features google --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features cohere --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features bedrock --all-targets -- -D warnings
+cargo clippy -p ditto-llm --no-default-features --features vertex --all-targets -- -D warnings
+```
+
+Node/前端：默认 gate 只覆盖 `packages/*`；`apps/admin-ui` 作为可选资产单独验证。
+
+```bash
+pnpm run typecheck
+pnpm run build
+# optional:
+pnpm run typecheck:admin-ui
+pnpm run build:admin-ui
 ```
 
 ---

@@ -2,119 +2,113 @@
 
 本页是“查表型”入口，帮助你快速回答：
 
-- 我该启用哪些 Cargo features？
-- 某个 provider 支持哪些能力（stream/tools/embeddings/…）？
-- Gateway 的 passthrough 与 translation 分别覆盖到什么程度？
+- 默认构建到底承诺什么
+- 某个 provider pack 要配哪个 capability pack
+- 当前哪些 provider/capability 已实现，哪些还只是规划或 catalog 元数据
+- Gateway 的 passthrough 与 translation 分别覆盖到哪里
 
-更完整的矩阵请直接看仓库根目录的 `PROVIDERS.md`（它会随代码演进而更新）。
-
----
-
-## 1) Ditto 的两条集成路径
-
-### A) Native adapters（推荐）
-
-直接调用 provider 的原生 API，语义最完整、兼容性最清晰：
-
-- OpenAI：Responses API（`/responses`）
-- Anthropic：Messages API（`/messages`）
-- Google：GenAI（`generateContent` / `streamGenerateContent`）
-- Cohere：Chat v2（`/v2/chat`）
-- Bedrock / Vertex：各自的认证与 API（feature-gated）
-
-适用：
-
-- 你在 Rust 服务端直接集成模型
-- 你希望 Warnings 明确暴露能力差异
-
-### B) OpenAI-compatible adapters（务实）
-
-通过 OpenAI-compatible upstream（例如 LiteLLM Proxy、各类兼容网关或厂商兼容层）：
-
-- Chat Completions（`/chat/completions`）
-- Embeddings（`/embeddings`）
-- 以及 upstream 自己支持的其它 OpenAI 端点（视具体实现）
-
-适用：
-
-- 你已经有一个“兼容 OpenAI API 的统一入口”
-- 你需要把 Ditto 放在现有网关/平台上逐步替换
+仓库根目录的 `PROVIDERS.md` 是更完整的矩阵与状态表；`CATALOG_COMPLETENESS.md` 则给出持续更新的 provider/capability/model completeness dashboard。本页给出最重要的阅读顺序。
 
 ---
 
-## 2) Provider features（Cargo）
+## 1) 默认核心是什么
 
-常见 provider feature：
+Ditto 的默认构建不是“全家桶”。
 
-- `openai`
-- `openai-compatible`
-- `anthropic`
-- `google`
-- `cohere`
-- `bedrock`（依赖 `auth` + `base64`）
-- `vertex`（依赖 `auth`）
+默认只打开：
 
-你也可以直接用 bundles：
+- `provider-openai-compatible`
+- `cap-llm`
 
-- `all-providers`
-- `all`
+这意味着默认只承诺：
 
----
+- 通用 OpenAI-compatible 文本生成
+- SSE streaming
+- tool calling
 
-## 3) Capability features（Cargo）
-
-Ditto 把能力拆成独立 feature，避免默认拉入所有依赖：
-
-- `streaming`
-- `tools`
-- `embeddings`
-- `images`
-- `audio`
-- `moderations`
-- `rerank`
-- `batches`
-
-以及 bundles：
-
-- `all-capabilities`
-- `all`
-
-> 注意：某个能力 feature 打开，只代表 Ditto **提供了相应 trait 与实现入口**；具体 provider 是否支持，还要看 provider 自身能力与请求映射（不支持会产出 `Warning`）。
+其它 provider 与能力都必须显式开启。
 
 ---
 
-## 4) Gateway 相关 features（Cargo）
+## 2) 两类 feature：provider packs 与 capability packs
 
-Gateway 的能力也拆成多个 feature：
+### Provider packs
 
-- `gateway`：HTTP server + passthrough proxy（`ANY /v1/*`）+ 基础控制面
-- `gateway-translation`：OpenAI in/out → native providers（translation backends）
-- `gateway-proxy-cache`：非 streaming proxy cache
-- `gateway-routing-advanced`：retry/circuit-breaker/health-checks
-- `gateway-store-sqlite` / `gateway-store-redis`：持久化 store
-- `gateway-costing`：美元预算（需要 pricing table）
-- `gateway-tokenizer`：更准确的 token 估算（tiktoken）
-- `gateway-metrics-prometheus`：Prometheus 指标
-- `gateway-otel`：OpenTelemetry tracing
+- `provider-openai-compatible`
+- `provider-openai`
+- `provider-anthropic`
+- `provider-google`
+- `provider-cohere`
+- `provider-bedrock`
+- `provider-vertex`
+- 以及 `provider-deepseek`、`provider-kimi`、`provider-openrouter` 等 provider-specific packs
 
-推荐组合（多副本生产常见）：
+### Capability packs
 
-- `gateway`
-- `gateway-store-redis`
-- `gateway-routing-advanced`（可选）
-- `gateway-proxy-cache`（可选）
-- `gateway-metrics-prometheus` 或 `gateway-otel`（可选）
-- `gateway-tokenizer`（可选：预算更准）
+- `cap-llm`
+- `cap-embedding`
+- `cap-image-generation`
+- `cap-image-edit`
+- `cap-audio-transcription`
+- `cap-audio-speech`
+- `cap-moderation`
+- `cap-rerank`
+- `cap-batch`
+- `cap-realtime`
+
+一个功能真正可用，通常需要同时满足：
+
+- provider pack 已启用
+- capability pack 已启用
+- runtime 已经实现这条 provider × capability 绑定
 
 ---
 
-## 5) 快速决策：我该用哪个 provider 路径？
+## 3) Ditto 的两条 provider 路径
 
-- 你只需要“一个 HTTP 入口”并且 upstream 已经统一：**OpenAI-compatible**（SDK 或 Gateway passthrough）。
-- 你要拿到最完整语义（tool calling / structured outputs / provider options）：**Native adapters**。
-- 你需要“OpenAI API surface → Anthropic/Google/Cohere 等原生 API”的转换：启用 **Gateway translation**（`gateway-translation`）。
+### A) Native adapters
 
-下一步：
+直接调用 provider 原生 API，语义最完整：
 
-- 继续阅读「SDK → ProviderConfig 与 Profile」
-- 或阅读「Gateway → 配置文件」「Gateway → HTTP Endpoints」
+- OpenAI：`/responses`
+- Anthropic：`/messages`
+- Google：`generateContent`
+- Cohere：`/v2/chat`
+- Bedrock / Vertex：各自原生认证与入口
+
+### B) OpenAI-compatible adapters
+
+通过 OpenAI-compatible upstream 调用：
+
+- `/chat/completions`
+- `/embeddings`
+- `/batches`
+- 以及上游自己支持的其它 OpenAI 兼容端点
+
+这条路径适合 LiteLLM、OpenRouter、DeepSeek、Qwen、Kimi、本地代理等统一入口。
+
+---
+
+## 4) 怎么看实现状态
+
+优先看仓库根目录的 `PROVIDERS.md`，因为它直接按下面这个维度列状态：
+
+- provider pack
+- capability
+- Cargo feature
+- runtime status
+- 备注（native / openai-compatible 复用 / planned 等）
+
+阅读建议：
+
+1. 先确认你要的 provider pack 是否是默认核心，还是可选 pack。
+2. 再确认对应 capability pack 是否已经实现，不要只看 catalog 里“声明过”。
+3. 如果你走 Gateway translation，再额外确认 translation surface 是否已挂载该 capability。
+
+---
+
+## 5) 下一步读哪里
+
+- `SDK → ProviderConfig 与 Profile`：看 node 配置边界
+- `Gateway → 配置文件`：看 gateway backend / translation backend 的配置方式
+- 仓库根目录 `PROVIDERS.md`：看完整实现状态表

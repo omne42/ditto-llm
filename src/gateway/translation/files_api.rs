@@ -1,25 +1,8 @@
-
 impl TranslationBackend {
     async fn resolve_file_client(&self) -> crate::Result<Arc<dyn FileClient>> {
-        if let Some(client) = self.file_client.as_ref() {
-            return Ok(client.clone());
-        }
-
-        let client = self
-            .file_cache
-            .get_or_try_init(|| async {
-                build_file_client(self.provider.as_str(), &self.provider_config, &self.env)
-                    .await?
-                    .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
-                            "provider backend does not support files: {}",
-                            self.provider
-                        ))
-                    })
-            })
-            .await?;
-
-        Ok(client.clone())
+        self.runtime
+            .resolve_file_client(self.provider_name(), self.bindings.file_client.as_ref())
+            .await
     }
 
     pub async fn list_files(&self) -> crate::Result<Vec<crate::file::FileObject>> {

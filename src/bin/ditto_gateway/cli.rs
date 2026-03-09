@@ -34,6 +34,8 @@ pub(crate) struct GatewayCliArgs {
     pub proxy_cache_max_entries: Option<usize>,
     pub proxy_cache_max_body_bytes: Option<usize>,
     pub proxy_cache_max_total_body_bytes: Option<usize>,
+    pub proxy_cache_streaming_enabled: bool,
+    pub proxy_cache_max_stream_body_bytes: Option<usize>,
     pub proxy_max_body_bytes: Option<usize>,
     pub proxy_usage_max_body_bytes: Option<usize>,
     pub proxy_max_in_flight: Option<usize>,
@@ -46,10 +48,16 @@ pub(crate) struct GatewayCliArgs {
     pub proxy_retry_enabled: bool,
     pub proxy_retry_status_codes: Option<Vec<u16>>,
     pub proxy_fallback_status_codes: Option<Vec<u16>>,
+    pub proxy_network_error_action: Option<String>,
+    pub proxy_timeout_error_action: Option<String>,
     pub proxy_retry_max_attempts: Option<usize>,
     pub proxy_circuit_breaker_enabled: bool,
     pub proxy_cb_failure_threshold: Option<u32>,
     pub proxy_cb_cooldown_secs: Option<u64>,
+    pub proxy_cb_failure_status_codes: Option<Vec<u16>>,
+    pub proxy_cb_no_network_errors: bool,
+    pub proxy_cb_no_timeout_errors: bool,
+    pub proxy_cb_no_server_errors: bool,
     pub proxy_health_checks_enabled: bool,
     pub proxy_health_check_path: Option<String>,
     pub proxy_health_check_interval_secs: Option<u64>,
@@ -109,6 +117,8 @@ pub(crate) fn parse_gateway_cli_args(
     let mut proxy_cache_max_entries: Option<usize> = None;
     let mut proxy_cache_max_body_bytes: Option<usize> = None;
     let mut proxy_cache_max_total_body_bytes: Option<usize> = None;
+    let mut proxy_cache_streaming_enabled = false;
+    let mut proxy_cache_max_stream_body_bytes: Option<usize> = None;
     let mut proxy_max_body_bytes: Option<usize> = None;
     let mut proxy_usage_max_body_bytes: Option<usize> = None;
     let mut proxy_max_in_flight: Option<usize> = None;
@@ -121,10 +131,16 @@ pub(crate) fn parse_gateway_cli_args(
     let mut proxy_retry_enabled = false;
     let mut proxy_retry_status_codes: Option<Vec<u16>> = None;
     let mut proxy_fallback_status_codes: Option<Vec<u16>> = None;
+    let mut proxy_network_error_action: Option<String> = None;
+    let mut proxy_timeout_error_action: Option<String> = None;
     let mut proxy_retry_max_attempts: Option<usize> = None;
     let mut proxy_circuit_breaker_enabled = false;
     let mut proxy_cb_failure_threshold: Option<u32> = None;
     let mut proxy_cb_cooldown_secs: Option<u64> = None;
+    let mut proxy_cb_failure_status_codes: Option<Vec<u16>> = None;
+    let mut proxy_cb_no_network_errors = false;
+    let mut proxy_cb_no_timeout_errors = false;
+    let mut proxy_cb_no_server_errors = false;
     let mut proxy_health_checks_enabled = false;
     let mut proxy_health_check_path: Option<String> = None;
     let mut proxy_health_check_interval_secs: Option<u64> = None;
@@ -306,6 +322,20 @@ pub(crate) fn parse_gateway_cli_args(
                         .map_err(|_| "invalid --proxy-cache-max-total-body-bytes")?,
                 );
             }
+            "--proxy-cache-streaming" => {
+                proxy_cache_enabled = true;
+                proxy_cache_streaming_enabled = true;
+            }
+            "--proxy-cache-max-stream-body-bytes" => {
+                proxy_cache_enabled = true;
+                let raw = args
+                    .next()
+                    .ok_or("missing value for --proxy-cache-max-stream-body-bytes")?;
+                proxy_cache_max_stream_body_bytes = Some(
+                    raw.parse::<usize>()
+                        .map_err(|_| "invalid --proxy-cache-max-stream-body-bytes")?,
+                );
+            }
             "--proxy-max-in-flight" => {
                 let raw = args
                     .next()
@@ -398,6 +428,20 @@ pub(crate) fn parse_gateway_cli_args(
                         .ok_or("missing value for --proxy-fallback-status-codes")?,
                 )?);
             }
+            "--proxy-network-error-action" => {
+                proxy_network_error_action = Some(parse_proxy_failure_action(
+                    &args
+                        .next()
+                        .ok_or("missing value for --proxy-network-error-action")?,
+                )?);
+            }
+            "--proxy-timeout-error-action" => {
+                proxy_timeout_error_action = Some(parse_proxy_failure_action(
+                    &args
+                        .next()
+                        .ok_or("missing value for --proxy-timeout-error-action")?,
+                )?);
+            }
             "--proxy-retry-max-attempts" => {
                 proxy_retry_enabled = true;
                 let raw = args
@@ -430,6 +474,25 @@ pub(crate) fn parse_gateway_cli_args(
                     raw.parse::<u64>()
                         .map_err(|_| "invalid --proxy-cb-cooldown-secs")?,
                 );
+            }
+            "--proxy-cb-failure-status-codes" => {
+                proxy_circuit_breaker_enabled = true;
+                proxy_cb_failure_status_codes =
+                    Some(parse_status_codes(&args.next().ok_or(
+                        "missing value for --proxy-cb-failure-status-codes",
+                    )?)?);
+            }
+            "--proxy-cb-no-network-errors" => {
+                proxy_circuit_breaker_enabled = true;
+                proxy_cb_no_network_errors = true;
+            }
+            "--proxy-cb-no-timeout-errors" => {
+                proxy_circuit_breaker_enabled = true;
+                proxy_cb_no_timeout_errors = true;
+            }
+            "--proxy-cb-no-server-errors" => {
+                proxy_circuit_breaker_enabled = true;
+                proxy_cb_no_server_errors = true;
             }
             "--proxy-health-checks" => {
                 proxy_health_checks_enabled = true;
@@ -510,6 +573,8 @@ pub(crate) fn parse_gateway_cli_args(
         proxy_cache_max_entries,
         proxy_cache_max_body_bytes,
         proxy_cache_max_total_body_bytes,
+        proxy_cache_streaming_enabled,
+        proxy_cache_max_stream_body_bytes,
         proxy_max_body_bytes,
         proxy_usage_max_body_bytes,
         proxy_max_in_flight,
@@ -522,10 +587,16 @@ pub(crate) fn parse_gateway_cli_args(
         proxy_retry_enabled,
         proxy_retry_status_codes,
         proxy_fallback_status_codes,
+        proxy_network_error_action,
+        proxy_timeout_error_action,
         proxy_retry_max_attempts,
         proxy_circuit_breaker_enabled,
         proxy_cb_failure_threshold,
         proxy_cb_cooldown_secs,
+        proxy_cb_failure_status_codes,
+        proxy_cb_no_network_errors,
+        proxy_cb_no_timeout_errors,
+        proxy_cb_no_server_errors,
         proxy_health_checks_enabled,
         proxy_health_check_path,
         proxy_health_check_interval_secs,
@@ -535,6 +606,15 @@ pub(crate) fn parse_gateway_cli_args(
         otel_endpoint,
         otel_json,
     })
+}
+
+#[cfg(feature = "gateway")]
+fn parse_proxy_failure_action(raw: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let normalized = raw.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "none" | "fallback" | "retry" => Ok(normalized),
+        _ => Err("invalid proxy failure action".into()),
+    }
 }
 
 #[cfg(feature = "gateway")]
@@ -584,11 +664,11 @@ pub(crate) async fn resolve_cli_secret(
 fn usage() -> &'static str {
     #[cfg(feature = "gateway-config-yaml")]
     {
-        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
     #[cfg(not(feature = "gateway-config-yaml"))]
     {
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
 }
 
@@ -618,6 +698,23 @@ mod tests {
         .expect("parse");
         assert!(cli.proxy_cache_enabled);
         assert_eq!(cli.proxy_cache_ttl_seconds, Some(10));
+    }
+
+    #[test]
+    fn proxy_cache_streaming_flags_parse() {
+        let cli = parse_gateway_cli_args(
+            vec![
+                "gateway.json".to_string(),
+                "--proxy-cache-streaming".to_string(),
+                "--proxy-cache-max-stream-body-bytes".to_string(),
+                "2048".to_string(),
+            ]
+            .into_iter(),
+        )
+        .expect("parse");
+        assert!(cli.proxy_cache_enabled);
+        assert!(cli.proxy_cache_streaming_enabled);
+        assert_eq!(cli.proxy_cache_max_stream_body_bytes, Some(2048));
     }
 
     #[test]
@@ -691,5 +788,31 @@ mod tests {
         .expect("parse");
         assert_eq!(cli.proxy_fallback_status_codes, Some(vec![500, 502]));
         assert!(!cli.proxy_retry_enabled);
+    }
+
+    #[test]
+    fn parses_proxy_transport_and_circuit_breaker_failure_flags() {
+        let cli = parse_gateway_cli_args(
+            vec![
+                "gateway.json".to_string(),
+                "--proxy-network-error-action".to_string(),
+                "retry".to_string(),
+                "--proxy-timeout-error-action".to_string(),
+                "none".to_string(),
+                "--proxy-cb-failure-status-codes".to_string(),
+                "408,429".to_string(),
+                "--proxy-cb-no-network-errors".to_string(),
+                "--proxy-cb-no-timeout-errors".to_string(),
+                "--proxy-circuit-breaker".to_string(),
+            ]
+            .into_iter(),
+        )
+        .expect("parse");
+        assert_eq!(cli.proxy_network_error_action.as_deref(), Some("retry"));
+        assert_eq!(cli.proxy_timeout_error_action.as_deref(), Some("none"));
+        assert_eq!(cli.proxy_cb_failure_status_codes, Some(vec![408, 429]));
+        assert!(cli.proxy_cb_no_network_errors);
+        assert!(cli.proxy_cb_no_timeout_errors);
+        assert!(cli.proxy_circuit_breaker_enabled);
     }
 }

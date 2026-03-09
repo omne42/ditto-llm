@@ -320,11 +320,14 @@ mod tests {
                     prompt: None,
                     response_format: Some(TranscriptionResponseFormat::Json),
                     temperature: None,
-                    provider_options: Some(serde_json::json!({
-                        "extra": "ok",
-                        "tags": ["tag-a", "tag-b"],
-                        "model": "evil-model"
-                    })),
+                    provider_options: Some(
+                        serde_json::json!({
+                            "extra": "ok",
+                            "tags": ["tag-a", "tag-b"],
+                            "model": "evil-model"
+                        })
+                        .into(),
+                    ),
                 })
                 .await?;
 

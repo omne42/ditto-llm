@@ -15,7 +15,7 @@ Admin API 用于“管理与观测控制面状态”：
 - config versions handlers：`src/gateway/http/admin/config_versions.rs`
 - other handlers：`src/gateway/http/admin/handlers.rs`
 
-仓库内也提供一个最小 Admin UI（React）用于快速试用与演示：
+仓库内还保留一个可选 Admin UI（React）资产用于快速试用与演示；它不属于默认核心交付或默认 CI 路径：
 
 - `apps/admin-ui`
 
@@ -264,22 +264,32 @@ Query 参数：
 
 权限：需要 write admin token。
 
-请求体二选一：
+请求体支持两类模式：
 
-- `{ "all": true }`
-- `{ "cache_key": "ditto-proxy-cache-v1-..." }`
+- 全量清理：`{ "all": true }`
+- 选择器清理：`{ "cache_key"?: "...", "scope"?: "vk:key-1", "method"?: "POST", "path"?: "/v1/responses", "model"?: "gpt-4o-mini" }`
+
+选择器语义：
+
+- 所有已提供字段按 AND 语义匹配
+- `cache_key` 单独使用时走精确删除
+- `path` 会按规范化后的请求路径匹配，不带 query string（例如 `/v1/responses?foo=1` 会归一为 `/v1/responses`）
+- `method` 会先归一为大写再匹配
 
 响应：
 
 ```json
-{ "cleared_memory": true, "deleted_redis": 123 }
+{ "cleared_memory": true, "deleted_memory": 1, "deleted_redis": 1 }
 ```
 
-- `deleted_redis` 仅在启用 redis store 时出现
+- `deleted_memory` 表示本机内存缓存删除条数
+- `deleted_redis` 仅在启用 redis store 时出现，表示共享 redis 缓存删除条数
+- selector purge 同时适用于非流式缓存与已启用的 streaming SSE 缓存条目
 
 实现细节与运维提示：
 
 - `{ "all": true }` 在启用 redis store 时会使用 `SCAN + DEL` 按批删除（不会把所有 key 一次性读进内存），但仍然是 O(N) 操作；大规模缓存场景建议优先依赖 TTL、并避免频繁 purge-all。
+- selector purge 在 redis 中会使用 `SCAN` 逐条读取缓存记录的 metadata 后再选择性删除，因此它是运维操作，不应该放在热点路径里高频调用。
 
 ---
 

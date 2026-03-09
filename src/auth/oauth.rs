@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::profile::{Env, ProviderAuth};
+use crate::config::{Env, ProviderAuth};
 use crate::{DittoError, Result};
 
 #[derive(Clone)]

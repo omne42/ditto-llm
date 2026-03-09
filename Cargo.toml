@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 
 [features]
-default = ["openai", "streaming", "tools", "embeddings"]
+default = ["provider-openai-compatible", "cap-llm"]
 
 # Modules
 agent = ["dep:regex", "dep:safe-fs-tools"]
@@ -36,7 +36,7 @@ gateway-otel = [
 ]
 base64 = ["dep:base64"]
 
-# Providers
+# Internal protocol/provider implementation toggles retained for cfg compatibility.
 openai = []
 anthropic = []
 google = []
@@ -44,32 +44,53 @@ openai-compatible = []
 cohere = []
 bedrock = ["auth", "base64"]
 vertex = ["auth"]
+
+# Public provider packs.
+provider-openai-compatible = ["openai-compatible"]
+provider-openai = ["openai", "openai-compatible"]
 provider-anthropic = ["anthropic"]
-provider-bailian = []
-provider-deepseek = ["openai-compatible"]
-provider-doubao = []
 provider-google = ["google"]
+provider-cohere = ["cohere"]
+provider-bedrock = ["bedrock"]
+provider-vertex = ["vertex"]
+provider-bailian = []
+provider-deepseek = ["provider-openai-compatible"]
+provider-doubao = []
 provider-hunyuan = []
-provider-kimi = ["openai-compatible"]
+provider-kimi = ["provider-openai-compatible"]
 provider-minimax = []
-provider-openrouter = ["openai-compatible"]
+provider-openrouter = ["provider-openai-compatible"]
 provider-qianfan = []
-provider-xai = ["openai-compatible"]
+provider-xai = ["provider-openai-compatible"]
 provider-zhipu = []
 
-# Optional capabilities
+# Internal capability toggles retained for cfg compatibility.
 streaming = []
 tools = []
 embeddings = []
 images = []
+videos = ["dep:base64"]
 audio = []
 moderations = []
 rerank = []
 batches = []
+realtime = []
 
-# Bundles
-all-providers = ["openai", "anthropic", "google", "openai-compatible", "cohere", "bedrock", "vertex", "provider-anthropic", "provider-bailian", "provider-deepseek", "provider-doubao", "provider-google", "provider-hunyuan", "provider-kimi", "provider-minimax", "provider-openrouter", "provider-qianfan", "provider-xai", "provider-zhipu"]
-all-capabilities = ["streaming", "tools", "embeddings", "images", "audio", "moderations", "rerank", "batches"]
+# Public capability packs.
+cap-llm = ["streaming", "tools"]
+cap-embedding = ["embeddings"]
+cap-image-generation = ["images"]
+cap-image-edit = ["images"]
+cap-audio-transcription = ["audio"]
+cap-audio-speech = ["audio"]
+cap-moderation = ["moderations"]
+cap-rerank = ["rerank"]
+cap-batch = ["batches"]
+cap-realtime = ["realtime"]
+
+# Bundles.
+all-providers = ["provider-openai-compatible", "provider-openai", "provider-anthropic", "provider-google", "provider-cohere", "provider-bedrock", "provider-vertex", "provider-bailian", "provider-deepseek", "provider-doubao", "provider-hunyuan", "provider-kimi", "provider-minimax", "provider-openrouter", "provider-qianfan", "provider-xai", "provider-zhipu"]
+all-capabilities = ["cap-llm", "cap-embedding", "cap-image-generation", "cap-image-edit", "cap-audio-transcription", "cap-audio-speech", "cap-moderation", "cap-rerank", "cap-batch", "cap-realtime"]
 all = ["all-providers", "all-capabilities"]
 
 integration = []
@@ -115,36 +136,44 @@ tower = { version = "0.5", features = ["util"] }
 
 [[example]]
 name = "anthropic_messages"
-required-features = ["anthropic"]
+required-features = ["provider-anthropic", "cap-llm"]
+
+[[example]]
+name = "batches"
+required-features = ["provider-openai-compatible", "cap-batch"]
+
+[[example]]
+name = "cache_bench_deepseek_direct"
+required-features = ["provider-openai-compatible", "cap-llm"]
 
 [[example]]
 name = "basic"
-required-features = ["openai"]
+required-features = ["provider-openai-compatible", "cap-llm"]
 
 [[example]]
 name = "embeddings"
-required-features = ["openai", "embeddings"]
+required-features = ["provider-openai", "cap-embedding"]
 
 [[example]]
 name = "local_native_formats"
-required-features = ["anthropic"]
+required-features = ["provider-anthropic", "cap-llm"]
 
 [[example]]
 name = "multimodal"
-required-features = ["openai", "base64"]
+required-features = ["provider-openai", "cap-llm", "base64"]
 
 [[example]]
 name = "openai_compatible"
-required-features = ["openai-compatible"]
+required-features = ["provider-openai-compatible", "cap-llm"]
 
 [[example]]
 name = "openai_compatible_embeddings"
-required-features = ["openai-compatible", "embeddings"]
+required-features = ["provider-openai-compatible", "cap-embedding"]
 
 [[example]]
 name = "streaming"
-required-features = ["openai", "streaming"]
+required-features = ["provider-openai-compatible", "cap-llm"]
 
 [[example]]
 name = "tool_calling"
-required-features = ["openai", "tools"]
+required-features = ["provider-openai-compatible", "cap-llm"]

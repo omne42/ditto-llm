@@ -1,4 +1,9 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Clone, Copy)]
 struct ProxyBudgetReservationParams<'a> {
     state: &'a GatewayHttpState,
@@ -14,7 +19,12 @@ struct ProxyBudgetReservationParams<'a> {
     charge_tokens: u32,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 async fn reserve_proxy_token_budgets_for_request(
     params: ProxyBudgetReservationParams<'_>,
 ) -> Result<(bool, Vec<String>), (StatusCode, Json<OpenAiErrorResponse>)> {
@@ -142,7 +152,12 @@ async fn reserve_proxy_token_budgets_for_request(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 async fn reserve_proxy_cost_budgets_for_request(
     params: ProxyBudgetReservationParams<'_>,
@@ -257,10 +272,16 @@ async fn reserve_proxy_cost_budgets_for_request(
                         reserve_proxy_cost_budget(ctx, limit_usd_micros, charge_cost_usd_micros)
                             .await
                     {
-                        rollback_proxy_cost_budget_reservations(state, &cost_budget_reservation_ids)
-                            .await;
-                        rollback_proxy_token_budget_reservations(state, token_budget_reservation_ids)
-                            .await;
+                        rollback_proxy_cost_budget_reservations(
+                            state,
+                            &cost_budget_reservation_ids,
+                        )
+                        .await;
+                        rollback_proxy_token_budget_reservations(
+                            state,
+                            token_budget_reservation_ids,
+                        )
+                        .await;
                         return Err(err);
                     }
                     cost_budget_reservation_ids.push(reservation_id);

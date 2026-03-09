@@ -3,7 +3,17 @@ use serde_json::{Map, Value};
 
 use crate::{DittoError, Result};
 
-use super::{ProviderOptions, ResponseFormat, Warning};
+#[cfg(any(
+    feature = "anthropic",
+    feature = "bedrock",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai",
+    feature = "openai-compatible",
+    feature = "vertex",
+))]
+use super::Warning;
+use super::{ProviderOptions, ResponseFormat};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(transparent)]

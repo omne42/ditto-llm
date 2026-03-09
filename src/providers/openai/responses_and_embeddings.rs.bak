@@ -608,7 +608,8 @@ mod tests {
             },
         ];
 
-        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) =
+            OpenAI::messages_to_input_with_quirks(&messages, false);
         assert!(warnings.is_empty());
         assert_eq!(instructions.as_deref(), Some("sys"));
         assert_eq!(input.len(), 3);
@@ -634,7 +635,8 @@ mod tests {
             }],
         }];
 
-        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) =
+            OpenAI::messages_to_input_with_quirks(&messages, false);
         assert!(warnings.is_empty());
         assert!(instructions.is_none());
         assert_eq!(input.len(), 1);
@@ -682,7 +684,8 @@ mod tests {
             }],
         }];
 
-        let (instructions, input, warnings) = OpenAI::messages_to_input(&messages);
+        let (instructions, input, warnings) =
+            OpenAI::messages_to_input_with_quirks(&messages, false);
         assert!(warnings.is_empty());
         assert!(instructions.is_none());
         assert_eq!(input.len(), 1);

@@ -7,12 +7,12 @@ async fn maybe_handle_proxy_cache_hit(
     now_epoch_seconds: u64,
     _metrics: Option<(&str, std::time::Instant)>,
 ) -> Option<axum::response::Response> {
-    let (Some(cache), Some(cache_key)) = (state.proxy_cache.as_ref(), cache_key) else {
+    let (Some(cache), Some(cache_key)) = (state.proxy.cache.as_ref(), cache_key) else {
         return None;
     };
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let (Some(metrics), Some((metrics_path, _))) = (state.prometheus_metrics.as_ref(), _metrics) {
+    if let (Some(metrics), Some((metrics_path, _))) = (state.proxy.metrics.as_ref(), _metrics) {
         metrics.lock().await.record_proxy_cache_lookup(metrics_path);
     }
 
@@ -28,28 +28,28 @@ async fn maybe_handle_proxy_cache_hit(
 
     #[cfg(feature = "gateway-store-redis")]
     if cached.is_none() {
-        if let Some(store) = state.redis_store.as_ref() {
-            if let Ok(redis_cached) = store.get_proxy_cache_response(cache_key).await {
-                if redis_cached.is_some() {
-                    cache_source = "redis";
-                }
-                cached = redis_cached;
+        if let Some(store) = state.stores.redis.as_ref() {
+            if let Ok(Some(redis_cached)) = store.get_proxy_cache_response(cache_key).await {
+                cache_source = "redis";
+                let mut cache = cache.lock().await;
+                cache.insert_with_metadata(
+                    cache_key.to_string(),
+                    redis_cached.response.clone(),
+                    redis_cached.metadata,
+                    now_epoch_seconds,
+                );
+                cached = Some(redis_cached.response);
             }
         }
     }
 
     let Some(cached) = cached else {
         #[cfg(feature = "gateway-metrics-prometheus")]
-        if let (Some(metrics), Some((metrics_path, _))) = (state.prometheus_metrics.as_ref(), _metrics) {
+        if let (Some(metrics), Some((metrics_path, _))) = (state.proxy.metrics.as_ref(), _metrics) {
             metrics.lock().await.record_proxy_cache_miss(metrics_path);
         }
         return None;
     };
-
-    if cache_source == "redis" {
-        let mut cache = cache.lock().await;
-        cache.insert(cache_key.to_string(), cached.clone(), now_epoch_seconds);
-    }
 
     state.record_cache_hit();
 
@@ -74,7 +74,7 @@ async fn maybe_handle_proxy_cache_hit(
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     if let (Some(metrics), Some((metrics_path, metrics_timer_start))) =
-        (state.prometheus_metrics.as_ref(), _metrics)
+        (state.proxy.metrics.as_ref(), _metrics)
     {
         let mut metrics = metrics.lock().await;
         metrics.record_proxy_cache_hit();

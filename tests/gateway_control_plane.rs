@@ -134,7 +134,7 @@ fn base_config(key: VirtualKeyConfig) -> GatewayConfig {
 async fn virtual_key_validation_rejects_unknown() {
     let config = base_config(base_key());
     let clock = Box::new(FixedClock { now: 0 });
-    let mut gateway = Gateway::with_clock(config, clock);
+    let gateway = Gateway::with_clock(config, clock);
 
     let mut request = base_request();
     request.virtual_key = "invalid".to_string();

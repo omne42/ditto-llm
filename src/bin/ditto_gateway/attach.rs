@@ -1,3 +1,15 @@
+#[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
+fn parse_proxy_failure_action(
+    raw: &str,
+) -> Result<ditto_llm::gateway::proxy_routing::ProxyFailureAction, Box<dyn std::error::Error>> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "none" => Ok(ditto_llm::gateway::proxy_routing::ProxyFailureAction::None),
+        "fallback" => Ok(ditto_llm::gateway::proxy_routing::ProxyFailureAction::Fallback),
+        "retry" => Ok(ditto_llm::gateway::proxy_routing::ProxyFailureAction::Retry),
+        _ => Err("invalid proxy failure action".into()),
+    }
+}
+
 #[cfg(all(feature = "gateway", feature = "sdk"))]
 pub(crate) fn attach_devtools(
     state: ditto_llm::gateway::GatewayHttpState,
@@ -62,27 +74,39 @@ pub(crate) fn attach_proxy_usage_max_body_bytes(
     Ok(state.with_proxy_usage_max_body_bytes(max))
 }
 
+#[cfg(feature = "gateway")]
+#[derive(Default)]
+pub(crate) struct ProxyCacheCliOptions {
+    pub(crate) enabled: bool,
+    pub(crate) ttl_seconds: Option<u64>,
+    pub(crate) max_entries: Option<usize>,
+    pub(crate) max_body_bytes: Option<usize>,
+    pub(crate) max_total_body_bytes: Option<usize>,
+    pub(crate) streaming_enabled: bool,
+    pub(crate) max_stream_body_bytes: Option<usize>,
+}
+
 #[cfg(all(feature = "gateway", feature = "gateway-proxy-cache"))]
 pub(crate) fn attach_proxy_cache(
     state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    ttl_seconds: Option<u64>,
-    max_entries: Option<usize>,
-    max_body_bytes: Option<usize>,
-    max_total_body_bytes: Option<usize>,
+    opts: ProxyCacheCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if !enabled {
+    if !opts.enabled {
         return Ok(state);
     }
 
     let mut config = ditto_llm::gateway::ProxyCacheConfig::default();
-    config.ttl_seconds = ttl_seconds.unwrap_or(config.ttl_seconds).max(1);
-    config.max_entries = max_entries.unwrap_or(config.max_entries).max(1);
-    if let Some(max_body_bytes) = max_body_bytes {
+    config.ttl_seconds = opts.ttl_seconds.unwrap_or(config.ttl_seconds).max(1);
+    config.max_entries = opts.max_entries.unwrap_or(config.max_entries).max(1);
+    if let Some(max_body_bytes) = opts.max_body_bytes {
         config.max_body_bytes = max_body_bytes.max(1);
     }
-    if let Some(max_total_body_bytes) = max_total_body_bytes {
+    if let Some(max_total_body_bytes) = opts.max_total_body_bytes {
         config.max_total_body_bytes = max_total_body_bytes.max(1);
+    }
+    config.streaming_enabled = opts.streaming_enabled;
+    if let Some(max_stream_body_bytes) = opts.max_stream_body_bytes {
+        config.max_stream_body_bytes = max_stream_body_bytes.max(1);
     }
     Ok(state.with_proxy_cache(config))
 }
@@ -90,13 +114,9 @@ pub(crate) fn attach_proxy_cache(
 #[cfg(all(feature = "gateway", not(feature = "gateway-proxy-cache")))]
 pub(crate) fn attach_proxy_cache(
     state: ditto_llm::gateway::GatewayHttpState,
-    enabled: bool,
-    _ttl_seconds: Option<u64>,
-    _max_entries: Option<usize>,
-    _max_body_bytes: Option<usize>,
-    _max_total_body_bytes: Option<usize>,
+    opts: ProxyCacheCliOptions,
 ) -> Result<ditto_llm::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
-    if enabled {
+    if opts.enabled {
         return Err("proxy cache requires `--features gateway-proxy-cache`".into());
     }
     Ok(state)
@@ -108,10 +128,16 @@ pub(crate) struct ProxyRoutingCliOptions {
     pub(crate) retry_enabled: bool,
     pub(crate) retry_status_codes: Option<Vec<u16>>,
     pub(crate) fallback_status_codes: Option<Vec<u16>>,
+    pub(crate) network_error_action: Option<String>,
+    pub(crate) timeout_error_action: Option<String>,
     pub(crate) retry_max_attempts: Option<usize>,
     pub(crate) circuit_breaker_enabled: bool,
     pub(crate) cb_failure_threshold: Option<u32>,
     pub(crate) cb_cooldown_secs: Option<u64>,
+    pub(crate) cb_failure_status_codes: Option<Vec<u16>>,
+    pub(crate) cb_no_network_errors: bool,
+    pub(crate) cb_no_timeout_errors: bool,
+    pub(crate) cb_no_server_errors: bool,
     pub(crate) health_checks_enabled: bool,
     pub(crate) health_check_path: Option<String>,
     pub(crate) health_check_interval_secs: Option<u64>,
@@ -124,10 +150,16 @@ impl ProxyRoutingCliOptions {
         self.retry_enabled
             || self.retry_status_codes.is_some()
             || self.fallback_status_codes.is_some()
+            || self.network_error_action.is_some()
+            || self.timeout_error_action.is_some()
             || self.retry_max_attempts.is_some()
             || self.circuit_breaker_enabled
             || self.cb_failure_threshold.is_some()
             || self.cb_cooldown_secs.is_some()
+            || self.cb_failure_status_codes.is_some()
+            || self.cb_no_network_errors
+            || self.cb_no_timeout_errors
+            || self.cb_no_server_errors
             || self.health_checks_enabled
             || self.health_check_path.is_some()
             || self.health_check_interval_secs.is_some()
@@ -154,6 +186,12 @@ pub(crate) fn attach_proxy_routing(
     if let Some(codes) = opts.fallback_status_codes {
         config.retry.fallback_status_codes = codes;
     }
+    if let Some(action) = opts.network_error_action.as_deref() {
+        config.retry.network_error_action = parse_proxy_failure_action(action)?;
+    }
+    if let Some(action) = opts.timeout_error_action.as_deref() {
+        config.retry.timeout_error_action = parse_proxy_failure_action(action)?;
+    }
     config.retry.max_attempts = opts.retry_max_attempts.filter(|v| *v > 0);
 
     if opts.circuit_breaker_enabled {
@@ -164,6 +202,18 @@ pub(crate) fn attach_proxy_routing(
     }
     if let Some(cooldown) = opts.cb_cooldown_secs {
         config.circuit_breaker.cooldown_seconds = cooldown;
+    }
+    if let Some(codes) = opts.cb_failure_status_codes {
+        config.circuit_breaker.failure_status_codes = codes;
+    }
+    if opts.cb_no_network_errors {
+        config.circuit_breaker.count_network_errors = false;
+    }
+    if opts.cb_no_timeout_errors {
+        config.circuit_breaker.count_timeout_errors = false;
+    }
+    if opts.cb_no_server_errors {
+        config.circuit_breaker.count_server_errors = false;
     }
 
     if opts.health_checks_enabled {

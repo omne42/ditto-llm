@@ -3,8 +3,8 @@ mod ditto_gateway;
 
 #[cfg(feature = "gateway")]
 use ditto_gateway::attach::{
-    ProxyRoutingCliOptions, attach_devtools, attach_otel, attach_pricing_table,
-    attach_prometheus_metrics, attach_proxy_backpressure, attach_proxy_cache,
+    ProxyCacheCliOptions, ProxyRoutingCliOptions, attach_devtools, attach_otel,
+    attach_pricing_table, attach_prometheus_metrics, attach_proxy_backpressure, attach_proxy_cache,
     attach_proxy_max_body_bytes, attach_proxy_routing, attach_proxy_usage_max_body_bytes,
 };
 
@@ -60,6 +60,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_cache_max_entries,
         proxy_cache_max_body_bytes,
         proxy_cache_max_total_body_bytes,
+        proxy_cache_streaming_enabled,
+        proxy_cache_max_stream_body_bytes,
         proxy_max_body_bytes,
         proxy_usage_max_body_bytes,
         proxy_max_in_flight,
@@ -72,10 +74,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         proxy_retry_enabled,
         proxy_retry_status_codes,
         proxy_fallback_status_codes,
+        proxy_network_error_action,
+        proxy_timeout_error_action,
         proxy_retry_max_attempts,
         proxy_circuit_breaker_enabled,
         proxy_cb_failure_threshold,
         proxy_cb_cooldown_secs,
+        proxy_cb_failure_status_codes,
+        proxy_cb_no_network_errors,
+        proxy_cb_no_timeout_errors,
+        proxy_cb_no_server_errors,
         proxy_health_checks_enabled,
         proxy_health_check_path,
         proxy_health_check_interval_secs,
@@ -649,11 +657,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     state = attach_proxy_cache(
         state,
-        proxy_cache_enabled,
-        proxy_cache_ttl_seconds,
-        proxy_cache_max_entries,
-        proxy_cache_max_body_bytes,
-        proxy_cache_max_total_body_bytes,
+        ProxyCacheCliOptions {
+            enabled: proxy_cache_enabled,
+            ttl_seconds: proxy_cache_ttl_seconds,
+            max_entries: proxy_cache_max_entries,
+            max_body_bytes: proxy_cache_max_body_bytes,
+            max_total_body_bytes: proxy_cache_max_total_body_bytes,
+            streaming_enabled: proxy_cache_streaming_enabled,
+            max_stream_body_bytes: proxy_cache_max_stream_body_bytes,
+        },
     )?;
     state = attach_proxy_max_body_bytes(state, proxy_max_body_bytes)?;
     state = attach_proxy_usage_max_body_bytes(state, proxy_usage_max_body_bytes)?;
@@ -673,10 +685,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             retry_enabled: proxy_retry_enabled,
             retry_status_codes: proxy_retry_status_codes,
             fallback_status_codes: proxy_fallback_status_codes,
+            network_error_action: proxy_network_error_action,
+            timeout_error_action: proxy_timeout_error_action,
             retry_max_attempts: proxy_retry_max_attempts,
             circuit_breaker_enabled: proxy_circuit_breaker_enabled,
             cb_failure_threshold: proxy_cb_failure_threshold,
             cb_cooldown_secs: proxy_cb_cooldown_secs,
+            cb_failure_status_codes: proxy_cb_failure_status_codes,
+            cb_no_network_errors: proxy_cb_no_network_errors,
+            cb_no_timeout_errors: proxy_cb_no_timeout_errors,
+            cb_no_server_errors: proxy_cb_no_server_errors,
             health_checks_enabled: proxy_health_checks_enabled,
             health_check_path: proxy_health_check_path,
             health_check_interval_secs: proxy_health_check_interval_secs,

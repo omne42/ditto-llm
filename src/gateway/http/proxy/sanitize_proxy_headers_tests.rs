@@ -13,8 +13,14 @@ mod sanitize_proxy_headers_tests {
             "x-forwarded-authorization",
             axum::http::HeaderValue::from_static("forwarded-secret"),
         );
-        headers.insert("connection", axum::http::HeaderValue::from_static("keep-alive"));
-        headers.insert("keep-alive", axum::http::HeaderValue::from_static("timeout=5"));
+        headers.insert(
+            "connection",
+            axum::http::HeaderValue::from_static("keep-alive"),
+        );
+        headers.insert(
+            "keep-alive",
+            axum::http::HeaderValue::from_static("timeout=5"),
+        );
         headers.insert(
             "proxy-authenticate",
             axum::http::HeaderValue::from_static("Basic realm=\"test\""),
@@ -24,13 +30,19 @@ mod sanitize_proxy_headers_tests {
             axum::http::HeaderValue::from_static("keep-alive"),
         );
         headers.insert("te", axum::http::HeaderValue::from_static("trailers"));
-        headers.insert("trailer", axum::http::HeaderValue::from_static("some-trailer"));
+        headers.insert(
+            "trailer",
+            axum::http::HeaderValue::from_static("some-trailer"),
+        );
         headers.insert(
             "transfer-encoding",
             axum::http::HeaderValue::from_static("chunked"),
         );
         headers.insert("upgrade", axum::http::HeaderValue::from_static("websocket"));
-        headers.insert("content-length", axum::http::HeaderValue::from_static("123"));
+        headers.insert(
+            "content-length",
+            axum::http::HeaderValue::from_static("123"),
+        );
         headers.insert(
             "authorization",
             axum::http::HeaderValue::from_static("Bearer abc"),

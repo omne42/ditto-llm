@@ -22,7 +22,9 @@ async fn maybe_handle_mcp_tools_chat_completions(
             maybe_handle_mcp_tools_chat_completions_impl(state, parts, parsed_json, request_id)
                 .await
         }
-        "/v1/responses" => maybe_handle_mcp_tools_responses(state, parts, parsed_json, request_id).await,
+        "/v1/responses" => {
+            maybe_handle_mcp_tools_responses(state, parts, parsed_json, request_id).await
+        }
         _ => Ok(None),
     }
 }
@@ -60,7 +62,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
     let server_ids = match requested_servers {
         Some(servers) => servers,
         None => {
-            let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+            let mut all: Vec<String> = state.backends.mcp_servers.keys().cloned().collect();
             all.sort();
             all
         }
@@ -304,7 +306,7 @@ async fn maybe_handle_mcp_tools_responses(
     let server_ids = match requested_servers {
         Some(servers) => servers,
         None => {
-            let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+            let mut all: Vec<String> = state.backends.mcp_servers.keys().cloned().collect();
             all.sort();
             all
         }
@@ -380,9 +382,14 @@ async fn maybe_handle_mcp_tools_responses(
 
     if tool_calls.is_empty() {
         if original_stream {
-            let response =
-                call_openai_compat_proxy_with_body(state, parts, request_id, &request_with_tools, true)
-                    .await?;
+            let response = call_openai_compat_proxy_with_body(
+                state,
+                parts,
+                request_id,
+                &request_with_tools,
+                true,
+            )
+            .await?;
             return Ok(Some(response));
         }
         return Ok(Some(rebuild_response(
@@ -481,14 +488,9 @@ async fn maybe_handle_mcp_tools_responses(
                 obj.remove("messages");
             }
 
-            let response = call_openai_compat_proxy_with_body(
-                state,
-                parts,
-                request_id,
-                &follow_up,
-                false,
-            )
-            .await?;
+            let response =
+                call_openai_compat_proxy_with_body(state, parts, request_id, &follow_up, false)
+                    .await?;
             return Ok(Some(response));
         }
 
@@ -515,14 +517,9 @@ async fn maybe_handle_mcp_tools_responses(
             obj.remove("messages");
         }
 
-        let response = call_openai_compat_proxy_with_body(
-            state,
-            parts,
-            &step_request_id,
-            &follow_up,
-            false,
-        )
-        .await?;
+        let response =
+            call_openai_compat_proxy_with_body(state, parts, &step_request_id, &follow_up, false)
+                .await?;
 
         let (status, headers, body) = split_response(response, 8 * 1024 * 1024).await?;
         let value: Value = match serde_json::from_slice(&body) {
@@ -566,9 +563,7 @@ type OpenAiCompatProxyError = (StatusCode, Json<OpenAiErrorResponse>);
 type OpenAiCompatProxyResult<T> = Result<T, OpenAiCompatProxyError>;
 type McpToolSplit = (Vec<McpToolConfig>, Vec<Value>);
 
-fn split_mcp_tool_configs(
-    tools: &[Value],
-) -> OpenAiCompatProxyResult<McpToolSplit> {
+fn split_mcp_tool_configs(tools: &[Value]) -> OpenAiCompatProxyResult<McpToolSplit> {
     let mut mcp = Vec::new();
     let mut other = Vec::new();
 
@@ -638,9 +633,7 @@ fn split_mcp_tool_configs(
     Ok((mcp, other))
 }
 
-fn resolve_mcp_max_steps(
-    cfgs: &[McpToolConfig],
-) -> OpenAiCompatProxyResult<usize> {
+fn resolve_mcp_max_steps(cfgs: &[McpToolConfig]) -> OpenAiCompatProxyResult<usize> {
     let mut max_steps = 1usize;
     for cfg in cfgs {
         if let Some(steps) = cfg.max_steps {
@@ -884,7 +877,11 @@ async fn split_response(
     Ok((status, headers, bytes))
 }
 
-fn rebuild_response(status: StatusCode, headers: HeaderMap, body: Bytes) -> axum::response::Response {
+fn rebuild_response(
+    status: StatusCode,
+    headers: HeaderMap,
+    body: Bytes,
+) -> axum::response::Response {
     let mut response = axum::response::Response::new(Body::from(body));
     *response.status_mut() = status;
     *response.headers_mut() = headers;
@@ -985,7 +982,8 @@ fn mcp_tool_result_to_text(result: &Value) -> String {
 
     if let Some(content) = result.get("content").and_then(|v| v.as_array()) {
         let mut assembled = String::new();
-        let raw_limit = MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES.saturating_add(TRUNCATE_SUFFIX.len());
+        let raw_limit =
+            MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES.saturating_add(TRUNCATE_SUFFIX.len());
         let mut has_text = false;
         for item in content {
             if item.get("type").and_then(|v| v.as_str()) == Some("text") {
@@ -1002,10 +1000,7 @@ fn mcp_tool_result_to_text(result: &Value) -> String {
             }
         }
         if has_text {
-            return truncate_utf8_with_suffix(
-                &assembled,
-                MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES,
-            );
+            return truncate_utf8_with_suffix(&assembled, MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES);
         }
     }
 
@@ -1105,19 +1100,28 @@ mod tests {
     #[test]
     fn tool_name_allowed_accepts_hyphenated_server_prefix() {
         let allowed = BTreeSet::from(["hello".to_string()]);
-        assert!(tool_name_allowed(&json!({"name": "alpha-1-hello"}), &allowed));
+        assert!(tool_name_allowed(
+            &json!({"name": "alpha-1-hello"}),
+            &allowed
+        ));
     }
 
     #[test]
     fn tool_name_allowed_accepts_hyphenated_tool_name() {
         let allowed = BTreeSet::from(["tool-a".to_string()]);
-        assert!(tool_name_allowed(&json!({"name": "alpha-1-tool-a"}), &allowed));
+        assert!(tool_name_allowed(
+            &json!({"name": "alpha-1-tool-a"}),
+            &allowed
+        ));
     }
 
     #[test]
     fn tool_name_allowed_rejects_non_matching_suffix() {
         let allowed = BTreeSet::from(["hello".to_string()]);
-        assert!(!tool_name_allowed(&json!({"name": "alpha-1-world"}), &allowed));
+        assert!(!tool_name_allowed(
+            &json!({"name": "alpha-1-world"}),
+            &allowed
+        ));
     }
 
     #[test]

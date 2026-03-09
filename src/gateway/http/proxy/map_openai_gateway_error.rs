@@ -47,6 +47,12 @@ fn map_openai_gateway_error(err: GatewayError) -> (StatusCode, Json<OpenAiErrorR
             Some("backend_error"),
             message,
         ),
+        GatewayError::BackendTimeout { message } => openai_error(
+            StatusCode::GATEWAY_TIMEOUT,
+            "api_error",
+            Some("backend_timeout"),
+            message,
+        ),
         GatewayError::InvalidRequest { reason } => openai_error(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
@@ -55,4 +61,3 @@ fn map_openai_gateway_error(err: GatewayError) -> (StatusCode, Json<OpenAiErrorR
         ),
     }
 }
-

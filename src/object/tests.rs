@@ -76,6 +76,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "tools")]
     #[tokio::test]
     async fn generate_object_prefers_tool_call() -> Result<()> {
         let model = FakeModel {
@@ -111,6 +112,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "tools")]
     #[tokio::test]
     async fn stream_object_tool_call_emits_array_elements() -> Result<()> {
         let chunks = vec![

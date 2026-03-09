@@ -479,7 +479,7 @@ async fn openai_compat_proxy_respects_backend_timeout_seconds() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
     assert_eq!(
@@ -487,7 +487,7 @@ async fn openai_compat_proxy_respects_backend_timeout_seconds() {
             .get("error")
             .and_then(|err| err.get("code"))
             .and_then(|code| code.as_str()),
-        Some("backend_error")
+        Some("backend_timeout")
     );
 
     mock.assert_calls(1);

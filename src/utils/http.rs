@@ -9,6 +9,17 @@ use crate::{DittoError, Result};
 const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BODY_BYTES: usize = 16 * 1024 * 1024;
 
+pub(crate) fn to_websocket_base_url(base_url: &str) -> String {
+    let base_url = base_url.trim();
+    if let Some(rest) = base_url.strip_prefix("https://") {
+        return format!("wss://{rest}");
+    }
+    if let Some(rest) = base_url.strip_prefix("http://") {
+        return format!("ws://{rest}");
+    }
+    base_url.to_string()
+}
+
 pub(crate) async fn response_text_truncated(
     response: reqwest::Response,
     max_bytes: usize,
@@ -147,6 +158,22 @@ pub(crate) async fn send_checked_bytes(req: reqwest::RequestBuilder) -> Result<B
 mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    #[test]
+    fn to_websocket_base_url_rewrites_http_and_https() {
+        assert_eq!(
+            super::to_websocket_base_url("https://api.openai.com/v1"),
+            "wss://api.openai.com/v1"
+        );
+        assert_eq!(
+            super::to_websocket_base_url("http://localhost:8080/v1"),
+            "ws://localhost:8080/v1"
+        );
+        assert_eq!(
+            super::to_websocket_base_url("wss://proxy.example/v1"),
+            "wss://proxy.example/v1"
+        );
+    }
 
     #[tokio::test]
     async fn send_checked_bytes_errors_on_truncated_http_body() {

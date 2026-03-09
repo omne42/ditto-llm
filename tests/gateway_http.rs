@@ -696,19 +696,17 @@ async fn gateway_http_admin_config_versions_support_rollback() -> ditto_llm::Res
         .await
         .unwrap();
     let rollback_json: serde_json::Value = serde_json::from_slice(&rollback_body)?;
-    assert_eq!(
-        rollback_json
+    assert!(
+        !rollback_json
             .get("dry_run")
             .and_then(|value| value.as_bool())
-            .expect("dry_run"),
-        false
+            .expect("dry_run")
     );
-    assert_eq!(
-        rollback_json
+    assert!(
+        !rollback_json
             .get("noop")
             .and_then(|value| value.as_bool())
-            .expect("noop"),
-        false
+            .expect("noop")
     );
     assert_eq!(
         rollback_json

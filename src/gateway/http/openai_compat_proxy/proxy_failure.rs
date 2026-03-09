@@ -64,7 +64,7 @@ async fn finalize_openai_compat_proxy_failure(
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     if let (Some(metrics), Some((metrics_path, metrics_timer_start))) =
-        (state.prometheus_metrics.as_ref(), ctx.metrics)
+        (state.proxy.metrics.as_ref(), ctx.metrics)
     {
         let status = ctx
             .last_err

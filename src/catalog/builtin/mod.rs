@@ -1,37 +1,46 @@
+#[cfg(feature = "provider-google")]
+mod google;
+#[cfg(any(feature = "provider-openai", feature = "openai"))]
 mod openai;
+#[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+mod openai_compatible;
 
 use super::{CatalogRegistry, ProviderPluginDescriptor};
 
 #[cfg(feature = "provider-anthropic")]
-use crate::catalog::generated::ANTHROPIC_PLUGIN;
+use crate::catalog::generated::providers::ANTHROPIC_PLUGIN;
 #[cfg(feature = "provider-bailian")]
-use crate::catalog::generated::BAILIAN_PLUGIN;
+use crate::catalog::generated::providers::BAILIAN_PLUGIN;
 #[cfg(feature = "provider-deepseek")]
-use crate::catalog::generated::DEEPSEEK_PLUGIN;
+use crate::catalog::generated::providers::DEEPSEEK_PLUGIN;
 #[cfg(feature = "provider-doubao")]
-use crate::catalog::generated::DOUBAO_PLUGIN;
-#[cfg(feature = "provider-google")]
-use crate::catalog::generated::GOOGLE_PLUGIN;
+use crate::catalog::generated::providers::DOUBAO_PLUGIN;
 #[cfg(feature = "provider-hunyuan")]
-use crate::catalog::generated::HUNYUAN_PLUGIN;
+use crate::catalog::generated::providers::HUNYUAN_PLUGIN;
 #[cfg(feature = "provider-kimi")]
-use crate::catalog::generated::KIMI_PLUGIN;
+use crate::catalog::generated::providers::KIMI_PLUGIN;
 #[cfg(feature = "provider-minimax")]
-use crate::catalog::generated::MINIMAX_PLUGIN;
+use crate::catalog::generated::providers::MINIMAX_PLUGIN;
 #[cfg(feature = "provider-openrouter")]
-use crate::catalog::generated::OPENROUTER_PLUGIN;
+use crate::catalog::generated::providers::OPENROUTER_PLUGIN;
 #[cfg(feature = "provider-qianfan")]
-use crate::catalog::generated::QIANFAN_PLUGIN;
+use crate::catalog::generated::providers::QIANFAN_PLUGIN;
 #[cfg(feature = "provider-xai")]
-use crate::catalog::generated::XAI_PLUGIN;
+use crate::catalog::generated::providers::XAI_PLUGIN;
 #[cfg(feature = "provider-zhipu")]
-use crate::catalog::generated::ZHIPU_PLUGIN;
+use crate::catalog::generated::providers::ZHIPU_PLUGIN;
+#[cfg(feature = "provider-google")]
+pub use google::BUILTIN_GOOGLE_PLUGIN;
 
-#[cfg(feature = "openai")]
+#[cfg(any(feature = "provider-openai", feature = "openai"))]
 pub use openai::GENERIC_OPENAI_PLUGIN;
+#[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+pub use openai_compatible::GENERIC_OPENAI_COMPATIBLE_PLUGIN;
 
 const BUILTIN_PROVIDER_PLUGINS: &[ProviderPluginDescriptor] = &[
-    #[cfg(feature = "openai")]
+    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    GENERIC_OPENAI_COMPATIBLE_PLUGIN,
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
     GENERIC_OPENAI_PLUGIN,
     #[cfg(feature = "provider-anthropic")]
     ANTHROPIC_PLUGIN,
@@ -42,7 +51,7 @@ const BUILTIN_PROVIDER_PLUGINS: &[ProviderPluginDescriptor] = &[
     #[cfg(feature = "provider-doubao")]
     DOUBAO_PLUGIN,
     #[cfg(feature = "provider-google")]
-    GOOGLE_PLUGIN,
+    BUILTIN_GOOGLE_PLUGIN,
     #[cfg(feature = "provider-hunyuan")]
     HUNYUAN_PLUGIN,
     #[cfg(feature = "provider-kimi")]

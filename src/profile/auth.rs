@@ -6,7 +6,7 @@ use serde::Deserialize;
 use crate::secrets::resolve_secret_string;
 use crate::{DittoError, Result};
 
-use super::config::ProviderAuth;
+use super::config::{ProviderAuth, ProviderConfig};
 use super::env::Env;
 
 #[derive(Clone)]
@@ -144,8 +144,69 @@ pub(crate) async fn resolve_request_auth_with_default_keys(
     }
 }
 
+fn default_api_key_env_auth() -> ProviderAuth {
+    ProviderAuth::ApiKeyEnv { keys: Vec::new() }
+}
+
+#[cfg(any(
+    feature = "anthropic",
+    feature = "cohere",
+    feature = "google",
+    feature = "openai"
+))]
+pub(crate) async fn resolve_provider_request_auth_required(
+    config: &ProviderConfig,
+    env: &Env,
+    default_keys: &[&str],
+    default_header: &str,
+    default_prefix: Option<&str>,
+) -> Result<RequestAuth> {
+    let auth = config.auth.clone().unwrap_or_else(default_api_key_env_auth);
+    resolve_request_auth_with_default_keys(&auth, env, default_keys, default_header, default_prefix)
+        .await
+}
+
+pub(crate) async fn resolve_provider_request_auth_optional(
+    config: &ProviderConfig,
+    env: &Env,
+    default_keys: &[&str],
+    default_header: &str,
+    default_prefix: Option<&str>,
+) -> Result<Option<RequestAuth>> {
+    match config.auth.as_ref() {
+        Some(auth) => Ok(Some(
+            resolve_request_auth_with_default_keys(
+                auth,
+                env,
+                default_keys,
+                default_header,
+                default_prefix,
+            )
+            .await?,
+        )),
+        None => {
+            let has_default_key = default_keys.iter().any(|key| env.get(key).is_some());
+            if !has_default_key {
+                return Ok(None);
+            }
+
+            let auth = default_api_key_env_auth();
+            Ok(Some(
+                resolve_request_auth_with_default_keys(
+                    &auth,
+                    env,
+                    default_keys,
+                    default_header,
+                    default_prefix,
+                )
+                .await?,
+            ))
+        }
+    }
+}
+
 pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String> {
-    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
+    const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
     resolve_auth_token_with_default_keys(auth, env, DEFAULT_KEYS).await
 }
 

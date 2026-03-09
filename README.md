@@ -15,36 +15,32 @@ Layered product plan (L0/L1/L2):
 
 Current scope:
 
-- Unified types + traits: `LanguageModel` / `EmbeddingModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
+- Default build: generic OpenAI-compatible LLM core (`provider-openai-compatible + cap-llm`). This is the stable base and only default capability promise.
+- Unified LLM types + traits: `LanguageModel`, `Message`/`ContentPart`, `Tool`, `StreamChunk`, `Warning`.
 - Text helpers: `generate_text` / `stream_text` (AI SDK-style `generateText` / `streamText`).
 - Structured outputs: `generate_object_json` / `stream_object` (AI SDK-style `generateObject` / `streamObject`).
-- Multi-modal inputs: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
+- Multi-modal inputs at the request shape level: images + PDF documents via `ContentPart::Image` / `ContentPart::File` (provider support varies; unsupported parts emit `Warning`).
 - Parameter hygiene: `temperature`/`top_p` are clamped to provider ranges; non-finite values are dropped (with warnings).
-- Providers:
-  - OpenAI Responses API (generate + SSE streaming) and embeddings
-  - OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / etc.) and embeddings
-  - Anthropic Messages API (generate + SSE streaming)
-  - Google GenAI (generate + SSE streaming) and embeddings
-  - Cohere Chat API (generate + SSE streaming), embeddings, and rerank (feature-gated)
-- Batches: `BatchClient` for OpenAI/OpenAI-compatible `/batches` (feature `batches`).
-- Provider profile config and model discovery (`ProviderConfig` / `GET /models`) for routing use-cases.
+- Default provider path: OpenAI-compatible Chat Completions (LiteLLM / DeepSeek / Qwen / OpenRouter / local gateways / etc.) with generate + SSE streaming + tools.
+- Optional provider packs and capability packs add official OpenAI Responses, embeddings, images, audio, moderations, Google GenAI, Anthropic Messages, Cohere, Bedrock, Vertex, batches, rerank, and gateway translation surfaces.
+- Provider profile config and model discovery (`ProviderConfig` / `GET /models`) remain available for routing use-cases, but the default examples and docs now assume a generic OpenAI-compatible upstream.
 
 Optional feature-gated modules:
 
 - Agent tool loop: `ToolLoopAgent` + `ToolExecutor` (feature `agent`).
 - Auth adapters: SigV4 signer + OAuth client-credentials flow (feature `auth`).
-- Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `bedrock`, `vertex`).
+- Providers: Bedrock (SigV4) and Vertex (OAuth) adapters with generate + SSE streaming + tools (features `provider-bedrock`, `provider-vertex`).
 - SDK utilities: stream protocol v1, HTTP adapters (SSE/NDJSON), telemetry sink, devtools JSONL logger, MCP tool adapter, cache middleware with streaming replay (feature `sdk`).
 - SDK HTTP helpers: optional `axum` response builders for stream adapters (feature `sdk-axum`).
 - Gateway control-plane: virtual keys, limits, cache, budget, routing, guardrails, passthrough, plus a `ditto-gateway` HTTP server (feature `gateway`). Includes LiteLLM-like conveniences such as `/key/*` endpoints, `/a2a/*` agent proxy, and `/mcp*` MCP tool gateway.
 - Gateway token counting: tiktoken-based input token estimation for proxy budgets/guardrails/costing (feature `gateway-tokenizer`).
-- Gateway translation proxy: OpenAI-compatible `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` backed by Ditto providers (feature `gateway-translation`).
+- Gateway translation proxy: OpenAI-compatible `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*` (create/list/retrieve/delete/content/remix), `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` backed by Ditto providers (feature `gateway-translation`).
 - Gateway proxy caching: in-memory cache for non-streaming OpenAI-compatible responses (feature `gateway-proxy-cache`).
 - Gateway OpenTelemetry: OTLP tracing exporter + structured logs for gateway HTTP requests (feature `gateway-otel`).
 
 Non-goals (for now):
 
-- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
+- The default build is not an API gateway/proxy; the `gateway` feature adds a lightweight control-plane + HTTP service. The `gateway-translation` feature adds translation for `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches`. Full OpenAI surface translation (etc) is tracked in `TODO.md`.
 - Core helpers are single-step and return tool calls to the caller; the `agent` feature offers an opt-in tool loop, but it is not enabled by default.
 - It is not a full UI SDK (no frontend hooks or middleware ecosystem); the `sdk` feature only provides protocol/telemetry/devtools/MCP utilities.
 - Bedrock support targets Anthropic Messages-on-Bedrock; other Bedrock model families and Vertex service-account JWT flows are not covered yet.
@@ -62,6 +58,22 @@ mdbook serve docs
 ```
 
 If you don’t want to install mdBook, you can still read the Markdown directly in `docs/src`.
+
+## Provider Packs and Capability Packs
+
+Ditto now documents provider integration around three separate axes:
+
+- Default core: `provider-openai-compatible + cap-llm` is the only out-of-the-box contract.
+- Provider packs: `provider-openai`, `provider-anthropic`, `provider-google`, `provider-cohere`, `provider-bedrock`, `provider-vertex`, plus provider-specific packs such as `provider-deepseek`, `provider-kimi`, and `provider-openrouter`.
+- Capability packs: `cap-llm`, `cap-embedding`, `cap-image-generation`, `cap-image-edit`, `cap-audio-transcription`, `cap-audio-speech`, `cap-moderation`, `cap-rerank`, `cap-batch`, `cap-realtime`.
+
+The intended boundary is:
+
+- `provider` selects the runtime adapter/provider pack.
+- `ProviderConfig` configures one concrete upstream node for that runtime.
+- `GenerateRequest.provider_options` stays request-scoped.
+
+See `PROVIDERS.md` for the provider × capability × feature × status table.
 
 ## Tool Schemas
 
@@ -91,17 +103,26 @@ and `exclusiveMinimum`/`exclusiveMaximum` (number form → `minimum`/`maximum` +
 
 ## Examples
 
-Examples expect provider API keys in environment variables.
+Default-core examples expect a generic OpenAI-compatible upstream:
 
 ```bash
+export OPENAI_COMPAT_BASE_URL="https://your-openai-compatible-endpoint/v1"
+export OPENAI_COMPAT_MODEL="your-chat-model"
+export OPENAI_COMPAT_API_KEY="sk-..."   # optional for local gateways that do not require auth
+
 cargo run --example basic
 cargo run --example streaming
 cargo run --example tool_calling
-cargo run --example embeddings
 cargo run --example openai_compatible
-cargo run --example openai_compatible_embeddings
-cargo run --example multimodal --features base64 -- ./image.png ./doc.pdf
-cargo run --example batches --features batches -- ./requests.jsonl
+```
+
+Additional provider/capability examples stay opt-in:
+
+```bash
+cargo run --example openai_compatible_embeddings --features cap-embedding
+cargo run --example embeddings --features "provider-openai cap-embedding"
+cargo run --example multimodal --features "provider-openai cap-llm base64" -- ./image.png ./doc.pdf
+cargo run --example batches --features "provider-openai-compatible cap-batch" -- ./requests.jsonl
 ```
 
 ## Gateway (optional)
@@ -118,11 +139,11 @@ YAML config is optional (feature `gateway-config-yaml`):
 cargo run --features gateway-config-yaml --bin ditto-gateway -- ./gateway.yaml --listen 0.0.0.0:8080
 ```
 
-Minimal admin UI (React):
+Optional admin UI asset (React; outside the default core build/CI path):
 
 ```bash
 pnpm install
-pnpm dev
+pnpm run dev:admin-ui
 ```
 
 Minimal multi-language gateway clients:
@@ -153,7 +174,7 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
 `backends[].max_in_flight` optionally caps concurrent in-flight proxy requests per backend (rejects with HTTP 429 + OpenAI-style error code `inflight_limit_backend`).
 `backends[].timeout_seconds` optionally overrides the backend request timeout in seconds (default: 300s).
 
-Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` fields (e.g. `base_url`/`http_headers`/`http_query_params`), `virtual_keys[].token`, `a2a_agents[]` (agent url/headers/query), and `mcp_servers[]` (server url/headers/query) (expanded at startup via the process env or `--dotenv`).
+Gateway config supports `${ENV_VAR}` interpolation in backend `base_url`/`headers`/`query_params`, backend `provider_config` node fields (for example `base_url`, `default_model`, `http_headers`, `http_query_params`, `auth`, `upstream_api`, `normalize_to`, `normalize_endpoint`), `virtual_keys[].token`, `a2a_agents[]` (agent url/headers/query), and `mcp_servers[]` (server url/headers/query) (expanded at startup via the process env or `--dotenv`).
 
 Translation backends (feature `gateway-translation`) can be configured with `provider` + `provider_config` (same shape as `ProviderConfig`):
 
@@ -174,6 +195,8 @@ Translation backends (feature `gateway-translation`) can be configured with `pro
 }
 ```
 
+`provider` selects the runtime adapter; `provider_config` only provides the concrete upstream node settings for that adapter.
+
 For OpenAI-compatible upstreams, `provider` can be `openai-compatible`/`openai_compatible` or a LiteLLM-style alias (e.g. `groq`, `mistral`, `deepseek`, `qwen`, `together`, `fireworks`, `xai`, `perplexity`, `openrouter`, `ollama`, `azure`).
 
 Routing (optional):
@@ -181,7 +204,7 @@ Routing (optional):
 - `router.default_backends`: weighted primary selection (seeded by `x-request-id` when proxying)
 - `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backends` when empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
-- With `--features gateway-routing-advanced`, proxying can also use status-based retry/fallback, circuit breaker, and active health checks (`--proxy-retry*` / `--proxy-fallback-status-codes` / `--proxy-circuit-breaker*` / `--proxy-health-check*`).
+- With `--features gateway-routing-advanced`, proxying can also use typed retry/fallback policies for status/network/timeout failures, circuit breaker controls, and active health checks (`--proxy-retry*` / `--proxy-fallback-status-codes` / `--proxy-network-error-action` / `--proxy-timeout-error-action` / `--proxy-circuit-breaker*` / `--proxy-cb-failure-status-codes` / `--proxy-health-check*`).
 
 Endpoints:
 
@@ -190,7 +213,7 @@ Endpoints:
   - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key` / `x-api-key`).
   - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
-- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
+- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*` (create/list/retrieve/delete/content/remix), `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /metrics`
@@ -238,10 +261,14 @@ CLI options:
 - `--proxy-retry` enables retry on retryable statuses (requires `--features gateway-routing-advanced`).
 - `--proxy-retry-status-codes CODES` overrides retry status codes (comma-separated; implies `--proxy-retry`).
 - `--proxy-fallback-status-codes CODES` falls back to the next backend when a response status matches (comma-separated; works even when retry is disabled).
+- `--proxy-network-error-action ACTION` controls what to do on transport failures (`none`, `fallback`, `retry`; default: `fallback`).
+- `--proxy-timeout-error-action ACTION` controls what to do on backend timeouts (`none`, `fallback`, `retry`; default: `fallback`).
 - `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).
 - `--proxy-circuit-breaker` enables a simple circuit breaker (requires `--features gateway-routing-advanced`).
 - `--proxy-cb-failure-threshold N` sets circuit breaker failure threshold (implies `--proxy-circuit-breaker`).
 - `--proxy-cb-cooldown-secs SECS` sets circuit breaker cooldown seconds (implies `--proxy-circuit-breaker`).
+- `--proxy-cb-failure-status-codes CODES` adds extra status codes that should count toward the circuit breaker (for example `408,429`).
+- `--proxy-cb-no-network-errors`, `--proxy-cb-no-timeout-errors`, `--proxy-cb-no-server-errors` disable individual circuit-breaker failure buckets.
 - `--proxy-health-checks` enables active health checks (requires `--features gateway-routing-advanced`).
 - `--proxy-health-check-path PATH` overrides the health check request path (implies `--proxy-health-checks`; default: `/v1/models`).
 - `--proxy-health-check-interval-secs SECS` sets health check interval seconds (implies `--proxy-health-checks`).
@@ -408,7 +435,7 @@ let http = reqwest::Client::builder().build()?;
 let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
 ```
 
-When building providers from config, you can also set default headers via
+When building providers from config, you can also set per-node default headers via
 `ProviderConfig.http_headers`.
 
 ## Provider Auth (Custom Headers / Query Params)
@@ -438,7 +465,7 @@ The command stdout may be a plain token, a JSON string (`"sk-..."`), or a JSON o
 `api_key`/`token`/`access_token`. Ditto enforces a 15s timeout (configurable via
 `DITTO_AUTH_COMMAND_TIMEOUT_MS/SECS`) and a 64KiB stdout/stderr cap.
 
-## Provider Query Params (Optional)
+## Provider Node Query Params (Optional)
 
 If your provider requires additional fixed query params on every request (e.g. Azure OpenAI
 `api-version`), set `ProviderConfig.http_query_params`:
@@ -490,6 +517,36 @@ git config core.hooksPath githooks
 ```
 
 This enforces Conventional Commits and requires each commit to include `CHANGELOG.md`.
+
+### Structure Gates
+
+默认结构 gate 以 Rust 主线为准，目标是让“默认 core + all-features + no-default-features + provider feature matrix”都持续可构建、可 lint。对应的本地最小命令集：
+
+```bash
+cargo fmt -- --check
+cargo run --bin ditto-llms-txt -- --check
+cargo check
+cargo test --all-targets
+cargo check --examples
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+cargo check --no-default-features
+cargo clippy --no-default-features -- -D warnings
+```
+
+Node 默认只验证 `packages/*`：
+
+```bash
+pnpm run typecheck
+pnpm run build
+```
+
+可选 Admin UI 资产单独验证：
+
+```bash
+pnpm run typecheck:admin-ui
+pnpm run build:admin-ui
+```
 
 ### Integration Tests (Optional)
 

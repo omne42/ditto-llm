@@ -47,7 +47,7 @@ struct FakeFileClient;
 
 #[async_trait]
 impl FileClient for FakeFileClient {
-    fn provider(&self) -> &str {
+    fn provider_name(&self) -> &str {
         "fake"
     }
 

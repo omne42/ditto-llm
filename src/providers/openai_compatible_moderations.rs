@@ -1,1 +1,1 @@
-pub use super::openai_moderations::OpenAICompatibleModerations;
+pub use super::openai::OpenAICompatibleModerations;

@@ -1,0 +1,1176 @@
+{
+  "base_url": "https://yunwu.ai/v1",
+  "tested_at": "2026-03-08T16:43:56Z",
+  "models_total_local_text": 53,
+  "models_total_intersection": 45,
+  "results": [
+    {
+      "id": "babbage-002",
+      "local_surfaces": [
+        "completion.legacy"
+      ],
+      "supported_endpoint_types": [],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "completions",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309003620665492922shZovexQ)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":null}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004437202385256ztSD9MyS)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":null}}"
+      }
+    },
+    {
+      "id": "chatgpt-4o-latest",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 202603090036341368301164JNzzm4a)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_not_found\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004449368863880A2uwP4Hl)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_not_found\"}}"
+      }
+    },
+    {
+      "id": "davinci-002",
+      "local_surfaces": [
+        "completion.legacy"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "completions",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 202603090036441574764Ydkv9nBp)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":null}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004501688037416fMGOq8Zf)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":null}}"
+      }
+    },
+    {
+      "id": "gpt-3.5-turbo",
+      "local_surfaces": [
+        "chat.completion"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 503,
+        "attempts": 1,
+        "error_excerpt": "{\"error\":{\"message\":\"No available channels for model gpt-3.5-turbo in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309003645301708402viBG89nw)\",\"message_zh\":\"当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-3.5-turbo 无可用渠道\",\"type\":\"new_api_error\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 503,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"No available channels for model gpt-3.5-turbo in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309004513815045360ZuDdlqnm)\",\"message_zh\":\"当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专"
+      }
+    },
+    {
+      "id": "gpt-4",
+      "local_surfaces": [
+        "chat.completion"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "The user says: \"Reply with OK only.\" So we should respond with just \"OK\". No extra text.OK",
+          "has_tool_calls": false,
+          "cached_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 106
+        },
+        "raw_excerpt": "{\"id\":\"4eefb16bb5894ef78dba892f28d1c016\",\"object\":\"chat.completion\",\"created\":1772987810,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"The user says: \\\"Reply with OK only.\\\" So we should respond with just \\\"OK\\\". No extra text.OK\",\"reasoning_content\":\"The user says: \\\"Reply with OK only.\\\" So we should respond with just \\\"OK\\\". No extra text.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":72,\"completion_tokens\":34,\"total_tokens\":106,\"prompt_tokens_details\":{},\"completion_tokens_details\":{},\"input_tokens\":0,\"output_tokens\":0,\"input_tokens_details\":null}}"
+      }
+    },
+    {
+      "id": "gpt-4-turbo",
+      "local_surfaces": [
+        "chat.completion"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPYTIlbb6hFJjX1yhCBA3nBURQM\",\"object\":\"chat.completion\",\"created\":1772987812,\"model\":\"gpt-4-turbo-2024-04-09\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0},\"input_tokens\":0,\"output_tokens\":0,\"input_tokens_details\":null},\"system_fingerprint\":\"fp_7a7fd0eb44\"}"
+      }
+    },
+    {
+      "id": "gpt-4-turbo-preview",
+      "local_surfaces": [
+        "chat.completion"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPaql2Ld9V6MJHtYNX4wRDd6FC5\",\"object\":\"chat.completion\",\"created\":1772987815,\"model\":\"gpt-4-turbo-preview\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0},\"input_tokens\":0,\"output_tokens\":0,\"input_tokens_details\":null},\"system_fingerprint\":\"fp_7a7fd0eb44\"}"
+      }
+    },
+    {
+      "id": "gpt-4.1",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPcGCJJ543Y5P4qgKj9HBSx0HYa\",\"object\":\"chat.completion\",\"created\":1772987816,\"model\":\"gpt-4.1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_63d8723934\"}"
+      }
+    },
+    {
+      "id": "gpt-4.1-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPe4XVpsifpGW3FRlfc78IuR0VX\",\"object\":\"chat.completion\",\"created\":1772987818,\"model\":\"gpt-4.1-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_b6f445fc1c\",\"service_tier\":\"default\"}"
+      }
+    },
+    {
+      "id": "gpt-4.1-nano",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPfa6UYV2HY8UlmQaS9Os6iT2UP\",\"object\":\"chat.completion\",\"created\":1772987819,\"model\":\"gpt-4.1-nano\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_490a4ad033\"}"
+      }
+    },
+    {
+      "id": "gpt-4.5-preview",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309003709616809893etz2X9HG)\",\"type\":\"shell_api_error\",\"param\":\"\",\"code\":null}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004527239425852vepseHdd)\",\"type\":\"shell_api_error\",\"param\":\"\",\"code\":null}}"
+      }
+    },
+    {
+      "id": "gpt-4o",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBPrnegRPUJVvao90CjdmPIBWRbU\",\"object\":\"chat.completion\",\"created\":1772987831,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_af7f7349a4\"}"
+      }
+    },
+    {
+      "id": "gpt-4o-audio-preview",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"This model requires that either input content or output modality contain audio. (request id: 20260309003727352481370VvcuUMu4)\",\"type\":\"invalid_request_error\",\"param\":\"model\",\"code\":\"invalid_value\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"This model requires that either input content or output modality contain audio. (request id: 20260309004544897800274LgGEwegk)\",\"type\":\"invalid_request_error\",\"param\":\"model\",\"code\":\"invalid_value\"}}"
+      }
+    },
+    {
+      "id": "gpt-4o-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 14
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBQCq07lS1Axh1fNbACHkIJBl5f6\",\"object\":\"chat.completion\",\"created\":1772987852,\"model\":\"gpt-4o-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":2,\"total_tokens\":14,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_f97eff32c5\"}"
+      }
+    },
+    {
+      "id": "gpt-4o-mini-audio-preview",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309003747806707712ZKN2EKJA)\",\"type\":\"upstream_error\",\"param\":\"\",\"code\":\"model_not_found\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004607201045746Fw5X64rY)\",\"type\":\"upstream_error\",\"param\":\"\",\"code\":\"model_not_found\"}}"
+      }
+    },
+    {
+      "id": "gpt-4o-search-preview",
+      "local_surfaces": [
+        "chat.completion"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 503,
+        "attempts": 1,
+        "error_excerpt": "{\"error\":{\"message\":\"No available channels for model gpt-4o-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 202603090037516395828406AuhGfHQ)\",\"message_zh\":\"当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-search-preview 无可用渠道\",\"type\":\"new_api_error\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 503,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"No available channels for model gpt-4o-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 2026030900462276259635jMEvJttQ)\",\"message_zh\":\"当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claud"
+      }
+    },
+    {
+      "id": "gpt-5",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 22
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBQWl0qmtSfgYHCjq6NKdmHf092J\",\"object\":\"chat.completion\",\"created\":1772987872,\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":11,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null,\"service_tier\":\"default\"}"
+      }
+    },
+    {
+      "id": "gpt-5-chat-latest",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Unsupported value: 'low' is not supported with the 'gpt-5-chat-2025-08-07' model. Supported values are: 'medium'. (request id: 20260309003814364682355BJYeE8xy)\",\"type\":\"invalid_request_error\",\"param\":\"text.verbosity\",\"code\":\"unsupported_value\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Invalid 'max_output_tokens': integer below minimum value. Expected a value \\u003e= 16, but got 8 instead. (request id: 20260309004634662307363QvfL2ABX)\",\"type\":\"invalid_request_error\",\"param\":\"max_output_tokens\",\"code\":\"integer_below_min_value\"}}"
+      }
+    },
+    {
+      "id": "gpt-5-codex",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309003857597517314po0z2ZMb)\",\"type\":\"upstream_error\",\"param\":\"\",\"code\":\"model_not_found\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Invalid 'max_output_tokens': integer below minimum value. Expected a value \\u003e= 16, but got 8 instead. (request id: 202603090047185859855819gejZ6Gn)\",\"type\":\"invalid_request_error\",\"param\":\"max_output_tokens\",\"code\":\"integer_below_min_value\"}}"
+      }
+    },
+    {
+      "id": "gpt-5-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "response",
+          "status": "incomplete",
+          "incomplete_reason": "max_output_tokens",
+          "output_types": [
+            "reasoning"
+          ],
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 11,
+          "reasoning_effort": "medium"
+        },
+        "raw_excerpt": "{\"id\":\"resp_0393ca8df92e72480069ada63049e48193ac69744abb84f80f\",\"object\":\"response\",\"model\":\"gpt-5-mini\",\"usage\":{\"total_tokens\":11,\"input_tokens\":11,\"input_tokens_details\":{\n      \"cached_tokens\": 0\n    },\"output_tokens\":0,\"output_tokens_details\":{\n      \"reasoning_tokens\": 0\n    }},\"created_at\":1772987952,\"status\":\"incomplete\",\"background\":false,\"completed_at\":null,\"content_filters\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":{\n    \"reason\": \"max_output_tokens\"\n  },\"instructions\":null,\"max_output_tokens\":16,\"max_tool_calls\":null,\"output\":[\n    {\n      \"id\": \"rs_0393ca8df92e72480069ada631ad6c8193b94d41ea87605c30\",\n      \"type\": \"reasoning\",\n      \"summary\": []\n    }\n  ],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":null,\"prompt_cache_retention\":null,\"reasoning\":{\n    \"effort\": \"medium\",\n    \"summary\": null\n  },\"safety_identifier\":null,\"service_tier\":\"default\",\"store\":true,\"temperature\":1.0,\"text\":{\n    \"format\": {\n      \"type\": \"text\"\n    },\n    \"verbosity\": \"low\"\n  },\"tool_choice\":\"auto\",\"tools\":[],\"top_logprobs\":0,\"top_p\":1.0,\"truncation\":\"disabled\",\"user\":null,\"metadata\":{}}"
+      }
+    },
+    {
+      "id": "gpt-5-nano",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "response",
+          "status": "incomplete",
+          "incomplete_reason": "max_output_tokens",
+          "output_types": [
+            "reasoning"
+          ],
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 11,
+          "reasoning_effort": "medium"
+        },
+        "raw_excerpt": "{\"id\":\"resp_0d9b82b104c98aa00069ada6333ecc81979921ee720dde4971\",\"object\":\"response\",\"model\":\"gpt-5-nano\",\"usage\":{\"total_tokens\":11,\"input_tokens\":11,\"input_tokens_details\":{\n      \"cached_tokens\": 0\n    },\"output_tokens\":0,\"output_tokens_details\":{\n      \"reasoning_tokens\": 0\n    }},\"created_at\":1772987955,\"status\":\"incomplete\",\"background\":false,\"completed_at\":null,\"content_filters\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":{\n    \"reason\": \"max_output_tokens\"\n  },\"instructions\":null,\"max_output_tokens\":16,\"max_tool_calls\":null,\"output\":[\n    {\n      \"id\": \"rs_0d9b82b104c98aa00069ada633c6748197b09c091761cf1923\",\n      \"type\": \"reasoning\",\n      \"summary\": []\n    }\n  ],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":null,\"prompt_cache_retention\":null,\"reasoning\":{\n    \"effort\": \"medium\",\n    \"summary\": null\n  },\"safety_identifier\":null,\"service_tier\":\"default\",\"store\":true,\"temperature\":1.0,\"text\":{\n    \"format\": {\n      \"type\": \"text\"\n    },\n    \"verbosity\": \"low\"\n  },\"tool_choice\":\"auto\",\"tools\":[],\"top_logprobs\":0,\"top_p\":1.0,\"truncation\":\"disabled\",\"user\":null,\"metadata\":{}}"
+      }
+    },
+    {
+      "id": "gpt-5-pro",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "response",
+          "status": "incomplete",
+          "incomplete_reason": "max_output_tokens",
+          "output_types": [
+            "reasoning"
+          ],
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 11,
+          "reasoning_effort": "high"
+        },
+        "raw_excerpt": "{\"id\":\"resp_0ec5e625ad62e13b0069ada6360b5481969e2e4841d6ec2fa4\",\"object\":\"response\",\"model\":\"gpt-5-pro\",\"usage\":{\"total_tokens\":11,\"input_tokens\":11,\"input_tokens_details\":{\n      \"cached_tokens\": 0\n    },\"output_tokens\":0,\"output_tokens_details\":{\n      \"reasoning_tokens\": 0\n    }},\"created_at\":1772987958,\"status\":\"incomplete\",\"background\":false,\"completed_at\":null,\"content_filters\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":{\n    \"reason\": \"max_output_tokens\"\n  },\"instructions\":null,\"max_output_tokens\":16,\"max_tool_calls\":null,\"output\":[\n    {\n      \"id\": \"rs_0ec5e625ad62e13b0069ada63f8d5c81968538c4ddbdca499c\",\n      \"type\": \"reasoning\",\n      \"summary\": []\n    }\n  ],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":null,\"prompt_cache_retention\":null,\"reasoning\":{\n    \"effort\": \"high\",\n    \"summary\": null\n  },\"safety_identifier\":null,\"service_tier\":\"default\",\"store\":true,\"temperature\":1.0,\"text\":{\n    \"format\": {\n      \"type\": \"text\"\n    },\n    \"verbosity\": \"low\"\n  },\"tool_choice\":\"auto\",\"tools\":[],\"top_logprobs\":0,\"top_p\":1.0,\"truncation\":\"disabled\",\"user\":null,\"metadata\":{}}"
+      }
+    },
+    {
+      "id": "gpt-5.1",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response",
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 22
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBS5QSgxhuNNLZ6ts5aKFSzQRYSh\",\"object\":\"chat.completion\",\"created\":1772987969,\"model\":\"gpt-5.1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":11,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    },
+    {
+      "id": "gpt-5.1-chat-latest",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 22
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBS77ol8uoitKVMhopwEQ5QjIw7N\",\"object\":\"chat.completion\",\"created\":1772987971,\"model\":\"gpt-5.1-chat-latest\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":11,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    },
+    {
+      "id": "gpt-5.1-codex",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Unsupported value: 'low' is not supported with the 'gpt-5.1-codex-2025-11-13' model. Supported values are: 'medium'. (request id: 20260309004019374321198S2it0njZ)\",\"type\":\"invalid_request_error\",\"param\":\"text.verbosity\",\"code\":\"unsupported_value\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Invalid 'max_output_tokens': integer below minimum value. Expected a value \\u003e= 16, but got 8 instead. (request id: 20260309004745836756054KARqBNNl)\",\"type\":\"invalid_request_error\",\"param\":\"max_output_tokens\",\"code\":\"integer_below_min_value\"}}"
+      }
+    },
+    {
+      "id": "gpt-5.1-codex-max",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Unsupported value: 'low' is not supported with the 'gpt-5.1-codex-max-2025-12-04' model. Supported values are: 'medium'. (request id: 20260309004145269626108mTV4Muip)\",\"type\":\"invalid_request_error\",\"param\":\"text.verbosity\",\"code\":\"unsupported_value\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Invalid 'max_output_tokens': integer below minimum value. Expected a value \\u003e= 16, but got 8 instead. (request id: 20260309004800767474069DUKfxo1m)\",\"type\":\"invalid_request_error\",\"param\":\"max_output_tokens\",\"code\":\"integer_below_min_value\"}}"
+      }
+    },
+    {
+      "id": "gpt-5.1-codex-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response",
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"The chatCompletion operation does not work with the specified model, gpt-5.1-codex-mini. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309004218440199857Bg82Y5w)\",\"type\":\"\",\"param\":\"\",\"code\":\"OperationNotSupported\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"The chatCompletion operation does not work with the specified model, gpt-5.1-codex-mini. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 2026030"
+      }
+    },
+    {
+      "id": "gpt-5.2",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 16
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-20260308164221367738901VEzIeEI2\",\"object\":\"chat.completion\",\"created\":1772988143,\"model\":\"gpt-5.2\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":5,\"total_tokens\":16,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null,\"service_tier\":\"default\"}"
+      }
+    },
+    {
+      "id": "gpt-5.2-chat-latest",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 33
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBUvxTqs4SuwrkkNvtOGBWYsmySA\",\"object\":\"chat.completion\",\"created\":1772988145,\"model\":\"gpt-5.2-chat-latest\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":22,\"total_tokens\":33,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    },
+    {
+      "id": "gpt-5.2-codex",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"The chatCompletion operation does not work with the specified model, gpt-5.2-codex. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309004235204284073jpiX46qR)\",\"type\":\"\",\"param\":\"\",\"code\":\"OperationNotSupported\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"The chatCompletion operation does not work with the specified model, gpt-5.2-codex. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 202603090048"
+      }
+    },
+    {
+      "id": "gpt-5.3-chat-latest",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 22
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBV6FNYacImcPzlF9r6dLkzR8CZT\",\"object\":\"chat.completion\",\"created\":1772988158,\"model\":\"gpt-5.3-chat-latest\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":11,\"total_tokens\":22,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0},\"input_tokens\":0,\"output_tokens\":0,\"input_tokens_details\":null}}"
+      }
+    },
+    {
+      "id": "gpt-5.3-codex",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 16
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-20260308164240486290800r7iLJ4jU\",\"object\":\"chat.completion\",\"created\":1772988162,\"model\":\"gpt-5.3-codex\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":5,\"total_tokens\":16,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null,\"service_tier\":\"default\"}"
+      }
+    },
+    {
+      "id": "gpt-5.4",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 16
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-20260308164246669578786SpJaR7FD\",\"object\":\"chat.completion\",\"created\":1772988168,\"model\":\"gpt-5.4\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":5,\"total_tokens\":16,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null,\"service_tier\":\"default\"}"
+      }
+    },
+    {
+      "id": "gpt-5.4-pro",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "incomplete_reason": null,
+          "output_types": [
+            "message"
+          ],
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 16,
+          "reasoning_effort": "none"
+        },
+        "raw_excerpt": "{\"id\":\"resp_0dd5858dacf33ce30069ada70bd8348190bee2f4f3829ce617\",\"object\":\"response\",\"model\":\"gpt-5.4-pro\",\"usage\":{\"total_tokens\":16,\"input_tokens\":11,\"input_tokens_details\":{\n      \"cached_tokens\": 0\n    },\"output_tokens\":5,\"output_tokens_details\":{\n      \"reasoning_tokens\": 0\n    }},\"created_at\":1772988171,\"status\":\"completed\",\"background\":false,\"completed_at\":1772988175,\"content_filters\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":null,\"max_output_tokens\":16,\"max_tool_calls\":null,\"output\":[\n    {\n      \"id\": \"msg_0dd5858dacf33ce30069ada70ed62481908e944106eca94da0\",\n      \"type\": \"message\",\n      \"status\": \"completed\",\n      \"content\": [\n        {\n          \"type\": \"output_text\",\n          \"annotations\": [],\n          \"logprobs\": [],\n          \"text\": \"OK\"\n        }\n      ],\n      \"phase\": \"final_answer\",\n      \"role\": \"assistant\"\n    }\n  ],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":null,\"prompt_cache_retention\":null,\"reasoning\":{\n    \"effort\": \"none\",\n    \"summary\": null\n  },\"safety_identifier\":null,\"service_tier\":\"default\",\"store\":true,\"temperature\":1.0,\"text\":{\n    \"format\": {\n      \"t"
+      }
+    },
+    {
+      "id": "gpt-audio",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004304516275195DQvAieUn)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_price_error\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004839414378224qOGNdE4A)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_price_error\"}}"
+      }
+    },
+    {
+      "id": "gpt-audio-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 20260309004313430457169Pb5hooQe)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_price_error\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"当前分组上游负载已饱和，请稍后再试 (request id: 2026030900485199657973gyYV56Tw)\",\"type\":\"new_api_error\",\"param\":\"\",\"code\":\"model_price_error\"}}"
+      }
+    },
+    {
+      "id": "gpt-oss-120b",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": null,
+          "reasoning_tokens": null,
+          "total_tokens": 106
+        },
+        "raw_excerpt": "{\"id\":\"de94f49a79f7488cb584d3153ee84a22\",\"object\":\"chat.completion\",\"created\":1772988197,\"model\":\"gpt-oss-120b\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"tool_calls\":null,\"reasoning_content\":\"The user says: \\\"Reply with OK only.\\\" So we should respond with just \\\"OK\\\". No extra text.\"},\"logprobs\":null,\"finish_reason\":\"stop\",\"stop_reason\":null}],\"usage\":{\"prompt_tokens\":72,\"completion_tokens\":34,\"total_tokens\":106,\"prompt_tokens_details\":{},\"audio_prompt_tokens\":0,\"reasoning_tokens\":0}}"
+      }
+    },
+    {
+      "id": "gpt-oss-20b",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": null,
+          "reasoning_tokens": 19,
+          "total_tokens": 32
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-89DzfeJHUF7F5jC16NhjmNXmdR613\",\"object\":\"chat.completion\",\"created\":1772988200,\"model\":\"gpt-oss-20b\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"reasoning_content\":\"The user says: \\\"Reply with OK only.\\\" So I should reply \\\"OK\\\" exactly.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":20,\"total_tokens\":32,\"prompt_tokens_details\":{\"text_tokens\":5},\"completion_tokens_details\":{\"reasoning_tokens\":19,\"content_tokens\":1}}}"
+      }
+    },
+    {
+      "id": "o1",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response",
+        "openai"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 64,
+          "total_tokens": 88
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBVp0DkhfgzkNexWaru9vZEkpNi5\",\"object\":\"chat.completion\",\"created\":1772988201,\"model\":\"o1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":77,\"total_tokens\":88,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":64,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_a2dc940e6b\"}"
+      }
+    },
+    {
+      "id": "o1-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 40
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBVvWco4OlCZh6Cs5V9RF1CnqiEv\",\"object\":\"chat.completion\",\"created\":1772988207,\"model\":\"o1-mini-2024-09-12\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\",\"content_filter_result\":{\"error\":{\"code\":\"content_filter_error\",\"message\":\"The contents are not filtered\"}}}],\"usage\":{\"prompt_tokens\":38,\"completion_tokens\":2,\"total_tokens\":40,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_b6f445fc1c\"}"
+      }
+    },
+    {
+      "id": "o1-preview",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 31
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBW325d8osHXc2mAi31s2CqP3rxU\",\"object\":\"chat.completion\",\"created\":1772988215,\"model\":\"o1-preview\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":20,\"total_tokens\":31,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    },
+    {
+      "id": "o3",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response",
+        "openai"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 31
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBW6RbmRCwGrDL2FsaJ4vRXbSU97\",\"object\":\"chat.completion\",\"created\":1772988218,\"model\":\"o3\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":20,\"total_tokens\":31,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    },
+    {
+      "id": "o3-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "openai",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 64,
+          "total_tokens": 87
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBW8idfj7yEYuZNqcJmWDr1WGOKU\",\"object\":\"chat.completion\",\"created\":1772988220,\"model\":\"o3-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":76,\"total_tokens\":87,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":64,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":\"fp_0d2bf52fac\"}"
+      }
+    },
+    {
+      "id": "o3-pro",
+      "local_surfaces": [
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "responses",
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Unsupported value: 'low' is not supported with the 'o3-pro-2025-06-10' model. Supported values are: 'medium'. (request id: 20260309004352664749803jHtNTe70)\",\"type\":\"invalid_request_error\",\"param\":\"text.verbosity\",\"code\":\"unsupported_value\"}}"
+      },
+      "retry_test": {
+        "ok": false,
+        "http_status": 429,
+        "attempts": 3,
+        "error_excerpt": "{\"error\":{\"message\":\"Invalid 'max_output_tokens': integer below minimum value. Expected a value \\u003e= 16, but got 8 instead. (request id: 20260309004903145407525FwEjTXqf)\",\"type\":\"invalid_request_error\",\"param\":\"max_output_tokens\",\"code\":\"integer_below_min_value\"}}"
+      }
+    },
+    {
+      "id": "o4-mini",
+      "local_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "supported_endpoint_types": [
+        "openai",
+        "openai-response"
+      ],
+      "owned_by": "custom",
+      "primary_test": {
+        "endpoint_kind": "chat",
+        "ok": true,
+        "http_status": 200,
+        "attempts": 1,
+        "summary": {
+          "object": "chat.completion",
+          "finish_reason": "stop",
+          "content": "OK",
+          "has_tool_calls": false,
+          "cached_tokens": 0,
+          "reasoning_tokens": 64,
+          "total_tokens": 95
+        },
+        "raw_excerpt": "{\"id\":\"chatcmpl-DHBWMEETCVFes6awPybIWNouI1Zt2\",\"object\":\"chat.completion\",\"created\":1772988234,\"model\":\"o4-mini\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"OK\",\"refusal\":null,\"annotations\":[]},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":11,\"completion_tokens\":84,\"total_tokens\":95,\"prompt_tokens_details\":{\"cached_tokens\":0,\"audio_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":64,\"audio_tokens\":0,\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0}},\"system_fingerprint\":null}"
+      }
+    }
+  ]
+}

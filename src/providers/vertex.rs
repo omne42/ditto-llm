@@ -11,8 +11,11 @@ use serde_json::{Map, Value};
 
 use super::genai;
 use crate::auth::oauth::{OAuthClientCredentials, resolve_oauth_client_credentials};
+use crate::config::{
+    DEFAULT_HTTP_TIMEOUT, Env, HttpAuth, ProviderConfig, build_http_client,
+    resolve_http_provider_config,
+};
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, HttpAuth, ProviderConfig};
 use crate::types::{ContentPart, GenerateRequest, GenerateResponse, Warning};
 #[cfg(feature = "streaming")]
 use crate::types::{StreamChunk, Usage};
@@ -34,10 +37,7 @@ impl Vertex {
         base_url: impl Into<String>,
         default_model: impl Into<String>,
     ) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
-            .build()
-            .map_err(DittoError::Http)?;
+        let http = build_http_client(DEFAULT_HTTP_TIMEOUT, &BTreeMap::new())?;
         Ok(Self {
             http,
             base_url: base_url.into(),
@@ -74,12 +74,9 @@ impl Vertex {
     }
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
-        let base_url = config.base_url.as_deref().ok_or_else(|| {
-            DittoError::InvalidResponse("provider base_url is missing".to_string())
-        })?;
-        let model = config.default_model.as_deref().ok_or_else(|| {
-            DittoError::InvalidResponse("provider default_model is missing".to_string())
-        })?;
+        let resolved = resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, config, None)?;
+        let base_url = resolved.required_base_url("provider base_url is missing")?;
+        let model = resolved.required_default_model("provider default_model is missing")?;
         let auth = config
             .auth
             .clone()
@@ -88,7 +85,7 @@ impl Vertex {
 
         let mut out = Self::new(oauth, base_url, model)?;
         out.http_headers = config.http_headers.clone();
-        out.http_query_params = config.http_query_params.clone();
+        out.http_query_params = resolved.http_query_params;
         Ok(out)
     }
 

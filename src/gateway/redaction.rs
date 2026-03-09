@@ -107,25 +107,25 @@ impl GatewayRedactor {
         value
     }
 
+    pub(crate) fn redact_named_string(&self, key: &str, value: &str) -> String {
+        let normalized_key = normalize_name(key);
+        if self.redact_key_names.contains(&normalized_key) {
+            return self.replacement.clone();
+        }
+
+        self.redact_string(
+            value,
+            RedactionContext {
+                sanitize_query: self.sanitize_query_in_keys.contains(&normalized_key),
+            },
+        )
+    }
+
     fn redact_value_in_place(&self, value: &mut Value, ctx: RedactionContext) {
         match value {
             Value::Null | Value::Bool(_) | Value::Number(_) => {}
             Value::String(value) => {
-                if ctx.sanitize_query {
-                    *value =
-                        redact_query_string(&self.redact_query_params, &self.replacement, value);
-                }
-                if !self.redact_regexes.is_empty() {
-                    let mut out = value.clone();
-                    for regex in &self.redact_regexes {
-                        if regex.is_match(&out) {
-                            out = regex
-                                .replace_all(&out, NoExpand(&self.replacement))
-                                .to_string();
-                        }
-                    }
-                    *value = out;
-                }
+                *value = self.redact_string(value, ctx);
             }
             Value::Array(items) => {
                 for item in items {
@@ -148,6 +148,24 @@ impl GatewayRedactor {
                 }
             }
         }
+    }
+
+    fn redact_string(&self, value: &str, ctx: RedactionContext) -> String {
+        let mut out = if ctx.sanitize_query {
+            redact_query_string(&self.redact_query_params, &self.replacement, value)
+        } else {
+            value.to_string()
+        };
+
+        for regex in &self.redact_regexes {
+            if regex.is_match(&out) {
+                out = regex
+                    .replace_all(&out, NoExpand(&self.replacement))
+                    .to_string();
+            }
+        }
+
+        out
     }
 }
 

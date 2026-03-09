@@ -14,6 +14,37 @@ use super::{
 pub struct GatewayObservabilityConfig {
     #[serde(default)]
     pub redaction: GatewayRedactionConfig,
+    #[serde(default)]
+    pub sampling: GatewaySamplingConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GatewaySamplingConfig {
+    #[serde(default = "default_observability_sample_rate")]
+    pub json_logs_rate: f64,
+    #[serde(default = "default_observability_sample_rate")]
+    pub audit_rate: f64,
+    #[serde(default = "default_observability_sample_rate")]
+    pub devtools_rate: f64,
+}
+
+impl Default for GatewaySamplingConfig {
+    fn default() -> Self {
+        Self {
+            json_logs_rate: default_observability_sample_rate(),
+            audit_rate: default_observability_sample_rate(),
+            devtools_rate: default_observability_sample_rate(),
+        }
+    }
+}
+
+impl GatewaySamplingConfig {
+    pub fn validate(&self) -> Result<(), super::GatewayError> {
+        validate_sample_rate("observability.sampling.json_logs_rate", self.json_logs_rate)?;
+        validate_sample_rate("observability.sampling.audit_rate", self.audit_rate)?;
+        validate_sample_rate("observability.sampling.devtools_rate", self.devtools_rate)?;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -52,6 +83,19 @@ impl GatewayRedactionConfig {
     pub fn validate(&self) -> Result<(), super::GatewayError> {
         super::redaction::GatewayRedactor::validate_config(self)
     }
+}
+
+fn default_observability_sample_rate() -> f64 {
+    1.0
+}
+
+fn validate_sample_rate(name: &str, value: f64) -> Result<(), super::GatewayError> {
+    if value.is_finite() && (0.0..=1.0).contains(&value) {
+        return Ok(());
+    }
+    Err(super::GatewayError::InvalidRequest {
+        reason: format!("{name} must be a finite value between 0.0 and 1.0"),
+    })
 }
 
 fn default_redaction_replacement() -> String {
@@ -161,6 +205,7 @@ impl GatewayConfig {
 
     pub fn validate(&self) -> Result<(), super::GatewayError> {
         self.observability.redaction.validate()?;
+        self.observability.sampling.validate()?;
         Ok(())
     }
 }
@@ -643,6 +688,8 @@ mod tests {
         };
 
         let provider_config = ProviderConfig {
+            provider: None,
+            enabled_capabilities: Vec::new(),
             base_url: Some("${BASE_URL}".to_string()),
             default_model: Some("${DEFAULT_MODEL}".to_string()),
             model_whitelist: vec!["${MODEL_PREFIX}-*".to_string()],

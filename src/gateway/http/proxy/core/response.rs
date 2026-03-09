@@ -1,8 +1,8 @@
-#[cfg(feature = "gateway-metrics-prometheus")]
 #[derive(Clone, Copy, Debug)]
 enum ProxyStreamEnd {
     Completed,
     Error,
+    #[cfg(feature = "gateway-metrics-prometheus")]
     Aborted,
 }
 
@@ -150,16 +150,114 @@ fn enqueue_proxy_stream_abort_finalize(finalizer: ProxyStreamFinalizer, bytes_se
     }
 }
 
-async fn proxy_response(
-    _state: &GatewayHttpState,
-    upstream: reqwest::Response,
-    backend: String,
-    request_id: String,
+#[derive(Clone, Copy)]
+struct ProxyResponseContext<'a> {
+    state: &'a GatewayHttpState,
+    backend: &'a str,
+    request_id: &'a str,
     #[cfg(feature = "gateway-metrics-prometheus")]
-    metrics_path: &str,
-    _cache_key: Option<&str>,
+    metrics_path: &'a str,
+    cache_key: Option<&'a str>,
+    #[cfg(feature = "gateway-proxy-cache")]
+    cache_metadata: Option<&'a ProxyCacheEntryMetadata>,
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+struct ProxyCompletedStreamCacheWrite {
+    state: GatewayHttpState,
+    backend: String,
+    status: StatusCode,
+    headers: HeaderMap,
+    cache_key: String,
+    cache_metadata: ProxyCacheEntryMetadata,
+    recorder: ProxyCacheStreamRecorder,
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+impl ProxyCompletedStreamCacheWrite {
+    fn new(
+        state: &GatewayHttpState,
+        backend: &str,
+        status: StatusCode,
+        headers: &HeaderMap,
+        cache_key: Option<&str>,
+        cache_metadata: Option<&ProxyCacheEntryMetadata>,
+    ) -> Option<Self> {
+        if !status.is_success() {
+            return None;
+        }
+
+        let (Some(config), Some(cache_key), Some(cache_metadata)) =
+            (state.proxy.cache_config.as_ref(), cache_key, cache_metadata)
+        else {
+            return None;
+        };
+
+        Some(Self {
+            state: state.clone(),
+            backend: backend.to_string(),
+            status,
+            headers: headers.clone(),
+            cache_key: cache_key.to_string(),
+            cache_metadata: cache_metadata.clone(),
+            recorder: config.stream_recorder()?,
+        })
+    }
+
+    fn ingest(&mut self, chunk: &Bytes) {
+        self.recorder.ingest(chunk);
+    }
+
+    async fn finish(self) {
+        store_completed_stream_proxy_cache(
+            &self.state,
+            &self.cache_key,
+            &self.cache_metadata,
+            self.status,
+            &self.headers,
+            &self.backend,
+            self.recorder,
+        )
+        .await;
+    }
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+async fn store_completed_stream_proxy_cache(
+    state: &GatewayHttpState,
+    cache_key: &str,
+    metadata: &ProxyCacheEntryMetadata,
+    status: StatusCode,
+    headers: &HeaderMap,
+    backend: &str,
+    recorder: ProxyCacheStreamRecorder,
+) {
+    let Some(body) = recorder.finish() else {
+        return;
+    };
+
+    let cached = CachedProxyResponse {
+        status: status.as_u16(),
+        headers: headers.clone(),
+        body,
+        backend: backend.to_string(),
+    };
+    store_proxy_cache_response(state, cache_key, cached, metadata, now_epoch_seconds()).await;
+}
+
+async fn proxy_response(
+    ctx: ProxyResponseContext<'_>,
+    upstream: reqwest::Response,
     proxy_permits: ProxyPermits,
 ) -> axum::response::Response {
+    let _state = ctx.state;
+    let backend = ctx.backend.to_string();
+    let request_id = ctx.request_id.to_string();
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let metrics_path = ctx.metrics_path;
+    let _cache_key = ctx.cache_key;
+    #[cfg(feature = "gateway-proxy-cache")]
+    let _cache_metadata = ctx.cache_metadata;
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
     let content_type = upstream_headers
@@ -182,17 +280,20 @@ async fn proxy_response(
             .map(|chunk| chunk.map_err(std::io::Error::other))
             .boxed();
 
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        {
-            struct StreamState {
-                upstream: ProxyBodyStream,
-                bytes_sent: u64,
-                finalizer: Option<ProxyStreamFinalizer>,
-                _permits: ProxyPermits,
-            }
+        struct StreamState {
+            upstream: ProxyBodyStream,
+            bytes_sent: u64,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            finalizer: Option<ProxyStreamFinalizer>,
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: Option<ProxyCompletedStreamCacheWrite>,
+            _permits: ProxyPermits,
+        }
 
-            impl Drop for StreamState {
-                fn drop(&mut self) {
+        impl Drop for StreamState {
+            fn drop(&mut self) {
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -200,9 +301,19 @@ async fn proxy_response(
                     enqueue_proxy_stream_abort_finalize(finalizer, bytes_sent);
                 }
             }
+        }
 
-            impl StreamState {
-                async fn finalize(&mut self, end: ProxyStreamEnd) {
+        impl StreamState {
+            async fn finalize(&mut self, end: ProxyStreamEnd) {
+                #[cfg(feature = "gateway-proxy-cache")]
+                if matches!(end, ProxyStreamEnd::Completed) {
+                    if let Some(cache_completion) = self.cache_completion.take() {
+                        cache_completion.finish().await;
+                    }
+                }
+
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -210,81 +321,85 @@ async fn proxy_response(
                     finalizer.finalize(end, bytes_sent).await;
                 }
             }
+        }
 
-            let metrics = _state.prometheus_metrics.clone();
-            if let Some(metrics) = metrics.as_ref() {
-                metrics.lock().await.record_proxy_stream_open(&backend, metrics_path);
-            }
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        let metrics = _state.proxy.metrics.clone();
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = metrics.as_ref() {
+            metrics
+                .lock()
+                .await
+                .record_proxy_stream_open(&backend, metrics_path);
+        }
 
-            let finalizer = ProxyStreamFinalizer {
-                metrics,
-                backend: backend.clone(),
-                path: metrics_path.to_string(),
-            };
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        let finalizer = ProxyStreamFinalizer {
+            metrics,
+            backend: backend.clone(),
+            path: metrics_path.to_string(),
+        };
 
-            let state = StreamState {
-                upstream: upstream_stream,
-                bytes_sent: 0,
-                finalizer: Some(finalizer),
-                _permits: proxy_permits,
-            };
+        let state = StreamState {
+            upstream: upstream_stream,
+            bytes_sent: 0,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            finalizer: Some(finalizer),
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: ProxyCompletedStreamCacheWrite::new(
+                _state,
+                &backend,
+                status,
+                &headers,
+                _cache_key,
+                _cache_metadata,
+            ),
+            _permits: proxy_permits,
+        };
 
-            let stream = futures_util::stream::try_unfold(state, |mut state| async move {
-                match state.upstream.next().await {
-                    Some(Ok(chunk)) => {
-                        state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
-                        Ok(Some((chunk, state)))
+        let stream = futures_util::stream::try_unfold(state, |mut state| async move {
+            match state.upstream.next().await {
+                Some(Ok(chunk)) => {
+                    state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
+                    #[cfg(feature = "gateway-proxy-cache")]
+                    if let Some(cache_completion) = state.cache_completion.as_mut() {
+                        cache_completion.ingest(&chunk);
                     }
-                    Some(Err(err)) => {
-                        state.finalize(ProxyStreamEnd::Error).await;
-                        Err(err)
-                    }
-                    None => {
-                        state.finalize(ProxyStreamEnd::Completed).await;
-                        Ok(None)
-                    }
+                    Ok(Some((chunk, state)))
                 }
-            });
+                Some(Err(err)) => {
+                    state.finalize(ProxyStreamEnd::Error).await;
+                    Err(err)
+                }
+                None => {
+                    state.finalize(ProxyStreamEnd::Completed).await;
+                    Ok(None)
+                }
+            }
+        });
 
-            let mut response = axum::response::Response::new(Body::from_stream(stream));
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            response
-        }
-
-        #[cfg(not(feature = "gateway-metrics-prometheus"))]
-        {
-            let stream = ProxyBodyStreamWithPermit {
-                inner: upstream_stream,
-                _permits: proxy_permits,
-            };
-            let mut response = axum::response::Response::new(Body::from_stream(stream));
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            response
-        }
+        let mut response = axum::response::Response::new(Body::from_stream(stream));
+        *response.status_mut() = status;
+        *response.headers_mut() = headers;
+        response
     } else {
         let cacheable = status.is_success() && _cache_key.is_some();
-        let should_buffer = cacheable
-            && {
-                #[cfg(feature = "gateway-proxy-cache")]
-                {
-                    let content_length = upstream_headers
-                        .get("content-length")
-                        .and_then(|value| value.to_str().ok())
-                        .and_then(|value| value.parse::<usize>().ok());
-                    _state
-                        .proxy_cache_config
-                        .as_ref()
-                        .is_some_and(|config| {
-                            content_length.is_some_and(|len| len <= config.max_body_bytes)
-                        })
-                }
-                #[cfg(not(feature = "gateway-proxy-cache"))]
-                {
-                    false
-                }
-            };
+        let should_buffer = cacheable && {
+            #[cfg(feature = "gateway-proxy-cache")]
+            {
+                let content_length = upstream_headers
+                    .get("content-length")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<usize>().ok());
+                _state.proxy.cache_config.as_ref().is_some_and(|config| {
+                    content_length.is_some_and(|len| len <= config.max_body_bytes)
+                })
+            }
+            #[cfg(not(feature = "gateway-proxy-cache"))]
+            {
+                false
+            }
+        };
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
         if let Some(cache_key) = _cache_key {
@@ -297,7 +412,8 @@ async fn proxy_response(
                 #[cfg(feature = "gateway-proxy-cache")]
                 {
                     _state
-                        .proxy_cache_config
+                        .proxy
+                        .cache_config
                         .as_ref()
                         .map(|c| c.max_body_bytes)
                         .unwrap_or(1)
@@ -330,14 +446,21 @@ async fn proxy_response(
 
             #[cfg(feature = "gateway-proxy-cache")]
             if status.is_success() {
-                if let Some(cache_key) = _cache_key {
+                if let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata) {
                     let cached = CachedProxyResponse {
                         status: status.as_u16(),
                         headers: headers.clone(),
                         body: bytes.clone(),
                         backend: backend.clone(),
                     };
-                    store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
+                    store_proxy_cache_response(
+                        _state,
+                        cache_key,
+                        cached,
+                        cache_metadata,
+                        now_epoch_seconds(),
+                    )
+                    .await;
                 }
             }
 
@@ -365,15 +488,18 @@ async fn proxy_response(
 }
 
 async fn responses_shim_response(
-    _state: &GatewayHttpState,
+    ctx: ProxyResponseContext<'_>,
     upstream: reqwest::Response,
-    backend: String,
-    request_id: String,
-    #[cfg(feature = "gateway-metrics-prometheus")]
-    metrics_path: &str,
-    _cache_key: Option<&str>,
     proxy_permits: ProxyPermits,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let _state = ctx.state;
+    let backend = ctx.backend.to_string();
+    let request_id = ctx.request_id.to_string();
+    #[cfg(feature = "gateway-metrics-prometheus")]
+    let metrics_path = ctx.metrics_path;
+    let _cache_key = ctx.cache_key;
+    #[cfg(feature = "gateway-proxy-cache")]
+    let _cache_metadata = ctx.cache_metadata;
     let status = upstream.status();
     let upstream_headers = upstream.headers().clone();
     let content_type = upstream_headers
@@ -404,17 +530,20 @@ async fn responses_shim_response(
             }
         }
 
-        #[cfg(feature = "gateway-metrics-prometheus")]
-        {
-            struct StreamState {
-                upstream: ProxyBodyStream,
-                bytes_sent: u64,
-                finalizer: Option<ProxyStreamFinalizer>,
-                _permits: ProxyPermits,
-            }
+        struct StreamState {
+            upstream: ProxyBodyStream,
+            bytes_sent: u64,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            finalizer: Option<ProxyStreamFinalizer>,
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: Option<ProxyCompletedStreamCacheWrite>,
+            _permits: ProxyPermits,
+        }
 
-            impl Drop for StreamState {
-                fn drop(&mut self) {
+        impl Drop for StreamState {
+            fn drop(&mut self) {
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -422,9 +551,19 @@ async fn responses_shim_response(
                     enqueue_proxy_stream_abort_finalize(finalizer, bytes_sent);
                 }
             }
+        }
 
-            impl StreamState {
-                async fn finalize(&mut self, end: ProxyStreamEnd) {
+        impl StreamState {
+            async fn finalize(&mut self, end: ProxyStreamEnd) {
+                #[cfg(feature = "gateway-proxy-cache")]
+                if matches!(end, ProxyStreamEnd::Completed) {
+                    if let Some(cache_completion) = self.cache_completion.take() {
+                        cache_completion.finish().await;
+                    }
+                }
+
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                {
                     let Some(finalizer) = self.finalizer.take() else {
                         return;
                     };
@@ -432,59 +571,67 @@ async fn responses_shim_response(
                     finalizer.finalize(end, bytes_sent).await;
                 }
             }
+        }
 
-            let metrics = _state.prometheus_metrics.clone();
-            if let Some(metrics) = metrics.as_ref() {
-                metrics.lock().await.record_proxy_stream_open(&backend, metrics_path);
-            }
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        let metrics = _state.proxy.metrics.clone();
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = metrics.as_ref() {
+            metrics
+                .lock()
+                .await
+                .record_proxy_stream_open(&backend, metrics_path);
+        }
 
-            let finalizer = ProxyStreamFinalizer {
-                metrics,
-                backend: backend.clone(),
-                path: metrics_path.to_string(),
-            };
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        let finalizer = ProxyStreamFinalizer {
+            metrics,
+            backend: backend.clone(),
+            path: metrics_path.to_string(),
+        };
 
-            let state = StreamState {
-                upstream: upstream_stream,
-                bytes_sent: 0,
-                finalizer: Some(finalizer),
-                _permits: proxy_permits,
-            };
+        let state = StreamState {
+            upstream: upstream_stream,
+            bytes_sent: 0,
+            #[cfg(feature = "gateway-metrics-prometheus")]
+            finalizer: Some(finalizer),
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: ProxyCompletedStreamCacheWrite::new(
+                _state,
+                &backend,
+                status,
+                &headers,
+                _cache_key,
+                _cache_metadata,
+            ),
+            _permits: proxy_permits,
+        };
 
-            let stream = futures_util::stream::try_unfold(state, |mut state| async move {
-                match state.upstream.next().await {
-                    Some(Ok(chunk)) => {
-                        state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
-                        Ok(Some((chunk, state)))
+        let stream = futures_util::stream::try_unfold(state, |mut state| async move {
+            match state.upstream.next().await {
+                Some(Ok(chunk)) => {
+                    state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
+                    #[cfg(feature = "gateway-proxy-cache")]
+                    if let Some(cache_completion) = state.cache_completion.as_mut() {
+                        cache_completion.ingest(&chunk);
                     }
-                    Some(Err(err)) => {
-                        state.finalize(ProxyStreamEnd::Error).await;
-                        Err(err)
-                    }
-                    None => {
-                        state.finalize(ProxyStreamEnd::Completed).await;
-                        Ok(None)
-                    }
+                    Ok(Some((chunk, state)))
                 }
-            });
+                Some(Err(err)) => {
+                    state.finalize(ProxyStreamEnd::Error).await;
+                    Err(err)
+                }
+                None => {
+                    state.finalize(ProxyStreamEnd::Completed).await;
+                    Ok(None)
+                }
+            }
+        });
 
-            let mut response = axum::response::Response::new(Body::from_stream(stream));
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            Ok(response)
-        }
-
-        #[cfg(not(feature = "gateway-metrics-prometheus"))]
-        {
-            let stream = ProxyBodyStreamWithPermit {
-                inner: upstream_stream,
-                _permits: proxy_permits,
-            };
-            let mut response = axum::response::Response::new(Body::from_stream(stream));
-            *response.status_mut() = status;
-            *response.headers_mut() = headers;
-            Ok(response)
-        }
+        let mut response = axum::response::Response::new(Body::from_stream(stream));
+        *response.status_mut() = status;
+        *response.headers_mut() = headers;
+        Ok(response)
     } else {
         let max_body_bytes = 8 * 1024 * 1024;
         let bytes = read_reqwest_body_bytes_bounded_with_content_length(
@@ -537,14 +684,21 @@ async fn responses_shim_response(
 
         #[cfg(feature = "gateway-proxy-cache")]
         if status.is_success() {
-            if let Some(cache_key) = _cache_key {
+            if let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata) {
                 let cached = CachedProxyResponse {
                     status: status.as_u16(),
                     headers: headers.clone(),
                     body: mapped_bytes.clone(),
                     backend: backend.clone(),
                 };
-                store_proxy_cache_response(_state, cache_key, cached, now_epoch_seconds()).await;
+                store_proxy_cache_response(
+                    _state,
+                    cache_key,
+                    cached,
+                    cache_metadata,
+                    now_epoch_seconds(),
+                )
+                .await;
             }
         }
 
@@ -574,10 +728,7 @@ fn apply_proxy_response_headers(
             .unwrap_or_else(|_| axum::http::HeaderValue::from_static("unknown")),
     );
     if cache_hit {
-        headers.insert(
-            "x-ditto-cache",
-            axum::http::HeaderValue::from_static("hit"),
-        );
+        headers.insert("x-ditto-cache", axum::http::HeaderValue::from_static("hit"));
     } else {
         headers.remove("x-ditto-cache");
     }
@@ -606,10 +757,12 @@ async fn store_proxy_cache_response(
     state: &GatewayHttpState,
     cache_key: &str,
     cached: CachedProxyResponse,
+    metadata: &ProxyCacheEntryMetadata,
     now_epoch_seconds: u64,
 ) {
-    if let Some(config) = state.proxy_cache_config.as_ref() {
-        if cached.body.len() > config.max_body_bytes {
+    if let Some(config) = state.proxy.cache_config.as_ref() {
+        let max_body_bytes = config.max_body_bytes_for_headers(&cached.headers);
+        if max_body_bytes == 0 || cached.body.len() > max_body_bytes {
             return;
         }
     }
@@ -619,13 +772,13 @@ async fn store_proxy_cache_response(
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some(config)) = (
-        state.redis_store.as_ref(),
-        state.proxy_cache_config.as_ref(),
+        state.stores.redis.as_ref(),
+        state.proxy.cache_config.as_ref(),
     ) {
         #[cfg(feature = "gateway-metrics-prometheus")]
         {
             let result = store
-                .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
+                .set_proxy_cache_response(cache_key, &cached, metadata, config.ttl_seconds)
                 .await;
             redis_store_error = Some(result.is_err());
         }
@@ -633,18 +786,23 @@ async fn store_proxy_cache_response(
         #[cfg(not(feature = "gateway-metrics-prometheus"))]
         {
             let _ = store
-                .set_proxy_cache_response(cache_key, &cached, config.ttl_seconds)
+                .set_proxy_cache_response(cache_key, &cached, metadata, config.ttl_seconds)
                 .await;
         }
     }
 
-    if let Some(cache) = state.proxy_cache.as_ref() {
+    if let Some(cache) = state.proxy.cache.as_ref() {
         let mut cache = cache.lock().await;
-        cache.insert(cache_key.to_string(), cached, now_epoch_seconds);
+        cache.insert_with_metadata(
+            cache_key.to_string(),
+            cached,
+            metadata.clone(),
+            now_epoch_seconds,
+        );
     }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
         let mut metrics = metrics.lock().await;
         metrics.record_proxy_cache_store("memory");
         if let Some(redis_error) = redis_store_error {
@@ -669,13 +827,13 @@ async fn filter_backend_candidates_by_health(
     candidates: Vec<String>,
     now_epoch_seconds: u64,
 ) -> Vec<String> {
-    let Some(config) = state.proxy_routing.as_ref() else {
+    let Some(config) = state.proxy.routing.as_ref() else {
         return candidates;
     };
     if !config.circuit_breaker.enabled && !config.health_check.enabled {
         return candidates;
     }
-    let Some(health) = state.proxy_backend_health.as_ref() else {
+    let Some(health) = state.proxy.backend_health.as_ref() else {
         return candidates;
     };
 
@@ -699,10 +857,10 @@ async fn record_proxy_backend_failure(
     kind: FailureKind,
     message: String,
 ) {
-    let Some(config) = state.proxy_routing.as_ref() else {
+    let Some(config) = state.proxy.routing.as_ref() else {
         return;
     };
-    let Some(health) = state.proxy_backend_health.as_ref() else {
+    let Some(health) = state.proxy.backend_health.as_ref() else {
         return;
     };
 
@@ -714,7 +872,7 @@ async fn record_proxy_backend_failure(
 
 #[cfg(feature = "gateway-routing-advanced")]
 async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
-    let Some(health) = state.proxy_backend_health.as_ref() else {
+    let Some(health) = state.proxy.backend_health.as_ref() else {
         return;
     };
 
@@ -729,13 +887,14 @@ async fn record_proxy_backend_success(state: &GatewayHttpState, backend: &str) {
 fn start_proxy_health_checks(state: &GatewayHttpState) -> Option<Arc<AbortOnDrop>> {
     const PROXY_HEALTH_CHECK_MAX_CONCURRENCY: usize = 8;
 
-    let config = state.proxy_routing.as_ref()?;
+    let config = state.proxy.routing.as_ref()?;
     if !config.health_check.enabled {
         return None;
     }
-    let health = state.proxy_backend_health.as_ref()?;
+    let health = state.proxy.backend_health.as_ref()?;
 
     let backend_entries = state
+        .backends
         .proxy_backends
         .iter()
         .map(|(backend_name, backend)| (backend_name.clone(), backend.clone()))

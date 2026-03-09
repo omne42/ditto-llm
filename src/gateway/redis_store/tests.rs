@@ -5,7 +5,7 @@ mod tests {
 
     #[cfg(feature = "gateway-proxy-cache")]
     #[test]
-    fn proxy_cache_record_round_trips_headers_and_body() {
+    fn proxy_cache_record_round_trips_headers_body_and_metadata() {
         let mut headers = axum::http::HeaderMap::new();
         headers.append("content-type", "application/json".parse().unwrap());
         headers.append("set-cookie", "a=b".parse().unwrap());
@@ -16,22 +16,30 @@ mod tests {
             body: bytes::Bytes::from_static(b"ok"),
             backend: "primary".to_string(),
         };
+        let metadata = ProxyCacheEntryMetadata::new(
+            "vk:key-1",
+            &axum::http::Method::POST,
+            "/v1/responses?stream=false",
+            Some("gpt-4o-mini"),
+        );
 
-        let record = CachedProxyResponseRecord::from_cached(&cached);
+        let record = CachedProxyResponseRecord::from_cached(&cached, &metadata);
         let raw = serde_json::to_vec(&record).expect("serialize");
         let decoded: CachedProxyResponseRecord = serde_json::from_slice(&raw).expect("decode");
-        let round_tripped = decoded.into_cached();
+        let round_tripped = decoded.into_stored();
 
-        assert_eq!(round_tripped.status, cached.status);
-        assert_eq!(round_tripped.backend, cached.backend);
-        assert_eq!(round_tripped.body, cached.body);
+        assert_eq!(round_tripped.response.status, cached.status);
+        assert_eq!(round_tripped.response.backend, cached.backend);
+        assert_eq!(round_tripped.response.body, cached.body);
+        assert_eq!(round_tripped.metadata, metadata);
 
         assert_eq!(
-            round_tripped.headers.get("content-type"),
+            round_tripped.response.headers.get("content-type"),
             headers.get("content-type")
         );
         assert_eq!(
             round_tripped
+                .response
                 .headers
                 .get_all("set-cookie")
                 .iter()

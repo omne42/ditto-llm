@@ -3,6 +3,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::catalog::{CapabilityKind, OperationKind, RuntimeRouteRequest, builtin_registry};
+
 use super::{ProviderConfig, normalize_string_list};
 
 // Multi-provider weighted routing config for "completion"/"thinking" phases.
@@ -17,19 +19,19 @@ use super::{ProviderConfig, normalize_string_list};
 // TOML sketch:
 // ```toml
 // [profiles.fast]
-// provider = "openai-primary"
-// base_url = "https://api.openai.com/v1"
-// default_model = "gpt-4.1-mini"
+// provider = "compat-primary"
+// base_url = "https://proxy.example/v1"
+// default_model = "chat-small"
 // weight = 3
 //
 // [profiles.fast.auth]
 // type = "api_key_env"
-// keys = ["OPENAI_API_KEY_A"]
+// keys = ["OPENAI_COMPAT_API_KEY_A"]
 //
 // [profiles.quality]
-// provider = "openai-primary"
-// base_url = "https://api.openai.com/v1"
-// default_model = "gpt-4.1"
+// provider = "compat-primary"
+// base_url = "https://proxy.example/v1"
+// default_model = "chat-large"
 // weight = 1
 //
 // [default.completion]
@@ -41,6 +43,27 @@ use super::{ProviderConfig, normalize_string_list};
 
 fn default_weight() -> f64 {
     1.0
+}
+
+const LLM_ROUTING_OPERATIONS: &[OperationKind] = &[
+    OperationKind::CHAT_COMPLETION,
+    OperationKind::RESPONSE,
+    OperationKind::TEXT_COMPLETION,
+];
+
+#[derive(Debug, Clone, Copy)]
+struct RoutingPhaseRequirement {
+    capability: CapabilityKind,
+    preferred_operations: &'static [OperationKind],
+}
+
+fn routing_phase_requirement(phase: RoutingPhase) -> RoutingPhaseRequirement {
+    match phase {
+        RoutingPhase::Completion | RoutingPhase::Thinking => RoutingPhaseRequirement {
+            capability: CapabilityKind::LLM,
+            preferred_operations: LLM_ROUTING_OPERATIONS,
+        },
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -297,7 +320,7 @@ impl ProviderRoutingConfig {
             .unwrap_or_else(|| hash64_fnv1a(stage_key.as_bytes()));
 
         let model_fallbacks = normalize_string_list(stage.model_fallbacks.clone());
-        let targets = self.resolve_stage_targets(&stage, seed_hash)?;
+        let targets = self.resolve_stage_targets(&stage, ctx.phase, seed_hash)?;
         if targets.is_empty() {
             return Err(format!("routing stage has no usable targets: {stage_key}"));
         }
@@ -328,6 +351,7 @@ impl ProviderRoutingConfig {
     fn resolve_stage_targets(
         &self,
         stage: &RoutingStagePolicy,
+        phase: RoutingPhase,
         seed_hash: u64,
     ) -> Result<Vec<ResolvedRoutingTarget>, String> {
         if stage.targets.is_empty() {
@@ -346,7 +370,7 @@ impl ProviderRoutingConfig {
                 ));
             };
             let provider_name = profile.provider.trim();
-            let provider_config = profile.config.clone();
+            let mut provider_config = profile.config.clone();
 
             let model = clean_opt_string(target.model.as_deref())
                 .or_else(|| clean_opt_string(provider_config.default_model.as_deref()))
@@ -355,6 +379,7 @@ impl ProviderRoutingConfig {
                         "routing target[{idx}] profile={profile_id} has no model and no default_model"
                     )
                 })?;
+            provider_config.default_model = Some(model.clone());
 
             let weight = target.weight.unwrap_or(profile.weight);
             if !weight_valid(weight) {
@@ -362,6 +387,15 @@ impl ProviderRoutingConfig {
                     "routing target[{idx}] profile={profile_id} has invalid weight={weight}"
                 ));
             }
+
+            validate_runtime_route_for_target(
+                idx,
+                profile_id,
+                provider_name,
+                &provider_config,
+                model.as_str(),
+                phase,
+            )?;
 
             resolved.push(ResolvedRoutingTarget {
                 profile: profile_id.to_string(),
@@ -487,6 +521,41 @@ fn validate_stage(
         }
     }
     Ok(())
+}
+
+fn validate_runtime_route_for_target(
+    idx: usize,
+    profile_id: &str,
+    provider_name: &str,
+    provider_config: &ProviderConfig,
+    model: &str,
+    phase: RoutingPhase,
+) -> Result<(), String> {
+    let requirement = routing_phase_requirement(phase);
+    let mut errors = Vec::<String>::new();
+
+    for &operation in requirement.preferred_operations {
+        match builtin_registry().resolve_runtime_route(
+            RuntimeRouteRequest::new(provider_name, Some(model), operation)
+                .with_provider_config(provider_config)
+                .with_required_capability(requirement.capability),
+        ) {
+            Ok(_) => return Ok(()),
+            Err(err) => errors.push(format!("{operation}: {err}")),
+        }
+    }
+
+    let operations = requirement
+        .preferred_operations
+        .iter()
+        .map(|operation| operation.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "routing target[{idx}] profile={profile_id} failed catalog runtime resolution for provider={provider_name} model={model} capability={} operations=[{operations}]: {}",
+        requirement.capability,
+        errors.join("; ")
+    ))
 }
 
 fn find_profile<'a>(
@@ -647,12 +716,14 @@ mod tests {
     fn resolves_thinking_and_completion_with_role_scenario_override() {
         let raw = r#"
 [profiles.primary]
-provider = "openai-primary"
+provider = "compat-primary"
+base_url = "https://proxy.example/v1"
 weight = 9
 default_model = "gpt-4.1"
 
 [profiles.thinking]
-provider = "openai-primary"
+provider = "compat-primary"
+base_url = "https://proxy.example/v1"
 weight = 1
 default_model = "o3"
 
@@ -753,7 +824,7 @@ targets = [{ profile = "thinking", model = "o3" }]
 
         let toml_raw = r#"
 [profiles.primary]
-provider = "openai-primary"
+provider = "compat-primary"
 default_model = "gpt-4.1"
 
 [default.completion]
@@ -781,6 +852,57 @@ targets = [{ profile = "primary" }]
 
         assert_eq!(from_toml.profiles.len(), 1);
         assert_eq!(from_json.profiles.len(), 1);
+    }
+
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[test]
+    fn resolve_plan_rejects_catalog_incompatible_model_for_completion() {
+        let raw = r#"
+[profiles.embedding_only]
+provider = "openai"
+default_model = "text-embedding-3-large"
+
+[default.completion]
+targets = [{ profile = "embedding_only" }]
+"#;
+
+        let config = ProviderRoutingConfig::from_toml_str(raw).expect("parse");
+        let err = config
+            .resolve_plan(RoutingContext {
+                role: None,
+                scenario: None,
+                phase: RoutingPhase::Completion,
+                seed_hash: Some(0),
+            })
+            .expect_err("embedding-only model should fail llm runtime resolution");
+        assert!(err.contains("failed catalog runtime resolution"));
+        assert!(err.contains("text-embedding-3-large"));
+    }
+
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[test]
+    fn resolve_plan_accepts_response_only_model_for_completion() {
+        let raw = r#"
+[profiles.response_only]
+provider = "openai"
+default_model = "computer-use-preview"
+
+[default.completion]
+targets = [{ profile = "response_only" }]
+"#;
+
+        let config = ProviderRoutingConfig::from_toml_str(raw).expect("parse");
+        let plan = config
+            .resolve_plan(RoutingContext {
+                role: None,
+                scenario: None,
+                phase: RoutingPhase::Completion,
+                seed_hash: Some(0),
+            })
+            .expect("response-only model should resolve through routing fallback operations");
+        assert_eq!(plan.targets.len(), 1);
+        assert_eq!(plan.targets[0].profile, "response_only");
+        assert_eq!(plan.targets[0].model, "computer-use-preview");
     }
 
     #[test]

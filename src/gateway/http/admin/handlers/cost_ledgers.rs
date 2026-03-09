@@ -1,6 +1,11 @@
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 async fn list_cost_ledgers(
     State(state): State<GatewayHttpState>,
@@ -22,7 +27,7 @@ async fn list_cost_ledgers(
         .filter(|value| !value.is_empty());
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let mut ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -46,7 +51,7 @@ async fn list_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let mut ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -70,7 +75,7 @@ async fn list_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let mut ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -94,7 +99,7 @@ async fn list_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let mut ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -126,7 +131,12 @@ async fn list_cost_ledgers(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 #[derive(Debug, Serialize)]
 struct ProjectCostLedger {
@@ -139,7 +149,12 @@ struct ProjectCostLedger {
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 #[derive(Debug, Serialize)]
 struct UserCostLedger {
@@ -152,7 +167,12 @@ struct UserCostLedger {
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 #[derive(Debug, Serialize)]
 struct TenantCostLedger {
@@ -165,7 +185,12 @@ struct TenantCostLedger {
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 fn group_cost_ledgers_by_project(
     ledgers: &[CostLedgerRecord],
@@ -216,7 +241,12 @@ fn group_cost_ledgers_by_project(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 fn group_cost_ledgers_by_user(
     ledgers: &[CostLedgerRecord],
@@ -267,7 +297,12 @@ fn group_cost_ledgers_by_user(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 fn group_cost_ledgers_by_tenant(
     ledgers: &[CostLedgerRecord],
@@ -318,7 +353,12 @@ fn group_cost_ledgers_by_tenant(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 async fn list_project_cost_ledgers(
     State(state): State<GatewayHttpState>,
@@ -332,7 +372,7 @@ async fn list_project_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -344,7 +384,7 @@ async fn list_project_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -356,7 +396,7 @@ async fn list_project_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -368,7 +408,7 @@ async fn list_project_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -388,7 +428,12 @@ async fn list_project_cost_ledgers(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 async fn list_user_cost_ledgers(
     State(state): State<GatewayHttpState>,
@@ -402,7 +447,7 @@ async fn list_user_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -414,7 +459,7 @@ async fn list_user_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -426,7 +471,7 @@ async fn list_user_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -438,7 +483,7 @@ async fn list_user_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -458,7 +503,12 @@ async fn list_user_cost_ledgers(
 
 #[cfg(all(
     feature = "gateway-costing",
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"),
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
 ))]
 async fn list_tenant_cost_ledgers(
     State(state): State<GatewayHttpState>,
@@ -472,7 +522,7 @@ async fn list_tenant_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -484,7 +534,7 @@ async fn list_tenant_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -496,7 +546,7 @@ async fn list_tenant_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -508,7 +558,7 @@ async fn list_tenant_cost_ledgers(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let ledgers = store.list_cost_ledgers().await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,

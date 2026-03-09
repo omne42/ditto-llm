@@ -1,15 +1,10 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
 use super::ProviderAuth;
-
-const EMBEDDED_ANTHROPIC_MODEL_CATALOG: &str =
-    include_str!("../../catalog/provider_models/anthropic.toml");
-const ANTHROPIC_MODEL_CATALOG_ENV: &str = "DITTO_ANTHROPIC_MODEL_CATALOG";
-const PROVIDER_MODEL_CATALOG_DIR_ENV: &str = "DITTO_PROVIDER_MODEL_CATALOG_DIR";
+use super::generated_catalogs::generated_anthropic_model_catalog;
 
 static ANTHROPIC_MODEL_CATALOG: OnceLock<AnthropicModelCatalog> = OnceLock::new();
 
@@ -94,11 +89,7 @@ pub struct AnthropicModelPricing {
 }
 
 pub fn anthropic_model_catalog() -> &'static AnthropicModelCatalog {
-    ANTHROPIC_MODEL_CATALOG.get_or_init(|| {
-        let catalog_text = load_anthropic_model_catalog_text();
-        toml::from_str::<AnthropicModelCatalog>(&catalog_text)
-            .expect("embedded anthropic model catalog must parse")
-    })
+    ANTHROPIC_MODEL_CATALOG.get_or_init(generated_anthropic_model_catalog)
 }
 
 pub fn anthropic_model_catalog_entry(model: &str) -> Option<&'static AnthropicModelCatalogEntry> {
@@ -114,26 +105,4 @@ pub fn anthropic_model_catalog_entry_by_model(
             || entry.bedrock_model_id.as_deref() == Some(model)
             || entry.vertex_model_id.as_deref() == Some(model)
     })
-}
-
-fn load_anthropic_model_catalog_text() -> String {
-    let Some(path) = configured_anthropic_model_catalog_path() else {
-        return EMBEDDED_ANTHROPIC_MODEL_CATALOG.to_string();
-    };
-    std::fs::read_to_string(&path).unwrap_or_else(|err| {
-        panic!(
-            "failed to read anthropic model catalog from {}: {err}",
-            path.display()
-        )
-    })
-}
-
-fn configured_anthropic_model_catalog_path() -> Option<PathBuf> {
-    std::env::var_os(ANTHROPIC_MODEL_CATALOG_ENV)
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os(PROVIDER_MODEL_CATALOG_DIR_ENV)
-                .map(PathBuf::from)
-                .map(|dir| dir.join("anthropic.toml"))
-        })
 }

@@ -8,7 +8,7 @@ fn estimate_charge_cost_usd_micros(
     backends: &[String],
 ) -> Option<u64> {
     let request_model = request_model?;
-    let pricing = state.pricing.as_ref()?;
+    let pricing = state.proxy.pricing.as_ref()?;
 
     let mut cost = pricing.estimate_cost_usd_micros_for_service_tier(
         request_model,
@@ -18,7 +18,7 @@ fn estimate_charge_cost_usd_micros(
     );
 
     for backend_name in backends {
-        if !state.proxy_backends.contains_key(backend_name) {
+        if !state.backends.proxy_backends.contains_key(backend_name) {
             continue;
         }
 

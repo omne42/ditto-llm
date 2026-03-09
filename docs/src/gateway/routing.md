@@ -107,8 +107,8 @@
 
 需要启用 feature `gateway-routing-advanced`，并在启动时通过 CLI 打开对应开关：
 
-- `--proxy-retry` / `--proxy-retry-status-codes` / `--proxy-fallback-status-codes` / `--proxy-retry-max-attempts`
-- `--proxy-circuit-breaker` / `--proxy-cb-failure-threshold` / `--proxy-cb-cooldown-secs`
+- `--proxy-retry` / `--proxy-retry-status-codes` / `--proxy-fallback-status-codes` / `--proxy-network-error-action` / `--proxy-timeout-error-action` / `--proxy-retry-max-attempts`
+- `--proxy-circuit-breaker` / `--proxy-cb-failure-threshold` / `--proxy-cb-cooldown-secs` / `--proxy-cb-failure-status-codes` / `--proxy-cb-no-network-errors` / `--proxy-cb-no-timeout-errors` / `--proxy-cb-no-server-errors`
 - `--proxy-health-checks` / `--proxy-health-check-*`
 
 这些选项会影响 `/v1/*` passthrough 的“backend 候选集如何被尝试/过滤”。
@@ -120,9 +120,10 @@
 重要细节：
 
 - `max_attempts` 的默认值是 “候选 backend 数量”（即最多尝试一遍 fallback 列表）
-- 网络错误始终会尝试 fallback 到下一个 backend
+- `--proxy-network-error-action` / `--proxy-timeout-error-action` 可分别配置 `none | fallback | retry`，默认都是 `fallback`
 - `--proxy-retry` + `--proxy-retry-status-codes`：命中状态码时按 retry 语义 fallback
 - `--proxy-fallback-status-codes`：命中状态码时直接 fallback（即使未启用 `--proxy-retry`）
+- JSON logs / devtools 会额外记录 `action`、`failure_kind`、`reason` 与 `will_attempt_next_backend`，便于解释为什么继续尝试或直接停止
 
 ### 3.2 Circuit Breaker（按连续失败）
 
@@ -133,8 +134,9 @@
 
 计数策略（见 `FailureKind`）：
 
-- 网络错误会计入失败
-- retryable status 里 **只有 5xx** 会计入失败（例如 429 不计入熔断）
+- 默认会计入网络错误、超时与 5xx
+- `--proxy-cb-failure-status-codes` 可以补充额外状态码（例如 `408,429`）
+- `--proxy-cb-no-network-errors` / `--proxy-cb-no-timeout-errors` / `--proxy-cb-no-server-errors` 可按类型关闭计数
 
 ### 3.3 Health Checks（主动探活）
 

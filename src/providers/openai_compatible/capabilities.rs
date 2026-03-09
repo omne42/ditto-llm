@@ -380,7 +380,7 @@ mod tests {
         }];
 
         let (mapped, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
+            OpenAICompatible::messages_to_chat_messages(&messages, "gpt-4o", Default::default());
         assert!(warnings.is_empty());
         assert_eq!(
             mapped,
@@ -404,7 +404,7 @@ mod tests {
         }];
 
         let (mapped, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
+            OpenAICompatible::messages_to_chat_messages(&messages, "gpt-4o", Default::default());
         assert!(warnings.is_empty());
         assert_eq!(mapped.len(), 1);
 
@@ -436,7 +436,7 @@ mod tests {
         }];
 
         let (mapped, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&messages, Default::default());
+            OpenAICompatible::messages_to_chat_messages(&messages, "gpt-4o", Default::default());
         assert!(warnings.is_empty());
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].get("role").and_then(Value::as_str), Some("user"));

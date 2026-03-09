@@ -28,9 +28,9 @@ fn ensure_admin(
     headers: &HeaderMap,
     permission: AdminPermission,
 ) -> Result<AdminContext, (StatusCode, Json<ErrorResponse>)> {
-    let write_token = state.admin_token.as_deref();
-    let read_token = state.admin_read_token.as_deref();
-    let has_tenant_tokens = !state.admin_tenant_tokens.is_empty();
+    let write_token = state.admin.admin_token.as_deref();
+    let read_token = state.admin.admin_read_token.as_deref();
+    let has_tenant_tokens = !state.admin.admin_tenant_tokens.is_empty();
 
     if write_token.is_none() && read_token.is_none() && !has_tenant_tokens {
         return Err(error_response(
@@ -55,7 +55,7 @@ fn ensure_admin(
     }
 
     if has_tenant_tokens {
-        for binding in &state.admin_tenant_tokens {
+        for binding in &state.admin.admin_tenant_tokens {
             if provided != binding.token {
                 continue;
             }
@@ -84,25 +84,30 @@ fn ensure_admin(
     feature = "gateway-store-redis"
 ))]
 async fn append_admin_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
-    let payload = state.redactor.redact(payload);
+    let Some(payload) = state.prepare_observability_event(
+        crate::gateway::observability::GatewayObservabilitySink::Audit,
+        payload,
+    ) else {
+        return;
+    };
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let _ = store.append_audit_log(kind, payload).await;
     }
 }
@@ -163,7 +168,10 @@ fn percent_decode_www_form(value: &str) -> Option<String> {
             }
         }
     }
-    String::from_utf8(out).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    String::from_utf8(out)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn from_hex(byte: u8) -> Option<u8> {
@@ -245,6 +253,9 @@ fn map_gateway_error(err: GatewayError) -> (StatusCode, Json<ErrorResponse>) {
         GatewayError::Backend { message } => {
             error_response(StatusCode::BAD_GATEWAY, "backend_error", message)
         }
+        GatewayError::BackendTimeout { message } => {
+            error_response(StatusCode::GATEWAY_TIMEOUT, "backend_timeout", message)
+        }
         GatewayError::InvalidRequest { reason } => {
             error_response(StatusCode::BAD_REQUEST, "invalid_request", reason)
         }
@@ -294,7 +305,7 @@ async fn persist_virtual_keys(
     let router = state.router_config_snapshot();
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         store.replace_virtual_keys(keys).await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -312,7 +323,7 @@ async fn persist_virtual_keys(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         store.replace_virtual_keys(keys).await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -330,7 +341,7 @@ async fn persist_virtual_keys(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         store.replace_virtual_keys(keys).await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -348,7 +359,7 @@ async fn persist_virtual_keys(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         store.replace_virtual_keys(keys).await.map_err(|err| {
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -365,7 +376,7 @@ async fn persist_virtual_keys(
         })?;
     }
 
-    if let Some(path) = state.state_file.as_ref() {
+    if let Some(path) = state.admin.state_file.as_ref() {
         persist_state_file(path.as_path(), keys, &router)?;
     }
 

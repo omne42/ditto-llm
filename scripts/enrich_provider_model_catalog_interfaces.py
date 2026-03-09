@@ -71,6 +71,42 @@ BAILIAN_NLU_UNDERSTANDING_URL = 'https://dashscope.aliyuncs.com/api/v1/services/
 BAILIAN_WS_INFERENCE_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference'
 BAILIAN_WS_REALTIME_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime'
 
+OPENAI_RESPONSES_ONLY_SNIPPETS = (
+    'responses api only',
+    'only usable in the responses api',
+    'only available in the responses api',
+    "it's available in the responses api only",
+    "it's only available in the responses api",
+)
+OPENAI_CHAT_ONLY_MODEL_IDS = {
+    'gpt-3.5-turbo',
+    'gpt-4',
+    'gpt-4-turbo',
+    'gpt-4-turbo-preview',
+    'gpt-4o-search-preview',
+    'gpt-4o-mini-search-preview',
+}
+OPENAI_REASONING_MODEL_IDS = {'codex-mini-latest'}
+OPENAI_REASONING_MODEL_PREFIXES = ('gpt-5', 'gpt-oss-', 'o1', 'o3', 'o4')
+OPENAI_PROMPT_CACHE_MODEL_IDS = {'codex-mini-latest', 'computer-use-preview'}
+OPENAI_PROMPT_CACHE_MODEL_PREFIXES = (
+    'chatgpt-4o',
+    'gpt-4o',
+    'gpt-4.1',
+    'gpt-4.5',
+    'gpt-5',
+    'gpt-oss-',
+    'o1',
+    'o3',
+    'o4',
+)
+OPENAI_TEXT_BEHAVIOR_SURFACES = {'chat.completion', 'responses', 'completion.legacy'}
+OPENAI_SURFACE_TO_BEHAVIOR_OPERATION = {
+    'chat.completion': 'chat.completion',
+    'responses': 'response',
+    'completion.legacy': 'text.completion',
+}
+
 
 QUOTED_STRING_RE = re.compile(r'^([A-Za-z0-9_.-]+)\s*=\s*"(.*)"\s*$')
 RECORD_HEADER_RE = re.compile(r'^\[\[models\.(".+")\.records\]\]$')
@@ -126,8 +162,45 @@ def model_code_or_id(model_id: str, model: dict) -> str:
     return str(model.get('model_code') or model_id)
 
 
-def infer_openai_surfaces(model_id: str, model: dict) -> list[str]:
+def openai_is_responses_only(model_id: str, model: dict) -> bool:
+    if model_id == 'computer-use-preview':
+        return True
     summary = model_summary(model)
+    return any(snippet in summary for snippet in OPENAI_RESPONSES_ONLY_SNIPPETS)
+
+
+def openai_is_chat_only(model_id: str, model: dict) -> bool:
+    if model_id in OPENAI_CHAT_ONLY_MODEL_IDS:
+        return True
+    summary = model_summary(model)
+    return (
+        'usable in chat completions' in summary
+        or 'with the chat completions api' in summary
+        or 'using the chat completions api' in summary
+    )
+
+
+def openai_supports_reasoning(model_id: str, model: dict) -> bool:
+    if model_id in OPENAI_REASONING_MODEL_IDS or model_id.startswith(OPENAI_REASONING_MODEL_PREFIXES):
+        return True
+    summary = model_summary(model)
+    return any(
+        snippet in summary
+        for snippet in (
+            'reasoning.effort supports',
+            'configurable reasoning',
+            'reasoning model',
+            'think before they answer',
+            'full chain-of-thought',
+        )
+    )
+
+
+def openai_supports_prompt_caching(model_id: str) -> bool:
+    return model_id in OPENAI_PROMPT_CACHE_MODEL_IDS or model_id.startswith(OPENAI_PROMPT_CACHE_MODEL_PREFIXES)
+
+
+def infer_openai_surfaces(model_id: str, model: dict) -> list[str]:
     inputs, outputs = normalize_text_list(model)
     outputs_set = set(outputs)
     inputs_set = set(inputs)
@@ -150,8 +223,10 @@ def infer_openai_surfaces(model_id: str, model: dict) -> list[str]:
         if 'image' in inputs_set:
             surfaces.append('image.edit')
         return surfaces
-    if 'responses api only' in summary or 'only usable in the responses api' in summary:
+    if openai_is_responses_only(model_id, model):
         return ['responses']
+    if openai_is_chat_only(model_id, model):
+        return ['chat.completion']
     return ['chat.completion', 'responses']
 
 
@@ -532,11 +607,90 @@ def build_records(provider_id: str, model_id: str, model: dict, surfaces: list[s
     return records
 
 
-def render_record(model_id: str, record: OrderedDict[str, str]) -> list[str]:
+def render_toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, list):
+        return toml_array([str(item) for item in value])
+    return toml_quote(str(value))
+
+
+def render_record(model_id: str, record: OrderedDict[str, object]) -> list[str]:
     lines = [f'[[models.{toml_quote(model_id)}.records]]']
     for key, value in record.items():
-        lines.append(f'{key} = {toml_quote(value)}')
+        lines.append(f'{key} = {render_toml_value(value)}')
     return lines
+
+
+def build_openai_behavior_records(model_id: str, model: dict, surfaces: list[str]) -> list[OrderedDict[str, object]]:
+    if not any(surface in OPENAI_TEXT_BEHAVIOR_SURFACES for surface in surfaces):
+        return []
+
+    features = model.get('features') or {}
+    reasoning_supported = openai_supports_reasoning(model_id, model)
+    prompt_cache_supported = openai_supports_prompt_caching(model_id)
+    tool_support = 'supported' if features.get('function_calling') else 'unsupported'
+    response_only = openai_is_responses_only(model_id, model)
+    chat_only = openai_is_chat_only(model_id, model)
+
+    records: list[OrderedDict[str, object]] = []
+    for surface in surfaces:
+        if surface not in OPENAI_TEXT_BEHAVIOR_SURFACES:
+            continue
+
+        record: OrderedDict[str, object] = OrderedDict()
+        record['table_kind'] = 'behavior'
+        record['source_url'] = str(model.get('source_url') or '')
+        record['source_page'] = 'model_behaviors'
+        record['section'] = 'Runtime Semantics'
+        record['operation'] = OPENAI_SURFACE_TO_BEHAVIOR_OPERATION[surface]
+
+        if surface == 'completion.legacy':
+            record['tool_calls'] = 'unsupported'
+            record['tool_choice_required'] = 'unsupported'
+            record['assistant_tool_followup'] = 'none'
+            record['reasoning_output'] = 'unsupported'
+            record['reasoning_activation'] = 'unavailable'
+            record['context_cache_modes'] = []
+            record['context_cache_default_enabled'] = False
+            record['cache_usage_reporting'] = 'unknown'
+            record['notes'] = 'Legacy OpenAI text completions models do not support tools, prompt caching, or reasoning controls.'
+            records.append(record)
+            continue
+
+        record['tool_calls'] = tool_support
+        record['tool_choice_required'] = tool_support
+        record['assistant_tool_followup'] = 'none'
+        record['reasoning_output'] = 'optional' if reasoning_supported and surface == 'responses' else 'unsupported'
+        record['reasoning_activation'] = 'openai_reasoning_effort' if reasoning_supported else 'unavailable'
+        record['context_cache_modes'] = ['passive'] if prompt_cache_supported else []
+        record['context_cache_default_enabled'] = prompt_cache_supported
+        record['cache_usage_reporting'] = 'standard_usage' if prompt_cache_supported else 'unknown'
+
+        notes: list[str] = []
+        if response_only:
+            notes.append('Model docs mark this family as Responses API only.')
+        elif chat_only:
+            notes.append('Model docs describe this family for Chat Completions flows.')
+        if reasoning_supported:
+            if surface == 'responses':
+                notes.append('This reasoning-capable family uses OpenAI reasoning.effort on the Responses API.')
+            else:
+                notes.append('This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items.')
+        if prompt_cache_supported:
+            notes.append('Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details.')
+        if notes:
+            record['notes'] = ' '.join(notes)
+
+        records.append(record)
+
+    return records
+
+
+def build_behavior_records(provider_id: str, model_id: str, model: dict, surfaces: list[str]) -> list[OrderedDict[str, object]]:
+    if provider_id == 'openai':
+        return build_openai_behavior_records(model_id, model, surfaces)
+    return []
 
 
 def find_model_starts(lines: list[str]) -> list[tuple[str, int]]:
@@ -572,6 +726,11 @@ def current_api_line_index(lines: list[str], start: int, end: int) -> int | None
 def has_api_record(model: dict) -> bool:
     records = model.get('records') or []
     return any(isinstance(r, dict) and ('api_surface' in r or 'api_surfaces' in r) for r in records)
+
+
+def has_behavior_record(model: dict) -> bool:
+    records = model.get('records') or []
+    return any(isinstance(r, dict) and r.get('table_kind') == 'behavior' for r in records)
 
 
 def find_record_blocks(lines: list[str], start: int, end: int, model_id: str) -> list[tuple[int, int]]:
@@ -674,7 +833,50 @@ def repair_existing_api_blocks(lines: list[str], provider_id: str, model_id: str
     return repaired
 
 
-def enrich_file(path: Path) -> tuple[int, int, int]:
+def find_record_blocks_of_kind(lines: list[str], start: int, end: int, model_id: str, table_kind: str) -> list[tuple[int, int]]:
+    matches: list[tuple[int, int]] = []
+    for block_start, block_end in find_record_blocks(lines, start, end, model_id):
+        values, _ = parse_record_block(lines, block_start, block_end)
+        if values.get('table_kind') == table_kind:
+            matches.append((block_start, block_end))
+    return matches
+
+
+def remove_record_blocks(lines: list[str], blocks: list[tuple[int, int]]) -> int:
+    removed_lines = 0
+    for block_start, block_end in reversed(blocks):
+        delete_start = block_start
+        if delete_start > 0 and not lines[delete_start - 1].strip():
+            delete_start -= 1
+        removed_lines += block_end - delete_start
+        del lines[delete_start:block_end]
+    return removed_lines
+
+
+def sync_behavior_blocks(lines: list[str], provider_id: str, model_id: str, model: dict, surfaces: list[str], start: int, end: int) -> int:
+    desired_records = build_behavior_records(provider_id, model_id, model, surfaces)
+    existing_blocks = find_record_blocks_of_kind(lines, start, end, model_id, 'behavior')
+    removed_lines = remove_record_blocks(lines, existing_blocks) if existing_blocks else 0
+    end -= removed_lines
+
+    if not desired_records:
+        return 1 if existing_blocks else 0
+
+    record_lines: list[str] = []
+    if end > 0 and lines[end - 1].strip():
+        record_lines.append('')
+    for index, record in enumerate(desired_records):
+        if index and record_lines and record_lines[-1] != '':
+            record_lines.append('')
+        record_lines.extend(render_record(model_id, record))
+        record_lines.append('')
+    if record_lines and record_lines[-1] == '':
+        record_lines.pop()
+    lines[end:end] = record_lines
+    return 1
+
+
+def enrich_file(path: Path) -> tuple[int, int, int, int]:
     raw_text = path.read_text(encoding='utf-8')
     data = toml.loads(raw_text)
     provider_id = data['provider']['id']
@@ -686,6 +888,7 @@ def enrich_file(path: Path) -> tuple[int, int, int]:
     insertions = 0
     updated_surfaces = 0
     repaired_blocks = 0
+    synced_behaviors = 0
 
     for pos in range(len(order) - 1, -1, -1):
         model_id = order[pos]
@@ -735,14 +938,20 @@ def enrich_file(path: Path) -> tuple[int, int, int]:
                 lines[end:end] = record_lines
                 insertions += 1
 
+        if provider_id == 'openai':
+            synced_behaviors += sync_behavior_blocks(lines, provider_id, model_id, model, surfaces, start, end)
+
     new_text = '\n'.join(lines) + '\n'
     path.write_text(new_text, encoding='utf-8')
     write_json_sidecar(path)
-    return insertions, updated_surfaces, repaired_blocks
+    return insertions, updated_surfaces, repaired_blocks, synced_behaviors
 
 
 if __name__ == '__main__':
     for name in TARGET_FILES:
         path = CATALOG_DIR / name
-        insertions, updated_surfaces, repaired_blocks = enrich_file(path)
-        print(f'{path.name}: insertions={insertions} updated_surfaces={updated_surfaces} repaired_blocks={repaired_blocks}')
+        insertions, updated_surfaces, repaired_blocks, synced_behaviors = enrich_file(path)
+        print(
+            f'{path.name}: insertions={insertions} updated_surfaces={updated_surfaces} '
+            f'repaired_blocks={repaired_blocks} synced_behaviors={synced_behaviors}'
+        )

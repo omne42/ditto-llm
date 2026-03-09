@@ -45,4 +45,3 @@ fn estimate_tokens_from_length(len: usize) -> u32 {
         estimate as u32
     }
 }
-

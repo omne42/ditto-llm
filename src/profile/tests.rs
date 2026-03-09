@@ -92,13 +92,13 @@ fn parses_dotenv_basic() {
     let parsed = parse_dotenv(
         r#"
 # comment
-export OPENAI_API_KEY="sk-test"
+export OPENAI_COMPAT_API_KEY="sk-test"
 FOO=bar
 EMPTY=
 "#,
     );
     assert_eq!(
-        parsed.get("OPENAI_API_KEY").map(String::as_str),
+        parsed.get("OPENAI_COMPAT_API_KEY").map(String::as_str),
         Some("sk-test")
     );
     assert_eq!(parsed.get("FOO").map(String::as_str), Some("bar"));
@@ -259,6 +259,8 @@ normalize_endpoint = "/v1/chat/completions"
 #[test]
 fn merge_openai_provider_config_merges_overrides() {
     let base = ProviderConfig {
+        provider: None,
+        enabled_capabilities: Vec::new(),
         base_url: Some("https://upstream.example/v1".to_string()),
         default_model: Some("base-model".to_string()),
         model_whitelist: vec!["old".to_string()],
@@ -271,6 +273,8 @@ fn merge_openai_provider_config_merges_overrides() {
         normalize_endpoint: None,
     };
     let overrides = ProviderConfig {
+        provider: None,
+        enabled_capabilities: Vec::new(),
         base_url: Some("https://example.com/v1".to_string()),
         default_model: Some("my-model".to_string()),
         model_whitelist: vec!["m1".to_string(), "m1".to_string(), "m2".to_string()],

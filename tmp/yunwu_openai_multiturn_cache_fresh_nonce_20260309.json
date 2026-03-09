@@ -1,0 +1,65 @@
+{
+  "tested_at": "2026-03-08T17:24:18Z",
+  "base_url": "https://yunwu.ai/v1",
+  "surface": "responses",
+  "mode": "fresh_nonce_multiturn_second_round",
+  "models": [
+    {
+      "model": "gpt-4.1-mini",
+      "nonce": "UNIQUE-fd662da45b224a4b989cebe6395addf6",
+      "round1": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R1",
+        "input_tokens": 27943,
+        "output_tokens": 3,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R2",
+        "input_tokens": 27970,
+        "output_tokens": 3,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      }
+    },
+    {
+      "model": "gpt-5-mini",
+      "nonce": "UNIQUE-42f565cf72774d9fbb4e72ded868e1dc",
+      "round1": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R1",
+        "input_tokens": 28842,
+        "output_tokens": 20,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R2",
+        "input_tokens": 28871,
+        "output_tokens": 20,
+        "cached_tokens": 28800,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      }
+    }
+  ],
+  "notes": [
+    "fresh_nonce means the long prefix included a unique nonce not reused in earlier probes, so round2 cache cannot come from historical warming outside this two-turn exchange.",
+    "gpt-4.1-mini was tested without reasoning.effort because yunwu rejected that parameter for this model on /v1/responses.",
+    "gpt-5-mini was tested with reasoning.effort=minimal and max_output_tokens=64 to obtain a completed textual response while still exposing cache usage details."
+  ]
+}

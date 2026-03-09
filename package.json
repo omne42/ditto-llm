@@ -6,9 +6,15 @@
     "apps/*"
   ],
   "scripts": {
-    "typecheck": "pnpm -r run typecheck",
-    "build": "pnpm -r run build",
-    "dev": "pnpm --filter ditto-admin-ui dev"
+    "typecheck": "pnpm run typecheck:packages",
+    "typecheck:packages": "pnpm -r --filter './packages/**' run typecheck",
+    "typecheck:workspace": "pnpm -r run typecheck",
+    "build": "pnpm run build:packages",
+    "build:packages": "pnpm -r --filter './packages/**' run build",
+    "build:workspace": "pnpm -r run build",
+    "typecheck:admin-ui": "pnpm --filter ditto-admin-ui run typecheck",
+    "build:admin-ui": "pnpm --filter ditto-admin-ui run build",
+    "dev:admin-ui": "pnpm --filter ditto-admin-ui dev"
   },
   "devDependencies": {
     "typescript": "^5.5.4"

@@ -1,6 +1,11 @@
 #[cfg(all(
     test,
-    any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis")
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    )
 ))]
 mod ledger_grouping_tests {
     use super::*;
@@ -150,4 +155,3 @@ mod ledger_grouping_tests {
         assert_eq!(tenants[1].updated_at_ms, 100);
     }
 }
-

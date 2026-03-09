@@ -2,4 +2,7 @@
 include!("google/client.rs");
 include!("google/generate_api.rs");
 include!("google/embeddings.rs");
+include!("google/images.rs");
+include!("google/videos.rs");
+include!("google/realtime.rs");
 include!("google/tests.rs");

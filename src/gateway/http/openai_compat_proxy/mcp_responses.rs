@@ -15,10 +15,7 @@ fn extract_responses_tool_calls(response: &Value) -> Vec<ResponsesToolCall> {
         let Some(obj) = item.as_object() else {
             continue;
         };
-        let item_type = obj
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default();
+        let item_type = obj.get("type").and_then(|v| v.as_str()).unwrap_or_default();
         if item_type != "function_call" {
             continue;
         }
@@ -93,17 +90,15 @@ async fn follow_up_via_chat_completions_to_responses(
     let mut request_with_tools = params.request_json.clone();
     set_json_tools(&mut request_with_tools, params.tools_for_llm);
 
-    let chat_req =
-        responses_shim::responses_request_to_chat_completions(&request_with_tools).ok_or_else(
-            || {
-                openai_error(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_request_error",
-                    Some("invalid_mcp_request"),
-                    "missing input/messages",
-                )
-            },
-        )?;
+    let chat_req = responses_shim::responses_request_to_chat_completions(&request_with_tools)
+        .ok_or_else(|| {
+            openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_mcp_request"),
+                "missing input/messages",
+            )
+        })?;
     let mut chat_req = chat_req;
 
     let Some(messages) = chat_req.get("messages").and_then(|v| v.as_array()).cloned() else {
@@ -281,8 +276,8 @@ async fn follow_up_via_chat_completions_to_responses(
                     .await;
             }
 
-            let mapped =
-                responses_shim::chat_completions_response_to_responses(&value).ok_or_else(|| {
+            let mapped = responses_shim::chat_completions_response_to_responses(&value)
+                .ok_or_else(|| {
                     openai_error(
                         StatusCode::BAD_GATEWAY,
                         "api_error",
@@ -332,9 +327,10 @@ async fn follow_up_via_chat_completions_to_responses(
         }
 
         for call in &tool_calls {
-            let result = mcp_call_tool(state, params.server_ids, &call.name, call.arguments.clone())
-                .await
-                .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
+            let result =
+                mcp_call_tool(state, params.server_ids, &call.name, call.arguments.clone())
+                    .await
+                    .unwrap_or_else(|err| Value::String(format!("MCP tool call failed: {err}")));
             let content = mcp_tool_result_to_text(&result);
             push_message_with_limit(
                 &mut messages,
@@ -444,10 +440,8 @@ async fn convert_chat_response_to_responses(
         let reader = tokio::io::BufReader::new(reader);
         let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
 
-        let stream = responses_shim::chat_completions_sse_to_responses_sse(
-            data_stream,
-            fallback_request_id,
-        );
+        let stream =
+            responses_shim::chat_completions_sse_to_responses_sse(data_stream, fallback_request_id);
 
         let mut response = axum::response::Response::new(Body::from_stream(stream));
         *response.status_mut() = status;
@@ -464,14 +458,15 @@ async fn convert_chat_response_to_responses(
             format!("invalid chat/completions response: {err}"),
         )
     })?;
-    let mapped = responses_shim::chat_completions_response_to_responses(&value).ok_or_else(|| {
-        openai_error(
-            StatusCode::BAD_GATEWAY,
-            "api_error",
-            Some("invalid_backend_response"),
-            "chat/completions response cannot be mapped to /responses",
-        )
-    })?;
+    let mapped =
+        responses_shim::chat_completions_response_to_responses(&value).ok_or_else(|| {
+            openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("invalid_backend_response"),
+                "chat/completions response cannot be mapped to /responses",
+            )
+        })?;
     let bytes = serde_json::to_vec(&mapped)
         .map(Bytes::from)
         .unwrap_or_else(|_| Bytes::from(mapped.to_string()));

@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashSet};
 #[cfg(feature = "streaming")]
 use std::collections::HashMap;
+use std::collections::{BTreeMap, HashSet};
 
 use async_trait::async_trait;
 #[cfg(feature = "streaming")]
@@ -10,23 +10,23 @@ use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::config::{
+    DEFAULT_HTTP_TIMEOUT, Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
+    default_http_client, resolve_http_provider_config, resolve_provider_request_auth_required,
+};
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{
-    Env, HttpAuth, ProviderAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    resolve_request_auth_with_default_keys,
-};
 #[cfg(feature = "rerank")]
 use crate::rerank::RerankModel;
+#[cfg(feature = "streaming")]
+use crate::types::StreamChunk;
 use crate::types::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool, ToolChoice,
     Usage, Warning,
 };
 #[cfg(feature = "rerank")]
 use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
-#[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
 use crate::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";
@@ -42,10 +42,7 @@ pub struct Cohere {
 
 impl Cohere {
     pub fn new(api_key: impl Into<String>) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let http = default_http_client(DEFAULT_HTTP_TIMEOUT);
 
         let api_key = api_key.into();
         let auth = if api_key.trim().is_empty() {
@@ -82,36 +79,24 @@ impl Cohere {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         const DEFAULT_KEYS: &[&str] = &["COHERE_API_KEY"];
-        let auth = config
-            .auth
-            .clone()
-            .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-        let auth_header = resolve_request_auth_with_default_keys(
-            &auth,
+        let auth_header = resolve_provider_request_auth_required(
+            config,
             env,
             DEFAULT_KEYS,
             "authorization",
             Some("Bearer "),
         )
         .await?;
+        let resolved =
+            resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, config, Some(DEFAULT_BASE_URL))?;
 
-        let mut out = Self::new("");
+        let mut out = Self::new("").with_http_client(resolved.http);
         out.auth = Some(auth_header);
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                std::time::Duration::from_secs(300),
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+        out.http_query_params = resolved.http_query_params;
+        if let Some(base_url) = resolved.base_url {
             out = out.with_base_url(base_url);
         }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        if let Some(model) = resolved.default_model {
             out = out.with_model(model);
         }
         Ok(out)

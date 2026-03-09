@@ -12,7 +12,7 @@ async fn list_backends(
         ));
     }
 
-    let Some(health) = state.proxy_backend_health.as_ref() else {
+    let Some(health) = state.proxy.backend_health.as_ref() else {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
             "not_configured",
@@ -20,7 +20,7 @@ async fn list_backends(
         ));
     };
 
-    let mut names: Vec<String> = state.proxy_backends.keys().cloned().collect();
+    let mut names: Vec<String> = state.backends.proxy_backends.keys().cloned().collect();
     names.sort();
 
     let mut out = Vec::with_capacity(names.len());
@@ -54,7 +54,7 @@ async fn reset_backend(
         ));
     }
 
-    let Some(health) = state.proxy_backend_health.as_ref() else {
+    let Some(health) = state.proxy.backend_health.as_ref() else {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
             "not_configured",
@@ -66,7 +66,12 @@ async fn reset_backend(
     health.remove(name.as_str());
     drop(health);
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "admin.backend.reset",

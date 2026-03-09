@@ -13,7 +13,7 @@ async fn purge_proxy_cache(
         ));
     }
 
-    let Some(cache) = state.proxy_cache.as_ref() else {
+    let Some(cache) = state.proxy.cache.as_ref() else {
         return Err(error_response(
             StatusCode::NOT_FOUND,
             "not_configured",
@@ -21,15 +21,19 @@ async fn purge_proxy_cache(
         ));
     };
 
+    let selector = payload.selector.into_normalized();
+
     if payload.all {
-        {
+        let deleted_memory = {
             let mut cache = cache.lock().await;
+            let deleted = cache.len() as u64;
             cache.clear();
-        }
+            deleted
+        };
 
         let deleted_redis = {
             #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.redis_store.as_ref() {
+            if let Some(store) = state.stores.redis.as_ref() {
                 Some(store.clear_proxy_cache().await.map_err(|err| {
                     error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -47,17 +51,23 @@ async fn purge_proxy_cache(
         };
 
         #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        if let Some(metrics) = state.proxy.metrics.as_ref() {
             metrics.lock().await.record_proxy_cache_purge("all");
         }
 
-        #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
         append_admin_audit_log(
             &state,
             "admin.proxy_cache.purge",
             serde_json::json!({
                 "all": true,
-                "cache_key": payload.cache_key.as_deref(),
+                "selector": selector,
+                "deleted_memory": deleted_memory,
                 "deleted_redis": deleted_redis,
             }),
         )
@@ -65,34 +75,30 @@ async fn purge_proxy_cache(
 
         return Ok(Json(PurgeProxyCacheResponse {
             cleared_memory: true,
+            deleted_memory,
             deleted_redis,
         }));
     }
 
-    let Some(cache_key) = payload
-        .cache_key
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
+    if selector.is_empty() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
             "invalid_request",
-            "must set all=true or cache_key",
+            "must set all=true or at least one of cache_key/scope/method/path/model",
         ));
-    };
+    }
 
-    let removed_memory = {
+    let deleted_memory = {
         let mut cache = cache.lock().await;
-        cache.remove(cache_key)
+        cache.purge_matching(&selector)
     };
 
     let deleted_redis = {
         #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.redis_store.as_ref() {
+        if let Some(store) = state.stores.redis.as_ref() {
             Some(
                 store
-                    .delete_proxy_cache_response(cache_key)
+                    .purge_proxy_cache_matching(&selector)
                     .await
                     .map_err(|err| {
                         error_response(
@@ -112,25 +118,34 @@ async fn purge_proxy_cache(
     };
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
-        metrics.lock().await.record_proxy_cache_purge("key");
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
+        metrics
+            .lock()
+            .await
+            .record_proxy_cache_purge(selector.kind_label());
     }
 
-    #[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     append_admin_audit_log(
         &state,
         "admin.proxy_cache.purge",
         serde_json::json!({
             "all": false,
-            "cache_key": cache_key,
-            "cleared_memory": removed_memory,
+            "selector": selector,
+            "deleted_memory": deleted_memory,
             "deleted_redis": deleted_redis,
         }),
     )
     .await;
 
     Ok(Json(PurgeProxyCacheResponse {
-        cleared_memory: removed_memory,
+        cleared_memory: deleted_memory > 0,
+        deleted_memory,
         deleted_redis,
     }))
 }

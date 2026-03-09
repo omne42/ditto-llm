@@ -101,12 +101,10 @@ async fn handle_google_genai(
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
-            parts
-                .headers
-                .insert(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static("text/event-stream"),
-                );
+            parts.headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/event-stream"),
+            );
             parts.headers.remove("content-length");
 
             let data_stream = body
@@ -206,12 +204,10 @@ async fn handle_google_genai(
 
     let mut response = axum::response::Response::new(Body::from(out_bytes));
     *response.status_mut() = status;
-    response
-        .headers_mut()
-        .insert(
-            axum::http::header::CONTENT_TYPE,
-            axum::http::HeaderValue::from_static("application/json"),
-        );
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
     Ok(response)
 }
 
@@ -349,12 +345,10 @@ async fn handle_cloudcode_generate_content_inner(
             use tokio_util::io::StreamReader;
 
             let (mut parts, body) = openai_resp.into_parts();
-            parts
-                .headers
-                .insert(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static("text/event-stream"),
-                );
+            parts.headers.insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/event-stream"),
+            );
             parts.headers.remove("content-length");
 
             let data_stream = body
@@ -454,11 +448,9 @@ async fn handle_cloudcode_generate_content_inner(
 
     let mut response = axum::response::Response::new(Body::from(out_bytes));
     *response.status_mut() = status;
-    response
-        .headers_mut()
-        .insert(
-            axum::http::header::CONTENT_TYPE,
-            axum::http::HeaderValue::from_static("application/json"),
-        );
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
     Ok(response)
 }

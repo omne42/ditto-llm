@@ -38,9 +38,10 @@ pub struct McpServerState {
 
 impl McpServerState {
     pub fn new(server_id: String, url: String) -> Result<Self, GatewayError> {
-        let parsed = reqwest::Url::parse(url.trim()).map_err(|err| GatewayError::InvalidRequest {
-            reason: format!("invalid MCP server url: {err}"),
-        })?;
+        let parsed =
+            reqwest::Url::parse(url.trim()).map_err(|err| GatewayError::InvalidRequest {
+                reason: format!("invalid MCP server url: {err}"),
+            })?;
         match parsed.scheme() {
             "http" | "https" => {}
             other => {
@@ -50,13 +51,12 @@ impl McpServerState {
             }
         }
 
-        let client =
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(300))
-                .build()
-                .map_err(|err| GatewayError::Backend {
-                    message: format!("mcp http client error: {err}"),
-                })?;
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|err| GatewayError::Backend {
+                message: format!("mcp http client error: {err}"),
+            })?;
 
         Ok(Self {
             server_id,
@@ -100,10 +100,7 @@ impl McpServerState {
         &self.headers
     }
 
-    fn parse_tools_list_result(
-        &self,
-        result: Value,
-    ) -> Result<McpToolsListResult, GatewayError> {
+    fn parse_tools_list_result(&self, result: Value) -> Result<McpToolsListResult, GatewayError> {
         match result {
             Value::Array(tools) => Ok(McpToolsListResult {
                 tools,
@@ -140,7 +137,10 @@ impl McpServerState {
                 Ok(McpToolsListResult { tools, next_cursor })
             }
             _ => Err(GatewayError::Backend {
-                message: format!("mcp tools/list invalid result for server {}", self.server_id),
+                message: format!(
+                    "mcp tools/list invalid result for server {}",
+                    self.server_id
+                ),
             }),
         }
     }
@@ -221,9 +221,7 @@ impl McpServerState {
             .is_some_and(|cursor| cursor.len() > MCP_TOOLS_LIST_MAX_CURSOR_BYTES)
         {
             return Err(GatewayError::InvalidRequest {
-                reason: format!(
-                    "cursor exceeded max bytes ({MCP_TOOLS_LIST_MAX_CURSOR_BYTES})"
-                ),
+                reason: format!("cursor exceeded max bytes ({MCP_TOOLS_LIST_MAX_CURSOR_BYTES})"),
             });
         }
 
@@ -254,9 +252,7 @@ impl McpServerState {
             cache.entries.insert(
                 cursor,
                 McpToolsListCacheEntry {
-                    expires_at: now
-                        .checked_add(MCP_TOOLS_LIST_CACHE_TTL)
-                        .unwrap_or(now),
+                    expires_at: now.checked_add(MCP_TOOLS_LIST_CACHE_TTL).unwrap_or(now),
                     tools: result.tools.clone(),
                     next_cursor: result.next_cursor.clone(),
                 },
@@ -489,12 +485,8 @@ async fn handle_mcp_tools_call(
     let parsed: McpToolsCallRequest = match serde_json::from_slice(&bytes) {
         Ok(parsed) => parsed,
         Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_json",
-                "invalid JSON body",
-            )
-            .into_response();
+            return error_response(StatusCode::BAD_REQUEST, "invalid_json", "invalid JSON body")
+                .into_response();
         }
     };
 
@@ -546,7 +538,9 @@ async fn handle_mcp_impl(
 
     let value: Value = match serde_json::from_slice(&bytes) {
         Ok(value) => value,
-        Err(_) => return Json(mcp_jsonrpc_error(Value::Null, -32700, "Parse error")).into_response(),
+        Err(_) => {
+            return Json(mcp_jsonrpc_error(Value::Null, -32700, "Parse error")).into_response();
+        }
     };
     if value.is_array() {
         return Json(mcp_jsonrpc_error(
@@ -559,7 +553,9 @@ async fn handle_mcp_impl(
 
     let rpc: JsonRpcRequest = match serde_json::from_value(value) {
         Ok(rpc) => rpc,
-        Err(_) => return Json(mcp_jsonrpc_error(Value::Null, -32600, "Invalid Request")).into_response(),
+        Err(_) => {
+            return Json(mcp_jsonrpc_error(Value::Null, -32600, "Invalid Request")).into_response();
+        }
     };
 
     let Some(id) = rpc.id.clone() else {
@@ -648,7 +644,8 @@ async fn enforce_mcp_auth(
     if !state.uses_virtual_keys() {
         return Ok(());
     }
-    let token = extract_virtual_key(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
+    let token =
+        extract_virtual_key(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
     let key = state
         .virtual_key_by_token(&token)
         .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
@@ -697,6 +694,9 @@ fn map_mcp_gateway_error(err: GatewayError) -> (StatusCode, Json<ErrorResponse>)
         GatewayError::Backend { message } => {
             error_response(StatusCode::BAD_GATEWAY, "mcp_backend_error", message)
         }
+        GatewayError::BackendTimeout { message } => {
+            error_response(StatusCode::GATEWAY_TIMEOUT, "mcp_backend_timeout", message)
+        }
         GatewayError::InvalidRequest { reason } => {
             error_response(StatusCode::BAD_REQUEST, "invalid_request", reason)
         }
@@ -727,7 +727,7 @@ fn resolve_requested_mcp_servers(
             .filter(|value| !value.is_empty())
             .collect()
     } else {
-        let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+        let mut all: Vec<String> = state.backends.mcp_servers.keys().cloned().collect();
         all.sort();
         all
     };
@@ -735,7 +735,7 @@ fn resolve_requested_mcp_servers(
     requested.sort();
     requested.dedup();
     if requested.is_empty() {
-        let message = if state.mcp_servers.is_empty() {
+        let message = if state.backends.mcp_servers.is_empty() {
             "no MCP servers configured"
         } else {
             "no MCP servers selected"
@@ -745,7 +745,7 @@ fn resolve_requested_mcp_servers(
         ));
     }
     for server_id in &requested {
-        if !state.mcp_servers.contains_key(server_id) {
+        if !state.backends.mcp_servers.contains_key(server_id) {
             return Err(Box::new(
                 error_response(
                     StatusCode::NOT_FOUND,
@@ -779,7 +779,7 @@ fn resolve_requested_mcp_servers_jsonrpc(
             .filter(|value| !value.is_empty())
             .collect()
     } else {
-        let mut all: Vec<String> = state.mcp_servers.keys().cloned().collect();
+        let mut all: Vec<String> = state.backends.mcp_servers.keys().cloned().collect();
         all.sort();
         all
     };
@@ -787,7 +787,7 @@ fn resolve_requested_mcp_servers_jsonrpc(
     requested.sort();
     requested.dedup();
     if requested.is_empty() {
-        let message = if state.mcp_servers.is_empty() {
+        let message = if state.backends.mcp_servers.is_empty() {
             "no MCP servers configured"
         } else {
             "no MCP servers selected"
@@ -795,7 +795,7 @@ fn resolve_requested_mcp_servers_jsonrpc(
         return Err(message.to_string());
     }
     for server_id in &requested {
-        if !state.mcp_servers.contains_key(server_id) {
+        if !state.backends.mcp_servers.contains_key(server_id) {
             return Err(format!("mcp server not found: {server_id}"));
         }
     }
@@ -816,7 +816,7 @@ async fn mcp_list_tools(
 
     let mut futures = Vec::with_capacity(server_ids.len());
     for server_id in server_ids {
-        let server = state.mcp_servers.get(server_id).ok_or_else(|| {
+        let server = state.backends.mcp_servers.get(server_id).ok_or_else(|| {
             GatewayError::InvalidRequest {
                 reason: format!("unknown MCP server: {server_id}"),
             }
@@ -903,9 +903,14 @@ async fn mcp_call_tool(
         });
     }
 
-    let server = state.mcp_servers.get(server_id).ok_or_else(|| GatewayError::InvalidRequest {
-        reason: format!("unknown MCP server: {server_id}"),
-    })?;
+    let server =
+        state
+            .backends
+            .mcp_servers
+            .get(server_id)
+            .ok_or_else(|| GatewayError::InvalidRequest {
+                reason: format!("unknown MCP server: {server_id}"),
+            })?;
 
     let req = serde_json::json!({
         "jsonrpc": "2.0",

@@ -8,11 +8,15 @@ use serde_json::{Map, Value};
 
 use super::openai_like;
 
+use crate::config::{Env, ProviderConfig};
+use crate::context_cache::{ContextCacheMode, ContextCacheProfile};
 #[cfg(feature = "embeddings")]
 use crate::embedding::EmbeddingModel;
 use crate::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, OpenAiProviderFamily, ProviderConfig, infer_openai_provider_quirks};
+use crate::providers::openai_compatible_family::{
+    OpenAiProviderFamily, infer_openai_provider_quirks,
+};
 #[cfg(feature = "streaming")]
 use crate::types::StreamChunk;
 use crate::types::{
@@ -42,8 +46,8 @@ impl Default for OpenAiCompatibleRequestQuirks {
 }
 
 impl OpenAiCompatibleRequestQuirks {
-    fn from_base_url(base_url: &str) -> Self {
-        let family = infer_openai_provider_quirks("", base_url).family;
+    fn from_provider_and_base_url(provider: &str, base_url: &str) -> Self {
+        let family = infer_openai_provider_quirks(provider, base_url).family;
         let assistant_tool_call_requires_reasoning_content =
             matches!(family, OpenAiProviderFamily::Kimi);
         let base_url_lower = base_url.to_ascii_lowercase();
@@ -57,6 +61,10 @@ impl OpenAiCompatibleRequestQuirks {
         }
     }
 
+    fn from_base_url(base_url: &str) -> Self {
+        Self::from_provider_and_base_url("", base_url)
+    }
+
     fn should_send_prompt_cache_key(self) -> bool {
         self.allow_prompt_cache_key
             || env_flag_is_true("DITTO_OPENAI_COMPAT_SEND_PROMPT_CACHE_KEY")
@@ -67,6 +75,44 @@ impl OpenAiCompatibleRequestQuirks {
         self.assistant_tool_call_requires_thought_signature
             || env_flag_is_true("DITTO_OPENAI_COMPAT_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
             || env_flag_is_true("OMNE_OPENAI_COMPAT_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
+    }
+}
+
+fn provider_behavior_for_chat_completion(
+    quirks: OpenAiCompatibleRequestQuirks,
+    model: &str,
+) -> Option<&'static crate::ModelBehaviorDescriptor> {
+    let provider = match quirks.family {
+        OpenAiProviderFamily::DeepSeek => "deepseek",
+        OpenAiProviderFamily::Kimi => "kimi",
+        OpenAiProviderFamily::OpenRouter => "openrouter",
+        _ => return None,
+    };
+    crate::builtin_registry().behavior(provider, model, crate::OperationKind::CHAT_COMPLETION)
+}
+
+fn assistant_tool_call_requires_reasoning_content(
+    model: &str,
+    quirks: OpenAiCompatibleRequestQuirks,
+) -> bool {
+    quirks.assistant_tool_call_requires_reasoning_content
+        || matches!(
+            provider_behavior_for_chat_completion(quirks, model)
+                .map(|behavior| behavior.assistant_tool_followup),
+            Some(crate::AssistantToolFollowupRequirement::RequiresReasoningContent)
+        )
+}
+
+fn tool_choice_required_supported(
+    model: &str,
+    quirks: OpenAiCompatibleRequestQuirks,
+) -> Option<bool> {
+    match provider_behavior_for_chat_completion(quirks, model)
+        .map(|behavior| behavior.tool_choice_required)
+    {
+        Some(crate::BehaviorSupport::Supported) => Some(true),
+        Some(crate::BehaviorSupport::Unsupported) => Some(false),
+        _ => None,
     }
 }
 
@@ -168,11 +214,37 @@ impl OpenAICompatible {
         const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
         let client =
             openai_like::OpenAiLikeClient::from_config_optional(config, env, DEFAULT_KEYS).await?;
-        let request_quirks = OpenAiCompatibleRequestQuirks::from_base_url(&client.base_url);
+        let request_quirks = OpenAiCompatibleRequestQuirks::from_provider_and_base_url(
+            config.provider.as_deref().unwrap_or(""),
+            &client.base_url,
+        );
         Ok(Self {
             client,
             request_quirks,
         })
+    }
+
+    pub fn context_cache_profile(&self) -> ContextCacheProfile {
+        match self.request_quirks.family {
+            OpenAiProviderFamily::DeepSeek => ContextCacheProfile {
+                modes: vec![ContextCacheMode::Passive],
+                notes: Some(
+                    "DeepSeek context caching is passive and applied automatically to repeated prefixes."
+                        .to_string(),
+                ),
+            },
+            OpenAiProviderFamily::MiniMax => ContextCacheProfile {
+                modes: vec![
+                    ContextCacheMode::Passive,
+                    ContextCacheMode::AnthropicCompatible,
+                ],
+                notes: Some(
+                    "MiniMax exposes passive prompt caching plus Anthropic-compatible active cache semantics."
+                        .to_string(),
+                ),
+            },
+            _ => ContextCacheProfile::default(),
+        }
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -286,10 +358,13 @@ impl OpenAICompatible {
 
     fn messages_to_chat_messages(
         messages: &[Message],
+        model: &str,
         quirks: OpenAiCompatibleRequestQuirks,
     ) -> (Vec<Value>, Vec<Warning>) {
         let mut out = Vec::<Value>::new();
         let mut warnings = Vec::<Warning>::new();
+        let assistant_tool_call_requires_reasoning_content =
+            assistant_tool_call_requires_reasoning_content(model, quirks);
 
         for message in messages {
             match message.role {
@@ -464,7 +539,7 @@ impl OpenAICompatible {
                         msg.insert("tool_calls".to_string(), Value::Array(tool_calls));
                     }
                     if !reasoning.trim().is_empty()
-                        || (has_tool_calls && quirks.assistant_tool_call_requires_reasoning_content)
+                        || (has_tool_calls && assistant_tool_call_requires_reasoning_content)
                     {
                         // Some OpenAI-compatible providers require reasoning_content to exist
                         // on assistant tool-call messages in follow-up turns. If reasoning text
@@ -514,7 +589,8 @@ impl OpenAICompatible {
         stream: bool,
         provider_options_context: &'static str,
     ) -> Result<(Map<String, Value>, Vec<Warning>)> {
-        let (messages, mut warnings) = Self::messages_to_chat_messages(&request.messages, quirks);
+        let (messages, mut warnings) =
+            Self::messages_to_chat_messages(&request.messages, model, quirks);
 
         let mut body = Map::<String, Value>::new();
         body.insert("model".to_string(), Value::String(model.to_string()));
@@ -642,6 +718,13 @@ impl OpenAICompatible {
         }
         if let Some(tool_choice) = request.tool_choice.as_ref() {
             if cfg!(feature = "tools") {
+                if matches!(tool_choice, ToolChoice::Required)
+                    && matches!(tool_choice_required_supported(model, quirks), Some(false))
+                {
+                    return Err(DittoError::InvalidResponse(format!(
+                        "{model} does not support tool_choice=required over chat/completions"
+                    )));
+                }
                 body.insert(
                     "tool_choice".to_string(),
                     Self::tool_choice_to_openai(tool_choice),
@@ -1071,7 +1154,7 @@ mod client_tests {
         };
 
         let (messages, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+            OpenAICompatible::messages_to_chat_messages(&[assistant], "gpt-4o", Default::default());
         assert_eq!(messages.len(), 1);
         assert!(warnings
                 .iter()
@@ -1097,7 +1180,7 @@ mod client_tests {
         };
 
         let (messages, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+            OpenAICompatible::messages_to_chat_messages(&[assistant], "gpt-4o", Default::default());
         assert_eq!(messages.len(), 1);
         assert!(warnings.is_empty());
 
@@ -1123,7 +1206,7 @@ mod client_tests {
         };
 
         let (messages, warnings) =
-            OpenAICompatible::messages_to_chat_messages(&[assistant], Default::default());
+            OpenAICompatible::messages_to_chat_messages(&[assistant], "gpt-4o", Default::default());
         assert_eq!(messages.len(), 1);
         assert!(warnings.is_empty());
 
@@ -1147,6 +1230,7 @@ mod client_tests {
 
         let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
             &[assistant],
+            "moonshot-v1-8k",
             OpenAiCompatibleRequestQuirks {
                 family: OpenAiProviderFamily::Kimi,
                 assistant_tool_call_requires_reasoning_content: true,
@@ -1180,6 +1264,7 @@ mod client_tests {
 
         let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
             &[assistant],
+            "gpt-4o",
             OpenAiCompatibleRequestQuirks {
                 assistant_tool_call_requires_thought_signature: true,
                 ..Default::default()
@@ -1230,6 +1315,7 @@ mod client_tests {
 
         let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
             &[assistant, tool],
+            "gpt-4o",
             OpenAiCompatibleRequestQuirks {
                 assistant_tool_call_requires_thought_signature: true,
                 ..Default::default()
@@ -1261,5 +1347,74 @@ mod client_tests {
             tool_msg.get("tool_call_id").and_then(Value::as_str),
             Some("call_abc")
         );
+    }
+
+    #[test]
+    fn messages_to_chat_messages_adds_empty_reasoning_for_deepseek_reasoner_tool_calls() {
+        let assistant = Message {
+            role: Role::Assistant,
+            content: vec![ContentPart::ToolCall {
+                id: "call_1".to_string(),
+                name: "workspace".to_string(),
+                arguments: json!({"op":"help"}),
+            }],
+        };
+
+        let (messages, warnings) = OpenAICompatible::messages_to_chat_messages(
+            &[assistant],
+            "deepseek-reasoner",
+            OpenAiCompatibleRequestQuirks {
+                family: OpenAiProviderFamily::DeepSeek,
+                ..Default::default()
+            },
+        );
+        assert_eq!(messages.len(), 1);
+        assert!(warnings.is_empty());
+
+        let msg = messages[0].as_object().expect("assistant message object");
+        assert_eq!(
+            msg.get("reasoning_content").and_then(Value::as_str),
+            Some("")
+        );
+        assert!(msg.get("tool_calls").is_some());
+    }
+
+    #[test]
+    fn build_body_rejects_deepseek_reasoner_required_tool_choice() {
+        let tool = Tool {
+            name: "add".to_string(),
+            description: Some("add".to_string()),
+            parameters: json!({
+                "type": "object",
+                "properties": { "a": { "type": "integer" } }
+            }),
+            strict: None,
+        };
+        let mut request = GenerateRequest::from(vec![Message::user("hi")]);
+        request.tools = Some(vec![tool]);
+        request.tool_choice = Some(ToolChoice::Required);
+        let provider_options = crate::types::ProviderOptions::default();
+        let selected = serde_json::to_value(&provider_options).expect("provider options json");
+
+        let err = OpenAICompatible::build_chat_completions_body(
+            &request,
+            "deepseek-reasoner",
+            OpenAiCompatibleRequestQuirks {
+                family: OpenAiProviderFamily::DeepSeek,
+                ..Default::default()
+            },
+            &provider_options,
+            Some(&selected),
+            false,
+            "test.provider_options",
+        )
+        .expect_err("deepseek-reasoner should reject tool_choice=required");
+
+        assert!(matches!(
+            err,
+            DittoError::InvalidResponse(ref message)
+                if message.contains("deepseek-reasoner")
+                    && message.contains("tool_choice=required")
+        ));
     }
 }

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Build: scope default root pnpm scripts and CI Node checks to `packages/*`; keep `apps/admin-ui` as an optional workspace asset outside the default core validation path.
+- Docs: reframe `apps/admin-ui` as an optional asset and switch startup examples to `pnpm run dev:admin-ui`.
+- Dev: document `cargo check` / `cargo clippy -D warnings` / provider feature matrix as the default structure-evolution stop gate.
 - Gateway: add LiteLLM-compatible key management endpoints (`/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`) gated by Ditto admin auth.
 - Gateway: accept LiteLLM-style OpenAI-compatible endpoints without the `/v1` prefix (e.g. `/chat/completions`, `/embeddings`, `/moderations`, `/files/*`, `/batches/*`, `/models/*`, `/responses/*`).
 - Gateway: accept LiteLLM virtual key header `x-litellm-api-key` (optionally `Bearer ...`) across gateway endpoints and strip it before proxying upstream when virtual keys are enabled.

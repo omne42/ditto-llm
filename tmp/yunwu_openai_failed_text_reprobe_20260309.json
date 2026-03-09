@@ -1,0 +1,1482 @@
+{
+  "tested_at": "2026-03-08T18:01:32Z",
+  "base_url": "https://yunwu.ai/v1",
+  "catalog": "/root/autodl-tmp/zjj/p/ditto-llm/catalog/provider_models/openai.json",
+  "max_attempts": 3,
+  "timeout_seconds": 180,
+  "models": [
+    {
+      "model": "babbage-002",
+      "official_surfaces": [
+        "completion.legacy"
+      ],
+      "probed_surfaces": [
+        "completion.legacy"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/babbage-002",
+      "availability": [
+        {
+          "surface": "completion.legacy",
+          "path": "/completions",
+          "payload": {
+            "model": "babbage-002",
+            "prompt": "Reply with OK only.",
+            "max_tokens": 16
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020133453827126cN6Gfc7C)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020135488220302BWVl9hOF)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020137517767100IpcJjSf5)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "chatgpt-4o-latest",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/chatgpt-4o-latest",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "chatgpt-4o-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020139640874385f8LoSivg)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "model_not_found"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "chatgpt-4o-latest",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020139937822535jv5Zw6xW)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "model_not_found"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "davinci-002",
+      "official_surfaces": [
+        "completion.legacy"
+      ],
+      "probed_surfaces": [
+        "completion.legacy"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/davinci-002",
+      "availability": [
+        {
+          "surface": "completion.legacy",
+          "path": "/completions",
+          "payload": {
+            "model": "davinci-002",
+            "prompt": "Reply with OK only.",
+            "max_tokens": 16
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020140234021952COLN8P1K)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020142260006020JUrHpN8t)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020144296422559KrUImb6x)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-3.5-turbo",
+      "official_surfaces": [
+        "chat.completion"
+      ],
+      "probed_surfaces": [
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-3.5-turbo",
+      "availability": [
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-3.5-turbo in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 2026030902014638855060366n7Mcgz)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-3.5-turbo 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-3.5-turbo in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020148159536726l6SzLYnG)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-3.5-turbo 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-3.5-turbo in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020149930566031oPDZXcqG)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-3.5-turbo 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-4.5-preview",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-4.5-preview",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-4.5-preview",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020151701367426O6WIGy4H)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020153621413175QPgseSSt)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020155546457521neB4jAkh)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-4.5-preview",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020157471795014ZjyM2PBh)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020159384610726vucb5vcV)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309020201295107178DSFSYqgT)",
+                  "type": "shell_api_error",
+                  "param": "",
+                  "code": null
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-4o-search-preview",
+      "official_surfaces": [
+        "chat.completion"
+      ],
+      "probed_surfaces": [
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-search-preview",
+      "availability": [
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-4o-search-preview",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020203215810821yQIO55IM)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020204986899405eQ3MjEA2)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 202603090202067578294198zRBYdf0)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "o3-pro",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/o3-pro",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "o3-pro",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 40,
+                "input_tokens": 11,
+                "output_tokens": 29,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses"
+    },
+    {
+      "model": "codex-mini-latest",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/codex-mini-latest",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "codex-mini-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020216961116705m9alTUb1)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020218732053180PMeiXbet)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020220502947135nkDBAyhc)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "codex-mini-latest",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020222274330336srmZfMaV)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 2026030902022445449489Wisl9pA6)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model codex-mini-latest in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020225816633811dJPUm1vQ)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 codex-mini-latest 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "computer-use-preview",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/computer-use-preview",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "computer-use-preview",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model computer-use-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020227587353478bnwM7nSf)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 computer-use-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model computer-use-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020229358265132IKw3rQ0U)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 computer-use-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model computer-use-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020231137033359urIt1NAd)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 computer-use-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-4o-mini-search-preview",
+      "official_surfaces": [
+        "chat.completion"
+      ],
+      "probed_surfaces": [
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview",
+      "availability": [
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-4o-mini-search-preview",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-mini-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020232908398570xLzyl7kk)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-mini-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-mini-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020234679826460X9MSKcbM)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-mini-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-4o-mini-search-preview in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020236450783734Szx8zgQa)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-4o-mini-search-preview 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-5.2-pro",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-pro",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.2-pro",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-5.2-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020238221647409X2KKNBei)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-5.2-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-5.2-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020239992682843e7Wgam5R)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-5.2-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model gpt-5.2-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020241763948775fRDDbTM7)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 gpt-5.2-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "o1-pro",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/o1-pro",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "o1-pro",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o1-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020243534875079tnSuyxU6)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o1-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o1-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020245305669515vZArks8B)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o1-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o1-pro in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 2026030902024776476461yZrM3eM9)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o1-pro 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "o3-deep-research",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/o3-deep-research",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "o3-deep-research",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020248847392005X0lgW1j7)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020250692914522ltSr0eQy)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020252464368182SDsdzCWI)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "o3-deep-research",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020254236059300KsinwbLt)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 202603090202567244493rT0AgBWo)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o3-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020257778801211ZBXOv2mP)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o3-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "o4-mini-deep-research",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/o4-mini-deep-research",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "o4-mini-deep-research",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020259550471510Sk5tWJBC)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020301321882010IupsI47f)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 2026030902030393448839FTQWPNlT)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "o4-mini-deep-research",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020304865047438obhMBX14)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 20260309020306636696396ZcRviK7e)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 503,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "No available channels for model o4-mini-deep-research in group MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip (request id: 202603090203084106191453XzrMPwF)",
+                  "message_zh": "当前分组 MJ慢速、限时特价、Codex专属、default、企业级高可用大模型、优质gemini、逆向、纯AZ、Claude Code专属、官转、官转gemini、官转克劳德1、sora-vip 下对于模型 o4-mini-deep-research 无可用渠道",
+                  "type": "new_api_error"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    }
+  ]
+}

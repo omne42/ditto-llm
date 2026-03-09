@@ -1,0 +1,230 @@
+{
+  "tested_at": "2026-03-08T17:17:05Z",
+  "base_url": "https://yunwu.ai/v1",
+  "conversation_shape": {
+    "system": "You are a terse assistant. Respect prior turns exactly and answer with only the requested short token.",
+    "round1_user_prefix_words": 900,
+    "round1_user_suffix": "Round1 task: reply with token R1 only.",
+    "round2_user": "Round2 task: given the exact prior exchange, reply with token R2 only."
+  },
+  "results": [
+    {
+      "model": "gpt-4.1-mini",
+      "surfaces": {
+        "chat.completions": {
+          "round1_status": 200,
+          "round1": {
+            "object": "chat.completion",
+            "content": "R1",
+            "finish_reason": "stop",
+            "prompt_tokens": 10842,
+            "completion_tokens": 3,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "chat.completion",
+            "content": "R2",
+            "finish_reason": "stop",
+            "prompt_tokens": 10869,
+            "completion_tokens": 3,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "responses": {
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "content": "R1",
+            "status": "completed",
+            "input_tokens": 10842,
+            "output_tokens": 3,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "content": "R2",
+            "status": "completed",
+            "input_tokens": 10869,
+            "output_tokens": 3,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-4.1",
+      "surfaces": {
+        "chat.completions": {
+          "round1_status": 200,
+          "round1": {
+            "object": "chat.completion",
+            "content": "R1",
+            "finish_reason": "stop",
+            "prompt_tokens": 10842,
+            "completion_tokens": 3,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "chat.completion",
+            "content": "R2",
+            "finish_reason": "stop",
+            "prompt_tokens": 10869,
+            "completion_tokens": 3,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "responses": {
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "content": "R1",
+            "status": "completed",
+            "input_tokens": 10842,
+            "output_tokens": 3,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "content": "R2",
+            "status": "completed",
+            "input_tokens": 10869,
+            "output_tokens": 3,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-4o-mini",
+      "surfaces": {
+        "chat.completions": {
+          "round1_status": 200,
+          "round1": {
+            "object": "chat.completion",
+            "content": "R1",
+            "finish_reason": "stop",
+            "prompt_tokens": 10842,
+            "completion_tokens": 3,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "chat.completion",
+            "content": "R2",
+            "finish_reason": "stop",
+            "prompt_tokens": 10869,
+            "completion_tokens": 3,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5-mini",
+      "surfaces": {
+        "chat.completions": {
+          "round1_status": 200,
+          "round1": {
+            "object": "chat.completion",
+            "content": "",
+            "finish_reason": "length",
+            "prompt_tokens": 10841,
+            "completion_tokens": 4,
+            "total_tokens": 10845,
+            "cached_tokens": 0,
+            "reasoning_tokens": 4
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "chat.completion",
+            "content": "",
+            "finish_reason": "length",
+            "prompt_tokens": 10868,
+            "completion_tokens": 4,
+            "total_tokens": 10872,
+            "cached_tokens": 0,
+            "reasoning_tokens": 4
+          }
+        },
+        "responses": {
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "content": "",
+            "status": "incomplete",
+            "input_tokens": 10841,
+            "output_tokens": 0,
+            "total_tokens": 10841,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "content": "",
+            "status": "incomplete",
+            "input_tokens": 10868,
+            "output_tokens": 0,
+            "total_tokens": 10868,
+            "cached_tokens": 10752,
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "model": "gpt-5-pro",
+      "surfaces": {
+        "responses": {
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "content": "",
+            "status": "incomplete",
+            "input_tokens": 10841,
+            "output_tokens": 0,
+            "total_tokens": 10841,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "content": "",
+            "status": "incomplete",
+            "input_tokens": 10868,
+            "output_tokens": 0,
+            "total_tokens": 10868,
+            "cached_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "retested_at": "2026-03-08T17:19:06Z"
+}

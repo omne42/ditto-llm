@@ -5,6 +5,8 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::{DittoError, Result};
 
+pub(crate) const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(300);
+
 pub(super) fn header_map_from_pairs(headers: &BTreeMap<String, String>) -> Result<HeaderMap> {
     let mut out = HeaderMap::new();
     for (name, value) in headers {
@@ -36,6 +38,56 @@ pub(crate) fn build_http_client(
         builder = builder.default_headers(header_map_from_pairs(headers)?);
     }
     builder.build().map_err(DittoError::Http)
+}
+
+#[cfg(any(feature = "google", feature = "cohere"))]
+pub(crate) fn default_http_client(timeout: Duration) -> reqwest::Client {
+    build_http_client(timeout, &BTreeMap::new()).unwrap_or_else(|_| reqwest::Client::new())
+}
+
+#[derive(Clone)]
+pub(crate) struct ResolvedHttpProviderConfig {
+    pub(crate) http: reqwest::Client,
+    pub(crate) base_url: Option<String>,
+    #[cfg(any(feature = "google", feature = "bedrock", feature = "vertex"))]
+    pub(crate) default_model: Option<String>,
+    pub(crate) http_query_params: BTreeMap<String, String>,
+}
+
+impl ResolvedHttpProviderConfig {
+    pub(crate) fn required_base_url(&self, message: &str) -> Result<&str> {
+        self.base_url
+            .as_deref()
+            .ok_or_else(|| DittoError::InvalidResponse(message.to_string()))
+    }
+
+    #[cfg(any(feature = "bedrock", feature = "vertex"))]
+    pub(crate) fn required_default_model(&self, message: &str) -> Result<&str> {
+        self.default_model
+            .as_deref()
+            .ok_or_else(|| DittoError::InvalidResponse(message.to_string()))
+    }
+}
+
+pub(crate) fn resolve_http_provider_config(
+    timeout: Duration,
+    config: &crate::config::ProviderConfig,
+    default_base_url: Option<&str>,
+) -> Result<ResolvedHttpProviderConfig> {
+    fn clean(value: Option<&str>) -> Option<String> {
+        value
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    Ok(ResolvedHttpProviderConfig {
+        http: build_http_client(timeout, &config.http_headers)?,
+        base_url: clean(config.base_url.as_deref()).or_else(|| clean(default_base_url)),
+        #[cfg(any(feature = "google", feature = "bedrock", feature = "vertex"))]
+        default_model: clean(config.default_model.as_deref()),
+        http_query_params: config.http_query_params.clone(),
+    })
 }
 
 pub(crate) fn apply_http_query_params(

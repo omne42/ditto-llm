@@ -1,4 +1,9 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Deserialize)]
 struct AuditQuery {
     #[serde(default = "default_audit_limit")]
@@ -7,7 +12,12 @@ struct AuditQuery {
     since_ts_ms: Option<u64>,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Deserialize)]
 struct AuditExportQuery {
     #[serde(default)]
@@ -20,7 +30,12 @@ struct AuditExportQuery {
     before_ts_ms: Option<u64>,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 async fn list_audit_logs(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -29,7 +44,7 @@ async fn list_audit_logs(
     let admin = ensure_admin_read(&state, &headers)?;
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let mut logs = store
             .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
             .await
@@ -55,7 +70,7 @@ async fn list_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let mut logs = store
             .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
             .await
@@ -81,7 +96,7 @@ async fn list_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let mut logs = store
             .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
             .await
@@ -107,7 +122,7 @@ async fn list_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let mut logs = store
             .list_audit_logs(query.limit.min(1000), query.since_ts_ms)
             .await
@@ -139,7 +154,12 @@ async fn list_audit_logs(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len().saturating_mul(2));
@@ -150,7 +170,12 @@ fn hex_lower(bytes: &[u8]) -> String {
     out
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn audit_chain_hash(prev_hash: Option<&str>, record: &AuditLogRecord) -> String {
     use sha2::Digest as _;
 
@@ -165,7 +190,12 @@ fn audit_chain_hash(prev_hash: Option<&str>, record: &AuditLogRecord) -> String 
     hex_lower(&hasher.finalize())
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn csv_escape(value: &str) -> String {
     if !value.contains([',', '"', '\n', '\r']) {
         return value.to_string();
@@ -174,7 +204,12 @@ fn csv_escape(value: &str) -> String {
     format!("\"{escaped}\"")
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Serialize)]
 struct AuditExportRecord {
     id: i64,
@@ -186,7 +221,12 @@ struct AuditExportRecord {
     hash: String,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 async fn export_audit_logs(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -203,7 +243,7 @@ async fn export_audit_logs(
     let limit = query.limit.clamp(1, 10_000);
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let mut logs = store
             .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
             .await
@@ -229,7 +269,7 @@ async fn export_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let mut logs = store
             .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
             .await
@@ -255,7 +295,7 @@ async fn export_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let mut logs = store
             .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
             .await
@@ -281,7 +321,7 @@ async fn export_audit_logs(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let mut logs = store
             .list_audit_logs_window(limit, query.since_ts_ms, query.before_ts_ms)
             .await
@@ -313,7 +353,12 @@ async fn export_audit_logs(
     ))
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn render_audit_export(
     format: &str,
     logs: Vec<AuditLogRecord>,
@@ -350,9 +395,11 @@ fn render_audit_export(
                 lines.push(line);
             }
 
-            let stream = stream::iter(lines.into_iter().map(|line| {
-                Ok::<Bytes, std::io::Error>(Bytes::from(line))
-            }));
+            let stream = stream::iter(
+                lines
+                    .into_iter()
+                    .map(|line| Ok::<Bytes, std::io::Error>(Bytes::from(line))),
+            );
             let mut response = axum::response::Response::new(Body::from_stream(stream));
             response.headers_mut().insert(
                 axum::http::header::CONTENT_TYPE,
@@ -377,16 +424,16 @@ fn render_audit_export(
                 prev_hash = Some(hash);
                 lines.push(line);
             }
-            let stream = stream::iter(lines.into_iter().map(|line| {
-                Ok::<Bytes, std::io::Error>(Bytes::from(line))
-            }));
+            let stream = stream::iter(
+                lines
+                    .into_iter()
+                    .map(|line| Ok::<Bytes, std::io::Error>(Bytes::from(line))),
+            );
             let mut response = axum::response::Response::new(Body::from_stream(stream));
-            response
-                .headers_mut()
-                .insert(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static("text/csv"),
-                );
+            response.headers_mut().insert(
+                axum::http::header::CONTENT_TYPE,
+                axum::http::HeaderValue::from_static("text/csv"),
+            );
             Ok(response)
         }
         _ => Err(error_response(

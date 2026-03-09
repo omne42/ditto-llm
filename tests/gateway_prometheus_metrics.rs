@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, HashMap};
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_llm::gateway::{
-    BackendConfig, Gateway, GatewayConfig, GatewayHttpState, ProxyBackend, RouteBackend,
-    RouterConfig, VirtualKeyConfig,
+    BackendConfig, Gateway, GatewayConfig, GatewayHttpState, GatewayRedactionConfig, ProxyBackend,
+    RouteBackend, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -280,6 +280,101 @@ async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_llm:
     assert!(rendered.contains(
         "ditto_gateway_proxy_responses_by_path_status_total{path=\"/v1/responses\",status=\"200\"} 2\n"
     ));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn prometheus_metrics_endpoint_redacts_labels_with_observability_policy()
+-> ditto_llm::Result<()> {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let mut redaction = GatewayRedactionConfig::default();
+    redaction
+        .redact_key_names
+        .push("virtual_key_id".to_string());
+    redaction.redact_key_names.push("backend".to_string());
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "sk-backend-1234567890",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("vk-secret-id", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "sk-backend-1234567890".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: ditto_llm::gateway::GatewayObservabilityConfig {
+            redaction,
+            sampling: Default::default(),
+        },
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_prometheus_metrics(Default::default());
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "sk-1234567890",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    mock.assert();
+
+    let metrics_request = Request::builder()
+        .method("GET")
+        .uri("/metrics/prometheus")
+        .body(Body::empty())
+        .unwrap();
+    let metrics_response = app.oneshot(metrics_request).await.unwrap();
+    assert_eq!(metrics_response.status(), StatusCode::OK);
+
+    let metrics_body = to_bytes(metrics_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let rendered = String::from_utf8_lossy(&metrics_body);
+    assert!(
+        rendered.contains(
+            "ditto_gateway_proxy_requests_by_key_total{virtual_key_id=\"<redacted>\"} 1\n"
+        )
+    );
+    assert!(
+        rendered.contains("ditto_gateway_proxy_requests_by_model_total{model=\"<redacted>\"} 1\n")
+    );
+    assert!(
+        rendered.contains("ditto_gateway_proxy_backend_attempts_total{backend=\"<redacted>\"} 1\n")
+    );
+    assert!(!rendered.contains("vk-secret-id"));
+    assert!(!rendered.contains("sk-backend-1234567890"));
+    assert!(!rendered.contains("model=\"sk-1234567890\""));
 
     Ok(())
 }

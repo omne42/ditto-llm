@@ -135,6 +135,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
                 retry_status_codes: vec![500],
                 fallback_status_codes: Vec::new(),
                 max_attempts: Some(2),
+                ..Default::default()
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
             ..Default::default()
@@ -231,11 +232,13 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
                 retry_status_codes: vec![500],
                 fallback_status_codes: Vec::new(),
                 max_attempts: Some(2),
+                ..Default::default()
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig {
                 enabled: true,
                 failure_threshold: 1,
                 cooldown_seconds: 300,
+                ..Default::default()
             },
             ..Default::default()
         });
@@ -334,6 +337,7 @@ async fn openai_compat_proxy_fallbacks_on_configured_status_when_retry_disabled(
                 retry_status_codes: vec![500],
                 fallback_status_codes: vec![503],
                 max_attempts: Some(2),
+                ..Default::default()
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
             ..Default::default()
@@ -430,6 +434,7 @@ async fn openai_compat_proxy_does_not_fallback_on_non_configured_status_when_ret
                 retry_status_codes: vec![500],
                 fallback_status_codes: vec![429],
                 max_attempts: Some(2),
+                ..Default::default()
             },
             circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig::default(),
             ..Default::default()
@@ -578,6 +583,381 @@ async fn openai_compat_proxy_health_check_skips_unhealthy_backends() {
     secondary_mock.assert_calls(1);
     primary_health.assert_calls(1);
     secondary_health.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_fallbacks_on_network_error_when_allowed() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let secondary = MockServer::start();
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-primary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok-secondary"}"#);
+    });
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind closed port");
+    let primary_base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+    drop(listener);
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary_base_url, "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                network_error_action:
+                    ditto_llm::gateway::proxy_routing::ProxyFailureAction::Fallback,
+                max_attempts: Some(2),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-primary")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-backend")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "secondary"
+    );
+
+    secondary_mock.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_does_not_fallback_on_network_error_when_disabled() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let secondary = MockServer::start();
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok-secondary"}"#);
+    });
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind closed port");
+    let primary_base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+    drop(listener);
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary_base_url, "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                network_error_action: ditto_llm::gateway::proxy_routing::ProxyFailureAction::None,
+                max_attempts: Some(2),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-primary")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    assert_eq!(
+        parsed
+            .get("error")
+            .and_then(|v| v.get("code"))
+            .and_then(|v| v.as_str()),
+        Some("backend_error")
+    );
+
+    secondary_mock.assert_calls(0);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_fallbacks_on_timeout_when_allowed() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let primary = MockServer::start();
+    let secondary = MockServer::start();
+
+    let primary_mock = primary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-primary")
+            .header("x-request-id", "req-timeout-fallback");
+        then.status(200)
+            .delay(std::time::Duration::from_millis(2_000))
+            .header("content-type", "application/json")
+            .body(r#"{"id":"late-primary"}"#);
+    });
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-timeout-fallback");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok-secondary"}"#);
+    });
+
+    let mut primary_backend = backend_config("primary", primary.base_url(), "Bearer sk-primary");
+    primary_backend.timeout_seconds = Some(1);
+
+    let config = GatewayConfig {
+        backends: vec![
+            primary_backend,
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                timeout_error_action:
+                    ditto_llm::gateway::proxy_routing::ProxyFailureAction::Fallback,
+                max_attempts: Some(2),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-timeout-fallback")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-backend")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default(),
+        "secondary"
+    );
+
+    primary_mock.assert_calls(1);
+    secondary_mock.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+#[tokio::test]
+async fn openai_compat_proxy_circuit_breaker_recovers_after_cooldown() {
+    if ditto_llm::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let primary = MockServer::start();
+    let secondary = MockServer::start();
+
+    let primary_mock = primary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-primary")
+            .header("x-request-id", "req-cb-recovery");
+        then.status(500)
+            .header("content-type", "application/json")
+            .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
+    });
+    let secondary_mock = secondary.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-secondary")
+            .header("x-request-id", "req-cb-recovery");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok-secondary"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![
+            backend_config("primary", primary.base_url(), "Bearer sk-primary"),
+            backend_config("secondary", secondary.base_url(), "Bearer sk-secondary"),
+        ],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![
+                RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                },
+                RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                },
+            ],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_proxy_routing(ditto_llm::gateway::ProxyRoutingConfig {
+            retry: ditto_llm::gateway::ProxyRetryConfig {
+                enabled: true,
+                retry_status_codes: vec![500],
+                max_attempts: Some(2),
+                ..Default::default()
+            },
+            circuit_breaker: ditto_llm::gateway::ProxyCircuitBreakerConfig {
+                enabled: true,
+                failure_threshold: 1,
+                cooldown_seconds: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    let app = ditto_llm::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+
+    let request = || {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/responses")
+            .header("authorization", "Bearer vk-1")
+            .header("x-request-id", "req-cb-recovery")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    };
+
+    let first = app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let second = app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+
+    let third = app.oneshot(request()).await.unwrap();
+    assert_eq!(third.status(), StatusCode::OK);
+
+    primary_mock.assert_calls(2);
+    secondary_mock.assert_calls(3);
 }
 
 #[tokio::test]

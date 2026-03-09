@@ -458,11 +458,16 @@ fn insert_request_id(headers: &mut HeaderMap, request_id: &str) {
 }
 
 fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Value) {
-    if !state.json_logs {
+    if !state.admin.json_logs {
         return;
     }
 
-    let payload = state.redactor.redact(payload);
+    let Some(payload) = state.prepare_observability_event(
+        crate::gateway::observability::GatewayObservabilitySink::JsonLogs,
+        payload,
+    ) else {
+        return;
+    };
     let record = serde_json::json!({
         "ts_ms": SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -476,10 +481,15 @@ fn emit_json_log(state: &GatewayHttpState, event: &str, payload: serde_json::Val
 
 #[cfg(feature = "sdk")]
 fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
-    let Some(logger) = state.devtools.as_ref() else {
+    let Some(logger) = state.admin.devtools.as_ref() else {
         return;
     };
-    let payload = state.redactor.redact(payload);
+    let Some(payload) = state.prepare_observability_event(
+        crate::gateway::observability::GatewayObservabilitySink::Devtools,
+        payload,
+    ) else {
+        return;
+    };
     let _ = logger.log_event(kind, payload);
 }
 
@@ -490,25 +500,30 @@ fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::
     feature = "gateway-store-redis"
 ))]
 async fn append_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
-    let payload = state.redactor.redact(payload);
+    let Some(payload) = state.prepare_observability_event(
+        crate::gateway::observability::GatewayObservabilitySink::Audit,
+        payload,
+    ) else {
+        return;
+    };
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let _ = store.append_audit_log(kind, payload.clone()).await;
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let _ = store.append_audit_log(kind, payload).await;
     }
 }

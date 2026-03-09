@@ -3,7 +3,7 @@
 Ditto Gateway 有两类缓存，面向不同使用场景：
 
 1) **Control-plane cache**：只作用于 `POST /v1/gateway`（demo/控制面端点）。  
-2) **Proxy cache**：作用于 OpenAI-compatible passthrough `ANY /v1/*`（非 streaming 响应）。
+2) **Proxy cache**：作用于 OpenAI-compatible passthrough `ANY /v1/*`（非 streaming 响应默认支持；streaming SSE 需显式开启）。
 
 实现位置：
 
@@ -73,10 +73,14 @@ cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gate
   --proxy-cache-ttl 60 \
   --proxy-cache-max-entries 2048 \
   --proxy-cache-max-body-bytes 1048576 \
-  --proxy-cache-max-total-body-bytes 67108864
+  --proxy-cache-max-total-body-bytes 67108864 \
+  --proxy-cache-streaming \
+  --proxy-cache-max-stream-body-bytes 1048576
 ```
 
-> `--proxy-cache-max-body-bytes` 会跳过缓存“过大的响应”（包含 memory 与 redis L2）；`--proxy-cache-max-total-body-bytes` 用于限制内存总缓存体积，避免内存被打爆。
+> `--proxy-cache-max-body-bytes` 会跳过缓存“过大的非流式响应”（包含 memory 与 redis L2）；`--proxy-cache-max-total-body-bytes` 用于限制内存总缓存体积，避免内存被打爆。
+
+> `--proxy-cache-streaming` 会显式开启 `text/event-stream` 缓存；`--proxy-cache-max-stream-body-bytes` 单独限制可缓存的完整 SSE 回放体积。Ditto 只会在 **流完整成功结束** 时写入缓存，不会缓存中断/报错的半截 stream。
 
 > 注意：`--proxy-cache-max-body-bytes` 只影响“缓存写入”的上限；Ditto 为了从 JSON 响应解析 `usage` 做更准的 token/cost 结算，另外提供 `--proxy-usage-max-body-bytes`（默认 1MiB）作为独立上限，避免把 cache 上限调大后导致 usage 缓冲也被动变大。
 
@@ -84,16 +88,18 @@ cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gate
 
 ### 2.2 缓存范围（What gets cached）
 
-Ditto 只会缓存：
+Ditto 会缓存：
 
 - 方法：`GET` / `POST`
-- 响应：**非** `text/event-stream`（也就是非 streaming）
 - 状态：2xx（成功响应）
+- 响应：
+  - 非 `text/event-stream`：默认可缓存
+  - `text/event-stream`：仅在显式开启 `--proxy-cache-streaming` 后可缓存，且只缓存**完整成功结束**的 stream
 
 因此：
 
 - `POST /v1/chat/completions`（非 streaming）可以被缓存
-- `POST /v1/chat/completions`（stream=true）不会被缓存
+- `POST /v1/chat/completions`（stream=true）在开启 `--proxy-cache-streaming` 后可以被缓存
 - `GET /v1/models` 可以被缓存
 
 ### 2.3 Cache key 与 scope（重要）
@@ -156,14 +162,21 @@ proxy cache 会：
 
 - `POST /admin/proxy_cache/purge`
   - `{ "all": true }`：清理全部
-  - `{ "cache_key": "ditto-proxy-cache-v1-..." }`：按 key 清理
+  - `{ "cache_key": "ditto-proxy-cache-v2-..." }`：按 key 精确清理
+  - `{ "path": "/v1/responses", "model": "gpt-4o-mini" }`：按 selector 清理
+  - selector 字段支持：`cache_key`、`scope`、`method`、`path`、`model`
+  - selector 按 AND 语义匹配；`path` 不带 query string，`method` 会规范化为大写
 
-如果启用 redis store，会同时清理 redis 中的记录，并在响应里返回 `deleted_redis`（删除条数）。
+响应会返回：
+
+- `cleared_memory`：本机内存缓存是否删到至少一条
+- `deleted_memory`：本机内存缓存删除条数
+- `deleted_redis`：redis 缓存删除条数（仅在启用 redis store 时出现）
 
 ---
 
 ## 5) 使用建议（好品味版）
 
-- 不要对 streaming 响应做缓存：语义复杂且容易引入“半截缓存”问题；Ditto 直接选择不缓存。
+- streaming cache 默认关闭；只有在你明确接受“按完整 SSE 字节回放、而非保留原始节奏”时再开启它。
 - 对大响应（例如 files/audio download）谨慎开启缓存：它会占用内存与 redis 带宽。
 - 如果你需要“更像 CDN 的缓存”，建议把 `/v1/*` 放到边缘缓存层做细粒度策略，Ditto 负责控制面与路由治理。

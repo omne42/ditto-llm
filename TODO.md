@@ -20,6 +20,7 @@
 - `README.md`（概览 + 用法）
 - `PROVIDERS.md`（provider/capability matrix）
 - `COMPARED_TO_LITELLM_AI_SDK.md`（对比口径）
+- `docs/src/roadmap/module-boundaries.md`（代码目录边界与迁移顺序）
 
 ---
 
@@ -135,7 +136,7 @@
 
 ### Backlog（未完成项，必须可追踪）
 
-- [ ] 观测：统一的采样/脱敏策略（logs/audit/devtools/metrics）
+- [x] 观测：统一的采样/脱敏策略（logs/audit/devtools/metrics）
   - DoD：
     - 提供可配置的脱敏规则（headers/query/json-path/正则），并为敏感字段提供默认规则
     - JSON logs、audit export、devtools JSONL、Prometheus labels 均遵守同一套脱敏策略（默认不泄漏 token/密钥/Authorization）
@@ -149,20 +150,28 @@
     - 文档更新（指标表/labels/基数上限/含义）
   - 验证：
     - `cargo test --all-targets --all-features`
-- [ ] 路由：更丰富的策略（分级 fallback、按错误类型熔断、按路由 backpressure）
+- [x] 路由：更丰富的策略（分级 fallback、按错误类型熔断、按路由 backpressure）
   - [x] 新增按状态码 fallback 策略（`--proxy-fallback-status-codes`，可独立于 retry 启用）
+  - [x] 新增 transport action 策略（`--proxy-network-error-action` / `--proxy-timeout-error-action`）与按错误类型熔断配置（`--proxy-cb-failure-status-codes` / `--proxy-cb-no-*`）
+  - [x] 决策日志补齐 `action` / `failure_kind` / `reason` / `will_attempt_next_backend`
   - DoD：
     - 路由策略可以表达“哪些错误才允许 fallback / retry”，并提供可解释的决策日志
     - 为路由策略补充回归测试（至少覆盖：网络错误、429/5xx、超时、熔断恢复）
   - 验证：
     - `cargo test --all-targets --all-features`
-- [ ] 代理缓存：支持 streaming cache 与更细粒度 invalidation
+- [x] 代理缓存：支持 streaming cache 与更细粒度 invalidation
+  - [x] 非流式缓存已支持强类型 metadata + selector-based purge（memory/redis/admin API 同步生效）
+  - [x] streaming cache 已支持显式开关、独立体积上限、完整 SSE 回放、默认禁用与共享 purge 语义
   - DoD：
     - streaming 场景可选择性缓存（可控上限/TTL/回放），并具备明确的禁用/绕过机制
     - 提供按 key/model/path 的 purge/invalidation 策略与运维端点
   - 验证：
     - `cargo test --all-targets --all-features`
 - [ ] Translation：扩面 OpenAI 端点覆盖（保持 feature gating）
+  - [x] OpenAI `/v1/images/edits`：multipart 解析、`ImageEditModel` runtime 绑定、`stream=true` 显式拒绝与回归测试
+  - [x] OpenAI `/v1/videos` 资源 API：typed `VideoGenerationModel` translation 绑定，覆盖 create(JSON/multipart) + list + retrieve + delete + `/:id/content` + `/:id/remix`，并显式拒绝 `stream=true`
+  - [x] OpenAI `/v1/responses` 资源读取/删除：best-effort local translation response store，覆盖 `GET /v1/responses/:id` + `GET /v1/responses/:id/input_items` + `DELETE /v1/responses/:id`（当前仅保证本进程内由 non-stream translation create 生成的响应可读写）
+  - [x] OpenAI `/v1/responses/input_tokens`：best-effort token 估算，复用 `gateway-tokenizer`，未启用该 feature 时显式返回 `unsupported_endpoint`
   - DoD：
     - 明确每个端点的“best-effort”语义与错误边界（不 silent downgrade）
     - 为新增端点补充 fixture/回归测试（含 streaming 与 files/multipart）
@@ -223,6 +232,26 @@
 - [x] Gateway translation：`/rerank`（`/images/generations` 与 `/moderations` 已完成）
 - [x] 更强的策略/缓存/背压（backpressure）控制（适配高并发与长连接 streaming）
 
+### 文档与结构说明（最近完成）
+
+- [x] `ProviderConfig` 文档改为明确的 provider node 语义，并区分 node 配置、provider pack、catalog、request-level `provider_options`。
+- [x] README 的 provider 说明改成“默认核心 + provider packs + capability packs”。
+- [x] 根目录 `PROVIDERS.md` 追加 provider × capability × feature × runtime status 对照表。
+- [x] 配置层新增显式 `provider` 与 `enabled_capabilities`，并由 registry 做 provider/capability 约束校验。
+- [x] 配置编辑器默认值与提示改为 registry 驱动，并移除按节点名猜 `openrouter/yunwu/google` 等 provider 特例。
+- [x] 默认 root pnpm 脚本与 CI Node 校验改为只覆盖 `packages/*`；`apps/admin-ui` 继续作为可选 workspace 资产保留。
+- [x] README / docs / CHANGELOG 已把 `apps/admin-ui` 改写为可选资产，不再把它描述成默认核心交付面。
+- [x] `cargo check` / `cargo clippy -D warnings` / provider feature matrix 已被明确写成新的结构演进 stop gate，并与默认 CI 口径对齐。
+- [x] 新增 `ditto-catalog-dashboard` 与 `CATALOG_COMPLETENESS.md`，持续汇总 provider/capability/model completeness，并纳入 `llms.txt` 生成与 `--check` 校验。
+- [x] 新增 `docs/src/roadmap/provider-runtime-rollout.md`，把剩余 runtime gap 收敛为按 capability 分组的落地顺序。
+- [x] 已把 `OpenAiProviderFamily` / quirks 推断从 `profile` 兼容壳迁到 `providers` 共享层，避免继续把 provider 行为塞回 legacy config namespace。
+- [x] 已把 `FileClient` 的 `OpenAI` / `OpenAICompatible` 实现移出 `src/file.rs`，能力层只保留 trait 与数据结构。
+- [x] 已恢复 `cargo check --features agent`，并补齐 OpenAI-family 共享 HTTP/auth gate。
+- [x] Rust provider catalog 生成结果已从单一 `src/catalog/generated/providers.rs` 拆成按 provider 的 `src/catalog/generated/providers/*.rs`，并保留统一聚合入口 `src/catalog/generated/providers/mod.rs`。
+- [x] 已完成 `context.cache` 的第一阶段收口：新增 typed `ContextCacheModel`，并让 DeepSeek / MiniMax 的 runtime、dashboard、provider tests 同步对齐。
+- [x] 已完成 OpenAI native `video.generation` 的第一阶段接入：新增 typed `VideoGenerationModel`，并补齐 `/videos` 资源型 builder、route、provider tests 与 dashboard。
+- [x] 已完成 Google native `image.generation`、`realtime`、`video.generation` 的第一阶段接入：补齐 `predict`/`predictLongRunning`/live builder、typed session/polling、provider tests 与 dashboard；provider-level runtime gap 已清零。
+
 ---
 
 ## 4) 验证（本仓库内可复制）
@@ -231,9 +260,25 @@
 cd ditto-llm
 
 cargo fmt -- --check
+cargo run --all-features --bin ditto-catalog-dashboard -- --check
 cargo run --bin ditto-llms-txt -- --check
+cargo test --all-targets                # default core: provider-openai-compatible + cap-llm
+cargo check --examples                  # default examples must stay generic openai-compatible
 cargo test --all-targets --all-features
+cargo test --test openai_provider_capabilities --all-features -- --nocapture
+cargo test --test deepseek_provider_capabilities --all-features -- --nocapture
+cargo test --test anthropic_provider_capabilities --all-features -- --nocapture
+cargo test --test google_provider_capabilities --all-features -- --nocapture
+cargo test --test gateway_translation_custom_provider_resolution --all-features -- --nocapture
+cargo test --all-features resolve_plan_accepts_response_only_model_for_completion -- --nocapture
+cargo test --all-features resolve_plan_rejects_catalog_incompatible_model_for_completion -- --nocapture
+cargo test --all-features builder_runtime_ -- --nocapture
+cargo test --test gateway_translation gateway_translation_rejects_endpoint_without_bound_capability --all-features -- --nocapture
+cargo test --test gateway_translation gateway_translation_rejects_model_capability_mismatch_before_builder_resolution --all-features -- --nocapture
+cargo test --test gateway_translation_files --all-features -- --nocapture
+cargo test --test gateway_translation_stream_options --all-features -- --nocapture
 cargo clippy --all-targets --all-features -- -D warnings
+# 外部 store 集成测试需要额外环境：DITTO_REDIS_URL / DITTO_MYSQL_URL / DITTO_POSTGRES_URL
 cargo check --no-default-features
 cargo clippy --no-default-features -- -D warnings
 
@@ -244,6 +289,13 @@ pnpm -r run build
 跑 examples（需要相应环境变量）：
 
 ```bash
+export OPENAI_COMPAT_BASE_URL="https://your-openai-compatible-endpoint/v1"
+export OPENAI_COMPAT_MODEL="your-chat-model"
+export OPENAI_COMPAT_API_KEY="sk-..."   # optional for local gateways
+
+cargo run --example basic
+cargo run --example streaming
+cargo run --example tool_calling
 cargo run --example openai_compatible
-cargo run --example multimodal --features base64 -- <image_path> <pdf_path>
+cargo run --example multimodal --features "provider-openai cap-llm base64" -- <image_path> <pdf_path>
 ```

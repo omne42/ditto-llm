@@ -1,16 +1,28 @@
 mod anthropic_model_catalog;
-mod auth;
 mod catalog_bridge;
-mod config;
 mod config_editor;
-mod env;
+mod generated_catalogs;
 mod google_model_catalog;
-mod http;
 mod openai_compatible;
 mod openai_model_catalog;
 mod openai_models;
 mod openai_providers;
-mod routing;
+
+mod provider_config {
+    pub use crate::config::provider_config::*;
+}
+mod env {
+    pub use crate::config::env::*;
+}
+mod auth {
+    pub use crate::config::auth::*;
+}
+mod http {
+    pub(crate) use crate::config::http::*;
+}
+mod routing {
+    pub use crate::config::routing_policy::*;
+}
 
 #[cfg(test)]
 mod tests;
@@ -22,12 +34,12 @@ pub use anthropic_model_catalog::{
 };
 pub use auth::{resolve_auth_token, resolve_auth_token_with_default_keys};
 pub use catalog_bridge::{
-    BuiltinProviderModelCandidate, BuiltinProviderPreset, builtin_models_for_provider,
-    builtin_provider_candidates_for_model, builtin_provider_preset, builtin_provider_presets,
-};
-pub use config::{
-    ModelConfig, ProviderApi, ProviderAuth, ProviderCapabilities, ProviderConfig,
-    ThinkingIntensity, filter_models_whitelist, normalize_string_list, select_model_config,
+    BuiltinProviderCapabilitySummary, BuiltinProviderModelCandidate, BuiltinProviderPreset,
+    ResolvedProviderCapabilityProfile, ResolvedProviderConfigSemantics,
+    builtin_models_for_provider, builtin_provider_candidates_for_model,
+    builtin_provider_capability_summaries, builtin_provider_capability_summary,
+    builtin_provider_preset, builtin_provider_presets,
+    resolve_openai_compatible_provider_capability_profile, resolve_provider_config_semantics,
 };
 pub use config_editor::{
     ConfigScope, ModelDeleteReport, ModelDeleteRequest, ModelListReport, ModelListRequest,
@@ -55,34 +67,12 @@ pub use openai_providers::{
     OpenAiProviderFamily, OpenAiProviderQuirks, PromptCacheUsageReporting,
     infer_openai_provider_family, infer_openai_provider_quirks, merge_provider_config,
 };
+pub use provider_config::{
+    ModelConfig, ProviderApi, ProviderAuth, ProviderCapabilities, ProviderConfig,
+    ThinkingIntensity, filter_models_whitelist, normalize_string_list, select_model_config,
+};
 pub use routing::{
     ProviderRoutingConfig, ResolvedRoutingPlan, ResolvedRoutingTarget, RoutingConfigFormat,
     RoutingContext, RoutingOverride, RoutingPhase, RoutingPolicy, RoutingPolicySource,
     RoutingProviderProfile, RoutingStagePolicy, RoutingTarget,
 };
-
-#[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
-))]
-pub(crate) use auth::HttpAuth;
-#[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-))]
-pub(crate) use auth::{RequestAuth, resolve_request_auth_with_default_keys};
-#[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-))]
-pub(crate) use http::{apply_http_query_params, build_http_client};

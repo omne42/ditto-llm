@@ -1,10 +1,13 @@
 //! Gateway module (feature-gated).
 
+pub mod adapters;
+pub mod application;
 pub mod budget;
 pub mod cache;
 pub mod config;
 #[cfg(feature = "gateway-costing")]
 pub mod costing;
+pub mod domain;
 pub mod guardrails;
 pub mod http;
 pub mod http_backend;
@@ -41,6 +44,7 @@ pub mod store_types;
 pub mod token_count;
 #[cfg(feature = "gateway-translation")]
 pub mod translation;
+pub mod transport;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -71,7 +75,7 @@ pub use budget::BudgetConfig;
 pub use cache::CacheConfig;
 pub use config::{
     BackendConfig, GatewayConfig, GatewayObservabilityConfig, GatewayRedactionConfig,
-    VirtualKeyConfig,
+    GatewaySamplingConfig, VirtualKeyConfig,
 };
 #[cfg(feature = "gateway-costing")]
 pub use costing::{PricingTable, PricingTableError};
@@ -86,7 +90,10 @@ pub use passthrough::PassthroughConfig;
 pub use postgres_store::{PostgresStore, PostgresStoreError};
 pub use proxy_backend::ProxyBackend;
 #[cfg(feature = "gateway-proxy-cache")]
-pub use proxy_cache::{CachedProxyResponse, ProxyCacheConfig, ProxyResponseCache};
+pub use proxy_cache::{
+    CachedProxyResponse, ProxyCacheConfig, ProxyCacheEntryMetadata, ProxyCachePurgeSelector,
+    ProxyCacheStoredResponse, ProxyResponseCache,
+};
 #[cfg(feature = "gateway-routing-advanced")]
 pub use proxy_routing::{
     BackendHealthSnapshot, ProxyCircuitBreakerConfig, ProxyRetryConfig, ProxyRoutingConfig,
@@ -311,7 +318,7 @@ mod tests {
             mcp_servers: Vec::new(),
             observability: Default::default(),
         };
-        let mut gateway = Gateway::new(config);
+        let gateway = Gateway::new(config);
         assert!(gateway.virtual_key_by_token("vk-old").is_some());
 
         let mut updated = VirtualKeyConfig::new("key-1", "vk-new");
@@ -427,7 +434,11 @@ mod tests {
         gateway.complete_handle_success(&prepared, &response);
 
         let now = gateway.clock.now_epoch_seconds();
-        assert!(gateway.cache.get("key-1", &cache_key, now).is_none());
+        assert!(
+            lock_unpoisoned(gateway.cache.as_ref())
+                .get("key-1", &cache_key, now)
+                .is_none()
+        );
     }
 }
 
@@ -460,6 +471,8 @@ pub enum GatewayError {
     BackendNotFound { name: String },
     #[error("backend error: {message}")]
     Backend { message: String },
+    #[error("backend timeout: {message}")]
+    BackendTimeout { message: String },
     #[error("invalid request: {reason}")]
     InvalidRequest { reason: String },
 }

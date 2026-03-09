@@ -215,6 +215,40 @@ def validate_sources(source_texts: dict[str, str], model_ids: list[str]) -> str:
     return extract_latest_v32_upgrade_date(updates)
 
 
+def behavior_record(
+    *,
+    source_url: str,
+    source_page: str,
+    section: str,
+    operation: str,
+    tool_calls: str,
+    tool_choice_required: str,
+    assistant_tool_followup: str,
+    reasoning_output: str,
+    reasoning_activation: str,
+    context_cache_modes: list[str] | None,
+    context_cache_default_enabled: bool,
+    cache_usage_reporting: str,
+    notes: str,
+) -> OrderedDict[str, object]:
+    return OrderedDict(
+        table_kind='behavior',
+        source_url=source_url,
+        source_page=source_page,
+        section=section,
+        operation=operation,
+        tool_calls=tool_calls,
+        tool_choice_required=tool_choice_required,
+        assistant_tool_followup=assistant_tool_followup,
+        reasoning_output=reasoning_output,
+        reasoning_activation=reasoning_activation,
+        context_cache_modes=context_cache_modes or [],
+        context_cache_default_enabled=context_cache_default_enabled,
+        cache_usage_reporting=cache_usage_reporting,
+        notes=notes,
+    )
+
+
 def build_catalog() -> OrderedDict[str, dict]:
     html_pages = {
         'pricing_html': fetch_html(PRICING_URL),
@@ -352,6 +386,36 @@ def build_catalog() -> OrderedDict[str, dict]:
                 support='enabled_by_default',
                 notes='Context caching is enabled by default for all users and bills repeated prefixes as cache hits.',
             ),
+            behavior_record(
+                source_url=THINKING_URL,
+                source_page='thinking_mode',
+                section='Thinking Mode / Runtime Semantics',
+                operation='chat.completion',
+                tool_calls='supported',
+                tool_choice_required='supported',
+                assistant_tool_followup='none',
+                reasoning_output='optional',
+                reasoning_activation='deepseek_thinking_type_enabled',
+                context_cache_modes=['passive'],
+                context_cache_default_enabled=True,
+                cache_usage_reporting='deepseek_prompt_cache_hit_miss',
+                notes='Docs define thinking.type=enabled and default-on context caching. Live probe on 2026-03-08 confirmed tool_choice=required plus prompt cache hit accounting on repeated prefixes.',
+            ),
+            behavior_record(
+                source_url=FIM_API_URL,
+                source_page='create_fim_completion',
+                section='Create FIM Completion (Beta) / Runtime Semantics',
+                operation='text.completion',
+                tool_calls='unsupported',
+                tool_choice_required='unsupported',
+                assistant_tool_followup='none',
+                reasoning_output='unsupported',
+                reasoning_activation='unavailable',
+                context_cache_modes=[],
+                context_cache_default_enabled=False,
+                cache_usage_reporting='unknown',
+                notes='FIM completion is beta-only for deepseek-chat and must use the beta base URL.',
+            ),
             OrderedDict(
                 table_kind='release_note',
                 source_url=UPDATES_URL,
@@ -471,6 +535,21 @@ def build_catalog() -> OrderedDict[str, dict]:
                 support='enabled_by_default',
                 notes='Context caching is enabled by default for all users and bills repeated prefixes as cache hits.',
             ),
+            behavior_record(
+                source_url=THINKING_URL,
+                source_page='thinking_mode',
+                section='Thinking Mode / Runtime Semantics',
+                operation='chat.completion',
+                tool_calls='supported',
+                tool_choice_required='unsupported',
+                assistant_tool_followup='requires_reasoning_content',
+                reasoning_output='always',
+                reasoning_activation='always_on',
+                context_cache_modes=['passive'],
+                context_cache_default_enabled=True,
+                cache_usage_reporting='deepseek_prompt_cache_hit_miss',
+                notes='Docs require reasoning_content replay during thinking-mode tool loops and default-on context caching. Live probe on 2026-03-08 confirmed reasoner rejects tool_choice=required and succeeds when reasoning_content is replayed on assistant tool-call follow-ups.',
+            ),
             OrderedDict(
                 table_kind='release_note',
                 source_url=UPDATES_URL,
@@ -514,7 +593,7 @@ def write_record(lines: list[str], path: str, record: OrderedDict[str, object]) 
 def render_toml(models: OrderedDict[str, dict]) -> str:
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
     lines = [
-        '# Generated from official DeepSeek API docs.',
+        '# Generated from official DeepSeek API docs plus live compatibility probes.',
         '# Edit via scripts/generate_deepseek_model_catalog.py.',
         '# Sources:',
         f'# - {FIRST_CALL_URL}',

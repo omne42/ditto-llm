@@ -1,11 +1,26 @@
 mod builtin;
 mod generated;
+mod provider_runtime;
+mod reference_schema;
 mod resolver;
 
 use core::fmt;
 
 pub use builtin::{builtin_provider_plugins, builtin_registry};
-pub use resolver::{RuntimeRoute, RuntimeRouteRequest};
+pub use provider_runtime::{
+    CapabilityKind, ModelCapabilityDescriptor, ProviderCapabilityBinding,
+    ProviderCapabilityResolution, ProviderCapabilitySet, ProviderId, ProviderProtocolFamily,
+    ProviderRuntimeSpec, capability_for_operation,
+};
+pub use reference_schema::{
+    ReferenceCatalogExpectation, ReferenceCatalogExpectationIssue,
+    ReferenceCatalogExpectationReport, ReferenceCatalogLoadError, ReferenceCatalogRole,
+    ReferenceCatalogValidationIssue, ReferenceCatalogValidationReport,
+    ReferenceModelCapabilityProfile, ReferenceModelEntry, ReferenceModelRecord,
+    ReferenceProviderAuth, ReferenceProviderCapabilityProfile, ReferenceProviderDescriptor,
+    ReferenceProviderModelCatalog, core_provider_reference_catalog_expectations,
+};
+pub use resolver::{RuntimeProviderApi, RuntimeProviderHints, RuntimeRoute, RuntimeRouteRequest};
 
 macro_rules! static_id_type {
     ($name:ident) => {
@@ -33,6 +48,7 @@ macro_rules! static_id_type {
 static_id_type!(OperationKind);
 static_id_type!(ApiSurfaceId);
 static_id_type!(WireProtocol);
+static_id_type!(ContextCacheModeId);
 
 impl OperationKind {
     pub const CHAT_COMPLETION: Self = Self::new("chat.completion");
@@ -72,6 +88,7 @@ impl ApiSurfaceId {
     pub const OPENAI_EMBEDDINGS: Self = Self::new("embedding");
     pub const OPENAI_IMAGES_GENERATIONS: Self = Self::new("image.generation");
     pub const OPENAI_IMAGES_EDITS: Self = Self::new("image.edit");
+    pub const OPENAI_VIDEOS: Self = Self::new("video.generation.async");
     pub const OPENAI_AUDIO_SPEECH: Self = Self::new("audio.speech");
     pub const OPENAI_AUDIO_TRANSCRIPTIONS: Self = Self::new("audio.transcription");
     pub const OPENAI_AUDIO_TRANSLATIONS: Self = Self::new("audio.translation");
@@ -95,6 +112,7 @@ impl WireProtocol {
     pub const OPENAI_TEXT_COMPLETIONS: Self = Self::new("openai.text_completions");
     pub const OPENAI_EMBEDDINGS: Self = Self::new("openai.embeddings");
     pub const OPENAI_IMAGES: Self = Self::new("openai.images");
+    pub const OPENAI_VIDEOS: Self = Self::new("openai.videos");
     pub const OPENAI_AUDIO: Self = Self::new("openai.audio");
     pub const OPENAI_MODERATIONS: Self = Self::new("openai.moderations");
     pub const OPENAI_BATCHES: Self = Self::new("openai.batches");
@@ -113,6 +131,12 @@ impl WireProtocol {
     pub const HUNYUAN_NATIVE: Self = Self::new("hunyuan.native");
     pub const MINIMAX_NATIVE: Self = Self::new("minimax.native");
     pub const ZHIPU_NATIVE: Self = Self::new("zhipu.native");
+}
+
+impl ContextCacheModeId {
+    pub const PASSIVE: Self = Self::new("passive");
+    pub const PROMPT_CACHE_KEY: Self = Self::new("prompt_cache_key");
+    pub const ANTHROPIC_COMPATIBLE: Self = Self::new("anthropic_compatible");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -327,8 +351,8 @@ impl ModelBinding {
             score += 16;
         }
 
-        if let Some(expected_async) = self.async_job {
-            let desired_async = hints.async_job.unwrap_or(false);
+        if let Some(desired_async) = hints.async_job {
+            let expected_async = self.async_job.unwrap_or(false);
             if expected_async != desired_async {
                 return None;
             }
@@ -336,6 +360,99 @@ impl ModelBinding {
         }
 
         Some(score)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CapabilityImplementationStatus {
+    Implemented,
+    Planned,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CapabilityStatusDescriptor {
+    pub capability: CapabilityKind,
+    pub status: CapabilityImplementationStatus,
+}
+
+impl CapabilityStatusDescriptor {
+    pub const fn implemented(capability: CapabilityKind) -> Self {
+        Self {
+            capability,
+            status: CapabilityImplementationStatus::Implemented,
+        }
+    }
+
+    pub const fn planned(capability: CapabilityKind) -> Self {
+        Self {
+            capability,
+            status: CapabilityImplementationStatus::Planned,
+        }
+    }
+
+    pub const fn blocked(capability: CapabilityKind) -> Self {
+        Self {
+            capability,
+            status: CapabilityImplementationStatus::Blocked,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BehaviorSupport {
+    Unknown,
+    Unsupported,
+    Supported,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AssistantToolFollowupRequirement {
+    None,
+    RequiresReasoningContent,
+    RequiresThoughtSignature,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReasoningOutputMode {
+    Unsupported,
+    Optional,
+    Always,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReasoningActivationKind {
+    Unavailable,
+    OpenAiReasoningEffort,
+    DeepSeekThinkingTypeEnabled,
+    AlwaysOn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CacheUsageReportingKind {
+    Unknown,
+    StandardUsage,
+    DeepSeekPromptCacheHitMiss,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelBehaviorDescriptor {
+    pub model: &'static str,
+    pub operation: OperationKind,
+    pub tool_calls: BehaviorSupport,
+    pub tool_choice_required: BehaviorSupport,
+    pub assistant_tool_followup: AssistantToolFollowupRequirement,
+    pub reasoning_output: ReasoningOutputMode,
+    pub reasoning_activation: ReasoningActivationKind,
+    pub context_cache_modes: &'static [ContextCacheModeId],
+    pub context_cache_default_enabled: bool,
+    pub cache_usage_reporting: CacheUsageReportingKind,
+    pub notes: Option<&'static str>,
+}
+
+impl ModelBehaviorDescriptor {
+    pub fn matches(&self, model: &str, operation: OperationKind) -> bool {
+        self.model == model && self.operation == operation
     }
 }
 
@@ -348,6 +465,7 @@ pub struct ProviderModelDescriptor {
     pub family: Option<&'static str>,
     pub summary: Option<&'static str>,
     pub supported_operations: &'static [OperationKind],
+    pub capability_statuses: &'static [CapabilityStatusDescriptor],
 }
 
 impl ProviderModelDescriptor {
@@ -366,6 +484,8 @@ pub struct ProviderPluginDescriptor {
     pub auth_hint: Option<ProviderAuthHint>,
     pub models: &'static [ProviderModelDescriptor],
     pub bindings: &'static [ModelBinding],
+    pub behaviors: &'static [ModelBehaviorDescriptor],
+    pub capability_statuses: &'static [CapabilityStatusDescriptor],
 }
 
 impl ProviderPluginDescriptor {
@@ -375,6 +495,21 @@ impl ProviderPluginDescriptor {
 
     pub fn model(&self, model: &str) -> Option<&'static ProviderModelDescriptor> {
         self.models.iter().find(|entry| entry.matches(model))
+    }
+
+    pub fn behaviors(&self) -> &'static [ModelBehaviorDescriptor] {
+        self.behaviors
+    }
+
+    pub fn behavior(
+        &self,
+        model: &str,
+        operation: OperationKind,
+    ) -> Option<&'static ModelBehaviorDescriptor> {
+        let canonical_model = self.model(model).map(|entry| entry.id).unwrap_or(model);
+        self.behaviors.iter().find(|behavior| {
+            behavior.matches(model, operation) || behavior.matches(canonical_model, operation)
+        })
     }
 
     pub fn resolve(&self, model: &str, operation: OperationKind) -> Option<ResolvedInvocation> {
@@ -387,12 +522,25 @@ impl ProviderPluginDescriptor {
         operation: OperationKind,
         hints: InvocationHints,
     ) -> Option<ResolvedInvocation> {
+        let model_descriptor = self.model(model);
+        if let Some(descriptor) = model_descriptor {
+            if !descriptor.supported_operations.contains(&operation) {
+                return None;
+            }
+        }
+
+        let canonical_model = model_descriptor.map(|entry| entry.id);
+
         let binding = self
             .bindings
             .iter()
             .filter_map(|binding| {
                 binding
                     .match_score(model, operation, hints)
+                    .or_else(|| {
+                        canonical_model
+                            .and_then(|canonical| binding.match_score(canonical, operation, hints))
+                    })
                     .map(|score| (binding, score))
             })
             .max_by_key(|(_, score)| *score)
@@ -438,6 +586,15 @@ impl CatalogRegistry {
 
     pub fn model(&self, provider: &str, model: &str) -> Option<&'static ProviderModelDescriptor> {
         self.plugin(provider)?.model(model)
+    }
+
+    pub fn behavior(
+        &self,
+        provider: &str,
+        model: &str,
+        operation: OperationKind,
+    ) -> Option<&'static ModelBehaviorDescriptor> {
+        self.plugin(provider)?.behavior(model, operation)
     }
 
     pub fn resolve(
@@ -518,6 +675,7 @@ mod tests {
         );
     }
 
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
     #[test]
     fn builtin_registry_resolves_generic_openai_chat() {
         let resolved = builtin_registry()
@@ -538,6 +696,7 @@ mod tests {
         assert_eq!(resolved.async_job, None);
     }
 
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
     #[test]
     fn builtin_registry_exposes_official_openai_models() {
         let registry = builtin_registry();
@@ -553,7 +712,10 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "embeddings")]
+    #[cfg(all(
+        feature = "embeddings",
+        any(feature = "provider-openai", feature = "openai")
+    ))]
     #[test]
     fn builtin_registry_resolves_generic_openai_embeddings() {
         let resolved = builtin_registry()
@@ -576,6 +738,7 @@ mod tests {
             family: Some("m2"),
             summary: None,
             supported_operations: &[OperationKind::CHAT_COMPLETION],
+            capability_statuses: &[],
         }];
         const BINDINGS: &[ModelBinding] = &[
             ModelBinding {
@@ -628,6 +791,8 @@ mod tests {
             auth_hint: None,
             models: MODELS,
             bindings: BINDINGS,
+            behaviors: &[],
+            capability_statuses: &[],
         };
 
         let resolved = PLUGIN
@@ -699,6 +864,8 @@ mod tests {
             auth_hint: None,
             models: &[],
             bindings: BINDINGS,
+            behaviors: &[],
+            capability_statuses: &[],
         };
 
         let resolved = PLUGIN

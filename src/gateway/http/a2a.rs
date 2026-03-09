@@ -111,16 +111,22 @@ async fn require_virtual_key_if_configured(
         .enabled;
 
     if !key_enabled {
-        return Err(
-            error_response(StatusCode::UNAUTHORIZED, "unauthorized", "virtual key disabled")
-                .into_response(),
-        );
+        return Err(error_response(
+            StatusCode::UNAUTHORIZED,
+            "unauthorized",
+            "virtual key disabled",
+        )
+        .into_response());
     }
 
     Ok(true)
 }
 
-fn jsonrpc_error(id: Option<Value>, code: i64, message: impl Into<String>) -> axum::response::Response {
+fn jsonrpc_error(
+    id: Option<Value>,
+    code: i64,
+    message: impl Into<String>,
+) -> axum::response::Response {
     let payload = serde_json::json!({
         "jsonrpc": "2.0",
         "id": id.unwrap_or(Value::Null),
@@ -155,9 +161,13 @@ async fn proxy_a2a_request(
         .request(reqwest::Method::POST, "", first_headers, Some(first_body))
         .await;
 
-    if let (Ok(resp), Some(path), Some((retry_headers, retry_body))) = (&response, retry_path, retry_payload) {
+    if let (Ok(resp), Some(path), Some((retry_headers, retry_body))) =
+        (&response, retry_path, retry_payload)
+    {
         let status = resp.status();
-        if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::METHOD_NOT_ALLOWED {
+        if status == reqwest::StatusCode::NOT_FOUND
+            || status == reqwest::StatusCode::METHOD_NOT_ALLOWED
+        {
             response = agent
                 .backend
                 .request(reqwest::Method::POST, path, retry_headers, Some(retry_body))
@@ -179,6 +189,7 @@ async fn handle_a2a_agent_card(
     };
 
     let agent = state
+        .backends
         .a2a_agents
         .values()
         .find(|agent| agent.matches(&agent_id))
@@ -218,6 +229,7 @@ async fn handle_a2a_invoke(
     };
 
     let agent = state
+        .backends
         .a2a_agents
         .values()
         .find(|agent| agent.matches(&agent_id))
@@ -226,7 +238,7 @@ async fn handle_a2a_invoke(
         return jsonrpc_error(None, -32000, format!("Agent '{agent_id}' not found"));
     };
 
-    let body = match to_bytes(body, state.proxy_max_body_bytes).await {
+    let body = match to_bytes(body, state.proxy.max_body_bytes).await {
         Ok(bytes) => bytes,
         Err(err) => {
             return jsonrpc_error(None, -32603, format!("Failed to read request body: {err}"));
@@ -276,7 +288,9 @@ async fn handle_a2a_invoke(
         .unwrap_or_default()
         .to_ascii_lowercase();
 
-    if content_type.starts_with("application/x-ndjson") || content_type.starts_with("text/event-stream") {
+    if content_type.starts_with("application/x-ndjson")
+        || content_type.starts_with("text/event-stream")
+    {
         let mut headers = upstream_headers;
         headers.remove("content-length");
         let stream = upstream
@@ -292,12 +306,14 @@ async fn handle_a2a_invoke(
     let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
         upstream,
         &upstream_headers,
-        state.proxy_max_body_bytes,
+        state.proxy.max_body_bytes,
     )
     .await
     {
         Ok(bytes) => bytes,
-        Err(err) => return jsonrpc_error(request_id, -32603, format!("Backend response error: {err}")),
+        Err(err) => {
+            return jsonrpc_error(request_id, -32603, format!("Backend response error: {err}"));
+        }
     };
 
     let mut headers = upstream_headers;

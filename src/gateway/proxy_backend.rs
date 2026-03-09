@@ -108,8 +108,13 @@ impl ProxyBackend {
         if let Some(body) = body {
             req = req.body(body);
         }
-        req.send().await.map_err(|err| GatewayError::Backend {
-            message: format!("backend request failed: {err}"),
+        req.send().await.map_err(|err| {
+            let message = format!("backend request failed: {err}");
+            if err.is_timeout() {
+                GatewayError::BackendTimeout { message }
+            } else {
+                GatewayError::Backend { message }
+            }
         })
     }
 }

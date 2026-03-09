@@ -38,7 +38,7 @@ pub struct FileUploadRequest {
 
 #[async_trait]
 pub trait FileClient: Send + Sync {
-    fn provider(&self) -> &str;
+    fn provider_name(&self) -> &str;
 
     async fn upload_file_with_purpose(&self, request: FileUploadRequest) -> Result<String>;
 
@@ -49,72 +49,4 @@ pub trait FileClient: Send + Sync {
     async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse>;
 
     async fn download_file_content(&self, file_id: &str) -> Result<FileContent>;
-}
-
-#[cfg(feature = "openai")]
-#[async_trait]
-impl FileClient for crate::providers::OpenAI {
-    fn provider(&self) -> &str {
-        "openai"
-    }
-
-    async fn upload_file_with_purpose(&self, request: FileUploadRequest) -> Result<String> {
-        self.upload_file_with_purpose(
-            request.filename,
-            request.bytes,
-            request.purpose,
-            request.media_type.as_deref(),
-        )
-        .await
-    }
-
-    async fn list_files(&self) -> Result<Vec<FileObject>> {
-        self.list_files().await
-    }
-
-    async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
-        self.retrieve_file(file_id).await
-    }
-
-    async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
-        self.delete_file(file_id).await
-    }
-
-    async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
-        self.download_file_content(file_id).await
-    }
-}
-
-#[cfg(feature = "openai-compatible")]
-#[async_trait]
-impl FileClient for crate::providers::OpenAICompatible {
-    fn provider(&self) -> &str {
-        "openai-compatible"
-    }
-
-    async fn upload_file_with_purpose(&self, request: FileUploadRequest) -> Result<String> {
-        self.upload_file_with_purpose(
-            request.filename,
-            request.bytes,
-            request.purpose,
-            request.media_type.as_deref(),
-        )
-        .await
-    }
-
-    async fn list_files(&self) -> Result<Vec<FileObject>> {
-        self.list_files().await
-    }
-
-    async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
-        self.retrieve_file(file_id).await
-    }
-
-    async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
-        self.delete_file(file_id).await
-    }
-
-    async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
-        self.download_file_content(file_id).await
-    }
 }

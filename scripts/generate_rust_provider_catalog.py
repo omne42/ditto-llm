@@ -10,7 +10,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / 'catalog' / 'provider_models'
 TARGET_DIR = ROOT / 'src' / 'catalog' / 'generated'
-TARGET_FILE = TARGET_DIR / 'providers.rs'
+TARGET_MODULE_DIR = TARGET_DIR / 'providers'
+LEGACY_TARGET_FILE = TARGET_DIR / 'providers.rs'
 
 SKIP_PROVIDERS: set[str] = set()
 
@@ -111,6 +112,37 @@ OPERATION_CONSTS = {
     '3d.generation': 'OperationKind::THREE_D_GENERATION',
 }
 
+CAPABILITY_CONSTS = {
+    'response': 'CapabilityKind::LLM',
+    'chat.completion': 'CapabilityKind::LLM',
+    'group.chat.completion': 'CapabilityKind::LLM',
+    'text.completion': 'CapabilityKind::LLM',
+    'thread.run': 'CapabilityKind::LLM',
+    'chat.translation': 'CapabilityKind::LLM',
+    'embedding': 'CapabilityKind::EMBEDDING',
+    'embedding.multimodal': 'CapabilityKind::EMBEDDING',
+    'image.generation': 'CapabilityKind::IMAGE_GENERATION',
+    'image.edit': 'CapabilityKind::IMAGE_EDIT',
+    'image.translation': 'CapabilityKind::IMAGE_TRANSLATION',
+    'image.question': 'CapabilityKind::IMAGE_QUESTION',
+    'video.generation': 'CapabilityKind::VIDEO_GENERATION',
+    'audio.speech': 'CapabilityKind::AUDIO_SPEECH',
+    'audio.transcription': 'CapabilityKind::AUDIO_TRANSCRIPTION',
+    'audio.translation': 'CapabilityKind::AUDIO_TRANSLATION',
+    'audio.voice_clone': 'CapabilityKind::AUDIO_VOICE_CLONE',
+    'audio.voice_design': 'CapabilityKind::AUDIO_VOICE_DESIGN',
+    'music.generation': 'CapabilityKind::MUSIC_GENERATION',
+    'rerank': 'CapabilityKind::RERANK',
+    'classification_or_extraction': 'CapabilityKind::CLASSIFICATION_OR_EXTRACTION',
+    'moderation': 'CapabilityKind::MODERATION',
+    'batch': 'CapabilityKind::BATCH',
+    'ocr': 'CapabilityKind::OCR',
+    'realtime.session': 'CapabilityKind::REALTIME',
+    'context.cache': 'CapabilityKind::CONTEXT_CACHE',
+    'model.list': 'CapabilityKind::MODEL_LIST',
+    '3d.generation': 'CapabilityKind::THREE_D_GENERATION',
+}
+
 SURFACE_CONSTS = {
     'chat.completion': 'ApiSurfaceId::OPENAI_CHAT_COMPLETIONS',
     'responses': 'ApiSurfaceId::OPENAI_RESPONSES',
@@ -154,6 +186,43 @@ WIRE_PROTOCOL_CONSTS = {
     'hunyuan.native': 'WireProtocol::HUNYUAN_NATIVE',
     'minimax.native': 'WireProtocol::MINIMAX_NATIVE',
     'zhipu.native': 'WireProtocol::ZHIPU_NATIVE',
+}
+
+BEHAVIOR_SUPPORT_CONSTS = {
+    'unknown': 'BehaviorSupport::Unknown',
+    'unsupported': 'BehaviorSupport::Unsupported',
+    'supported': 'BehaviorSupport::Supported',
+}
+
+ASSISTANT_TOOL_FOLLOWUP_CONSTS = {
+    'none': 'AssistantToolFollowupRequirement::None',
+    'requires_reasoning_content': 'AssistantToolFollowupRequirement::RequiresReasoningContent',
+    'requires_thought_signature': 'AssistantToolFollowupRequirement::RequiresThoughtSignature',
+}
+
+REASONING_OUTPUT_CONSTS = {
+    'unsupported': 'ReasoningOutputMode::Unsupported',
+    'optional': 'ReasoningOutputMode::Optional',
+    'always': 'ReasoningOutputMode::Always',
+}
+
+REASONING_ACTIVATION_CONSTS = {
+    'unavailable': 'ReasoningActivationKind::Unavailable',
+    'openai_reasoning_effort': 'ReasoningActivationKind::OpenAiReasoningEffort',
+    'deepseek_thinking_type_enabled': 'ReasoningActivationKind::DeepSeekThinkingTypeEnabled',
+    'always_on': 'ReasoningActivationKind::AlwaysOn',
+}
+
+CACHE_USAGE_REPORTING_CONSTS = {
+    'unknown': 'CacheUsageReportingKind::Unknown',
+    'standard_usage': 'CacheUsageReportingKind::StandardUsage',
+    'deepseek_prompt_cache_hit_miss': 'CacheUsageReportingKind::DeepSeekPromptCacheHitMiss',
+}
+
+CONTEXT_CACHE_MODE_CONSTS = {
+    'passive': 'ContextCacheModeId::PASSIVE',
+    'prompt_cache_key': 'ContextCacheModeId::PROMPT_CACHE_KEY',
+    'anthropic_compatible': 'ContextCacheModeId::ANTHROPIC_COMPATIBLE',
 }
 
 AUTH_KIND_MAP = {
@@ -378,6 +447,14 @@ def explicit_api_records(model: Json, surface: str) -> list[Json]:
     return records
 
 
+def explicit_behavior_records(model: Json) -> list[Json]:
+    records = []
+    for record in model.get('records', []):
+        if record.get('table_kind') == 'behavior':
+            records.append(record)
+    return records
+
+
 def infer_wire_protocol(provider_id: str, surface: str, endpoint: str | None) -> str:
     endpoint = endpoint or ''
     parsed = urllib.parse.urlparse(endpoint)
@@ -520,12 +597,14 @@ def route_specs_for_surface(provider: Json, provider_id: str, model_id: str, mod
     method = None
     endpoint = None
     source_url = None
+    record_base_url = None
     verification = 'Explicit'
 
     for record in records:
         endpoint = record.get('endpoint') or endpoint
         method = record.get('method') or method
         source_url = record.get('source_url') or source_url
+        record_base_url = record.get('base_url') or record_base_url
         if endpoint:
             break
 
@@ -547,6 +626,7 @@ def route_specs_for_surface(provider: Json, provider_id: str, model_id: str, mod
         method,
         base_url,
         candidates,
+        explicit_base_url=record_base_url,
     )
     wire_protocol = infer_wire_protocol(provider_id, surface, endpoint)
 
@@ -583,19 +663,29 @@ def route_specs_for_surface(provider: Json, provider_id: str, model_id: str, mod
     return specs
 
 
-def normalize_endpoint(endpoint: str, method: str | None, provider_base_url: str, candidates: list[str]) -> tuple[str, str | None, str | None, str, list[tuple[str, str]]]:
+def normalize_endpoint(
+    endpoint: str,
+    method: str | None,
+    provider_base_url: str,
+    candidates: list[str],
+    explicit_base_url: str | None = None,
+) -> tuple[str, str | None, str | None, str, list[tuple[str, str]]]:
     parsed = urllib.parse.urlparse(endpoint)
     transport = 'websocket' if parsed.scheme in {'ws', 'wss'} else 'http'
     http_method = None if transport == 'websocket' else (method or 'POST')
 
-    base_url = provider_base_url.rstrip('/')
+    provider_base = provider_base_url.rstrip('/')
     full_endpoint = endpoint.split('?', 1)[0]
     path_part = parsed.path or '/'
     query_params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
 
-    if base_url and full_endpoint.startswith(base_url):
+    if explicit_base_url:
+        explicit_base = explicit_base_url.rstrip('/')
+        base_override = None if explicit_base == provider_base else explicit_base
+        path_template = path_part or '/'
+    elif provider_base and full_endpoint.startswith(provider_base):
         base_override = None
-        path_template = full_endpoint[len(base_url):] or '/'
+        path_template = full_endpoint[len(provider_base):] or '/'
     else:
         base_override = f'{parsed.scheme}://{parsed.netloc}' if parsed.scheme and parsed.netloc else None
         path_template = path_part or '/'
@@ -695,6 +785,89 @@ def render_operation_slice(values: list[str]) -> str:
     return '&[' + ', '.join(operation_expr(value) for value in values) + ']'
 
 
+def capability_expr(operation_id: str) -> str | None:
+    return CAPABILITY_CONSTS.get(operation_id)
+
+
+def render_capability_status_slice(operation_ids: list[str]) -> str:
+    capabilities: list[str] = []
+    for operation_id in operation_ids:
+        capability = capability_expr(operation_id)
+        if capability and capability not in capabilities:
+            capabilities.append(capability)
+    if not capabilities:
+        return '&[]'
+    return '&[' + ', '.join(
+        f'CapabilityStatusDescriptor::implemented({capability})'
+        for capability in capabilities
+    ) + ']'
+
+
+def behavior_support_expr(value: str | None) -> str:
+    return BEHAVIOR_SUPPORT_CONSTS.get((value or 'unknown').strip(), 'BehaviorSupport::Unknown')
+
+
+def assistant_tool_followup_expr(value: str | None) -> str:
+    return ASSISTANT_TOOL_FOLLOWUP_CONSTS.get(
+        (value or 'none').strip(),
+        'AssistantToolFollowupRequirement::None',
+    )
+
+
+def reasoning_output_expr(value: str | None) -> str:
+    return REASONING_OUTPUT_CONSTS.get(
+        (value or 'unsupported').strip(),
+        'ReasoningOutputMode::Unsupported',
+    )
+
+
+def reasoning_activation_expr(value: str | None) -> str:
+    return REASONING_ACTIVATION_CONSTS.get(
+        (value or 'unavailable').strip(),
+        'ReasoningActivationKind::Unavailable',
+    )
+
+
+def cache_usage_reporting_expr(value: str | None) -> str:
+    return CACHE_USAGE_REPORTING_CONSTS.get(
+        (value or 'unknown').strip(),
+        'CacheUsageReportingKind::Unknown',
+    )
+
+
+def render_context_cache_modes(values: list[str]) -> str:
+    if not values:
+        return '&[]'
+    rendered = [
+        CONTEXT_CACHE_MODE_CONSTS.get(value, f'ContextCacheModeId::new({rust_string(value)})')
+        for value in values
+    ]
+    return '&[' + ', '.join(rendered) + ']'
+
+
+def collect_behaviors(models: Json) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for model_id, model in models.items():
+        for record in explicit_behavior_records(model):
+            operation_id = str(record.get('operation') or '').strip()
+            if not operation_id:
+                continue
+            entries.append({
+                'model': model_id,
+                'operation_id': operation_id,
+                'tool_calls': str(record.get('tool_calls') or 'unknown'),
+                'tool_choice_required': str(record.get('tool_choice_required') or 'unknown'),
+                'assistant_tool_followup': str(record.get('assistant_tool_followup') or 'none'),
+                'reasoning_output': str(record.get('reasoning_output') or 'unsupported'),
+                'reasoning_activation': str(record.get('reasoning_activation') or 'unavailable'),
+                'context_cache_modes': [str(value) for value in (record.get('context_cache_modes') or [])],
+                'context_cache_default_enabled': bool(record.get('context_cache_default_enabled') or False),
+                'cache_usage_reporting': str(record.get('cache_usage_reporting') or 'unknown'),
+                'notes': record.get('notes'),
+            })
+    return sorted(entries, key=lambda item: (item['model'], item['operation_id']))
+
+
 def render_model_descriptors(provider_id: str, models: Json) -> str:
     entries = []
     for model_id in sorted(models):
@@ -702,6 +875,7 @@ def render_model_descriptors(provider_id: str, models: Json) -> str:
         aliases = collect_aliases(model_id, model)
         display_name = str(model.get('display_name') or model_id)
         summary = model.get('summary') or model.get('description')
+        operations = supported_operations(model)
         entries.append(
             '    ProviderModelDescriptor {\n'
             f'        id: {rust_string(model_id)},\n'
@@ -710,7 +884,8 @@ def render_model_descriptors(provider_id: str, models: Json) -> str:
             f'        brand: {rust_option_string(model_brand(provider_id, model))},\n'
             f'        family: {rust_option_string(model_family(provider_id, model_id, model))},\n'
             f'        summary: {rust_option_string(summary if isinstance(summary, str) and summary else None)},\n'
-            f'        supported_operations: {render_operation_slice(supported_operations(model))},\n'
+            f'        supported_operations: {render_operation_slice(operations)},\n'
+            f'        capability_statuses: {render_capability_status_slice(operations)},\n'
             '    }'
         )
     return '&[\n' + ',\n'.join(entries) + '\n]'
@@ -742,15 +917,74 @@ def render_bindings(bindings: list[dict[str, Any]], evidence_const: str) -> str:
     return '&[\n' + ',\n'.join(entries) + '\n]'
 
 
+def render_behaviors(behaviors: list[dict[str, Any]]) -> str:
+    if not behaviors:
+        return '&[]'
+    entries = []
+    for behavior in behaviors:
+        entries.append(
+            '    ModelBehaviorDescriptor {\n'
+            f'        model: {rust_string(behavior["model"])},\n'
+            f'        operation: {operation_expr(behavior["operation_id"])},\n'
+            f'        tool_calls: {behavior_support_expr(behavior["tool_calls"])},\n'
+            f'        tool_choice_required: {behavior_support_expr(behavior["tool_choice_required"])},\n'
+            f'        assistant_tool_followup: {assistant_tool_followup_expr(behavior["assistant_tool_followup"])},\n'
+            f'        reasoning_output: {reasoning_output_expr(behavior["reasoning_output"])},\n'
+            f'        reasoning_activation: {reasoning_activation_expr(behavior["reasoning_activation"])},\n'
+            f'        context_cache_modes: {render_context_cache_modes(behavior["context_cache_modes"])},\n'
+            f'        context_cache_default_enabled: {"true" if behavior["context_cache_default_enabled"] else "false"},\n'
+            f'        cache_usage_reporting: {cache_usage_reporting_expr(behavior["cache_usage_reporting"])},\n'
+            f'        notes: {rust_option_string(behavior["notes"] if isinstance(behavior["notes"], str) and behavior["notes"] else None)},\n'
+            '    }'
+        )
+    return '&[\n' + ',\n'.join(entries) + '\n]'
+
+
+def render_prelude() -> str:
+    return '\n'.join([
+        '// Generated by scripts/generate_rust_provider_catalog.py. Do not edit by hand.',
+        '#![allow(unused_imports)]',
+        'use crate::catalog::{',
+        '    ApiSurfaceId, AssistantToolFollowupRequirement, AuthMethodKind, BehaviorSupport,',
+        '    CacheUsageReportingKind, CapabilityKind, CapabilityStatusDescriptor, ContextCacheModeId,',
+        '    EndpointQueryParam, EndpointTemplate, EvidenceLevel, EvidenceRef, HttpMethod,',
+        '    ModelBehaviorDescriptor, ModelBinding, ModelSelector, OperationKind, ProtocolQuirks,',
+        '    ProviderAuthHint, ProviderClass, ProviderModelDescriptor, ProviderPluginDescriptor,',
+        '    ReasoningActivationKind, ReasoningOutputMode, TransportKind, VerificationStatus,',
+        '    WireProtocol,',
+        '};',
+        '',
+    ])
+
+
+def provider_cfg_attr(provider_id: str) -> str:
+    return f'#[cfg(feature = {rust_string(PROVIDER_FEATURES[provider_id])})]'
+
+
+def provider_module_name(provider_id: str) -> str:
+    return provider_id.replace('-', '_')
+
+
 def render_provider(provider_id: str, data: Json) -> str:
     provider = data['provider']
     models = data.get('models') or {}
     bindings = collect_bindings(provider, provider_id, models)
+    behaviors = collect_behaviors(models)
+    provider_operations: list[str] = []
+    for binding in bindings:
+        operation_id = str(binding['operation_id'])
+        if operation_id not in provider_operations:
+            provider_operations.append(operation_id)
+    for model in models.values():
+        for operation_id in supported_operations(model):
+            if operation_id not in provider_operations:
+                provider_operations.append(operation_id)
     const_prefix = provider_const_name(provider_id)
     feature = PROVIDER_FEATURES[provider_id]
     evidence_const = f'{const_prefix}_EVIDENCE'
     models_const = f'{const_prefix}_MODELS'
     bindings_const = f'{const_prefix}_BINDINGS'
+    behaviors_const = f'{const_prefix}_BEHAVIORS'
     plugin_const = f'{const_prefix}_PLUGIN'
     auth_values = ', '.join(auth_kinds(provider))
     provider_source_url = str(provider.get('source_url') or '')
@@ -759,6 +993,9 @@ def render_provider(provider_id: str, data: Json) -> str:
         return '\n'.join([
             f'#[cfg(feature = {rust_string(feature)})]',
             f'pub(crate) const {models_const}: &[ProviderModelDescriptor] = {render_model_descriptors(provider_id, models)};',
+            '',
+            f'#[cfg(feature = {rust_string(feature)})]',
+            f'pub(crate) const {behaviors_const}: &[ModelBehaviorDescriptor] = {render_behaviors(behaviors)};',
         ])
 
     return '\n'.join([
@@ -776,6 +1013,9 @@ def render_provider(provider_id: str, data: Json) -> str:
         f'pub(crate) const {bindings_const}: &[ModelBinding] = {render_bindings(bindings, evidence_const)};',
         '',
         f'#[cfg(feature = {rust_string(feature)})]',
+        f'pub(crate) const {behaviors_const}: &[ModelBehaviorDescriptor] = {render_behaviors(behaviors)};',
+        '',
+        f'#[cfg(feature = {rust_string(feature)})]',
         f'pub const {plugin_const}: ProviderPluginDescriptor = ProviderPluginDescriptor {{',
         f'    id: {rust_string(provider_id)},',
         f'    display_name: {rust_string(str(provider.get("display_name") or provider_id))},',
@@ -785,37 +1025,84 @@ def render_provider(provider_id: str, data: Json) -> str:
         f'    auth_hint: {auth_hint_expr(provider_id, provider)},',
         f'    models: {models_const},',
         f'    bindings: {bindings_const},',
+        f'    behaviors: {behaviors_const},',
+        f'    capability_statuses: {render_capability_status_slice(provider_operations)},',
         '};',
     ])
 
 
-def render_file() -> str:
-    blocks = []
+def rendered_provider_catalogs() -> list[tuple[str, str]]:
+    catalogs: list[tuple[str, str]] = []
     for path in all_provider_paths():
         data = load_provider_catalog(path)
         provider_id = data['provider']['id']
         if provider_id not in PROVIDER_FEATURES:
             continue
-        blocks.append(render_provider(provider_id, data))
+        catalogs.append((provider_id, render_provider(provider_id, data)))
+    return catalogs
 
-    prelude = '\n'.join([
+
+def render_provider_file(provider_block: str) -> str:
+    return render_prelude() + provider_block + '\n'
+
+
+def render_providers_mod(provider_ids: list[str]) -> str:
+    lines = [
         '// Generated by scripts/generate_rust_provider_catalog.py. Do not edit by hand.',
         '#![allow(unused_imports)]',
-        'use crate::catalog::{',
-        '    ApiSurfaceId, AuthMethodKind, EndpointQueryParam, EndpointTemplate, EvidenceLevel,',
-        '    EvidenceRef, HttpMethod, ModelBinding, ModelSelector, OperationKind, ProtocolQuirks, ProviderAuthHint,',
-        '    ProviderClass, ProviderModelDescriptor, ProviderPluginDescriptor, TransportKind,',
-        '    VerificationStatus, WireProtocol,',
-        '};',
         '',
-    ])
-    return prelude + '\n\n'.join(blocks) + '\n'
+    ]
+    for provider_id in provider_ids:
+        cfg_attr = provider_cfg_attr(provider_id)
+        module_name = provider_module_name(provider_id)
+        lines.extend([
+            cfg_attr,
+            f'mod {module_name};',
+            cfg_attr,
+            f'pub(crate) use {module_name}::*;',
+            '',
+        ])
+    return '\n'.join(lines).rstrip() + '\n'
+
+
+def write_text(path: Path, content: str) -> None:
+    if path.exists() and path.read_text(encoding='utf-8') == content:
+        return
+    path.write_text(content, encoding='utf-8')
+
+
+def remove_stale_provider_files(active_module_names: set[str]) -> None:
+    if not TARGET_MODULE_DIR.exists():
+        return
+    for path in TARGET_MODULE_DIR.glob('*.rs'):
+        if path.name == 'mod.rs':
+            continue
+        if path.stem not in active_module_names:
+            path.unlink()
 
 
 def main() -> int:
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
-    TARGET_FILE.write_text(render_file(), encoding='utf-8')
-    print(TARGET_FILE.relative_to(ROOT))
+    TARGET_MODULE_DIR.mkdir(parents=True, exist_ok=True)
+
+    catalogs = rendered_provider_catalogs()
+    active_module_names: set[str] = set()
+    for provider_id, provider_block in catalogs:
+        module_name = provider_module_name(provider_id)
+        active_module_names.add(module_name)
+        target_file = TARGET_MODULE_DIR / f'{module_name}.rs'
+        write_text(target_file, render_provider_file(provider_block))
+        print(target_file.relative_to(ROOT))
+
+    write_text(TARGET_MODULE_DIR / 'mod.rs', render_providers_mod([provider_id for provider_id, _ in catalogs]))
+    print((TARGET_MODULE_DIR / 'mod.rs').relative_to(ROOT))
+
+    remove_stale_provider_files(active_module_names)
+
+    if LEGACY_TARGET_FILE.exists():
+        LEGACY_TARGET_FILE.unlink()
+        print(LEGACY_TARGET_FILE.relative_to(ROOT))
+
     return 0
 
 

@@ -5,7 +5,7 @@ use reqwest::Url;
 use sha2::{Digest, Sha256};
 use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 
-use crate::profile::{Env, ProviderAuth};
+use crate::config::{Env, ProviderAuth};
 use crate::{DittoError, Result};
 
 type HmacSha256 = Hmac<Sha256>;

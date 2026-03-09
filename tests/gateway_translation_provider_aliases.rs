@@ -11,10 +11,13 @@ use ditto_llm::gateway::translation::{
 use ditto_llm::{Env, ProviderConfig};
 
 #[tokio::test]
-async fn openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<()> {
+async fn generic_openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<()> {
     let env = Env::default();
     let config = ProviderConfig::default();
 
+    // Dedicated provider packs such as deepseek/openrouter/xai have their own catalog truth and
+    // separate capability tests. This list stays focused on aliases that intentionally fall back to
+    // the generic OpenAI-compatible runtime.
     let aliases = [
         "openai-compatible",
         "openai_compatible",
@@ -22,7 +25,6 @@ async fn openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<
         "azure",
         "azure-openai",
         "azure_openai",
-        "deepseek",
         "qwen",
         "groq",
         "mistral",
@@ -30,9 +32,7 @@ async fn openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<
         "together-ai",
         "together_ai",
         "fireworks",
-        "xai",
         "perplexity",
-        "openrouter",
         "ollama",
     ];
 

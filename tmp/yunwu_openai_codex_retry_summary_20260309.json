@@ -1,0 +1,91 @@
+{
+  "official_docs": {
+    "gpt-5-chat-latest": {
+      "expected_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest"
+    },
+    "gpt-5-codex": {
+      "expected_surfaces": [
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5-codex"
+    },
+    "gpt-5.1-codex": {
+      "expected_surfaces": [
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.1-codex"
+    },
+    "gpt-5.1-codex-max": {
+      "expected_surfaces": [
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max"
+    },
+    "gpt-5.1-codex-mini": {
+      "expected_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini"
+    },
+    "gpt-5.2-codex": {
+      "expected_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.2-codex"
+    }
+  },
+  "yunwu_retest": {
+    "gpt-5-chat-latest": {
+      "responses": "ok",
+      "chat.completion": "ok",
+      "notes": [
+        "previous failure was caused by unsupported text.verbosity=low and too-small max_output_tokens in the earlier probe"
+      ]
+    },
+    "gpt-5-codex": {
+      "responses": "ok",
+      "chat.completion": "ok",
+      "notes": [
+        "official docs say responses-only, but yunwu chat.completion also succeeded; treat as provider-specific divergence from OpenAI official semantics"
+      ]
+    },
+    "gpt-5.1-codex": {
+      "responses": "ok",
+      "chat.completion": "operation_not_supported",
+      "notes": [
+        "previous failure was caused by unsupported text.verbosity=low in the earlier probe"
+      ]
+    },
+    "gpt-5.1-codex-max": {
+      "responses": "ok",
+      "chat.completion": "operation_not_supported",
+      "notes": [
+        "64 output budget could be exhausted by reasoning; 128 and 512 produced completed OK responses in follow-up runs"
+      ]
+    },
+    "gpt-5.1-codex-mini": {
+      "responses": "ok",
+      "chat.completion": "operation_not_supported",
+      "notes": [
+        "official docs expose chat+responses, but yunwu currently only worked on responses in direct tests"
+      ]
+    },
+    "gpt-5.2-codex": {
+      "responses": "ok",
+      "chat.completion": "operation_not_supported",
+      "notes": [
+        "official docs expose chat+responses, but yunwu currently only worked on responses in direct tests"
+      ]
+    }
+  },
+  "artifacts": [
+    "/root/autodl-tmp/zjj/p/ditto-llm/tmp/yunwu_openai_retry_codex_chat_20260309.json",
+    "/root/autodl-tmp/zjj/p/ditto-llm/tmp/yunwu_openai_text_probe_20260309.json"
+  ]
+}

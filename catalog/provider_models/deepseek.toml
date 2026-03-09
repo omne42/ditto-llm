@@ -1,4 +1,4 @@
-# Generated from official DeepSeek API docs.
+# Generated from official DeepSeek API docs plus live compatibility probes.
 # Edit via scripts/generate_deepseek_model_catalog.py.
 # Sources:
 # - https://api-docs.deepseek.com/
@@ -13,7 +13,7 @@
 # - https://api-docs.deepseek.com/guides/json_mode/
 # - https://api-docs.deepseek.com/guides/kv_cache
 # - https://api-docs.deepseek.com/updates/
-# Generated at: 2026-03-06T22:23:05Z
+# Generated at: 2026-03-08T13:21:54Z
 
 [provider]
 id = "deepseek"
@@ -116,6 +116,38 @@ support = "enabled_by_default"
 notes = "Context caching is enabled by default for all users and bills repeated prefixes as cache hits."
 
 [[models."deepseek-chat".records]]
+table_kind = "behavior"
+source_url = "https://api-docs.deepseek.com/guides/thinking_mode/"
+source_page = "thinking_mode"
+section = "Thinking Mode / Runtime Semantics"
+operation = "chat.completion"
+tool_calls = "supported"
+tool_choice_required = "supported"
+assistant_tool_followup = "none"
+reasoning_output = "optional"
+reasoning_activation = "deepseek_thinking_type_enabled"
+context_cache_modes = ["passive"]
+context_cache_default_enabled = true
+cache_usage_reporting = "deepseek_prompt_cache_hit_miss"
+notes = "Docs define thinking.type=enabled and default-on context caching. Live probe on 2026-03-08 confirmed tool_choice=required plus prompt cache hit accounting on repeated prefixes."
+
+[[models."deepseek-chat".records]]
+table_kind = "behavior"
+source_url = "https://api-docs.deepseek.com/api/create-completion"
+source_page = "create_fim_completion"
+section = "Create FIM Completion (Beta) / Runtime Semantics"
+operation = "text.completion"
+tool_calls = "unsupported"
+tool_choice_required = "unsupported"
+assistant_tool_followup = "none"
+reasoning_output = "unsupported"
+reasoning_activation = "unavailable"
+context_cache_modes = []
+context_cache_default_enabled = false
+cache_usage_reporting = "unknown"
+notes = "FIM completion is beta-only for deepseek-chat and must use the beta base URL."
+
+[[models."deepseek-chat".records]]
 table_kind = "release_note"
 source_url = "https://api-docs.deepseek.com/updates/"
 source_page = "updates"
@@ -210,6 +242,22 @@ section = "Context Caching"
 feature = "context_caching"
 support = "enabled_by_default"
 notes = "Context caching is enabled by default for all users and bills repeated prefixes as cache hits."
+
+[[models."deepseek-reasoner".records]]
+table_kind = "behavior"
+source_url = "https://api-docs.deepseek.com/guides/thinking_mode/"
+source_page = "thinking_mode"
+section = "Thinking Mode / Runtime Semantics"
+operation = "chat.completion"
+tool_calls = "supported"
+tool_choice_required = "unsupported"
+assistant_tool_followup = "requires_reasoning_content"
+reasoning_output = "always"
+reasoning_activation = "always_on"
+context_cache_modes = ["passive"]
+context_cache_default_enabled = true
+cache_usage_reporting = "deepseek_prompt_cache_hit_miss"
+notes = "Docs require reasoning_content replay during thinking-mode tool loops and default-on context caching. Live probe on 2026-03-08 confirmed reasoner rejects tool_choice=required and succeeds when reasoning_content is replayed on assistant tool-call follow-ups."
 
 [[models."deepseek-reasoner".records]]
 table_kind = "release_note"

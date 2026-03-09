@@ -8,35 +8,19 @@ pub mod cohere;
 mod genai;
 #[cfg(feature = "google")]
 pub mod google;
-#[cfg(feature = "openai")]
+#[cfg(any(feature = "openai", feature = "openai-compatible"))]
 pub mod openai;
-#[cfg(all(
-    feature = "audio",
-    any(feature = "openai", feature = "openai-compatible")
-))]
-pub mod openai_audio;
-#[cfg(all(feature = "batches", feature = "openai"))]
-pub mod openai_batches;
 #[cfg(feature = "openai-compatible")]
 pub mod openai_compatible;
 #[cfg(all(feature = "audio", feature = "openai-compatible"))]
 pub mod openai_compatible_audio;
 #[cfg(all(feature = "batches", feature = "openai-compatible"))]
 pub mod openai_compatible_batches;
+pub mod openai_compatible_family;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub mod openai_compatible_images;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]
 pub mod openai_compatible_moderations;
-#[cfg(all(
-    feature = "images",
-    any(feature = "openai", feature = "openai-compatible")
-))]
-pub mod openai_images;
-#[cfg(all(
-    feature = "moderations",
-    any(feature = "openai", feature = "openai-compatible")
-))]
-pub mod openai_moderations;
 #[cfg(feature = "vertex")]
 pub mod vertex;
 
@@ -67,6 +51,8 @@ mod openai_like;
     any(feature = "openai", feature = "openai-compatible")
 ))]
 mod openai_moderations_common;
+#[cfg(all(feature = "videos", feature = "openai"))]
+mod openai_videos_common;
 
 #[cfg(feature = "anthropic")]
 pub use anthropic::Anthropic;
@@ -82,14 +68,36 @@ pub use cohere::CohereRerank;
 pub use google::Google;
 #[cfg(all(feature = "google", feature = "embeddings"))]
 pub use google::GoogleEmbeddings;
+#[cfg(all(feature = "google", feature = "images"))]
+pub use google::GoogleImages;
+#[cfg(all(feature = "google", feature = "realtime"))]
+pub use google::GoogleRealtime;
+#[cfg(all(feature = "google", feature = "videos"))]
+pub use google::GoogleVideos;
 #[cfg(feature = "openai")]
 pub use openai::OpenAI;
+#[cfg(all(feature = "batches", feature = "openai"))]
+pub use openai::OpenAIBatches;
+#[cfg(all(feature = "openai", feature = "openai-compatible"))]
+pub use openai::OpenAIChatCompletions;
+#[cfg(all(feature = "images", feature = "openai-compatible"))]
+pub use openai::OpenAICompatibleImageEdits;
 #[cfg(all(feature = "openai", feature = "embeddings"))]
 pub use openai::OpenAIEmbeddings;
+#[cfg(all(feature = "images", feature = "openai"))]
+pub use openai::OpenAIImageEdits;
+#[cfg(all(feature = "images", feature = "openai"))]
+pub use openai::OpenAIImages;
+#[cfg(all(feature = "moderations", feature = "openai"))]
+pub use openai::OpenAIModerations;
+#[cfg(all(feature = "realtime", feature = "openai"))]
+pub use openai::OpenAIRealtime;
+#[cfg(all(feature = "videos", feature = "openai"))]
+pub use openai::OpenAIVideos;
 #[cfg(all(feature = "audio", feature = "openai"))]
-pub use openai_audio::{OpenAIAudioTranscription, OpenAISpeech};
-#[cfg(all(feature = "batches", feature = "openai"))]
-pub use openai_batches::OpenAIBatches;
+pub use openai::{OpenAIAudioTranscription, OpenAISpeech};
+#[cfg(feature = "openai")]
+pub use openai::{OpenAICompletionsLegacy, OpenAITextModel};
 #[cfg(feature = "openai-compatible")]
 pub use openai_compatible::OpenAICompatible;
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
@@ -102,9 +110,5 @@ pub use openai_compatible_batches::OpenAICompatibleBatches;
 pub use openai_compatible_images::OpenAICompatibleImages;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]
 pub use openai_compatible_moderations::OpenAICompatibleModerations;
-#[cfg(all(feature = "images", feature = "openai"))]
-pub use openai_images::OpenAIImages;
-#[cfg(all(feature = "moderations", feature = "openai"))]
-pub use openai_moderations::OpenAIModerations;
 #[cfg(feature = "vertex")]
 pub use vertex::Vertex;

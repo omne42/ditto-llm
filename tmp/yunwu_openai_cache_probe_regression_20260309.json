@@ -1,0 +1,273 @@
+{
+  "tested_at": "2026-03-08T18:04:51Z",
+  "base_url": "https://yunwu.ai/v1",
+  "catalog": "/root/autodl-tmp/zjj/p/ditto-llm/catalog/provider_models/openai.json",
+  "max_attempts": 3,
+  "timeout_seconds": 180,
+  "models": [
+    {
+      "model": "gpt-5-chat-latest",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "input_tokens": 12,
+                "output_tokens": 2,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "chat.completion",
+                "status": null,
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "finish_reason": "stop",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "prompt_tokens": 12,
+                "completion_tokens": 2,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-d494f2f5a0b6471894f8a37cb9d303d1 CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 31546,
+              "input_tokens": 31543,
+              "output_tokens": 3,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 31488,
+              "reasoning_tokens": 0,
+              "total_tokens": 31573,
+              "input_tokens": 31570,
+              "output_tokens": 3,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 31546,
+            "input_tokens": 31543,
+            "output_tokens": 3,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 31488,
+            "reasoning_tokens": 0,
+            "total_tokens": 31573,
+            "input_tokens": 31570,
+            "output_tokens": 3,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 31488
+      }
+    },
+    {
+      "model": "gpt-5-codex",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5-codex",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 25,
+                "input_tokens": 11,
+                "output_tokens": 14,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-788bd4c959dd422da469e23e5db88eac CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 28006,
+              "input_tokens": 27942,
+              "output_tokens": 64,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 27988,
+              "input_tokens": 27971,
+              "output_tokens": 17,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 28006,
+            "input_tokens": 27942,
+            "output_tokens": 64,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 27988,
+            "input_tokens": 27971,
+            "output_tokens": 17,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 0
+      }
+    }
+  ]
+}

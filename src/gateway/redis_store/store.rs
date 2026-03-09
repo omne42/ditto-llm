@@ -8,7 +8,10 @@ use thiserror::Error;
 use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
 
 #[cfg(feature = "gateway-proxy-cache")]
-use super::CachedProxyResponse;
+use super::{
+    CachedProxyResponse, ProxyCacheEntryMetadata, ProxyCachePurgeSelector,
+    ProxyCacheStoredResponse,
+};
 #[cfg(feature = "gateway-proxy-cache")]
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
 #[cfg(feature = "gateway-proxy-cache")]
@@ -57,11 +60,13 @@ struct CachedProxyResponseRecord {
     backend: String,
     headers: Vec<(String, Vec<u8>)>,
     body: Vec<u8>,
+    #[serde(default)]
+    metadata: ProxyCacheEntryMetadata,
 }
 
 #[cfg(feature = "gateway-proxy-cache")]
 impl CachedProxyResponseRecord {
-    fn from_cached(cached: &CachedProxyResponse) -> Self {
+    fn from_cached(cached: &CachedProxyResponse, metadata: &ProxyCacheEntryMetadata) -> Self {
         let mut headers = Vec::with_capacity(cached.headers.len());
         for (name, value) in cached.headers.iter() {
             headers.push((name.as_str().to_string(), value.as_bytes().to_vec()));
@@ -72,10 +77,11 @@ impl CachedProxyResponseRecord {
             backend: cached.backend.clone(),
             headers,
             body: cached.body.as_ref().to_vec(),
+            metadata: metadata.clone(),
         }
     }
 
-    fn into_cached(self) -> CachedProxyResponse {
+    fn into_stored(self) -> ProxyCacheStoredResponse {
         let mut headers = HeaderMap::new();
         for (name, value) in self.headers {
             let Ok(name) = name.parse::<HeaderName>() else {
@@ -87,11 +93,14 @@ impl CachedProxyResponseRecord {
             headers.append(name, value);
         }
 
-        CachedProxyResponse {
-            status: self.status,
-            headers,
-            body: Bytes::from(self.body),
-            backend: self.backend,
+        ProxyCacheStoredResponse {
+            response: CachedProxyResponse {
+                status: self.status,
+                headers,
+                body: Bytes::from(self.body),
+                backend: self.backend,
+            },
+            metadata: self.metadata,
         }
     }
 }
@@ -177,6 +186,30 @@ impl RedisStore {
     #[cfg(feature = "gateway-proxy-cache")]
     fn key_proxy_cache_response(&self, cache_key: &str) -> String {
         format!("{}:proxy_cache:{cache_key}", self.prefix)
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    fn proxy_cache_pattern(&self) -> String {
+        format!("{}:proxy_cache:*", self.prefix)
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    fn proxy_cache_key_from_redis_key<'a>(&self, redis_key: &'a str) -> Option<&'a str> {
+        let prefix = format!("{}:proxy_cache:", self.prefix);
+        redis_key.strip_prefix(&prefix)
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    fn record_matches_selector(
+        &self,
+        selector: &ProxyCachePurgeSelector,
+        cache_key: &str,
+        raw: &[u8],
+    ) -> bool {
+        let Ok(record) = serde_json::from_slice::<CachedProxyResponseRecord>(raw) else {
+            return false;
+        };
+        selector.matches(cache_key, &record.metadata)
     }
 }
 

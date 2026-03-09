@@ -204,7 +204,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 (has_cost_budget, cost_budget_policy)
             };
 
-                        #[cfg(feature = "gateway-costing")]
+            #[cfg(feature = "gateway-costing")]
             if has_cost_budget
                 && matches!(
                     cost_budget_policy,
@@ -233,10 +233,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     state.record_rate_limited();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
-                                                let mut metrics = metrics.lock().await;
+                        let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_rate_limited(
                             Some(&key.id),
@@ -259,10 +259,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -290,10 +290,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -321,10 +321,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_rate_limited();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -359,10 +359,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         reason,
                     );
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
-                                                let mut metrics = metrics.lock().await;
+                        let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_guardrail_blocked(
                             Some(&key.id),
@@ -390,10 +390,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         format!("input_tokens>{limit}"),
                     );
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
-                                                let mut metrics = metrics.lock().await;
+                        let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_guardrail_blocked(
                             Some(&key.id),
@@ -411,7 +411,6 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
-            
             if guardrails.validate_schema {
                 let reason = if let Some(body_json) = parsed_json.as_ref() {
                     validate_openai_request_schema(path_and_query, body_json)
@@ -436,7 +435,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         reason,
                     );
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = err.0.as_u16();
                         let mut metrics = metrics.lock().await;
@@ -468,7 +467,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                             reason,
                         );
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = err.0.as_u16();
                             let mut metrics = metrics.lock().await;
@@ -494,17 +493,17 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
-                        if !use_persistent_budget {
+            if !use_persistent_budget {
                 if let Err(err) =
                     state.can_spend_budget_tokens(&key.id, &key.budget, u64::from(charge_tokens))
                 {
                     state.record_budget_exceeded();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
                         let duration = metrics_timer_start.elapsed();
                         let status = mapped.0.as_u16();
-                                                let mut metrics = metrics.lock().await;
+                        let mut metrics = metrics.lock().await;
                         metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
                         metrics.record_proxy_budget_exceeded(
                             Some(&key.id),
@@ -528,10 +527,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -560,10 +559,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -592,10 +591,10 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -634,7 +633,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                     match cost_budget_policy.unwrap_or(CostBudgetEndpointPolicy::Unsupported) {
                         CostBudgetEndpointPolicy::Free => Some(0),
                         CostBudgetEndpointPolicy::TokenBased => {
-                            if state.pricing.is_none() {
+                            if state.proxy.pricing.is_none() {
                                 return Err(openai_error(
                                     StatusCode::INTERNAL_SERVER_ERROR,
                                     "api_error",
@@ -695,18 +694,16 @@ async fn resolve_openai_compat_proxy_gateway_context(
                         ));
                     };
 
-                    if let Err(err) = state.can_spend_budget_cost(
-                        &key.id,
-                        &key.budget,
-                        charge_cost_usd_micros,
-                    ) {
+                    if let Err(err) =
+                        state.can_spend_budget_cost(&key.id, &key.budget, charge_cost_usd_micros)
+                    {
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                        if let Some(metrics) = state.proxy.metrics.as_ref() {
                             let duration = metrics_timer_start.elapsed();
                             let status = mapped.0.as_u16();
-                                                        let mut metrics = metrics.lock().await;
+                            let mut metrics = metrics.lock().await;
                             metrics.record_proxy_request(
                                 Some(&key.id),
                                 model.as_deref(),
@@ -750,18 +747,16 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = state.can_spend_budget_cost(
-                                scope,
-                                budget,
-                                charge_cost_usd_micros,
-                            ) {
+                            if let Err(err) =
+                                state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
+                            {
                                 state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
-                                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                                if let Some(metrics) = state.proxy.metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                                                        let mut metrics = metrics.lock().await;
+                                    let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
@@ -790,18 +785,16 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = state.can_spend_budget_cost(
-                                scope,
-                                budget,
-                                charge_cost_usd_micros,
-                            ) {
+                            if let Err(err) =
+                                state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
+                            {
                                 state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
-                                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                                if let Some(metrics) = state.proxy.metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                                                        let mut metrics = metrics.lock().await;
+                                    let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
@@ -830,18 +823,16 @@ async fn resolve_openai_compat_proxy_gateway_context(
 
                     if let Some((scope, budget)) = user_budget_scope.as_ref() {
                         if let Some(_limit) = budget.total_usd_micros {
-                            if let Err(err) = state.can_spend_budget_cost(
-                                scope,
-                                budget,
-                                charge_cost_usd_micros,
-                            ) {
+                            if let Err(err) =
+                                state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
+                            {
                                 state.record_budget_exceeded();
                                 let mapped = map_openai_gateway_error(err);
                                 #[cfg(feature = "gateway-metrics-prometheus")]
-                                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                                if let Some(metrics) = state.proxy.metrics.as_ref() {
                                     let duration = metrics_timer_start.elapsed();
                                     let status = mapped.0.as_u16();
-                                                                        let mut metrics = metrics.lock().await;
+                                    let mut metrics = metrics.lock().await;
                                     metrics.record_proxy_request(
                                         Some(&key.id),
                                         model.as_deref(),
@@ -870,7 +861,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
-                        (
+            (
                 virtual_key_id,
                 limits,
                 budget,
@@ -904,7 +895,7 @@ async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
-                        (
+            (
                 None,
                 None,
                 None,

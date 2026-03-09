@@ -5,11 +5,11 @@ use crate::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
-#[cfg(feature = "openai")]
-use crate::profile::ProviderAuth;
-use crate::profile::{
+#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+use crate::config::resolve_provider_request_auth_required;
+use crate::config::{
     Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    resolve_request_auth_with_default_keys,
+    resolve_http_provider_config, resolve_provider_request_auth_optional,
 };
 use crate::{DittoError, Result};
 
@@ -28,10 +28,7 @@ pub(crate) fn join_endpoint(base_url: &str, endpoint: &str) -> String {
 }
 
 pub(crate) fn default_http_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(HTTP_TIMEOUT)
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new())
+    crate::config::default_http_client(HTTP_TIMEOUT)
 }
 
 pub(crate) fn auth_from_api_key(api_key: &str) -> Option<RequestAuth> {
@@ -39,50 +36,6 @@ pub(crate) fn auth_from_api_key(api_key: &str) -> Option<RequestAuth> {
         return None;
     }
     HttpAuth::bearer(api_key).ok().map(RequestAuth::Http)
-}
-
-#[cfg(feature = "openai")]
-pub(crate) async fn resolve_auth_required(
-    config: &ProviderConfig,
-    env: &Env,
-    default_keys: &[&str],
-) -> Result<RequestAuth> {
-    let auth = config
-        .auth
-        .clone()
-        .unwrap_or(ProviderAuth::ApiKeyEnv { keys: Vec::new() });
-    resolve_request_auth_with_default_keys(
-        &auth,
-        env,
-        default_keys,
-        "authorization",
-        Some("Bearer "),
-    )
-    .await
-}
-
-#[cfg(feature = "openai-compatible")]
-pub(crate) async fn resolve_auth_optional(
-    config: &ProviderConfig,
-    env: &Env,
-    default_keys: &[&str],
-) -> Result<Option<RequestAuth>> {
-    match config.auth.clone() {
-        Some(auth) => Ok(Some(
-            resolve_request_auth_with_default_keys(
-                &auth,
-                env,
-                default_keys,
-                "authorization",
-                Some("Bearer "),
-            )
-            .await?,
-        )),
-        None => Ok(default_keys
-            .iter()
-            .find_map(|key| env.get(key))
-            .and_then(|token| HttpAuth::bearer(&token).ok().map(RequestAuth::Http))),
-    }
 }
 
 pub(crate) fn apply_auth(
@@ -143,31 +96,30 @@ impl OpenAiLikeClient {
         self
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(any(feature = "openai", feature = "openai-compatible"))]
     pub(crate) async fn from_config_required(
         config: &ProviderConfig,
         env: &Env,
         default_keys: &[&str],
     ) -> Result<Self> {
-        let auth_header = resolve_auth_required(config, env, default_keys).await?;
+        let auth_header = resolve_provider_request_auth_required(
+            config,
+            env,
+            default_keys,
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let resolved = resolve_http_provider_config(HTTP_TIMEOUT, config, Some(DEFAULT_BASE_URL))?;
 
-        let mut out = Self::new("");
+        let mut out = Self::new("").with_http_client(resolved.http);
         out.auth = Some(auth_header);
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+        out.http_query_params = resolved.http_query_params;
+        if let Some(base_url) = resolved.base_url {
             out = out.with_base_url(base_url);
         }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        #[cfg(any(feature = "openai", feature = "openai-compatible"))]
+        if let Some(model) = resolved.default_model {
             out = out.with_model(model);
         }
         Ok(out)
@@ -179,25 +131,24 @@ impl OpenAiLikeClient {
         env: &Env,
         default_keys: &[&str],
     ) -> Result<Self> {
-        let auth = resolve_auth_optional(config, env, default_keys).await?;
+        let auth = resolve_provider_request_auth_optional(
+            config,
+            env,
+            default_keys,
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let resolved = resolve_http_provider_config(HTTP_TIMEOUT, config, Some(DEFAULT_BASE_URL))?;
 
-        let mut out = Self::new("");
+        let mut out = Self::new("").with_http_client(resolved.http);
         out.auth = auth;
-        out.http_query_params = config.http_query_params.clone();
-        if !config.http_headers.is_empty() {
-            out = out.with_http_client(crate::profile::build_http_client(
-                HTTP_TIMEOUT,
-                &config.http_headers,
-            )?);
-        }
-        if let Some(base_url) = config.base_url.as_deref().filter(|s| !s.trim().is_empty()) {
+        out.http_query_params = resolved.http_query_params;
+        if let Some(base_url) = resolved.base_url {
             out = out.with_base_url(base_url);
         }
-        if let Some(model) = config
-            .default_model
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
+        #[cfg(any(feature = "openai", feature = "openai-compatible"))]
+        if let Some(model) = resolved.default_model {
             out = out.with_model(model);
         }
         Ok(out)

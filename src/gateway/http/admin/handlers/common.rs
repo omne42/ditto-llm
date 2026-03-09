@@ -70,7 +70,10 @@ fn apply_admin_list_window<T>(items: &mut Vec<T>, offset: usize, limit: Option<u
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
-fn tenant_allowed_scopes(keys: &[VirtualKeyConfig], tenant_id: &str) -> std::collections::HashSet<String> {
+fn tenant_allowed_scopes(
+    keys: &[VirtualKeyConfig],
+    tenant_id: &str,
+) -> std::collections::HashSet<String> {
     let tenant_id = tenant_id.trim();
     let mut scopes = std::collections::HashSet::<String>::new();
     if !tenant_id.is_empty() {

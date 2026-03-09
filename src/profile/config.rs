@@ -251,6 +251,25 @@ pub struct ProviderCapabilities {
 }
 
 impl ProviderCapabilities {
+    pub fn disabled() -> Self {
+        Self {
+            tools: false,
+            vision: false,
+            reasoning: false,
+            json_schema: false,
+            streaming: false,
+            prompt_cache: false,
+        }
+    }
+
+    pub fn catalog_default_llm(prompt_cache: bool) -> Self {
+        Self {
+            streaming: true,
+            prompt_cache,
+            ..Self::disabled()
+        }
+    }
+
     pub fn openai_responses() -> Self {
         Self {
             tools: true,
@@ -265,6 +284,10 @@ impl ProviderCapabilities {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ProviderConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub enabled_capabilities: Vec<String>,
     #[serde(default)]
     pub base_url: Option<String>,
     #[serde(default)]

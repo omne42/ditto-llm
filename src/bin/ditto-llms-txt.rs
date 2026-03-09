@@ -34,7 +34,12 @@ fn main() -> Result<(), String> {
     }
 
     let mut paths = Vec::<PathBuf>::new();
-    for file in ["README.md", "PROVIDERS.md", "COMPARED_TO_LITELLM_AI_SDK.md"] {
+    for file in [
+        "README.md",
+        "PROVIDERS.md",
+        "CATALOG_COMPLETENESS.md",
+        "COMPARED_TO_LITELLM_AI_SDK.md",
+    ] {
         let path = PathBuf::from(file);
         if path.exists() {
             paths.push(path);

@@ -1,0 +1,541 @@
+{
+  "tested_at": "2026-03-08T17:32:00Z",
+  "base_url": "https://yunwu.ai/v1",
+  "results": [
+    {
+      "model": "gpt-5-chat-latest",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_verbosity",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "text": {
+              "verbosity": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat_plain",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "chat.completion",
+                "status": null,
+                "finish_reason": "stop",
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gpt-5-codex",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_verbosity",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "text": {
+              "verbosity": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 32,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_reasoning",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "reasoning": {
+              "effort": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 23,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.1-codex",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 29,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_verbosity",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "text": {
+              "verbosity": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 26,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_reasoning",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "reasoning": {
+              "effort": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 33,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.1-codex-max",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-max",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "incomplete",
+                "finish_reason": null,
+                "text": "",
+                "cached_tokens": 0,
+                "reasoning_tokens": 64,
+                "total_tokens": 75,
+                "error": null,
+                "incomplete_details": {
+                  "reason": "max_output_tokens"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_verbosity",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-max",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "text": {
+              "verbosity": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "incomplete",
+                "finish_reason": null,
+                "text": "",
+                "cached_tokens": 0,
+                "reasoning_tokens": 64,
+                "total_tokens": 75,
+                "error": null,
+                "incomplete_details": {
+                  "reason": "max_output_tokens"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_reasoning",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-max",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "reasoning": {
+              "effort": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "incomplete",
+                "finish_reason": null,
+                "text": "",
+                "cached_tokens": 0,
+                "reasoning_tokens": 64,
+                "total_tokens": 75,
+                "error": null,
+                "incomplete_details": {
+                  "reason": "max_output_tokens"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.1-codex-mini",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-mini",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 29,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_medium_verbosity",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-mini",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "text": {
+              "verbosity": "medium"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat_plain",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5.1-codex-mini",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "finish_reason": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "error": {
+                  "message": "The chatCompletion operation does not work with the specified model, gpt-5.1-codex-mini. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309013256416512239PYAVSwdK)",
+                  "type": "",
+                  "param": "",
+                  "code": "OperationNotSupported"
+                },
+                "incomplete_details": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.2-codex",
+      "attempts": [
+        {
+          "name": "responses_default",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.2-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "responses_low_reasoning",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.2-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 64,
+            "reasoning": {
+              "effort": "low"
+            }
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "finish_reason": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "error": null,
+                "incomplete_details": null
+              }
+            }
+          ]
+        },
+        {
+          "name": "chat_plain",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5.2-codex",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "finish_reason": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "error": {
+                  "message": "The chatCompletion operation does not work with the specified model, gpt-5.2-codex. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309013302175475818GxKW3gRp)",
+                  "type": "",
+                  "param": "",
+                  "code": "OperationNotSupported"
+                },
+                "incomplete_details": null
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

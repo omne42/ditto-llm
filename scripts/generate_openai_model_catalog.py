@@ -236,6 +236,7 @@ def parse_model(slug: str) -> tuple[str, dict]:
 
     model: dict[str, object] = {
         "source_url": MODEL_DOC_URL.format(slug=slug),
+        "availability_status": "unverified",
         **header,
     }
     modalities = parse_modalities(lines)
@@ -283,6 +284,7 @@ def write_catalog(models: dict[str, dict], output_path: Path) -> None:
         lines.append(f'[models.{toml_quote(slug)}]')
         for key in (
             'source_url',
+            'availability_status',
             'display_name',
             'stage',
             'tagline',

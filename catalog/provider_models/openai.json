@@ -15,6 +15,7 @@
   "models": {
     "babbage-002": {
       "source_url": "https://developers.openai.com/api/docs/models/babbage-002",
+      "availability_status": "availability_questionable",
       "display_name": "babbage-002",
       "stage": "default",
       "tagline": "Replacement for the GPT-3 ada and babbage base models",
@@ -56,11 +57,28 @@
           "api_surface": "completion.legacy",
           "endpoint": "https://api.openai.com/v1/completions",
           "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/babbage-002",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "text.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Legacy OpenAI text completions models do not support tools, prompt caching, or reasoning controls."
         }
       ]
     },
     "chatgpt-4o-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/chatgpt-4o-latest",
+      "availability_status": "availability_questionable",
       "display_name": "ChatGPT-4o",
       "stage": "default",
       "tagline": "GPT-4o model used in ChatGPT",
@@ -125,11 +143,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/chatgpt-4o-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/chatgpt-4o-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "chatgpt-image-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/chatgpt-image-latest",
+      "availability_status": "unverified",
       "display_name": "chatgpt-image-latest",
       "stage": "default",
       "tagline": "Image model used in ChatGPT.",
@@ -184,6 +239,7 @@
     },
     "codex-mini-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/codex-mini-latest",
+      "availability_status": "availability_questionable",
       "display_name": "codex-mini-latest",
       "stage": "default",
       "tagline": "Fast reasoning model optimized for the Codex CLI",
@@ -236,11 +292,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/codex-mini-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/codex-mini-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "computer-use-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/computer-use-preview",
+      "availability_status": "availability_questionable",
       "display_name": "computer-use-preview",
       "stage": "default",
       "tagline": "Specialized model for computer use tool",
@@ -284,11 +377,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/computer-use-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "dall-e-2": {
       "source_url": "https://developers.openai.com/api/docs/models/dall-e-2",
+      "availability_status": "unverified",
       "display_name": "DALL·E 2",
       "stage": "default",
       "tagline": "Our first image generation model",
@@ -333,6 +445,7 @@
     },
     "dall-e-3": {
       "source_url": "https://developers.openai.com/api/docs/models/dall-e-3",
+      "availability_status": "unverified",
       "display_name": "DALL·E 3",
       "stage": "default",
       "tagline": "Previous generation image generation model",
@@ -369,6 +482,7 @@
     },
     "davinci-002": {
       "source_url": "https://developers.openai.com/api/docs/models/davinci-002",
+      "availability_status": "availability_questionable",
       "display_name": "davinci-002",
       "stage": "default",
       "tagline": "Replacement for the GPT-3 curie and davinci base models",
@@ -410,11 +524,28 @@
           "api_surface": "completion.legacy",
           "endpoint": "https://api.openai.com/v1/completions",
           "notes": "API surface supplemented from the provider protocol and model capability metadata already recorded in this catalog."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/davinci-002",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "text.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Legacy OpenAI text completions models do not support tools, prompt caching, or reasoning controls."
         }
       ]
     },
     "gpt-3.5-turbo": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-3.5-turbo",
+      "availability_status": "availability_questionable",
       "display_name": "GPT-3.5 Turbo",
       "stage": "default",
       "tagline": "Legacy GPT model for cheaper chat and non-chat tasks",
@@ -427,8 +558,7 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Sep 01, 2021",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -470,11 +600,28 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-3.5-turbo",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Model docs describe this family for Chat Completions flows."
         }
       ]
     },
     "gpt-4": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4",
+      "availability_status": "available",
       "display_name": "GPT-4",
       "stage": "default",
       "tagline": "An older high-intelligence GPT model",
@@ -487,8 +634,7 @@
       "max_output_tokens": 8192,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -529,11 +675,28 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Model docs describe this family for Chat Completions flows."
         }
       ]
     },
     "gpt-4-turbo": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4-turbo",
+      "availability_status": "available",
       "display_name": "GPT-4 Turbo",
       "stage": "default",
       "tagline": "An older high-intelligence GPT model",
@@ -546,8 +709,7 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -590,11 +752,28 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4-turbo",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Model docs describe this family for Chat Completions flows."
         }
       ]
     },
     "gpt-4-turbo-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview",
+      "availability_status": "available",
       "display_name": "GPT-4 Turbo Preview",
       "stage": "default",
       "tagline": "An older fast GPT model",
@@ -607,8 +786,7 @@
       "max_output_tokens": 4096,
       "knowledge_cutoff": "Dec 01, 2023",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -649,11 +827,28 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4-turbo-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown",
+          "notes": "Model docs describe this family for Chat Completions flows."
         }
       ]
     },
     "gpt-4.1": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1",
+      "availability_status": "cache_questionable",
       "display_name": "GPT-4.1",
       "stage": "default",
       "tagline": "Smartest non-reasoning model",
@@ -718,11 +913,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4.1-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
+      "availability_status": "cache_questionable",
       "display_name": "GPT-4.1 mini",
       "stage": "default",
       "tagline": "Smaller, faster version of GPT-4.1",
@@ -776,11 +1008,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4.1-nano": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
+      "availability_status": "available",
       "display_name": "GPT-4.1 nano",
       "stage": "default",
       "tagline": "Fastest, most cost-efficient version of GPT-4.1",
@@ -834,11 +1103,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.1-nano",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4.5-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4.5-preview",
+      "availability_status": "availability_questionable",
       "display_name": "GPT-4.5 Preview (Deprecated)",
       "stage": "default",
       "tagline": "Deprecated large model.",
@@ -892,11 +1198,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.5-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4.5-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o",
+      "availability_status": "available",
       "display_name": "GPT-4o",
       "stage": "default",
       "tagline": "Fast, intelligent, flexible GPT model",
@@ -952,11 +1295,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-audio-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview",
+      "availability_status": "unverified",
       "display_name": "GPT-4o Audio",
       "stage": "default",
       "tagline": "GPT-4o models capable of audio inputs and outputs",
@@ -1012,11 +1392,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-audio-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+      "availability_status": "cache_questionable",
       "display_name": "GPT-4o mini",
       "stage": "default",
       "tagline": "Fast, affordable small model for focused tasks",
@@ -1070,11 +1487,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-mini-audio-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview",
+      "availability_status": "unverified",
       "display_name": "GPT-4o mini Audio",
       "stage": "default",
       "tagline": "Smaller model capable of audio inputs and outputs",
@@ -1128,11 +1582,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-audio-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-mini-realtime-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-realtime-preview",
+      "availability_status": "unverified",
       "display_name": "GPT-4o mini Realtime",
       "stage": "default",
       "tagline": "Smaller realtime model for text and audio inputs and outputs",
@@ -1181,6 +1672,7 @@
     },
     "gpt-4o-mini-search-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview",
+      "availability_status": "availability_questionable",
       "display_name": "GPT-4o mini Search Preview",
       "stage": "default",
       "tagline": "Fast, affordable small model for web search",
@@ -1193,8 +1685,7 @@
       "max_output_tokens": 16384,
       "knowledge_cutoff": "Oct 01, 2023",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -1234,11 +1725,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs describe this family for Chat Completions flows. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-mini-transcribe": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-transcribe",
+      "availability_status": "unverified",
       "display_name": "GPT-4o mini Transcribe",
       "stage": "default",
       "tagline": "Speech-to-text model powered by GPT-4o mini",
@@ -1280,6 +1790,7 @@
     },
     "gpt-4o-mini-tts": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-tts",
+      "availability_status": "unverified",
       "display_name": "GPT-4o mini TTS",
       "stage": "default",
       "tagline": "Text-to-speech model powered by GPT-4o mini",
@@ -1318,6 +1829,7 @@
     },
     "gpt-4o-realtime-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-realtime-preview",
+      "availability_status": "unverified",
       "display_name": "GPT-4o Realtime",
       "stage": "default",
       "tagline": "Model capable of realtime text and audio inputs and outputs",
@@ -1368,6 +1880,7 @@
     },
     "gpt-4o-search-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-search-preview",
+      "availability_status": "availability_questionable",
       "display_name": "GPT-4o Search Preview",
       "stage": "default",
       "tagline": "GPT model for web search in Chat Completions",
@@ -1380,8 +1893,7 @@
       "max_output_tokens": 16384,
       "knowledge_cutoff": "Oct 01, 2023",
       "api_surfaces": [
-        "chat.completion",
-        "responses"
+        "chat.completion"
       ],
       "modalities": {
         "text": "input_and_output",
@@ -1421,11 +1933,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-search-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs describe this family for Chat Completions flows. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-4o-transcribe": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-transcribe",
+      "availability_status": "unverified",
       "display_name": "GPT-4o Transcribe",
       "stage": "default",
       "tagline": "Speech-to-text model powered by GPT-4o",
@@ -1465,6 +1996,7 @@
     },
     "gpt-4o-transcribe-diarize": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-transcribe-diarize",
+      "availability_status": "unverified",
       "display_name": "GPT-4o Transcribe Diarize",
       "stage": "default",
       "tagline": "Transcription model that identifies who's speaking when",
@@ -1504,6 +2036,7 @@
     },
     "gpt-5": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5",
+      "availability_status": "available",
       "display_name": "GPT-5",
       "stage": "default",
       "tagline": "Previous intelligent reasoning model for coding and agentic tasks with configurable reasoning effort",
@@ -1567,11 +2100,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5-chat-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest",
+      "availability_status": "available",
       "display_name": "GPT-5 Chat",
       "stage": "default",
       "tagline": "GPT-5 model used in ChatGPT",
@@ -1636,11 +2206,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5-codex": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5-codex",
+      "availability_status": "cache_questionable",
       "display_name": "GPT-5-Codex",
       "stage": "default",
       "tagline": "A version of GPT-5 optimized for agentic coding in Codex",
@@ -1682,11 +2289,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+      "availability_status": "available",
       "display_name": "GPT-5 mini",
       "stage": "default",
       "tagline": "A faster, cost-efficient version of GPT-5 for well-defined tasks",
@@ -1750,11 +2376,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5-nano": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5-nano",
+      "availability_status": "unverified",
       "display_name": "GPT-5 nano",
       "stage": "default",
       "tagline": "Fastest, most cost-efficient version of GPT-5",
@@ -1818,11 +2481,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-nano",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-nano",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5-pro",
+      "availability_status": "available",
       "display_name": "GPT-5 pro",
       "stage": "default",
       "tagline": "Version of GPT-5 that produces smarter and more precise responses",
@@ -1865,11 +2565,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5-pro",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.1": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1",
+      "availability_status": "available",
       "display_name": "GPT-5.1",
       "stage": "default",
       "tagline": "The best model for coding and agentic tasks with configurable reasoning effort",
@@ -1922,11 +2641,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.1-chat-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest",
+      "availability_status": "available",
       "display_name": "GPT-5.1 Chat",
       "stage": "default",
       "tagline": "GPT-5.1 model used in ChatGPT",
@@ -1979,11 +2735,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.1-codex": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex",
+      "availability_status": "available",
       "display_name": "GPT-5.1 Codex",
       "stage": "default",
       "tagline": "A version of GPT-5.1 optimized for agentic coding in Codex.",
@@ -2025,11 +2818,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.1-codex-max": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max",
+      "availability_status": "available",
       "display_name": "GPT-5.1-Codex-Max",
       "stage": "default",
       "tagline": "A version of GPT-5.1-codex optimized for long running tasks.",
@@ -2041,7 +2853,6 @@
       "max_output_tokens": 128000,
       "knowledge_cutoff": "Sep 30, 2024",
       "api_surfaces": [
-        "chat.completion",
         "responses"
       ],
       "modalities": {
@@ -2081,11 +2892,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.1-codex-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini",
+      "availability_status": "available",
       "display_name": "GPT-5.1 Codex mini",
       "stage": "default",
       "tagline": "Smaller, more cost-effective, less-capable version of GPT-5.1-Codex",
@@ -2137,11 +2967,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.2": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2",
+      "availability_status": "available",
       "display_name": "GPT-5.2",
       "stage": "default",
       "tagline": "Previous frontier model for professional work with configurable reasoning effort",
@@ -2194,11 +3061,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.2-chat-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest",
+      "availability_status": "available",
       "display_name": "GPT-5.2 Chat",
       "stage": "default",
       "tagline": "GPT-5.2 model used in ChatGPT",
@@ -2251,11 +3155,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.2-codex": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-codex",
+      "availability_status": "available",
       "display_name": "GPT-5.2-Codex",
       "stage": "default",
       "tagline": "Our most intelligent coding model optimized for long-horizon, agentic coding tasks.",
@@ -2307,11 +3248,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.2-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-pro",
+      "availability_status": "cache_questionable",
       "display_name": "GPT-5.2 pro",
       "stage": "default",
       "tagline": "Previous pro model for professional work that produces smarter and more precise responses.",
@@ -2354,11 +3332,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-pro",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.3-chat-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest",
+      "availability_status": "available",
       "display_name": "GPT-5.3 Chat",
       "stage": "default",
       "tagline": "GPT-5.3 Instant model used in ChatGPT",
@@ -2411,11 +3408,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-chat-latest",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.3-codex": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-codex",
+      "availability_status": "available",
       "display_name": "GPT-5.3-Codex",
       "stage": "default",
       "tagline": "The most capable agentic coding model to date.",
@@ -2467,11 +3501,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.3-codex",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.4": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+      "availability_status": "available",
       "display_name": "GPT-5.4",
       "stage": "default",
       "tagline": "Our most capable model for professional work",
@@ -2535,11 +3606,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-5.4-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-5.4-pro",
+      "availability_status": "available",
       "display_name": "GPT-5.4 pro",
       "stage": "default",
       "tagline": "Version of GPT-5.4 that produces smarter and more precise responses.",
@@ -2593,11 +3701,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-5.4-pro",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-audio": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-audio",
+      "availability_status": "unverified",
       "display_name": "gpt-audio",
       "stage": "default",
       "tagline": "For audio inputs and outputs with Chat Completions API",
@@ -2650,11 +3777,42 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
         }
       ]
     },
     "gpt-audio-1.5": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-1.5",
+      "availability_status": "unverified",
       "display_name": "gpt-audio-1.5",
       "stage": "default",
       "tagline": "The best voice model for audio in, audio out with Chat Completions.",
@@ -2706,11 +3864,42 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-1.5",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-1.5",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
         }
       ]
     },
     "gpt-audio-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-mini",
+      "availability_status": "unverified",
       "display_name": "gpt-audio-mini",
       "stage": "default",
       "tagline": "A cost-efficient version of GPT Audio",
@@ -2764,11 +3953,42 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-audio-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "unavailable",
+          "context_cache_modes": [],
+          "context_cache_default_enabled": false,
+          "cache_usage_reporting": "unknown"
         }
       ]
     },
     "gpt-image-1": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-image-1",
+      "availability_status": "unverified",
       "display_name": "GPT Image 1",
       "stage": "default",
       "tagline": "Our previous image generation model",
@@ -2823,6 +4043,7 @@
     },
     "gpt-image-1-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-image-1-mini",
+      "availability_status": "unverified",
       "display_name": "gpt-image-1-mini",
       "stage": "default",
       "tagline": "A cost-efficient version of GPT Image 1",
@@ -2869,6 +4090,7 @@
     },
     "gpt-image-1.5": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-image-1.5",
+      "availability_status": "unverified",
       "display_name": "GPT Image 1.5",
       "stage": "default",
       "tagline": "State-of-the-art image generation model.",
@@ -2924,6 +4146,7 @@
     },
     "gpt-oss-120b": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-120b",
+      "availability_status": "available",
       "display_name": "gpt-oss-120b",
       "stage": "default",
       "tagline": "Most powerful open-weight model, fits into an H100 GPU",
@@ -2972,11 +4195,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-120b",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-120b",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-oss-20b": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-20b",
+      "availability_status": "available",
       "display_name": "gpt-oss-20b",
       "stage": "default",
       "tagline": "Medium-sized open-weight model for low latency",
@@ -3025,11 +4285,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-20b",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/gpt-oss-20b",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "gpt-realtime": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-realtime",
+      "availability_status": "unverified",
       "display_name": "gpt-realtime",
       "stage": "default",
       "tagline": "Model capable of realtime text and audio inputs and outputs",
@@ -3077,6 +4374,7 @@
     },
     "gpt-realtime-1.5": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-realtime-1.5",
+      "availability_status": "unverified",
       "display_name": "gpt-realtime-1.5",
       "stage": "default",
       "tagline": "The best voice model for audio in, audio out.",
@@ -3123,6 +4421,7 @@
     },
     "gpt-realtime-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/gpt-realtime-mini",
+      "availability_status": "unverified",
       "display_name": "gpt-realtime-mini",
       "stage": "default",
       "tagline": "A cost-efficient version of GPT Realtime",
@@ -3171,6 +4470,7 @@
     },
     "o1": {
       "source_url": "https://developers.openai.com/api/docs/models/o1",
+      "availability_status": "available",
       "display_name": "o1",
       "stage": "default",
       "tagline": "Previous full o-series reasoning model",
@@ -3225,11 +4525,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o1-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/o1-mini",
+      "availability_status": "available",
       "display_name": "o1-mini",
       "stage": "default",
       "tagline": "A small model alternative to o1",
@@ -3282,11 +4619,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o1-preview": {
       "source_url": "https://developers.openai.com/api/docs/models/o1-preview",
+      "availability_status": "available",
       "display_name": "o1 Preview",
       "stage": "default",
       "tagline": "Preview of our first o-series reasoning model",
@@ -3339,11 +4713,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1-preview",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o1-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/o1-pro",
+      "availability_status": "availability_questionable",
       "display_name": "o1-pro",
       "stage": "default",
       "tagline": "Version of o1 with more compute for better responses",
@@ -3386,11 +4797,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o1-pro",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o3": {
       "source_url": "https://developers.openai.com/api/docs/models/o3",
+      "availability_status": "available",
       "display_name": "o3",
       "stage": "default",
       "tagline": "Reasoning model for complex tasks, succeeded by GPT-5",
@@ -3443,11 +4873,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o3-deep-research": {
       "source_url": "https://developers.openai.com/api/docs/models/o3-deep-research",
+      "availability_status": "availability_questionable",
       "display_name": "o3-deep-research",
       "stage": "default",
       "tagline": "Our most powerful deep research model",
@@ -3500,11 +4967,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3-deep-research",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3-deep-research",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o3-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/o3-mini",
+      "availability_status": "available",
       "display_name": "o3-mini",
       "stage": "default",
       "tagline": "A small model alternative to o3",
@@ -3557,11 +5061,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o3-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/o3-pro",
+      "availability_status": "available",
       "display_name": "o3-pro",
       "stage": "default",
       "tagline": "Version of o3 with more compute for better responses",
@@ -3604,11 +5145,30 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o3-pro",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "Model docs mark this family as Responses API only. This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o4-mini": {
       "source_url": "https://developers.openai.com/api/docs/models/o4-mini",
+      "availability_status": "available",
       "display_name": "o4-mini",
       "stage": "default",
       "tagline": "Fast, cost-efficient reasoning model, succeeded by GPT-5 mini",
@@ -3661,11 +5221,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o4-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o4-mini",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "supported",
+          "tool_choice_required": "supported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "o4-mini-deep-research": {
       "source_url": "https://developers.openai.com/api/docs/models/o4-mini-deep-research",
+      "availability_status": "availability_questionable",
       "display_name": "o4-mini-deep-research",
       "stage": "default",
       "tagline": "Faster, more affordable deep research model",
@@ -3718,11 +5315,48 @@
           "api_surface": "responses",
           "endpoint": "https://api.openai.com/v1/responses",
           "notes": "This model family is documented for the OpenAI Responses API or explicitly marked as Responses-only in the model docs."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o4-mini-deep-research",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "chat.completion",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "unsupported",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family can use reasoning.effort, but chat completions does not expose reasoning items. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
+        },
+        {
+          "table_kind": "behavior",
+          "source_url": "https://developers.openai.com/api/docs/models/o4-mini-deep-research",
+          "source_page": "model_behaviors",
+          "section": "Runtime Semantics",
+          "operation": "response",
+          "tool_calls": "unsupported",
+          "tool_choice_required": "unsupported",
+          "assistant_tool_followup": "none",
+          "reasoning_output": "optional",
+          "reasoning_activation": "openai_reasoning_effort",
+          "context_cache_modes": [
+            "passive"
+          ],
+          "context_cache_default_enabled": true,
+          "cache_usage_reporting": "standard_usage",
+          "notes": "This reasoning-capable family uses OpenAI reasoning.effort on the Responses API. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details."
         }
       ]
     },
     "omni-moderation-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/omni-moderation-latest",
+      "availability_status": "unverified",
       "display_name": "omni-moderation",
       "stage": "default",
       "tagline": "Identify potentially harmful content in text and images",
@@ -3769,6 +5403,7 @@
     },
     "sora-2": {
       "source_url": "https://developers.openai.com/api/docs/models/sora-2",
+      "availability_status": "unverified",
       "display_name": "Sora 2",
       "stage": "default",
       "tagline": "Flagship video generation with synced audio",
@@ -3807,6 +5442,7 @@
     },
     "sora-2-pro": {
       "source_url": "https://developers.openai.com/api/docs/models/sora-2-pro",
+      "availability_status": "unverified",
       "display_name": "Sora 2 Pro",
       "stage": "default",
       "tagline": "Most advanced synced-audio video generation",
@@ -3844,6 +5480,7 @@
     },
     "text-embedding-3-large": {
       "source_url": "https://developers.openai.com/api/docs/models/text-embedding-3-large",
+      "availability_status": "unverified",
       "display_name": "text-embedding-3-large",
       "stage": "default",
       "tagline": "Most capable embedding model",
@@ -3880,6 +5517,7 @@
     },
     "text-embedding-3-small": {
       "source_url": "https://developers.openai.com/api/docs/models/text-embedding-3-small",
+      "availability_status": "unverified",
       "display_name": "text-embedding-3-small",
       "stage": "default",
       "tagline": "Small embedding model",
@@ -3916,6 +5554,7 @@
     },
     "text-embedding-ada-002": {
       "source_url": "https://developers.openai.com/api/docs/models/text-embedding-ada-002",
+      "availability_status": "unverified",
       "display_name": "text-embedding-ada-002",
       "stage": "default",
       "tagline": "Older embedding model",
@@ -3952,6 +5591,7 @@
     },
     "text-moderation-latest": {
       "source_url": "https://developers.openai.com/api/docs/models/text-moderation-latest",
+      "availability_status": "unverified",
       "display_name": "text-moderation",
       "stage": "default",
       "tagline": "Previous generation text-only moderation model",
@@ -3993,6 +5633,7 @@
     },
     "text-moderation-stable": {
       "source_url": "https://developers.openai.com/api/docs/models/text-moderation-stable",
+      "availability_status": "unverified",
       "display_name": "text-moderation-stable",
       "stage": "default",
       "tagline": "Previous generation text-only moderation model",
@@ -4032,6 +5673,7 @@
     },
     "tts-1": {
       "source_url": "https://developers.openai.com/api/docs/models/tts-1",
+      "availability_status": "unverified",
       "display_name": "TTS-1",
       "stage": "default",
       "tagline": "Text-to-speech model optimized for speed",
@@ -4068,6 +5710,7 @@
     },
     "tts-1-hd": {
       "source_url": "https://developers.openai.com/api/docs/models/tts-1-hd",
+      "availability_status": "unverified",
       "display_name": "TTS-1 HD",
       "stage": "default",
       "tagline": "Text-to-speech model optimized for quality",
@@ -4104,6 +5747,7 @@
     },
     "whisper-1": {
       "source_url": "https://developers.openai.com/api/docs/models/whisper-1",
+      "availability_status": "unverified",
       "display_name": "Whisper",
       "stage": "default",
       "tagline": "General-purpose speech recognition model",

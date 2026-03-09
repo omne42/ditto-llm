@@ -1,4 +1,9 @@
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Deserialize)]
 struct ReapReservationsRequest {
     #[serde(default = "default_reap_reservations_older_than_secs")]
@@ -9,17 +14,32 @@ struct ReapReservationsRequest {
     dry_run: bool,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn default_reap_reservations_older_than_secs() -> u64 {
     24 * 60 * 60
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn default_reap_reservations_limit() -> usize {
     1000
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Serialize)]
 struct ReapReservationsCounts {
     scanned: u64,
@@ -27,7 +47,12 @@ struct ReapReservationsCounts {
     released: u64,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 #[derive(Debug, Serialize)]
 struct ReapReservationsResponse {
     store: &'static str,
@@ -37,7 +62,12 @@ struct ReapReservationsResponse {
     cost: ReapReservationsCounts,
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn now_millis_u64() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -45,7 +75,12 @@ fn now_millis_u64() -> u64 {
         .unwrap_or(0)
 }
 
-#[cfg(any(feature = "gateway-store-sqlite", feature = "gateway-store-postgres", feature = "gateway-store-mysql", feature = "gateway-store-redis"))]
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 async fn reap_reservations(
     State(state): State<GatewayHttpState>,
     headers: HeaderMap,
@@ -66,7 +101,7 @@ async fn reap_reservations(
     let dry_run = payload.dry_run;
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.sqlite_store.as_ref() {
+    if let Some(store) = state.stores.sqlite.as_ref() {
         let (budget_scanned, budget_reaped, budget_released) = store
             .reap_stale_budget_reservations(cutoff_ts_ms, limit, dry_run)
             .await
@@ -106,7 +141,7 @@ async fn reap_reservations(
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.postgres_store.as_ref() {
+    if let Some(store) = state.stores.postgres.as_ref() {
         let (budget_scanned, budget_reaped, budget_released) = store
             .reap_stale_budget_reservations(cutoff_ts_ms, limit, dry_run)
             .await
@@ -146,7 +181,7 @@ async fn reap_reservations(
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.mysql_store.as_ref() {
+    if let Some(store) = state.stores.mysql.as_ref() {
         let (budget_scanned, budget_reaped, budget_released) = store
             .reap_stale_budget_reservations(cutoff_ts_ms, limit, dry_run)
             .await
@@ -186,7 +221,7 @@ async fn reap_reservations(
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.redis_store.as_ref() {
+    if let Some(store) = state.stores.redis.as_ref() {
         let (budget_scanned, budget_reaped, budget_released) = store
             .reap_stale_budget_reservations(cutoff_ts_ms, limit, dry_run)
             .await

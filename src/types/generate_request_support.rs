@@ -1,7 +1,7 @@
 use crate::types::{GenerateRequest, Warning};
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct GenerateRequestSupport {
+pub struct GenerateRequestSupport {
     pub seed: bool,
     pub penalties: bool,
     pub logprobs: bool,
@@ -9,7 +9,7 @@ pub(crate) struct GenerateRequestSupport {
 }
 
 impl GenerateRequestSupport {
-    pub(crate) const NONE: Self = Self {
+    pub const NONE: Self = Self {
         seed: false,
         penalties: false,
         logprobs: false,
@@ -17,7 +17,7 @@ impl GenerateRequestSupport {
     };
 }
 
-pub(crate) fn warn_unsupported_generate_request_options(
+pub fn warn_unsupported_generate_request_options(
     provider_display: &str,
     request: &GenerateRequest,
     supported: GenerateRequestSupport,

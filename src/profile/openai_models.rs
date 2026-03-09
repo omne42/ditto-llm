@@ -1,15 +1,15 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::{DittoError, Result};
+use crate::Result;
 
-use super::auth::{HttpAuth, RequestAuth, resolve_request_auth_with_default_keys};
-use super::config::{ProviderCapabilities, ProviderConfig, filter_models_whitelist};
+use super::auth::{RequestAuth, resolve_provider_request_auth_optional};
+use super::catalog_bridge::resolve_openai_compatible_provider_capability_profile;
 use super::env::Env;
-use super::http::build_http_client;
+use super::http::{DEFAULT_HTTP_TIMEOUT, resolve_http_provider_config};
 use super::openai_compatible::OpenAiCompatibleClient;
+use super::provider_config::{ProviderCapabilities, ProviderConfig, filter_models_whitelist};
 
 #[async_trait]
 pub trait Provider: Send + Sync {
@@ -38,41 +38,32 @@ impl OpenAiModelsProvider {
         config: &ProviderConfig,
         env: &Env,
     ) -> Result<Self> {
-        const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
+        const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
 
-        let base_url = config.base_url.as_deref().ok_or_else(|| {
-            DittoError::InvalidResponse("provider base_url is missing".to_string())
-        })?;
-        let auth = match config.auth.clone() {
-            Some(auth) => Some(
-                resolve_request_auth_with_default_keys(
-                    &auth,
-                    env,
-                    DEFAULT_KEYS,
-                    "authorization",
-                    Some("Bearer "),
-                )
-                .await?,
-            ),
-            None => match DEFAULT_KEYS.iter().find_map(|key| env.get(key)) {
-                Some(token) if token.trim().is_empty() => None,
-                Some(token) => Some(RequestAuth::Http(HttpAuth::bearer(&token)?)),
-                None => None,
-            },
-        };
-
-        let http = build_http_client(Duration::from_secs(300), &config.http_headers)?;
+        let name = name.into();
+        let capability_profile =
+            resolve_openai_compatible_provider_capability_profile(name.as_str(), config)?;
+        let auth = resolve_provider_request_auth_optional(
+            config,
+            env,
+            DEFAULT_KEYS,
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let resolved = resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, config, None)?;
+        let base_url = resolved
+            .required_base_url("provider base_url is missing")?
+            .to_string();
 
         Ok(Self {
-            name: name.into(),
-            base_url: base_url.to_string(),
+            name,
+            base_url,
             auth,
             model_whitelist: config.model_whitelist.clone(),
-            capabilities: config
-                .capabilities
-                .unwrap_or_else(ProviderCapabilities::openai_responses),
-            http,
-            http_query_params: config.http_query_params.clone(),
+            capabilities: capability_profile.effective_capabilities,
+            http: resolved.http,
+            http_query_params: resolved.http_query_params,
         })
     }
 }
@@ -98,33 +89,23 @@ impl Provider for OpenAiModelsProvider {
 }
 
 pub async fn list_available_models(provider: &ProviderConfig, env: &Env) -> Result<Vec<String>> {
-    const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY", "OPENAI_COMPAT_API_KEY"];
+    const DEFAULT_KEYS: &[&str] = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"];
 
-    let base_url = provider
-        .base_url
-        .as_deref()
-        .ok_or_else(|| DittoError::InvalidResponse("provider base_url is missing".to_string()))?;
-    let auth = match provider.auth.clone() {
-        Some(auth) => Some(
-            resolve_request_auth_with_default_keys(
-                &auth,
-                env,
-                DEFAULT_KEYS,
-                "authorization",
-                Some("Bearer "),
-            )
-            .await?,
-        ),
-        None => match DEFAULT_KEYS.iter().find_map(|key| env.get(key)) {
-            Some(token) if token.trim().is_empty() => None,
-            Some(token) => Some(RequestAuth::Http(HttpAuth::bearer(&token)?)),
-            None => None,
-        },
-    };
-    let http = build_http_client(Duration::from_secs(300), &provider.http_headers)?;
-    let client = OpenAiCompatibleClient::new_with_auth(auth, base_url.to_string())?
-        .with_http_query_params(provider.http_query_params.clone())
-        .with_http_client(http);
+    let auth = resolve_provider_request_auth_optional(
+        provider,
+        env,
+        DEFAULT_KEYS,
+        "authorization",
+        Some("Bearer "),
+    )
+    .await?;
+    let resolved = resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, provider, None)?;
+    let base_url = resolved
+        .required_base_url("provider base_url is missing")?
+        .to_string();
+    let client = OpenAiCompatibleClient::new_with_auth(auth, base_url)?
+        .with_http_query_params(resolved.http_query_params)
+        .with_http_client(resolved.http);
     let models = client.list_models().await?;
     Ok(filter_models_whitelist(models, &provider.model_whitelist))
 }

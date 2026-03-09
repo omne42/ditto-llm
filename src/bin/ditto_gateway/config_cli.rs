@@ -165,6 +165,12 @@ struct ProviderAddArgs {
     namespace: ProviderNamespaceArg,
 
     #[arg(long)]
+    provider: Option<String>,
+
+    #[arg(long = "enabled-capability", value_delimiter = ',')]
+    enabled_capabilities: Vec<String>,
+
+    #[arg(long)]
     base_url: Option<String>,
 
     #[arg(long)]
@@ -428,6 +434,8 @@ pub(crate) async fn maybe_run_config_cli(
                     root: args.root,
                     scope: args.scope.to_config_scope(),
                     namespace: args.namespace.to_provider_namespace(),
+                    provider: args.provider,
+                    enabled_capabilities: args.enabled_capabilities,
                     base_url: args.base_url,
                     default_model: args.default_model,
                     upstream_api: args.upstream_api.map(ProviderApiArg::to_provider_api),

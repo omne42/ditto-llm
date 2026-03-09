@@ -1,15 +1,10 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
 use super::ProviderAuth;
-
-const EMBEDDED_GOOGLE_MODEL_CATALOG: &str =
-    include_str!("../../catalog/provider_models/google.toml");
-const GOOGLE_MODEL_CATALOG_ENV: &str = "DITTO_GOOGLE_MODEL_CATALOG";
-const PROVIDER_MODEL_CATALOG_DIR_ENV: &str = "DITTO_PROVIDER_MODEL_CATALOG_DIR";
+use super::generated_catalogs::generated_google_model_catalog;
 
 static GOOGLE_MODEL_CATALOG: OnceLock<GoogleModelCatalog> = OnceLock::new();
 
@@ -64,11 +59,7 @@ pub struct GoogleModelVersion {
 }
 
 pub fn google_model_catalog() -> &'static GoogleModelCatalog {
-    GOOGLE_MODEL_CATALOG.get_or_init(|| {
-        let catalog_text = load_google_model_catalog_text();
-        toml::from_str::<GoogleModelCatalog>(&catalog_text)
-            .expect("embedded google model catalog must parse")
-    })
+    GOOGLE_MODEL_CATALOG.get_or_init(generated_google_model_catalog)
 }
 
 pub fn google_model_catalog_entry(doc_slug: &str) -> Option<&'static GoogleModelCatalogEntry> {
@@ -81,26 +72,4 @@ pub fn google_model_catalog_entry_by_model(
     google_model_catalog().models.values().find(|entry| {
         entry.model_code == model || entry.versions.iter().any(|version| version.model == model)
     })
-}
-
-fn load_google_model_catalog_text() -> String {
-    let Some(path) = configured_google_model_catalog_path() else {
-        return EMBEDDED_GOOGLE_MODEL_CATALOG.to_string();
-    };
-    std::fs::read_to_string(&path).unwrap_or_else(|err| {
-        panic!(
-            "failed to read google model catalog from {}: {err}",
-            path.display()
-        )
-    })
-}
-
-fn configured_google_model_catalog_path() -> Option<PathBuf> {
-    std::env::var_os(GOOGLE_MODEL_CATALOG_ENV)
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os(PROVIDER_MODEL_CATALOG_DIR_ENV)
-                .map(PathBuf::from)
-                .map(|dir| dir.join("google.toml"))
-        })
 }

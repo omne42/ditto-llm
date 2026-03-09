@@ -1,0 +1,39 @@
+{
+  "tested_with_user_key": true,
+  "base_url": "https://yunwu.ai/v1",
+  "models": {
+    "gpt-5.2-pro": {
+      "availability": "ok",
+      "surface": "responses",
+      "tool": "ok",
+      "cache": {
+        "long_prefix": "blocked_by_local_insufficient_quota",
+        "short_prefix": {
+          "round1_status": 200,
+          "round2_status": 200,
+          "second_round_cached_tokens": 0,
+          "notes": "shorter fresh-nonce cache probe completed successfully but did not show a cache hit"
+        }
+      }
+    },
+    "o1-pro": {
+      "availability": "failed",
+      "surface": "responses",
+      "error_code": "model_price_error",
+      "notes": "retested with max_output_tokens 16, 32, 64, and 128; all failed with the same model_price_error"
+    },
+    "gpt-4o-mini-search-preview": {
+      "availability": "failed",
+      "surfaces_tested": [
+        "chat.completion",
+        "responses"
+      ],
+      "error_code": "account_deactivated",
+      "notes": "failed on both chat.completion and responses with the user key"
+    }
+  },
+  "artifacts": [
+    "/root/autodl-tmp/zjj/p/ditto-llm/tmp/yunwu_openai_gpt52pro_o1pro_searchpreview_20260309.json",
+    "/root/autodl-tmp/zjj/p/ditto-llm/tmp/yunwu_openai_failed_text_reprobe_with_user_key_20260309.json"
+  ]
+}

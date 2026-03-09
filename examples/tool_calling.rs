@@ -1,4 +1,7 @@
-use ditto_llm::{ContentPart, GenerateRequest, LanguageModel, Message, OpenAI, Tool, ToolChoice};
+use ditto_llm::{
+    ContentPart, DittoError, GenerateRequest, LanguageModel, Message, OpenAICompatible, Tool,
+    ToolChoice,
+};
 use serde_json::json;
 
 fn add(arguments: &serde_json::Value) -> serde_json::Value {
@@ -9,12 +12,15 @@ fn add(arguments: &serde_json::Value) -> serde_json::Value {
 
 #[tokio::main]
 async fn main() -> ditto_llm::Result<()> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".to_string())
-    })?;
-    let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
+        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
+    let model = std::env::var("OPENAI_COMPAT_MODEL")
+        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_MODEL".to_string()))?;
+    let api_key = std::env::var("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 
-    let openai = OpenAI::new(api_key).with_model(model);
+    let llm = OpenAICompatible::new(api_key)
+        .with_base_url(base_url)
+        .with_model(model);
 
     let tools = vec![Tool {
         name: "add".to_string(),
@@ -40,7 +46,7 @@ async fn main() -> ditto_llm::Result<()> {
         ..GenerateRequest::from(Vec::new())
     };
 
-    let response = openai.generate(request).await?;
+    let response = llm.generate(request).await?;
 
     let mut tool_calls = Vec::new();
     for part in &response.content {
@@ -81,7 +87,7 @@ async fn main() -> ditto_llm::Result<()> {
         followup_messages.push(Message::tool_result(tool_call_id, output.to_string()));
     }
 
-    let response = openai.generate(followup_messages.into()).await?;
+    let response = llm.generate(followup_messages.into()).await?;
     println!("{}", response.text());
 
     Ok(())

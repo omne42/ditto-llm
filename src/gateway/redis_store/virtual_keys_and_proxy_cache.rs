@@ -48,7 +48,7 @@ impl RedisStore {
     pub async fn get_proxy_cache_response(
         &self,
         cache_key: &str,
-    ) -> Result<Option<CachedProxyResponse>, RedisStoreError> {
+    ) -> Result<Option<ProxyCacheStoredResponse>, RedisStoreError> {
         let mut conn = self.connection().await?;
         let redis_key = self.key_proxy_cache_response(cache_key);
         let raw: Option<Vec<u8>> = conn.get(redis_key).await?;
@@ -59,7 +59,7 @@ impl RedisStore {
             Ok(record) => record,
             Err(_) => return Ok(None),
         };
-        Ok(Some(record.into_cached()))
+        Ok(Some(record.into_stored()))
     }
 
     #[cfg(feature = "gateway-proxy-cache")]
@@ -67,6 +67,7 @@ impl RedisStore {
         &self,
         cache_key: &str,
         cached: &CachedProxyResponse,
+        metadata: &ProxyCacheEntryMetadata,
         ttl_seconds: u64,
     ) -> Result<(), RedisStoreError> {
         if ttl_seconds == 0 {
@@ -75,7 +76,7 @@ impl RedisStore {
 
         let mut conn = self.connection().await?;
         let redis_key = self.key_proxy_cache_response(cache_key);
-        let payload = serde_json::to_vec(&CachedProxyResponseRecord::from_cached(cached))?;
+        let payload = serde_json::to_vec(&CachedProxyResponseRecord::from_cached(cached, metadata))?;
         let _: () = conn.set_ex(redis_key, payload, ttl_seconds).await?;
         Ok(())
     }
@@ -92,8 +93,74 @@ impl RedisStore {
     }
 
     #[cfg(feature = "gateway-proxy-cache")]
+    pub async fn purge_proxy_cache_matching(
+        &self,
+        selector: &ProxyCachePurgeSelector,
+    ) -> Result<u64, RedisStoreError> {
+        let selector = selector.clone().into_normalized();
+        if selector.is_empty() {
+            return Ok(0);
+        }
+
+        if let Some(cache_key) = selector.cache_key.as_deref() {
+            let mut conn = self.connection().await?;
+            let redis_key = self.key_proxy_cache_response(cache_key);
+            if selector.as_exact_cache_key().is_some() {
+                let deleted: u64 = conn.del(redis_key).await?;
+                return Ok(deleted);
+            }
+
+            let raw: Option<Vec<u8>> = conn.get(&redis_key).await?;
+            let Some(raw) = raw else {
+                return Ok(0);
+            };
+            if self.record_matches_selector(&selector, cache_key, &raw) {
+                let deleted: u64 = conn.del(redis_key).await?;
+                return Ok(deleted);
+            }
+            return Ok(0);
+        }
+
+        let pattern = self.proxy_cache_pattern();
+        let mut conn = self.connection().await?;
+        let mut deleted = 0u64;
+        let mut cursor = "0".to_string();
+
+        loop {
+            let (next_cursor, keys): (String, Vec<String>) = redis::cmd("SCAN")
+                .arg(&cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut conn)
+                .await?;
+
+            for redis_key in keys {
+                let Some(cache_key) = self.proxy_cache_key_from_redis_key(&redis_key) else {
+                    continue;
+                };
+                let raw: Option<Vec<u8>> = conn.get(&redis_key).await?;
+                let Some(raw) = raw else {
+                    continue;
+                };
+                if self.record_matches_selector(&selector, cache_key, &raw) {
+                    let removed: u64 = conn.del(&redis_key).await?;
+                    deleted = deleted.saturating_add(removed);
+                }
+            }
+
+            if next_cursor == "0" {
+                break;
+            }
+            cursor = next_cursor;
+        }
+        Ok(deleted)
+    }
+
+    #[cfg(feature = "gateway-proxy-cache")]
     pub async fn clear_proxy_cache(&self) -> Result<u64, RedisStoreError> {
-        let pattern = format!("{}:proxy_cache:*", self.prefix);
+        let pattern = self.proxy_cache_pattern();
         let mut conn = self.connection().await?;
         let mut deleted = 0u64;
 

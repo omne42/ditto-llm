@@ -1,0 +1,1352 @@
+{
+  "tested_at": "2026-03-08T17:56:17Z",
+  "base_url": "https://yunwu.ai/v1",
+  "catalog": "/root/autodl-tmp/zjj/p/ditto-llm/catalog/provider_models/openai.json",
+  "max_attempts": 3,
+  "timeout_seconds": 180,
+  "models": [
+    {
+      "model": "gpt-5-chat-latest",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5-chat-latest",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "input_tokens": 12,
+                "output_tokens": 2,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5-chat-latest",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "chat.completion",
+                "status": null,
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "finish_reason": "stop",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 14,
+                "prompt_tokens": 12,
+                "completion_tokens": 2,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5-chat-latest",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 59,
+          "input_tokens": 53,
+          "output_tokens": 6,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_jKZIClKPhXEvpnNNXjdGzLqq"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-c4e85b0873754b6c8a99fb5053620b74 CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 429,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Unsupported parameter: '***.effort' is not supported with this model. (request id: 20260309015624850947649Wlh0tXdD)",
+                "type": "invalid_request_error",
+                "param": "reasoning.effort",
+                "code": "unsupported_parameter"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 429,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Unsupported parameter: '***.effort' is not supported with this model. (request id: 20260309015636539217955AWzMcfG)",
+                "type": "invalid_request_error",
+                "param": "reasoning.effort",
+                "code": "unsupported_parameter"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 29746,
+              "input_tokens": 29743,
+              "output_tokens": 3,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 29773,
+              "input_tokens": 29770,
+              "output_tokens": 3,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 29746,
+            "input_tokens": 29743,
+            "output_tokens": 3,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 29773,
+            "input_tokens": 29770,
+            "output_tokens": 3,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 0
+      }
+    },
+    {
+      "model": "gpt-5-codex",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5-codex",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 25,
+                "input_tokens": 11,
+                "output_tokens": 14,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5-codex",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 79,
+          "input_tokens": 49,
+          "output_tokens": 30,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_qSBeJFuw5Y4czlcXNZrd33eY"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-cc4923566119459ca1fb25e3aea63c5c CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 429,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309015706709929882XB0ZVl14)",
+                "type": "upstream_error",
+                "param": "",
+                "code": "model_not_found"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 429,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309015721826261598R5Nw4TPQ)",
+                "type": "upstream_error",
+                "param": "",
+                "code": "model_not_found"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 27960,
+              "input_tokens": 27942,
+              "output_tokens": 18,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 27992,
+              "input_tokens": 27971,
+              "output_tokens": 21,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 27960,
+            "input_tokens": 27942,
+            "output_tokens": 18,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 27992,
+            "input_tokens": 27971,
+            "output_tokens": 21,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 0
+      }
+    },
+    {
+      "model": "gpt-5.1-codex",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 26,
+                "input_tokens": 11,
+                "output_tokens": 15,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5.1-codex",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 82,
+          "input_tokens": 52,
+          "output_tokens": 30,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_wUqdC6BYAntDrij1RmjBq8CH"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-ae48f9e011304d5790cfad0e20c3fb5c CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 429,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Access denied due to invalid subscription key or wrong API endpoint. Make sure to provide a valid key for an active subscription and use a correct regional API endpoint for your resource. (request id: 2026030901580314864491v9EGKtoF)",
+                "type": "",
+                "param": "",
+                "code": "401"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 429,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Access denied due to invalid subscription key or wrong API endpoint. Make sure to provide a valid key for an active subscription and use a correct regional API endpoint for your resource. (request id: 20260309015823286748802sdQtEuw9)",
+                "type": "",
+                "param": "",
+                "code": "401"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 30660,
+              "input_tokens": 30642,
+              "output_tokens": 18,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 30688,
+              "input_tokens": 30671,
+              "output_tokens": 17,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 30660,
+            "input_tokens": 30642,
+            "output_tokens": 18,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 30688,
+            "input_tokens": 30671,
+            "output_tokens": 17,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 0
+      }
+    },
+    {
+      "model": "gpt-5.1-codex-max",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-max",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-max",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 64,
+                "total_tokens": 136,
+                "input_tokens": 11,
+                "output_tokens": 125,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5.1-codex-max",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 512,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 99,
+          "input_tokens": 52,
+          "output_tokens": 47,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_7jjU8GsKgrJzbH3nAKCBLbLM"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-bf85050663964a6a9ff3820ac2f425ed CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 512,
+              "reasoning": {
+                "effort": "medium"
+              }
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 128,
+              "total_tokens": 28106,
+              "input_tokens": 27942,
+              "output_tokens": 164,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 27904,
+              "reasoning_tokens": 384,
+              "total_tokens": 28421,
+              "input_tokens": 27971,
+              "output_tokens": 450,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 512,
+            "reasoning": {
+              "effort": "medium"
+            }
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 128,
+            "total_tokens": 28106,
+            "input_tokens": 27942,
+            "output_tokens": 164,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 27904,
+            "reasoning_tokens": 384,
+            "total_tokens": 28421,
+            "input_tokens": 27971,
+            "output_tokens": 450,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 27904
+      }
+    },
+    {
+      "model": "gpt-5.1-codex-mini",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.1-codex-mini",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.1-codex-mini",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "input_tokens": 11,
+                "output_tokens": 16,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5.1-codex-mini",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "The chatCompletion operation does not work with the specified model, gpt-5.1-codex-mini. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309015925830288860uhFxXndt)",
+                  "type": "",
+                  "param": "",
+                  "code": "OperationNotSupported"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5.1-codex-mini",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 85,
+          "input_tokens": 52,
+          "output_tokens": 33,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_5tK29zrXYvQiXdc97oBFRNav"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-29b38db715d148c6b8cc8b84583f857f CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 429,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Unsupported value: 'minimal' is not supported with the 'gpt-5.1-codex-mini-2025-11-13' model. Supported values are: 'low', 'medium', and 'high'. (request id: 20260309015931969980596mHLwxi7Y)",
+                "type": "invalid_request_error",
+                "param": "reasoning.effort",
+                "code": "unsupported_value"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 429,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Unsupported value: 'minimal' is not supported with the 'gpt-5.1-codex-mini-2025-11-13' model. Supported values are: 'low', 'medium', and 'high'. (request id: 20260309015949550465199FVse48bu)",
+                "type": "invalid_request_error",
+                "param": "reasoning.effort",
+                "code": "unsupported_value"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 29767,
+              "input_tokens": 29742,
+              "output_tokens": 25,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 29823,
+              "input_tokens": 29771,
+              "output_tokens": 52,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 29767,
+            "input_tokens": 29742,
+            "output_tokens": 25,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 29823,
+            "input_tokens": 29771,
+            "output_tokens": 52,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 0
+      }
+    },
+    {
+      "model": "gpt-5.2-codex",
+      "official_surfaces": [
+        "chat.completion",
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses",
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-codex",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.2-codex",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 27,
+                "input_tokens": 11,
+                "output_tokens": 16,
+                "function_calls": []
+              }
+            }
+          ]
+        },
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-5.2-codex",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "The chatCompletion operation does not work with the specified model, gpt-5.2-codex. Please choose different model and try again. You can learn more about which models can be used with each operation here: https://go.microsoft.com/fwlink/?linkid=2197993. (request id: 20260309020019532586584ZrUy409l)",
+                  "type": "",
+                  "param": "",
+                  "code": "OperationNotSupported"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5.2-codex",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 82,
+          "input_tokens": 52,
+          "output_tokens": 30,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_Au41IdgRx3XLSWblXKOWDuQ5"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-b7e089c04b904ec8bbcd0f164dc4a293 CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 429,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Access denied due to invalid subscription key or wrong API endpoint. Make sure to provide a valid key for an active subscription and use a correct regional API endpoint for your resource. (request id: 20260309020023147567844eCwQ6twm)",
+                "type": "",
+                "param": "",
+                "code": "401"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 429,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "Access denied due to invalid subscription key or wrong API endpoint. Make sure to provide a valid key for an active subscription and use a correct regional API endpoint for your resource. (request id: 20260309020039151226898TS0oUudy)",
+                "type": "",
+                "param": "",
+                "code": "401"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 0,
+              "total_tokens": 28861,
+              "input_tokens": 28842,
+              "output_tokens": 19,
+              "function_calls": []
+            },
+            "round2_status": 200,
+            "round2": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R2",
+              "cached_tokens": 28672,
+              "reasoning_tokens": 0,
+              "total_tokens": 28890,
+              "input_tokens": 28871,
+              "output_tokens": 19,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 128
+          },
+          "round1_status": 200,
+          "round1": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R1",
+            "cached_tokens": 0,
+            "reasoning_tokens": 0,
+            "total_tokens": 28861,
+            "input_tokens": 28842,
+            "output_tokens": 19,
+            "function_calls": []
+          },
+          "round2_status": 200,
+          "round2": {
+            "object": "response",
+            "status": "completed",
+            "error": null,
+            "incomplete_details": null,
+            "text": "R2",
+            "cached_tokens": 28672,
+            "reasoning_tokens": 0,
+            "total_tokens": 28890,
+            "input_tokens": 28871,
+            "output_tokens": 19,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": 28672
+      }
+    }
+  ]
+}

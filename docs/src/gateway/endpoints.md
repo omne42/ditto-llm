@@ -55,10 +55,11 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 
 - `GET /v1/models`、`GET /v1/models/*`
 - `POST /v1/chat/completions`、`POST /v1/completions`
-- `POST /v1/responses`、`POST /v1/responses/compact`
+- `POST /v1/responses`、`POST /v1/responses/compact`、`POST /v1/responses/input_tokens`、`GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*`
 - `POST /v1/embeddings`
 - `POST /v1/moderations`
 - `POST /v1/images/generations`
+- `/v1/videos`（create/list）以及 `/v1/videos/*`（retrieve/delete/content/remix）
 - `POST /v1/audio/transcriptions`、`POST /v1/audio/translations`、`POST /v1/audio/speech`
 - `POST /v1/rerank`
 - `/v1/batches`（以及 retrieve/cancel）
@@ -66,6 +67,11 @@ Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
 当请求由 translation backend 处理时，响应会包含：
 
 - `x-ditto-translation: <provider>`
+
+补充说明：
+
+- `POST /v1/responses/input_tokens` 是 best-effort 估算：启用 `gateway-tokenizer` 时尽量按模型计数，否则显式返回 `unsupported_endpoint`，不会发起上游 provider 调用。
+- `GET /v1/responses/*` 与 `GET /v1/responses/*/input_items` 当前走 best-effort local store，只保证读写“同一进程内由 non-stream translation create 生成”的 response。
 
 ## Anthropic Messages（compat）
 

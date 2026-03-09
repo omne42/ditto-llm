@@ -1,0 +1,119 @@
+{
+  "tested_at": "2026-03-08T17:22:21Z",
+  "model": "gpt-5-mini",
+  "base_url": "https://yunwu.ai/v1",
+  "variants": [
+    {
+      "id": "default_16",
+      "round1": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10841,
+        "output_tokens": 0,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 0,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10868,
+        "output_tokens": 0,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      }
+    },
+    {
+      "id": "default_64",
+      "round1": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10841,
+        "output_tokens": 64,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 64,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10868,
+        "output_tokens": 64,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 64,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      }
+    },
+    {
+      "id": "minimal_16",
+      "round1": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10841,
+        "output_tokens": 4,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "incomplete",
+        "text": "",
+        "input_tokens": 10868,
+        "output_tokens": 4,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 0,
+        "incomplete_details": {
+          "reason": "max_output_tokens"
+        },
+        "error": null
+      }
+    },
+    {
+      "id": "minimal_64",
+      "round1": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R1",
+        "input_tokens": 10841,
+        "output_tokens": 20,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      },
+      "round2": {
+        "http_status": 200,
+        "status": "completed",
+        "text": "R2",
+        "input_tokens": 10870,
+        "output_tokens": 20,
+        "cached_tokens": 10752,
+        "reasoning_tokens": 0,
+        "incomplete_details": null,
+        "error": null
+      }
+    }
+  ]
+}

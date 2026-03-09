@@ -4,7 +4,8 @@ use ditto_llm::{DittoError, LanguageModel, Message, OpenAICompatible};
 async fn main() -> ditto_llm::Result<()> {
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
-    let model = std::env::var("OPENAI_COMPAT_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let model = std::env::var("OPENAI_COMPAT_MODEL")
+        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_MODEL".to_string()))?;
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 
     let llm = OpenAICompatible::new(api_key)

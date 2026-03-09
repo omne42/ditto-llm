@@ -1,1 +1,1 @@
-pub use super::openai_images::OpenAICompatibleImages;
+pub use super::openai::OpenAICompatibleImages;

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use crate::profile::Env;
+use crate::config::Env;
 use crate::{DittoError, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

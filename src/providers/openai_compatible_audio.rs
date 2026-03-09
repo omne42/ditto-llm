@@ -1,1 +1,1 @@
-pub use super::openai_audio::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
+pub use super::openai::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};

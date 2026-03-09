@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  node:
+  node-packages:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout ditto-llm
@@ -30,15 +30,15 @@ jobs:
         working-directory: ditto-llm
         run: corepack prepare pnpm@10.28.2 --activate
 
-      - name: pnpm install
+      - name: pnpm install (packages only)
         working-directory: ditto-llm
-        run: pnpm install --frozen-lockfile
+        run: CI=true pnpm install --frozen-lockfile --filter './packages/**'
 
-      - name: pnpm typecheck
+      - name: pnpm typecheck (packages only)
         working-directory: ditto-llm
         run: pnpm run typecheck
 
-      - name: pnpm build
+      - name: pnpm build (packages only)
         working-directory: ditto-llm
         run: pnpm run build
 
@@ -184,6 +184,14 @@ jobs:
       - name: gateway contract types check
         working-directory: ditto-llm
         run: cargo test --manifest-path crates/ditto-gateway-contract-types/Cargo.toml
+
+      - name: cargo test (default core)
+        working-directory: ditto-llm
+        run: cargo test --all-targets
+
+      - name: cargo check (default examples)
+        working-directory: ditto-llm
+        run: cargo check --examples
 
       - name: cargo clippy (all features)
         working-directory: ditto-llm

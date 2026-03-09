@@ -37,4 +37,3 @@ fn cost_budget_endpoint_policy(
 
     CostBudgetEndpointPolicy::Unsupported
 }
-

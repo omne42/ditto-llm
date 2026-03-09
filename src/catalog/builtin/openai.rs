@@ -1,15 +1,9 @@
-#[cfg(not(feature = "openai"))]
-use crate::catalog::ProviderModelDescriptor;
-#[cfg(feature = "openai")]
-use crate::catalog::generated::OPENAI_MODELS;
+use crate::catalog::generated::providers::{OPENAI_BEHAVIORS, OPENAI_MODELS};
 use crate::catalog::{
-    ApiSurfaceId, AuthMethodKind, EndpointTemplate, EvidenceLevel, EvidenceRef, HttpMethod,
-    ModelBinding, ModelSelector, OperationKind, ProviderAuthHint, ProviderClass,
+    ApiSurfaceId, AuthMethodKind, EndpointQueryParam, EndpointTemplate, EvidenceLevel, EvidenceRef,
+    HttpMethod, ModelBinding, ModelSelector, OperationKind, ProviderAuthHint, ProviderClass,
     ProviderPluginDescriptor, TransportKind, VerificationStatus, WireProtocol,
 };
-
-#[cfg(not(feature = "openai"))]
-const OPENAI_MODELS: &[ProviderModelDescriptor] = &[];
 
 const OPENAI_AUTH_METHODS: &[AuthMethodKind] = &[
     AuthMethodKind::ApiKeyHeader,
@@ -42,6 +36,24 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
             http_method: Some(HttpMethod::Post),
             base_url_override: None,
             path_template: "/v1/chat/completions",
+            query_params: &[],
+        },
+        quirks: None,
+        streaming: None,
+        async_job: None,
+        verification: VerificationStatus::Explicit,
+        evidence: OPENAI_EVIDENCE,
+    },
+    ModelBinding {
+        operation: OperationKind::TEXT_COMPLETION,
+        selector: ModelSelector::Any,
+        surface: ApiSurfaceId::OPENAI_TEXT_COMPLETIONS,
+        wire_protocol: WireProtocol::OPENAI_TEXT_COMPLETIONS,
+        endpoint: EndpointTemplate {
+            transport: TransportKind::Http,
+            http_method: Some(HttpMethod::Post),
+            base_url_override: None,
+            path_template: "/v1/completions",
             query_params: &[],
         },
         quirks: None,
@@ -125,6 +137,31 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
+    #[cfg(feature = "videos")]
+    ModelBinding {
+        operation: OperationKind::VIDEO_GENERATION,
+        selector: ModelSelector::Exact(&[
+            "sora-2",
+            "sora-2-2025-10-06",
+            "sora-2-2025-12-08",
+            "sora-2-pro",
+            "sora-2-pro-2025-10-06",
+        ]),
+        surface: ApiSurfaceId::OPENAI_VIDEOS,
+        wire_protocol: WireProtocol::OPENAI_VIDEOS,
+        endpoint: EndpointTemplate {
+            transport: TransportKind::Http,
+            http_method: Some(HttpMethod::Post),
+            base_url_override: None,
+            path_template: "/v1/videos",
+            query_params: &[],
+        },
+        quirks: None,
+        streaming: None,
+        async_job: Some(true),
+        verification: VerificationStatus::Explicit,
+        evidence: OPENAI_EVIDENCE,
+    },
     #[cfg(feature = "audio")]
     ModelBinding {
         operation: OperationKind::AUDIO_SPEECH,
@@ -201,6 +238,28 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
+    #[cfg(feature = "realtime")]
+    ModelBinding {
+        operation: OperationKind::REALTIME_SESSION,
+        selector: ModelSelector::Any,
+        surface: ApiSurfaceId::OPENAI_REALTIME,
+        wire_protocol: WireProtocol::OPENAI_REALTIME,
+        endpoint: EndpointTemplate {
+            transport: TransportKind::WebSocket,
+            http_method: None,
+            base_url_override: None,
+            path_template: "/v1/realtime",
+            query_params: &[EndpointQueryParam {
+                name: "model",
+                value_template: "{model}",
+            }],
+        },
+        quirks: None,
+        streaming: Some(true),
+        async_job: None,
+        verification: VerificationStatus::Explicit,
+        evidence: OPENAI_EVIDENCE,
+    },
 ];
 
 pub const GENERIC_OPENAI_PLUGIN: ProviderPluginDescriptor = ProviderPluginDescriptor {
@@ -212,4 +271,6 @@ pub const GENERIC_OPENAI_PLUGIN: ProviderPluginDescriptor = ProviderPluginDescri
     auth_hint: Some(OPENAI_AUTH_HINT),
     models: OPENAI_MODELS,
     bindings: OPENAI_BINDINGS,
+    behaviors: OPENAI_BEHAVIORS,
+    capability_statuses: &[],
 };

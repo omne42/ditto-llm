@@ -1,40 +1,42 @@
-use async_trait::async_trait;
-#[cfg(feature = "streaming")]
-use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(all(feature = "streaming", feature = "openai"))]
 use futures_util::TryStreamExt;
-#[cfg(feature = "streaming")]
-use futures_util::stream;
-use serde::{Deserialize, Serialize};
+#[cfg(feature = "openai")]
+use serde::Deserialize;
+#[cfg(feature = "openai")]
 use serde_json::{Map, Value};
+#[cfg(feature = "openai")]
 use tokio::sync::mpsc;
-#[cfg(feature = "streaming")]
+#[cfg(all(feature = "streaming", feature = "openai"))]
 use tokio_util::io::StreamReader;
 
-use super::openai_like;
-
-#[cfg(feature = "embeddings")]
-use crate::embedding::EmbeddingModel;
-use crate::file::{FileContent, FileDeleteResponse, FileObject};
-use crate::model::{LanguageModel, StreamResult};
-use crate::profile::{Env, ProviderConfig};
-#[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
-use crate::types::{
-    ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
-    Role, Tool, ToolChoice, Usage, Warning,
+#[cfg(feature = "openai")]
+use super::raw_responses::{
+    OpenAIResponsesCompactionRequest, OpenAIResponsesRawEvent, OpenAIResponsesRawEventStream,
+    OpenAIResponsesRawRequest, process_raw_responses_sse,
 };
-use crate::{DittoError, Result};
+use crate::providers::openai_like;
+
+#[cfg(feature = "openai")]
+use crate::DittoError;
+use crate::Result;
+use crate::config::{Env, ProviderConfig};
+#[cfg(feature = "openai")]
+use crate::types::{
+    ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
+    Warning,
+};
 
 #[derive(Clone)]
 pub struct OpenAI {
-    client: openai_like::OpenAiLikeClient,
+    pub(super) client: openai_like::OpenAiLikeClient,
 }
 
-const OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS: &[&str] =
+#[cfg(feature = "openai")]
+pub(super) const OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS: &[&str] =
     &["reasoning_effort", "response_format", "parallel_tool_calls"];
 
-const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
+#[cfg(feature = "openai")]
+pub(super) const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
     "instructions",
     "max_output_tokens",
     "previous_response_id",
@@ -58,10 +60,14 @@ const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
     "thinking",
 ];
 
-const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
-const OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE: &str = "skip_thought_signature_validator";
+#[cfg(feature = "openai")]
+pub(super) const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
+#[cfg(feature = "openai")]
+pub(super) const OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE: &str =
+    "skip_thought_signature_validator";
 
-fn env_flag_is_true(name: &str) -> bool {
+#[cfg(feature = "openai")]
+pub(super) fn env_flag_is_true(name: &str) -> bool {
     let Ok(raw) = std::env::var(name) else {
         return false;
     };
@@ -71,7 +77,8 @@ fn env_flag_is_true(name: &str) -> bool {
     )
 }
 
-fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
+#[cfg(feature = "openai")]
+pub(super) fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
     let Some((base_id, hex)) = id.rsplit_once(TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR) else {
         return (id.to_string(), None);
     };
@@ -100,7 +107,11 @@ fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>
     (base_id.to_string(), Some(signature))
 }
 
-fn encode_tool_call_id_with_thought_signature(id: &str, thought_signature: Option<&str>) -> String {
+#[cfg(feature = "openai")]
+pub(super) fn encode_tool_call_id_with_thought_signature(
+    id: &str,
+    thought_signature: Option<&str>,
+) -> String {
     let (base_id, _) = split_tool_call_id_and_thought_signature(id);
     let Some(signature) = thought_signature
         .map(str::trim)
@@ -151,57 +162,22 @@ impl OpenAI {
         })
     }
 
-    fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    pub(super) fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         self.client.apply_auth(req)
     }
 
-    fn responses_url(&self) -> String {
+    #[cfg(feature = "openai")]
+    pub(super) fn responses_url(&self) -> String {
         self.client.endpoint("responses")
     }
 
-    fn responses_compact_url(&self) -> String {
+    #[cfg(feature = "openai")]
+    pub(super) fn responses_compact_url(&self) -> String {
         format!("{}/compact", self.responses_url())
     }
 
-    pub async fn upload_file(&self, filename: impl Into<String>, bytes: Vec<u8>) -> Result<String> {
-        self.upload_file_with_purpose(filename, bytes, "assistants", None)
-            .await
-    }
-
-    pub async fn upload_file_with_purpose(
-        &self,
-        filename: impl Into<String>,
-        bytes: Vec<u8>,
-        purpose: impl Into<String>,
-        media_type: Option<&str>,
-    ) -> Result<String> {
-        self.client
-            .upload_file_with_purpose(crate::file::FileUploadRequest {
-                filename: filename.into(),
-                bytes,
-                purpose: purpose.into(),
-                media_type: media_type.map(|s| s.to_string()),
-            })
-            .await
-    }
-
-    pub async fn list_files(&self) -> Result<Vec<FileObject>> {
-        self.client.list_files().await
-    }
-
-    pub async fn retrieve_file(&self, file_id: &str) -> Result<FileObject> {
-        self.client.retrieve_file(file_id).await
-    }
-
-    pub async fn delete_file(&self, file_id: &str) -> Result<FileDeleteResponse> {
-        self.client.delete_file(file_id).await
-    }
-
-    pub async fn download_file_content(&self, file_id: &str) -> Result<FileContent> {
-        self.client.download_file_content(file_id).await
-    }
-
-    fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
+    #[cfg(feature = "openai")]
+    pub(super) fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
         }
@@ -213,7 +189,8 @@ impl OpenAI {
         ))
     }
 
-    fn tool_to_openai(tool: &Tool) -> Value {
+    #[cfg(feature = "openai")]
+    pub(super) fn tool_to_openai(tool: &Tool) -> Value {
         let mut out = Map::<String, Value>::new();
         out.insert("type".to_string(), Value::String("function".to_string()));
         out.insert("name".to_string(), Value::String(tool.name.clone()));
@@ -231,7 +208,8 @@ impl OpenAI {
         Value::Object(out)
     }
 
-    fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
+    #[cfg(feature = "openai")]
+    pub(super) fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
         match choice {
             ToolChoice::Auto => Value::String("auto".to_string()),
             ToolChoice::None => Value::String("none".to_string()),
@@ -240,7 +218,8 @@ impl OpenAI {
         }
     }
 
-    fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
+    #[cfg(feature = "openai")]
+    pub(super) fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
         match arguments {
             Value::String(raw) => {
                 let raw = raw.trim();
@@ -254,7 +233,8 @@ impl OpenAI {
         }
     }
 
-    fn should_send_function_call_thought_signature(&self, model: &str) -> bool {
+    #[cfg(feature = "openai")]
+    pub(super) fn should_send_function_call_thought_signature(&self, model: &str) -> bool {
         env_flag_is_true("DITTO_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
             || env_flag_is_true("OMNE_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
             || (self
@@ -265,12 +245,8 @@ impl OpenAI {
                 && model.to_ascii_lowercase().contains("gemini"))
     }
 
-    #[cfg(test)]
-    fn messages_to_input(messages: &[Message]) -> (Option<String>, Vec<Value>, Vec<Warning>) {
-        Self::messages_to_input_with_quirks(messages, false)
-    }
-
-    fn messages_to_input_with_quirks(
+    #[cfg(feature = "openai")]
+    pub(super) fn messages_to_input_with_quirks(
         messages: &[Message],
         include_function_call_thought_signature: bool,
     ) -> (Option<String>, Vec<Value>, Vec<Warning>) {
@@ -460,7 +436,8 @@ impl OpenAI {
         (instructions, input, warnings)
     }
 
-    fn parse_usage(value: &Value) -> Usage {
+    #[cfg(feature = "openai")]
+    pub(super) fn parse_usage(value: &Value) -> Usage {
         let mut usage = Usage::default();
         if let Some(obj) = value.as_object() {
             usage.input_tokens = obj.get("input_tokens").and_then(Value::as_u64);
@@ -492,7 +469,8 @@ impl OpenAI {
         usage
     }
 
-    fn build_responses_body(
+    #[cfg(feature = "openai")]
+    pub(super) fn build_responses_body(
         request: &GenerateRequest,
         model: &str,
         provider_options: &crate::types::ProviderOptions,
@@ -594,6 +572,7 @@ impl OpenAI {
         Ok((body, warnings))
     }
 
+    #[cfg(feature = "openai")]
     pub async fn compact_responses_history_raw(
         &self,
         request: &OpenAIResponsesCompactionRequest<'_>,
@@ -612,6 +591,7 @@ impl OpenAI {
         Ok(parsed.output)
     }
 
+    #[cfg(feature = "openai")]
     pub async fn create_response_stream_raw(
         &self,
         request: &OpenAIResponsesRawRequest<'_>,
@@ -708,7 +688,8 @@ impl OpenAI {
     }
 }
 
-fn apply_provider_options(
+#[cfg(feature = "openai")]
+pub(super) fn apply_provider_options(
     body: &mut Map<String, Value>,
     provider_options: &crate::types::ProviderOptions,
 ) -> Result<()> {
@@ -734,7 +715,8 @@ fn apply_provider_options(
     Ok(())
 }
 
-fn sanitize_openai_responses_provider_options(
+#[cfg(feature = "openai")]
+pub(super) fn sanitize_openai_responses_provider_options(
     selected_provider_options: Option<Value>,
     provider_options_context: &'static str,
 ) -> (Option<Value>, Vec<Warning>) {

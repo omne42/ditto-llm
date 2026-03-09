@@ -1,5 +1,5 @@
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -8,19 +8,26 @@ use axum::http::{Request, StatusCode};
 use ditto_llm::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_llm::batch::BatchClient;
 use ditto_llm::embedding::EmbeddingModel;
+use ditto_llm::file::FileContent;
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
 use ditto_llm::image::ImageGenerationModel;
+use ditto_llm::image_edit::ImageEditModel;
 use ditto_llm::model::{LanguageModel, StreamResult};
 use ditto_llm::moderation::ModerationModel;
+use ditto_llm::video::VideoGenerationModel;
 use ditto_llm::rerank::RerankModel;
 use ditto_llm::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, BatchStatus, ContentPart, FinishReason, GenerateRequest,
-    GenerateResponse, ImageGenerationRequest, ImageGenerationResponse, ImageSource, Message,
-    ModerationInput, ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
+    GenerateResponse, ImageEditRequest, ImageEditResponse, ImageGenerationRequest,
+    ImageGenerationResponse, ImageResponseFormat, ImageSource, Message, ModerationInput,
+    ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
     RerankResponse, RerankResult, SpeechRequest, SpeechResponse, StreamChunk, Usage,
+    VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
+    VideoGenerationStatus, VideoListOrder, VideoListRequest, VideoListResponse,
+    VideoRemixRequest,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -211,6 +218,187 @@ impl ImageGenerationModel for FakeImageModel {
             usage: Usage::default(),
             warnings: Vec::new(),
             provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeImageEditModel;
+
+#[async_trait]
+impl ImageEditModel for FakeImageEditModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-image-edit"
+    }
+
+    async fn edit(&self, request: ImageEditRequest) -> ditto_llm::Result<ImageEditResponse> {
+        assert_eq!(request.prompt, "remove background");
+        assert_eq!(request.model.as_deref(), Some("image-edit-v2"));
+        assert_eq!(request.n, Some(2));
+        assert_eq!(request.size.as_deref(), Some("1024x1024"));
+        assert_eq!(request.response_format, Some(ImageResponseFormat::Base64Json));
+        assert_eq!(request.images.len(), 1);
+        assert_eq!(request.images[0].filename, "image.png");
+        assert_eq!(request.images[0].media_type.as_deref(), Some("image/png"));
+        assert_eq!(request.images[0].data, b"image-bytes".to_vec());
+        let mask = request.mask.expect("mask must be present");
+        assert_eq!(mask.filename, "mask.png");
+        assert_eq!(mask.media_type.as_deref(), Some("image/png"));
+        assert_eq!(mask.data, b"mask-bytes".to_vec());
+
+        Ok(ImageGenerationResponse {
+            images: vec![
+                ImageSource::Url {
+                    url: "https://example.com/edited.png".to_string(),
+                },
+                ImageSource::Base64 {
+                    media_type: "image/png".to_string(),
+                    data: "ZWRpdGVk".to_string(),
+                },
+            ],
+            usage: Usage::default(),
+            warnings: Vec::new(),
+            provider_metadata: None,
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeVideoGenerationModel;
+
+#[async_trait]
+impl VideoGenerationModel for FakeVideoGenerationModel {
+    fn provider(&self) -> &str {
+        "fake"
+    }
+
+    fn model_id(&self) -> &str {
+        "fake-video"
+    }
+
+    async fn create(
+        &self,
+        request: VideoGenerationRequest,
+    ) -> ditto_llm::Result<VideoGenerationResponse> {
+        match request.prompt.as_str() {
+            "road at dusk" => {
+                assert!(request.input_reference.is_none());
+                assert_eq!(request.model.as_deref(), Some("sora-fast"));
+                assert_eq!(request.seconds, Some(4));
+                assert_eq!(request.size.as_deref(), Some("1280x720"));
+                Ok(VideoGenerationResponse {
+                    id: "vid_json".to_string(),
+                    object: Some("video".to_string()),
+                    status: VideoGenerationStatus::Queued,
+                    model: request.model,
+                    created_at: Some(123),
+                    prompt: Some("road at dusk".to_string()),
+                    seconds: Some("4".to_string()),
+                    size: Some("1280x720".to_string()),
+                    ..Default::default()
+                })
+            }
+            "remix shot" => {
+                let input = request.input_reference.expect("input_reference must exist");
+                assert_eq!(input.filename, "shot.mp4");
+                assert_eq!(input.media_type.as_deref(), Some("video/mp4"));
+                assert_eq!(input.data, b"video-bytes".to_vec());
+                assert_eq!(request.model.as_deref(), Some("sora-fast"));
+                assert_eq!(request.seconds, Some(6));
+                assert_eq!(request.size.as_deref(), Some("720p"));
+                Ok(VideoGenerationResponse {
+                    id: "vid_multipart".to_string(),
+                    object: Some("video".to_string()),
+                    status: VideoGenerationStatus::Queued,
+                    model: request.model,
+                    created_at: Some(456),
+                    prompt: Some("remix shot".to_string()),
+                    seconds: Some("6".to_string()),
+                    size: Some("720p".to_string()),
+                    ..Default::default()
+                })
+            }
+            other => Err(ditto_llm::DittoError::InvalidResponse(format!(
+                "unexpected video prompt: {other}"
+            ))),
+        }
+    }
+
+    async fn retrieve(&self, video_id: &str) -> ditto_llm::Result<VideoGenerationResponse> {
+        assert_eq!(video_id, "vid_123");
+        Ok(VideoGenerationResponse {
+            id: "vid_123".to_string(),
+            object: Some("video".to_string()),
+            status: VideoGenerationStatus::Completed,
+            model: Some("sora-fast".to_string()),
+            prompt: Some("road at dusk".to_string()),
+            progress: Some(100),
+            completed_at: Some(789),
+            ..Default::default()
+        })
+    }
+
+    async fn list(&self, request: VideoListRequest) -> ditto_llm::Result<VideoListResponse> {
+        assert_eq!(request.limit, Some(2));
+        assert_eq!(request.after.as_deref(), Some("vid_111"));
+        assert_eq!(request.order, Some(VideoListOrder::Desc));
+        Ok(VideoListResponse {
+            videos: vec![VideoGenerationResponse {
+                id: "vid_123".to_string(),
+                object: Some("video".to_string()),
+                status: VideoGenerationStatus::Completed,
+                model: Some("sora-fast".to_string()),
+                prompt: Some("road at dusk".to_string()),
+                ..Default::default()
+            }],
+            after: Some("vid_123".to_string()),
+            has_more: Some(false),
+            ..Default::default()
+        })
+    }
+
+    async fn delete(&self, video_id: &str) -> ditto_llm::Result<VideoDeleteResponse> {
+        assert_eq!(video_id, "vid_123");
+        Ok(VideoDeleteResponse {
+            id: "vid_123".to_string(),
+            deleted: true,
+            object: Some("video.deleted".to_string()),
+        })
+    }
+
+    async fn download_content(
+        &self,
+        video_id: &str,
+        variant: Option<VideoContentVariant>,
+    ) -> ditto_llm::Result<FileContent> {
+        assert_eq!(video_id, "vid_123");
+        assert_eq!(variant, Some(VideoContentVariant::Thumbnail));
+        Ok(FileContent {
+            bytes: b"thumbnail-bytes".to_vec(),
+            media_type: Some("image/png".to_string()),
+        })
+    }
+
+    async fn remix(
+        &self,
+        video_id: &str,
+        request: VideoRemixRequest,
+    ) -> ditto_llm::Result<VideoGenerationResponse> {
+        assert_eq!(video_id, "vid_123");
+        assert_eq!(request.prompt, "change angle");
+        assert!(request.provider_options.is_none());
+        Ok(VideoGenerationResponse {
+            id: "vid_remix".to_string(),
+            object: Some("video".to_string()),
+            status: VideoGenerationStatus::Queued,
+            model: Some("sora-fast".to_string()),
+            prompt: Some(request.prompt),
+            remixed_from_video_id: Some(video_id.to_string()),
+            ..Default::default()
         })
     }
 }

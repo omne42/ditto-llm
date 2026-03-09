@@ -54,10 +54,10 @@ cargo run --example multimodal --features base64 -- ./image.png ./doc.pdf
 
 ## Admin UI（可选）
 
-仓库包含一个最小的 React 管理台：`apps/admin-ui`，用于：
+仓库还包含一个可选的 React 管理台资产：`apps/admin-ui`。它不属于默认核心交付或默认 CI 路径，主要用于：
 
 - virtual keys 的增删改查
 - 审计日志查看与导出（JSONL/CSV）
 
-启动方式见：`apps/admin-ui/README.md`。
+启动方式见：`apps/admin-ui/README.md`（使用 `pnpm run dev:admin-ui`）。
 

@@ -427,6 +427,30 @@ LEGACY_OPENAI_CHAT_ONLY = {
 OPENAI_RESPONSE_ONLY_FAMILIES = {'o', 'codex', 'computer-use'}
 
 
+OPENAI_SOURCE_SURFACE_TO_INTERFACE = {
+    'responses': 'response',
+    'chat.completion': 'chat.completion',
+    'completion.legacy': 'text.completion',
+    'embedding': 'embedding',
+    'moderation': 'moderation',
+    'audio.speech': 'audio.speech',
+    'audio.transcription': 'audio.transcription',
+    'audio.translation': 'audio.translation',
+    'realtime.websocket': 'realtime.session',
+    'image.generation': 'image.generation',
+    'video.generation': 'video.generation',
+}
+
+
+def map_openai_source_interfaces(model: Json) -> list[str]:
+    interfaces: list[str] = []
+    for surface in model.get('api_surfaces') or []:
+        interface = OPENAI_SOURCE_SURFACE_TO_INTERFACE.get(surface)
+        if interface and interface not in interfaces:
+            interfaces.append(interface)
+    return interfaces
+
+
 def map_openai_interfaces(model_id: str, family: str) -> list[str]:
     if model_id.startswith('text-embedding'):
         return ['embedding']
@@ -619,7 +643,7 @@ def normalize_kimi_capabilities(model: Json, interfaces: list[str], modalities: 
 def normalize_openai_model(model_id: str, model: Json) -> Json:
     modalities = parse_openai_modalities(model.get('modalities'))
     family = infer_openai_family(model_id)
-    interfaces = map_openai_interfaces(model_id, family)
+    interfaces = map_openai_source_interfaces(model) or map_openai_interfaces(model_id, family)
     status, release_channel = normalize_openai_stage(model.get('stage'))
     source_urls = dedupe([model.get('source_url')])
     entry = OrderedDict([
@@ -633,6 +657,7 @@ def normalize_openai_model(model_id: str, model: Json) -> Json:
         ('display_name', model.get('display_name')),
         ('tagline', model.get('tagline')),
         ('summary', model.get('summary')),
+        ('availability_status', model.get('availability_status')),
         ('release_channel', release_channel),
         ('lifecycle', OrderedDict([
             ('status', status),

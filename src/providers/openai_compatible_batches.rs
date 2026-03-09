@@ -5,7 +5,7 @@ use super::openai_like;
 
 use crate::Result;
 use crate::batch::BatchClient;
-use crate::profile::{Env, ProviderConfig};
+use crate::config::{Env, ProviderConfig};
 use crate::types::{BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Clone)]
@@ -114,9 +114,12 @@ mod tests {
             endpoint: "/v1/chat/completions".to_string(),
             completion_window: "24h".to_string(),
             metadata: Some(BTreeMap::from([("run".to_string(), "yes".to_string())])),
-            provider_options: Some(json!({
-                "openai-compatible": { "extra": "ok", "input_file_id": "ignore" }
-            })),
+            provider_options: Some(
+                json!({
+                    "openai-compatible": { "extra": "ok", "input_file_id": "ignore" }
+                })
+                .into(),
+            ),
         };
 
         let resp = client.create(request).await?;

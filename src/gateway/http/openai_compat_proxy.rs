@@ -10,12 +10,23 @@ include!("openai_compat_proxy/mcp.rs");
 include!("openai_compat_proxy/proxy_cache_hit.rs");
 include!("openai_compat_proxy/proxy_failure.rs");
 
+fn is_non_billable_openai_meta_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    matches!(
+        path,
+        "/v1/responses/input_tokens" | "/v1/responses/input_tokens/"
+    )
+}
+
 async fn handle_openai_compat_proxy(
     State(state): State<GatewayHttpState>,
     Path(_path): Path<String>,
     req: axum::http::Request<Body>,
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
-    let max_body_bytes = state.proxy_max_body_bytes;
+    let max_body_bytes = state.proxy.max_body_bytes;
     let (parts, incoming_body) = req.into_parts();
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -61,7 +72,7 @@ async fn handle_openai_compat_proxy(
         .await;
     }
     let body = {
-        let _buffering_permit = if let Some(limit) = state.proxy_backpressure.as_ref() {
+        let _buffering_permit = if let Some(limit) = state.proxy.backpressure.as_ref() {
             Some(limit.clone().try_acquire_owned().map_err(|_| {
                 openai_error(
                     StatusCode::TOO_MANY_REQUESTS,
@@ -155,25 +166,29 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(not(feature = "gateway-tokenizer"))]
     let input_tokens_estimate = estimate_tokens_from_bytes(&body);
-    let charge_tokens = input_tokens_estimate.saturating_add(max_output_tokens);
+    let charge_tokens = if is_non_billable_openai_meta_path(path_and_query) {
+        0
+    } else {
+        input_tokens_estimate.saturating_add(max_output_tokens)
+    };
 
     #[cfg(feature = "gateway-store-sqlite")]
-    let use_sqlite_budget = state.sqlite_store.is_some();
+    let use_sqlite_budget = state.stores.sqlite.is_some();
     #[cfg(not(feature = "gateway-store-sqlite"))]
     let use_sqlite_budget = false;
 
     #[cfg(feature = "gateway-store-postgres")]
-    let use_postgres_budget = state.postgres_store.is_some();
+    let use_postgres_budget = state.stores.postgres.is_some();
     #[cfg(not(feature = "gateway-store-postgres"))]
     let use_postgres_budget = false;
 
     #[cfg(feature = "gateway-store-mysql")]
-    let use_mysql_budget = state.mysql_store.is_some();
+    let use_mysql_budget = state.stores.mysql.is_some();
     #[cfg(not(feature = "gateway-store-mysql"))]
     let use_mysql_budget = false;
 
     #[cfg(feature = "gateway-store-redis")]
-    let use_redis_budget = state.redis_store.is_some();
+    let use_redis_budget = state.stores.redis.is_some();
     #[cfg(not(feature = "gateway-store-redis"))]
     let use_redis_budget = false;
 
@@ -232,7 +247,7 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some(virtual_key_id), Some(limits)) = (
-        state.redis_store.as_ref(),
+        state.stores.redis.as_ref(),
         virtual_key_id.as_deref(),
         limits.as_ref(),
     ) {
@@ -253,7 +268,7 @@ async fn handle_openai_compat_proxy(
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
             if is_rate_limited {
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -281,7 +296,7 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
-        (state.redis_store.as_ref(), tenant_limits_scope.as_ref())
+        (state.stores.redis.as_ref(), tenant_limits_scope.as_ref())
     {
         if let Err(err) = store
             .check_and_consume_rate_limits(
@@ -300,7 +315,7 @@ async fn handle_openai_compat_proxy(
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
             if is_rate_limited {
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -328,7 +343,7 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
-        (state.redis_store.as_ref(), project_limits_scope.as_ref())
+        (state.stores.redis.as_ref(), project_limits_scope.as_ref())
     {
         if let Err(err) = store
             .check_and_consume_rate_limits(
@@ -347,7 +362,7 @@ async fn handle_openai_compat_proxy(
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
             if is_rate_limited {
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -375,7 +390,7 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
-        (state.redis_store.as_ref(), user_limits_scope.as_ref())
+        (state.stores.redis.as_ref(), user_limits_scope.as_ref())
     {
         if let Err(err) = store
             .check_and_consume_rate_limits(
@@ -394,7 +409,7 @@ async fn handle_openai_compat_proxy(
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-metrics-prometheus")]
             if is_rate_limited {
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -426,7 +441,7 @@ async fn handle_openai_compat_proxy(
     }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
-    if let Some(metrics) = state.prometheus_metrics.as_ref() {
+    if let Some(metrics) = state.proxy.metrics.as_ref() {
         metrics.lock().await.record_proxy_request(
             virtual_key_id.as_deref(),
             model.as_deref(),
@@ -439,22 +454,37 @@ async fn handle_openai_compat_proxy(
         filter_backend_candidates_by_health(&state, backend_candidates, _now_epoch_seconds).await;
 
     #[cfg(feature = "gateway-proxy-cache")]
-    let proxy_cache_key = if state.proxy_cache.is_some()
+    let streaming_cache_enabled = state
+        .proxy
+        .cache_config
+        .as_ref()
+        .is_some_and(ProxyCacheConfig::streaming_cache_enabled);
+
+    #[cfg(feature = "gateway-proxy-cache")]
+    let (proxy_cache_key, proxy_cache_metadata) = if state.proxy.cache.is_some()
         && proxy_cache_can_read(&parts.method)
-        && !_stream_requested
+        && (!_stream_requested || streaming_cache_enabled)
         && !proxy_cache_bypass(&parts.headers)
         && (parts.method == axum::http::Method::GET || parsed_json.is_some())
     {
         let scope = proxy_cache_scope(virtual_key_id.as_deref(), &parts.headers);
-        Some(proxy_cache_key(
-            &parts.method,
-            path_and_query,
-            &body,
-            &scope,
-            &parts.headers,
-        ))
+        (
+            Some(proxy_cache_key(
+                &parts.method,
+                path_and_query,
+                &body,
+                &scope,
+                &parts.headers,
+            )),
+            Some(ProxyCacheEntryMetadata::new(
+                scope,
+                &parts.method,
+                path_and_query,
+                model.as_deref(),
+            )),
+        )
     } else {
-        None
+        (None, None)
     };
 
     #[cfg(feature = "gateway-proxy-cache")]
@@ -513,7 +543,7 @@ async fn handle_openai_compat_proxy(
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = err.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -567,7 +597,7 @@ async fn handle_openai_compat_proxy(
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
                     let duration = metrics_timer_start.elapsed();
                     let status = err.0.as_u16();
                     let mut metrics = metrics.lock().await;
@@ -616,7 +646,8 @@ async fn handle_openai_compat_proxy(
 
     #[cfg(feature = "gateway-routing-advanced")]
     let retry_config = state
-        .proxy_routing
+        .proxy
+        .routing
         .as_ref()
         .map(|cfg| cfg.retry.clone())
         .unwrap_or_default();
@@ -675,6 +706,8 @@ async fn handle_openai_compat_proxy(
         retry_config: &retry_config,
         #[cfg(feature = "gateway-proxy-cache")]
         proxy_cache_key: &proxy_cache_key,
+        #[cfg(feature = "gateway-proxy-cache")]
+        proxy_cache_metadata: &proxy_cache_metadata,
         #[cfg(feature = "gateway-metrics-prometheus")]
         metrics_path: &metrics_path,
         #[cfg(feature = "gateway-metrics-prometheus")]
@@ -689,7 +722,12 @@ async fn handle_openai_compat_proxy(
         attempted_backends.push(backend_name.clone());
 
         #[cfg(feature = "gateway-translation")]
-        if let Some(translation_backend) = state.translation_backends.get(&backend_name).cloned() {
+        if let Some(translation_backend) = state
+            .backends
+            .translation_backends
+            .get(&backend_name)
+            .cloned()
+        {
             match attempt_translation_backend(
                 attempt_params,
                 &backend_name,
@@ -705,6 +743,10 @@ async fn handle_openai_compat_proxy(
                     }
                     continue;
                 }
+                BackendAttemptOutcome::Stop(err) => {
+                    last_err = Some(err);
+                    break;
+                }
             }
         }
 
@@ -716,6 +758,10 @@ async fn handle_openai_compat_proxy(
                     last_err = Some(err);
                 }
                 continue;
+            }
+            BackendAttemptOutcome::Stop(err) => {
+                last_err = Some(err);
+                break;
             }
         }
     }

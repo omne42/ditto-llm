@@ -42,6 +42,7 @@ async fn handle_openai_models_list(
     insert_request_id(&mut base_headers, &request_id);
 
     let mut backends: Vec<(String, ProxyBackend)> = state
+        .backends
         .proxy_backends
         .iter()
         .map(|(name, backend)| (name.clone(), backend.clone()))
@@ -53,7 +54,7 @@ async fn handle_openai_models_list(
             backends = vec![(name, backend)];
         } else {
             #[cfg(feature = "gateway-translation")]
-            if state.translation_backends.contains_key(route) {
+            if state.backends.translation_backends.contains_key(route) {
                 backends = Vec::new();
             } else {
                 return Err(openai_error(
@@ -81,7 +82,13 @@ async fn handle_openai_models_list(
         let timeout = std::time::Duration::from_secs(PER_BACKEND_TIMEOUT_SECS);
         async move {
             let response = backend
-                .request_with_timeout(reqwest::Method::GET, "/v1/models", headers, None, Some(timeout))
+                .request_with_timeout(
+                    reqwest::Method::GET,
+                    "/v1/models",
+                    headers,
+                    None,
+                    Some(timeout),
+                )
                 .await;
             (name, response)
         }
@@ -136,12 +143,13 @@ async fn handle_openai_models_list(
     }
 
     #[cfg(feature = "gateway-translation")]
-    let has_translation_backends = !state.translation_backends.is_empty();
+    let has_translation_backends = !state.backends.translation_backends.is_empty();
 
     #[cfg(feature = "gateway-translation")]
     if has_translation_backends {
-        let models =
-            super::translation::collect_models_from_translation_backends(state.translation_backends.as_ref());
+        let models = super::translation::collect_models_from_translation_backends(
+            state.backends.translation_backends.as_ref(),
+        );
         for (id, owned_by) in models {
             models_by_id
                 .entry(id.to_string())
@@ -170,25 +178,21 @@ async fn handle_openai_models_list(
         "object": "list",
         "data": models_by_id.into_values().collect::<Vec<_>>(),
     });
-    let bytes =
-        serde_json::to_vec(&response_json).unwrap_or_else(|_| response_json.to_string().into_bytes());
+    let bytes = serde_json::to_vec(&response_json)
+        .unwrap_or_else(|_| response_json.to_string().into_bytes());
 
     let mut response = axum::response::Response::new(Body::from(bytes));
     *response.status_mut() = StatusCode::OK;
-    response
-        .headers_mut()
-        .insert(
-            axum::http::header::CONTENT_TYPE,
-            axum::http::HeaderValue::from_static("application/json"),
-        );
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
     #[cfg(feature = "gateway-translation")]
     if has_translation_backends {
-        response
-            .headers_mut()
-            .insert(
-                "x-ditto-translation",
-                axum::http::HeaderValue::from_static("multi"),
-            );
+        response.headers_mut().insert(
+            "x-ditto-translation",
+            axum::http::HeaderValue::from_static("multi"),
+        );
     }
     if let Ok(value) = axum::http::HeaderValue::from_str(&request_id) {
         response.headers_mut().insert("x-request-id", value);

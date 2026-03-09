@@ -1,0 +1,467 @@
+{
+  "tested_at": "2026-03-08T18:58:45Z",
+  "base_url": "https://yunwu.ai/v1",
+  "catalog": "/root/autodl-tmp/zjj/p/ditto-llm/catalog/provider_models/openai.json",
+  "max_attempts": 3,
+  "timeout_seconds": 180,
+  "models": [
+    {
+      "model": "gpt-5.2-pro",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-5.2-pro",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "gpt-5.2-pro",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 200,
+              "summary": {
+                "object": "response",
+                "status": "completed",
+                "error": null,
+                "incomplete_details": null,
+                "text": "OK",
+                "cached_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 16,
+                "input_tokens": 11,
+                "output_tokens": 5,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": "responses",
+      "tool_probe": {
+        "surface": "responses",
+        "path": "/responses",
+        "payload": {
+          "model": "gpt-5.2-pro",
+          "input": "Call the tool with city=\"Paris\".",
+          "max_output_tokens": 128,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_weather",
+              "description": "Get weather by city",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "additionalProperties": false
+              }
+            }
+          ],
+          "tool_choice": "required"
+        },
+        "http_status": 200,
+        "summary": {
+          "object": "response",
+          "status": "completed",
+          "error": null,
+          "incomplete_details": null,
+          "text": "",
+          "cached_tokens": 0,
+          "reasoning_tokens": 0,
+          "total_tokens": 67,
+          "input_tokens": 49,
+          "output_tokens": 18,
+          "function_calls": [
+            {
+              "name": "get_weather",
+              "arguments": "{\"city\":\"Paris\"}",
+              "call_id": "call_vQTbgPMhQH7KoTN4B86Bm7GA"
+            }
+          ]
+        },
+        "tool_success": true
+      },
+      "cache_probe": {
+        "surface": "responses",
+        "nonce_prefix_sha_fragment": "UNIQUE-dd1334535886493f836e72d4a518b167 CACHE-CA",
+        "attempts": [
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128
+            },
+            "round1_status": 200,
+            "round1": {
+              "object": "response",
+              "status": "completed",
+              "error": null,
+              "incomplete_details": null,
+              "text": "R1",
+              "cached_tokens": 0,
+              "reasoning_tokens": 13,
+              "total_tokens": 26163,
+              "input_tokens": 26142,
+              "output_tokens": 21,
+              "function_calls": []
+            },
+            "round2_status": 403,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.518552 (request id: 2026030902591078356140pA0cAk2Q)",
+                "type": "new_api_error",
+                "param": "",
+                "code": "local:insufficient_quota"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 128,
+              "reasoning": {
+                "effort": "minimal"
+              }
+            },
+            "round1_status": 403,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.470504 (request id: 20260309025910516889961hYXYKuei)",
+                "type": "new_api_error",
+                "param": "",
+                "code": "local:insufficient_quota"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 403,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.517880 (request id: 2026030902591135362426YX2Ufuq3)",
+                "type": "new_api_error",
+                "param": "",
+                "code": "local:insufficient_quota"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          },
+          {
+            "surface": "responses",
+            "settings": {
+              "max_output_tokens": 256,
+              "reasoning": {
+                "effort": "medium"
+              }
+            },
+            "round1_status": 403,
+            "round1": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.492008 (request id: 202603090259114586251018WwjM8X8)",
+                "type": "new_api_error",
+                "param": "",
+                "code": "local:insufficient_quota"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            },
+            "round2_status": 403,
+            "round2": {
+              "object": null,
+              "status": null,
+              "error": {
+                "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.539384 (request id: 20260309025911893121857ze81rmza)",
+                "type": "new_api_error",
+                "param": "",
+                "code": "local:insufficient_quota"
+              },
+              "incomplete_details": null,
+              "text": "",
+              "cached_tokens": null,
+              "reasoning_tokens": null,
+              "total_tokens": null,
+              "input_tokens": null,
+              "output_tokens": null,
+              "function_calls": []
+            }
+          }
+        ],
+        "selected_attempt": {
+          "surface": "responses",
+          "settings": {
+            "max_output_tokens": 256,
+            "reasoning": {
+              "effort": "medium"
+            }
+          },
+          "round1_status": 403,
+          "round1": {
+            "object": null,
+            "status": null,
+            "error": {
+              "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.492008 (request id: 202603090259114586251018WwjM8X8)",
+              "type": "new_api_error",
+              "param": "",
+              "code": "local:insufficient_quota"
+            },
+            "incomplete_details": null,
+            "text": "",
+            "cached_tokens": null,
+            "reasoning_tokens": null,
+            "total_tokens": null,
+            "input_tokens": null,
+            "output_tokens": null,
+            "function_calls": []
+          },
+          "round2_status": 403,
+          "round2": {
+            "object": null,
+            "status": null,
+            "error": {
+              "message": "chat pre-consumed quota failed, user quota: ＄15.323666, need quota: ＄22.539384 (request id: 20260309025911893121857ze81rmza)",
+              "type": "new_api_error",
+              "param": "",
+              "code": "local:insufficient_quota"
+            },
+            "incomplete_details": null,
+            "text": "",
+            "cached_tokens": null,
+            "reasoning_tokens": null,
+            "total_tokens": null,
+            "input_tokens": null,
+            "output_tokens": null,
+            "function_calls": []
+          }
+        },
+        "second_round_cached_tokens": null
+      }
+    },
+    {
+      "model": "o1-pro",
+      "official_surfaces": [
+        "responses"
+      ],
+      "probed_surfaces": [
+        "responses"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/o1-pro",
+      "availability": [
+        {
+          "surface": "responses",
+          "path": "/responses",
+          "payload": {
+            "model": "o1-pro",
+            "input": "Reply with OK only.",
+            "max_output_tokens": 128
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309025912354357280XZgso8Ng)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "model_price_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309025914102881814SuY5B7x5)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "model_price_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309025915922725827YtECtmcH)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "model_price_error"
+                },
+                "incomplete_details": null,
+                "text": "",
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "input_tokens": null,
+                "output_tokens": null,
+                "function_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    },
+    {
+      "model": "gpt-4o-mini-search-preview",
+      "official_surfaces": [
+        "chat.completion"
+      ],
+      "probed_surfaces": [
+        "chat.completion"
+      ],
+      "source_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini-search-preview",
+      "availability": [
+        {
+          "surface": "chat.completion",
+          "path": "/chat/completions",
+          "payload": {
+            "model": "gpt-4o-mini-search-preview",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Reply with OK only."
+              }
+            ]
+          },
+          "tries": [
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309025917751197724lJ6CpY6D)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "account_deactivated"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 20260309025920236897299lnqLaiXW)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "account_deactivated"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            },
+            {
+              "http_status": 429,
+              "summary": {
+                "object": null,
+                "status": null,
+                "error": {
+                  "message": "当前分组上游负载已饱和，请稍后再试 (request id: 202603090259227029031247ko4dG2B)",
+                  "type": "new_api_error",
+                  "param": "",
+                  "code": "account_deactivated"
+                },
+                "incomplete_details": null,
+                "text": null,
+                "finish_reason": null,
+                "cached_tokens": null,
+                "reasoning_tokens": null,
+                "total_tokens": null,
+                "prompt_tokens": null,
+                "completion_tokens": null,
+                "tool_calls": []
+              }
+            }
+          ]
+        }
+      ],
+      "preferred_surface": null
+    }
+  ]
+}

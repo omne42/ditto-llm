@@ -165,7 +165,7 @@
                 let _ = (&end, stream_bytes);
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = self.state.prometheus_metrics.as_ref() {
+                if let Some(metrics) = self.state.proxy.metrics.as_ref() {
                     let mut metrics = metrics.lock().await;
                     metrics.record_proxy_stream_close(&self.backend_name, &self.metrics_path);
                     metrics.record_proxy_stream_bytes(
@@ -205,7 +205,7 @@
                                 .unwrap_or(request_model)
                         })
                         .and_then(|cost_model| {
-                            self.state.pricing.as_ref().and_then(|pricing| {
+                            self.state.proxy.pricing.as_ref().and_then(|pricing| {
                                 let usage = observed_usage?;
                                 let input = usage.input_tokens?;
                                 let output = usage.output_tokens?;
@@ -364,25 +364,25 @@
                         (self.virtual_key_id.as_deref(), spent_cost_usd_micros)
                     {
                         #[cfg(feature = "gateway-store-sqlite")]
-                        if let Some(store) = self.state.sqlite_store.as_ref() {
+                        if let Some(store) = self.state.stores.sqlite.as_ref() {
                             let _ = store
                                 .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                                 .await;
                         }
                         #[cfg(feature = "gateway-store-postgres")]
-                        if let Some(store) = self.state.postgres_store.as_ref() {
+                        if let Some(store) = self.state.stores.postgres.as_ref() {
                             let _ = store
                                 .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                                 .await;
                         }
                         #[cfg(feature = "gateway-store-mysql")]
-                        if let Some(store) = self.state.mysql_store.as_ref() {
+                        if let Some(store) = self.state.stores.mysql.as_ref() {
                             let _ = store
                                 .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                                 .await;
                         }
                         #[cfg(feature = "gateway-store-redis")]
-                        if let Some(store) = self.state.redis_store.as_ref() {
+                        if let Some(store) = self.state.stores.redis.as_ref() {
                             let _ = store
                                 .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
                                 .await;
@@ -573,6 +573,8 @@
             tracker: SseUsageTracker,
             bytes_sent: u64,
             finalizer: Option<ProxySseFinalizer>,
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: Option<ProxyCompletedStreamCacheWrite>,
             _permits: ProxyPermits,
         }
 
@@ -589,6 +591,13 @@
 
         impl ProxySseStreamState {
             async fn finalize(&mut self, end: StreamEnd) {
+                #[cfg(feature = "gateway-proxy-cache")]
+                if matches!(end, StreamEnd::Completed) {
+                    if let Some(cache_completion) = self.cache_completion.take() {
+                        cache_completion.finish().await;
+                    }
+                }
+
                 let Some(finalizer) = self.finalizer.take() else {
                     return;
                 };
@@ -666,7 +675,7 @@
         };
 
         #[cfg(feature = "gateway-metrics-prometheus")]
-        if let Some(metrics) = state.prometheus_metrics.as_ref() {
+        if let Some(metrics) = state.proxy.metrics.as_ref() {
             metrics
                 .lock()
                 .await
@@ -678,6 +687,15 @@
             tracker: SseUsageTracker::default(),
             bytes_sent: 0,
             finalizer: Some(finalizer),
+            #[cfg(feature = "gateway-proxy-cache")]
+            cache_completion: ProxyCompletedStreamCacheWrite::new(
+                state,
+                &backend_name,
+                status,
+                &headers,
+                proxy_cache_key.as_deref(),
+                proxy_cache_metadata.as_ref(),
+            ),
             _permits: proxy_permits.take(),
         };
 
@@ -686,6 +704,10 @@
                 Some(Ok(chunk)) => {
                     state.bytes_sent = state.bytes_sent.saturating_add(chunk.len() as u64);
                     state.tracker.ingest(&chunk);
+                    #[cfg(feature = "gateway-proxy-cache")]
+                    if let Some(cache_completion) = state.cache_completion.as_mut() {
+                        cache_completion.ingest(&chunk);
+                    }
                     Ok(Some((chunk, state)))
                 }
                 Some(Err(err)) => {

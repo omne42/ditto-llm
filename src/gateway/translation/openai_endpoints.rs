@@ -51,6 +51,14 @@ pub fn is_responses_compact_path(path_and_query: &str) -> bool {
     path == "/v1/responses/compact" || path == "/v1/responses/compact/"
 }
 
+pub fn is_responses_input_tokens_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/responses/input_tokens" || path == "/v1/responses/input_tokens/"
+}
+
 pub fn is_embeddings_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -75,6 +83,14 @@ pub fn is_images_generations_path(path_and_query: &str) -> bool {
     path == "/v1/images/generations" || path == "/v1/images/generations/"
 }
 
+pub fn is_images_edits_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/images/edits" || path == "/v1/images/edits/"
+}
+
 pub fn is_audio_transcriptions_path(path_and_query: &str) -> bool {
     let path = path_and_query
         .split_once('?')
@@ -89,6 +105,14 @@ pub fn is_audio_translations_path(path_and_query: &str) -> bool {
         .map(|(path, _)| path)
         .unwrap_or(path_and_query);
     path == "/v1/audio/translations" || path == "/v1/audio/translations/"
+}
+
+pub fn is_videos_path(path_and_query: &str) -> bool {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    path == "/v1/videos" || path == "/v1/videos/"
 }
 
 pub fn is_audio_speech_path(path_and_query: &str) -> bool {
@@ -115,6 +139,392 @@ pub fn is_rerank_path(path_and_query: &str) -> bool {
     path == "/v1/rerank" || path == "/v1/rerank/"
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranslationEndpointKind {
+    ChatCompletions,
+    Completions,
+    ResponsesCreate,
+    ResponsesCompact,
+    ResponsesInputTokens,
+    ResponsesRetrieve,
+    ResponsesInputItems,
+    Embeddings,
+    Moderations,
+    ImagesGenerations,
+    ImagesEdits,
+    AudioTranscriptions,
+    AudioTranslations,
+    VideosRoot,
+    VideoRetrieve,
+    VideoContent,
+    VideoRemix,
+    AudioSpeech,
+    BatchesRoot,
+    BatchRetrieve,
+    BatchCancel,
+    Rerank,
+    ModelsList,
+    ModelsRetrieve,
+    FilesRoot,
+    FilesRetrieve,
+    FilesContent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranslationEndpointRequirement {
+    None,
+    RuntimeCapability(&'static [crate::CapabilityKind]),
+    FilesApi,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TranslationEndpointDescriptor {
+    pub kind: TranslationEndpointKind,
+    pub runtime_operation: Option<crate::OperationKind>,
+    pub requirement: TranslationEndpointRequirement,
+}
+
+const LLM_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] = &[crate::CapabilityKind::LLM];
+const EMBEDDING_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::EMBEDDING];
+const MODERATION_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::MODERATION];
+const IMAGE_GENERATION_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::IMAGE_GENERATION];
+const IMAGE_EDIT_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::IMAGE_EDIT];
+const AUDIO_TRANSCRIPTION_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::AUDIO_TRANSCRIPTION];
+const VIDEO_GENERATION_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::VIDEO_GENERATION];
+const AUDIO_SPEECH_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] =
+    &[crate::CapabilityKind::AUDIO_SPEECH];
+const RERANK_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] = &[crate::CapabilityKind::RERANK];
+const BATCH_RUNTIME_CAPABILITIES: &[crate::CapabilityKind] = &[crate::CapabilityKind::BATCH];
+
+pub fn translation_endpoint_descriptor(
+    method: &axum::http::Method,
+    path_and_query: &str,
+) -> Option<TranslationEndpointDescriptor> {
+    use axum::http::Method;
+
+    if *method == Method::POST {
+        if is_chat_completions_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ChatCompletions,
+                runtime_operation: Some(crate::OperationKind::CHAT_COMPLETION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    LLM_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_completions_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::Completions,
+                runtime_operation: Some(crate::OperationKind::TEXT_COMPLETION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    LLM_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_responses_create_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ResponsesCreate,
+                runtime_operation: Some(crate::OperationKind::RESPONSE),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    LLM_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_responses_compact_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ResponsesCompact,
+                runtime_operation: Some(crate::OperationKind::RESPONSE),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    LLM_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_responses_input_tokens_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ResponsesInputTokens,
+                runtime_operation: Some(crate::OperationKind::RESPONSE),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    LLM_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_embeddings_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::Embeddings,
+                runtime_operation: Some(crate::OperationKind::EMBEDDING),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    EMBEDDING_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_moderations_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::Moderations,
+                runtime_operation: Some(crate::OperationKind::MODERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    MODERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_images_generations_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ImagesGenerations,
+                runtime_operation: Some(crate::OperationKind::IMAGE_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    IMAGE_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_images_edits_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ImagesEdits,
+                runtime_operation: Some(crate::OperationKind::IMAGE_EDIT),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    IMAGE_EDIT_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_audio_transcriptions_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::AudioTranscriptions,
+                runtime_operation: Some(crate::OperationKind::AUDIO_TRANSCRIPTION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    AUDIO_TRANSCRIPTION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_audio_translations_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::AudioTranslations,
+                runtime_operation: Some(crate::OperationKind::AUDIO_TRANSCRIPTION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    AUDIO_TRANSCRIPTION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_videos_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::VideosRoot,
+                runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if videos_remix_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::VideoRemix,
+                runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_audio_speech_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::AudioSpeech,
+                runtime_operation: Some(crate::OperationKind::AUDIO_SPEECH),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    AUDIO_SPEECH_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_rerank_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::Rerank,
+                runtime_operation: Some(crate::OperationKind::RERANK),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    RERANK_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_batches_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::BatchesRoot,
+                runtime_operation: Some(crate::OperationKind::BATCH),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    BATCH_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if batches_cancel_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::BatchCancel,
+                runtime_operation: Some(crate::OperationKind::BATCH),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    BATCH_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_files_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::FilesRoot,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::FilesApi,
+            });
+        }
+    } else if *method == Method::GET {
+        if is_batches_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::BatchesRoot,
+                runtime_operation: Some(crate::OperationKind::BATCH),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    BATCH_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if responses_retrieve_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ResponsesRetrieve,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::None,
+            });
+        }
+        if responses_input_items_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ResponsesInputItems,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::None,
+            });
+        }
+        if batches_retrieve_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::BatchRetrieve,
+                runtime_operation: Some(crate::OperationKind::BATCH),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    BATCH_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_videos_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::VideosRoot,
+                runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if videos_retrieve_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::VideoRetrieve,
+                runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if videos_content_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::VideoContent,
+                runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+                requirement: TranslationEndpointRequirement::RuntimeCapability(
+                    VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+                ),
+            });
+        }
+        if is_models_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ModelsList,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::None,
+            });
+        }
+        if models_retrieve_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::ModelsRetrieve,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::None,
+            });
+        }
+        if is_files_path(path_and_query) {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::FilesRoot,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::FilesApi,
+            });
+        }
+        if files_retrieve_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::FilesRetrieve,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::FilesApi,
+            });
+        }
+        if files_content_id(path_and_query).is_some() {
+            return Some(TranslationEndpointDescriptor {
+                kind: TranslationEndpointKind::FilesContent,
+                runtime_operation: None,
+                requirement: TranslationEndpointRequirement::FilesApi,
+            });
+        }
+    } else if *method == Method::DELETE && videos_retrieve_id(path_and_query).is_some() {
+        return Some(TranslationEndpointDescriptor {
+            kind: TranslationEndpointKind::VideoRetrieve,
+            runtime_operation: Some(crate::OperationKind::VIDEO_GENERATION),
+            requirement: TranslationEndpointRequirement::RuntimeCapability(
+                VIDEO_GENERATION_RUNTIME_CAPABILITIES,
+            ),
+        });
+    } else if *method == Method::DELETE && responses_retrieve_id(path_and_query).is_some() {
+        return Some(TranslationEndpointDescriptor {
+            kind: TranslationEndpointKind::ResponsesRetrieve,
+            runtime_operation: None,
+            requirement: TranslationEndpointRequirement::None,
+        });
+    } else if *method == Method::DELETE && files_retrieve_id(path_and_query).is_some() {
+        return Some(TranslationEndpointDescriptor {
+            kind: TranslationEndpointKind::FilesRetrieve,
+            runtime_operation: None,
+            requirement: TranslationEndpointRequirement::FilesApi,
+        });
+    }
+
+    None
+}
+
+fn responses_subresource_id(path_and_query: &str, suffix: Option<&str>) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/responses/")?;
+    if rest.trim().is_empty() || rest == "compact" || rest == "input_tokens" {
+        return None;
+    }
+
+    match suffix {
+        Some(suffix) => {
+            let (response_id, found_suffix) = rest.split_once('/')?;
+            if response_id.trim().is_empty() || found_suffix != suffix {
+                return None;
+            }
+            Some(response_id.to_string())
+        }
+        None => {
+            if rest.contains('/') {
+                return None;
+            }
+            Some(rest.to_string())
+        }
+    }
+}
+
+pub fn responses_retrieve_id(path_and_query: &str) -> Option<String> {
+    responses_subresource_id(path_and_query, None)
+}
+
+pub fn responses_input_items_id(path_and_query: &str) -> Option<String> {
+    responses_subresource_id(path_and_query, Some("input_items"))
+}
+
 pub fn batches_cancel_id(path_and_query: &str) -> Option<String> {
     let path = path_and_query
         .split_once('?')
@@ -130,6 +540,46 @@ pub fn batches_cancel_id(path_and_query: &str) -> Option<String> {
         return Some(batch_id.to_string());
     }
     None
+}
+
+fn videos_subresource_id(path_and_query: &str, suffix: Option<&str>) -> Option<String> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query);
+    let path = path.trim_end_matches('/');
+    let rest = path.strip_prefix("/v1/videos/")?;
+    if rest.trim().is_empty() {
+        return None;
+    }
+
+    match suffix {
+        Some(suffix) => {
+            let (video_id, found_suffix) = rest.split_once('/')?;
+            if video_id.trim().is_empty() || found_suffix != suffix {
+                return None;
+            }
+            Some(video_id.to_string())
+        }
+        None => {
+            if rest.contains('/') {
+                return None;
+            }
+            Some(rest.to_string())
+        }
+    }
+}
+
+pub fn videos_retrieve_id(path_and_query: &str) -> Option<String> {
+    videos_subresource_id(path_and_query, None)
+}
+
+pub fn videos_content_id(path_and_query: &str) -> Option<String> {
+    videos_subresource_id(path_and_query, Some("content"))
+}
+
+pub fn videos_remix_id(path_and_query: &str) -> Option<String> {
+    videos_subresource_id(path_and_query, Some("remix"))
 }
 
 pub fn batches_retrieve_id(path_and_query: &str) -> Option<String> {
@@ -162,7 +612,7 @@ pub fn collect_models_from_translation_backends(
             None => continue,
         };
 
-        let provider = backend.provider.trim();
+        let provider = backend.provider_name();
         let owned_by = if provider.is_empty() {
             backend_name.as_str()
         } else {
@@ -178,7 +628,7 @@ pub fn collect_models_from_translation_backends(
                 .or_insert_with(|| owned_by.to_string());
         }
 
-        let default_model = backend.model.model_id().trim();
+        let default_model = backend.default_model_id();
         if !default_model.is_empty() {
             out.entry(format!("{owned_by}/{default_model}"))
                 .or_insert_with(|| owned_by.to_string());
@@ -737,6 +1187,445 @@ pub fn images_generation_request_to_request(
 ) -> ParseResult<ImageGenerationRequest> {
     serde_json::from_value::<ImageGenerationRequest>(request.clone()).map_err(|err| {
         format!("images/generations request cannot be parsed as ImageGenerationRequest: {err}")
+    })
+}
+
+fn parse_image_response_format(value: &str) -> ParseResult<ImageResponseFormat> {
+    match value.trim() {
+        "url" => Ok(ImageResponseFormat::Url),
+        "b64_json" => Ok(ImageResponseFormat::Base64Json),
+        other => Err(format!(
+            "images/edits request has unsupported response_format: {other}"
+        )),
+    }
+}
+
+fn image_edit_upload_from_part(
+    field_name: &str,
+    part: super::multipart::MultipartPart,
+) -> ImageEditUpload {
+    let filename = part
+        .filename
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| field_name.to_string());
+    ImageEditUpload {
+        data: part.data.to_vec(),
+        filename,
+        media_type: part.content_type.clone(),
+    }
+}
+
+pub fn images_edits_request_to_request(
+    content_type: &str,
+    body: &Bytes,
+) -> ParseResult<ImageEditRequest> {
+    let mut prompt: Option<String> = None;
+    let mut images = Vec::<ImageEditUpload>::new();
+    let mut mask: Option<ImageEditUpload> = None;
+    let mut model: Option<String> = None;
+    let mut n: Option<u32> = None;
+    let mut size: Option<String> = None;
+    let mut response_format: Option<ImageResponseFormat> = None;
+
+    let parts = super::multipart::parse_multipart_form(content_type, body)?;
+    for part in parts {
+        match part.name.as_str() {
+            "prompt" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    prompt = Some(value);
+                }
+            }
+            "image" => images.push(image_edit_upload_from_part("image", part)),
+            "mask" => {
+                if mask.is_none() {
+                    mask = Some(image_edit_upload_from_part("mask", part));
+                }
+            }
+            "model" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    model = Some(value);
+                }
+            }
+            "n" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    n = Some(
+                        value
+                            .parse::<u32>()
+                            .map_err(|_| format!("images/edits request has invalid n: {value}"))?,
+                    );
+                }
+            }
+            "size" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    size = Some(value);
+                }
+            }
+            "response_format" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    response_format = Some(parse_image_response_format(&value)?);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let prompt = prompt.ok_or_else(|| "images/edits request missing prompt".to_string())?;
+    if images.is_empty() {
+        return Err("images/edits request missing image".to_string());
+    }
+
+    Ok(ImageEditRequest {
+        prompt,
+        images,
+        mask,
+        model,
+        n,
+        size,
+        response_format,
+        provider_options: None,
+    })
+}
+
+pub fn responses_input_items_from_value(input: &Value) -> ParseResult<Vec<Value>> {
+    match input {
+        Value::Array(items) => Ok(items.clone()),
+        Value::Object(_) => Ok(vec![input.clone()]),
+        Value::String(text) => Ok(vec![serde_json::json!({
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": text}],
+        })]),
+        _ => Err("`input` must be a string, array, or object".to_string()),
+    }
+}
+
+pub fn videos_create_request_to_request(request: &Value) -> ParseResult<VideoGenerationRequest> {
+    serde_json::from_value::<VideoGenerationRequest>(request.clone())
+        .map_err(|err| format!("videos request cannot be parsed as VideoGenerationRequest: {err}"))
+}
+
+pub fn videos_create_multipart_request_to_request(
+    content_type: &str,
+    body: &Bytes,
+) -> ParseResult<VideoGenerationRequest> {
+    let mut prompt: Option<String> = None;
+    let mut input_reference: Option<crate::types::VideoReferenceUpload> = None;
+    let mut model: Option<String> = None;
+    let mut seconds: Option<u32> = None;
+    let mut size: Option<String> = None;
+
+    let parts = super::multipart::parse_multipart_form(content_type, body)?;
+    for part in parts {
+        match part.name.as_str() {
+            "prompt" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    prompt = Some(value);
+                }
+            }
+            "input_reference" => {
+                let filename = part
+                    .filename
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| "input_reference".to_string());
+                input_reference = Some(crate::types::VideoReferenceUpload {
+                    data: part.data.to_vec(),
+                    filename,
+                    media_type: part.content_type.clone(),
+                });
+            }
+            "model" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    model = Some(value);
+                }
+            }
+            "seconds" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    seconds = Some(
+                        value
+                            .parse::<u32>()
+                            .map_err(|_| format!("videos request has invalid seconds: {value}"))?,
+                    );
+                }
+            }
+            "size" => {
+                let value = String::from_utf8_lossy(part.data.as_ref())
+                    .trim()
+                    .to_string();
+                if !value.is_empty() {
+                    size = Some(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(VideoGenerationRequest {
+        prompt: prompt.ok_or_else(|| "videos request missing prompt".to_string())?,
+        input_reference,
+        model,
+        seconds,
+        size,
+        provider_options: None,
+    })
+}
+
+pub fn videos_remix_request_to_request(request: &Value) -> ParseResult<VideoRemixRequest> {
+    serde_json::from_value::<VideoRemixRequest>(request.clone())
+        .map_err(|err| format!("videos remix request cannot be parsed as VideoRemixRequest: {err}"))
+}
+
+pub fn videos_content_variant_from_path(
+    path_and_query: &str,
+) -> ParseResult<Option<VideoContentVariant>> {
+    let query = match path_and_query.split_once('?') {
+        Some((_, query)) => query,
+        None => return Ok(None),
+    };
+
+    let mut variant = None;
+    for pair in query.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        if key != "variant" || value.is_empty() {
+            continue;
+        }
+
+        variant = Some(match value {
+            "video" => VideoContentVariant::Video,
+            "thumbnail" => VideoContentVariant::Thumbnail,
+            "spritesheet" => VideoContentVariant::Spritesheet,
+            _ => {
+                return Err(format!(
+                    "videos content request has unsupported variant: {value}"
+                ));
+            }
+        });
+    }
+
+    Ok(variant)
+}
+
+pub fn videos_list_request_from_path(path_and_query: &str) -> ParseResult<VideoListRequest> {
+    let query = match path_and_query.split_once('?') {
+        Some((_, query)) => query,
+        None => {
+            return Ok(VideoListRequest::default());
+        }
+    };
+
+    let mut request = VideoListRequest::default();
+    for pair in query.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        match key {
+            "limit" if !value.is_empty() => {
+                request.limit = Some(
+                    value
+                        .parse::<u32>()
+                        .map_err(|_| format!("videos list request has invalid limit: {value}"))?,
+                );
+            }
+            "after" if !value.is_empty() => {
+                request.after = Some(value.to_string());
+            }
+            "order" if !value.is_empty() => {
+                request.order = Some(match value {
+                    "asc" => VideoListOrder::Asc,
+                    "desc" => VideoListOrder::Desc,
+                    _ => {
+                        return Err(format!(
+                            "videos list request has unsupported order: {value}"
+                        ));
+                    }
+                });
+            }
+            _ => {}
+        }
+    }
+
+    Ok(request)
+}
+
+fn video_generation_response_to_openai_value(response: &VideoGenerationResponse) -> Value {
+    let mut out = Map::<String, Value>::new();
+    out.insert(
+        "id".to_string(),
+        Value::String(response.id.trim().to_string()),
+    );
+    out.insert(
+        "object".to_string(),
+        Value::String(
+            response
+                .object
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("video")
+                .to_string(),
+        ),
+    );
+    out.insert(
+        "status".to_string(),
+        serde_json::to_value(response.status)
+            .unwrap_or_else(|_| Value::String("unknown".to_string())),
+    );
+    if let Some(model) = response
+        .model
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert("model".to_string(), Value::String(model.to_string()));
+    }
+    if let Some(created_at) = response.created_at {
+        out.insert(
+            "created_at".to_string(),
+            Value::Number((created_at as i64).into()),
+        );
+    }
+    if let Some(completed_at) = response.completed_at {
+        out.insert(
+            "completed_at".to_string(),
+            Value::Number((completed_at as i64).into()),
+        );
+    }
+    if let Some(expires_at) = response.expires_at {
+        out.insert(
+            "expires_at".to_string(),
+            Value::Number((expires_at as i64).into()),
+        );
+    }
+    if let Some(progress) = response.progress {
+        out.insert(
+            "progress".to_string(),
+            Value::Number((progress as i64).into()),
+        );
+    }
+    if let Some(prompt) = response
+        .prompt
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert("prompt".to_string(), Value::String(prompt.to_string()));
+    }
+    if let Some(video_id) = response
+        .remixed_from_video_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert(
+            "remixed_from_video_id".to_string(),
+            Value::String(video_id.to_string()),
+        );
+    }
+    if let Some(seconds) = response
+        .seconds
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert("seconds".to_string(), Value::String(seconds.to_string()));
+    }
+    if let Some(size) = response
+        .size
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert("size".to_string(), Value::String(size.to_string()));
+    }
+    if let Some(error) = response.error.as_ref() {
+        out.insert(
+            "error".to_string(),
+            serde_json::to_value(error).unwrap_or(Value::Null),
+        );
+    }
+    Value::Object(out)
+}
+
+pub fn video_generation_response_to_openai(response: &VideoGenerationResponse) -> Value {
+    video_generation_response_to_openai_value(response)
+}
+
+pub fn video_list_response_to_openai(response: &VideoListResponse) -> Value {
+    let mut out = Map::<String, Value>::new();
+    out.insert("object".to_string(), Value::String("list".to_string()));
+    out.insert(
+        "data".to_string(),
+        Value::Array(
+            response
+                .videos
+                .iter()
+                .map(video_generation_response_to_openai_value)
+                .collect(),
+        ),
+    );
+    if let Some(has_more) = response.has_more {
+        out.insert("has_more".to_string(), Value::Bool(has_more));
+    }
+    if let Some(last_id) = response
+        .after
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        out.insert("last_id".to_string(), Value::String(last_id.to_string()));
+    }
+    Value::Object(out)
+}
+
+pub fn video_delete_response_to_openai(response: &VideoDeleteResponse) -> Value {
+    serde_json::json!({
+        "id": response.id,
+        "deleted": response.deleted,
+        "object": response.object.as_deref().unwrap_or("video.deleted"),
+    })
+}
+
+pub fn responses_input_tokens_to_openai(input_tokens: u32) -> Value {
+    serde_json::json!({
+        "object": "response.input_tokens",
+        "input_tokens": input_tokens,
+    })
+}
+
+pub fn responses_input_items_to_openai(input_items: &[Value]) -> Value {
+    serde_json::json!({
+        "object": "list",
+        "data": input_items,
+    })
+}
+
+pub fn response_delete_to_openai(response_id: &str) -> Value {
+    serde_json::json!({
+        "id": response_id,
+        "object": "response",
+        "deleted": true,
     })
 }
 

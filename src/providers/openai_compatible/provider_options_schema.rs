@@ -24,7 +24,7 @@ const OPENAI_COMPAT_KNOWN_CHAT_OPTION_KEYS: &[&str] = &[
 ];
 
 pub(super) fn apply_openai_compatible_provider_options_schema(
-    family: crate::profile::OpenAiProviderFamily,
+    family: crate::providers::openai_compatible_family::OpenAiProviderFamily,
     selected_provider_options: Option<serde_json::Value>,
     reserved_keys: &[&str],
     provider_options_context: &'static str,
@@ -58,7 +58,7 @@ pub(super) fn apply_openai_compatible_provider_options_schema(
 
         let mut handled_vendor_private_key = false;
         match family {
-            crate::profile::OpenAiProviderFamily::OpenRouter => {
+            crate::providers::openai_compatible_family::OpenAiProviderFamily::OpenRouter => {
                 if key == "provider" {
                     handled_vendor_private_key = true;
                     if value.is_object() {
@@ -71,7 +71,7 @@ pub(super) fn apply_openai_compatible_provider_options_schema(
                     }
                 }
             }
-            crate::profile::OpenAiProviderFamily::DeepSeek => {
+            crate::providers::openai_compatible_family::OpenAiProviderFamily::DeepSeek => {
                 if key == "thinking" || key == "thinking_config" {
                     handled_vendor_private_key = true;
                     if let Some(thinking) = sanitize_deepseek_thinking(value) {
@@ -94,7 +94,7 @@ pub(super) fn apply_openai_compatible_provider_options_schema(
                     }
                 }
             }
-            crate::profile::OpenAiProviderFamily::MiniMax => {
+            crate::providers::openai_compatible_family::OpenAiProviderFamily::MiniMax => {
                 if key == "reasoning_split" || key == "reasoningSplit" {
                     handled_vendor_private_key = true;
                     if let Some(reasoning_split) = value.as_bool() {
@@ -120,7 +120,7 @@ pub(super) fn apply_openai_compatible_provider_options_schema(
                     }
                 }
             }
-            crate::profile::OpenAiProviderFamily::Doubao => {
+            crate::providers::openai_compatible_family::OpenAiProviderFamily::Doubao => {
                 if key == "thinking" || key == "thinking_config" {
                     handled_vendor_private_key = true;
                     if let Some(thinking) = sanitize_doubao_thinking(value) {
@@ -143,11 +143,11 @@ pub(super) fn apply_openai_compatible_provider_options_schema(
                     }
                 }
             }
-            crate::profile::OpenAiProviderFamily::OpenAi
-            | crate::profile::OpenAiProviderFamily::Kimi
-            | crate::profile::OpenAiProviderFamily::Qwen
-            | crate::profile::OpenAiProviderFamily::Glm
-            | crate::profile::OpenAiProviderFamily::GenericOpenAiCompatible => {}
+            crate::providers::openai_compatible_family::OpenAiProviderFamily::OpenAi
+            | crate::providers::openai_compatible_family::OpenAiProviderFamily::Kimi
+            | crate::providers::openai_compatible_family::OpenAiProviderFamily::Qwen
+            | crate::providers::openai_compatible_family::OpenAiProviderFamily::Glm
+            | crate::providers::openai_compatible_family::OpenAiProviderFamily::GenericOpenAiCompatible => {}
         }
 
         if handled_vendor_private_key {

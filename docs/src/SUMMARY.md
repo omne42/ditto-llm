@@ -68,6 +68,9 @@
 
 - [Roadmap](./roadmap/index.md)
   - [Rust Native Provider Catalog](./roadmap/rust-native-provider-catalog.md)
+  - [Provider Runtime Rollout](./roadmap/provider-runtime-rollout.md)
+  - [Architecture Decision](./roadmap/architecture-decision.md)
+  - [Module Boundaries](./roadmap/module-boundaries.md)
   - [Superset Contract（兼容性口径）](./roadmap/contract.md)
   - [Gap Analysis（对标 LiteLLM + AI SDK）](./roadmap/gaps.md)
   - [Superset Roadmap（可执行切片）](./roadmap/superset.md)

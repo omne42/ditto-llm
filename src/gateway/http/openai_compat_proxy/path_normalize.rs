@@ -50,4 +50,3 @@ async fn handle_openai_compat_proxy_root(
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     handle_openai_compat_proxy(State(state), Path(String::new()), req).await
 }
-
