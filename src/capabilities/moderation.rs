@@ -1,2 +1,12 @@
-pub use crate::moderation::ModerationModel;
-pub use crate::types::{ModerationInput, ModerationRequest, ModerationResponse, ModerationResult};
+use async_trait::async_trait;
+
+use crate::foundation::error::Result;
+use crate::types::{ModerationRequest, ModerationResponse};
+
+#[async_trait]
+pub trait ModerationModel: Send + Sync {
+    fn provider(&self) -> &str;
+    fn model_id(&self) -> &str;
+
+    async fn moderate(&self, request: ModerationRequest) -> Result<ModerationResponse>;
+}

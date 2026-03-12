@@ -1,7 +1,10 @@
-use ditto_llm::{Anthropic, DittoError, LanguageModel, Message};
+use ditto_llm::contracts::Message;
+use ditto_llm::foundation::error::{DittoError, Result};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::Anthropic;
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> Result<()> {
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| DittoError::InvalidResponse("missing ANTHROPIC_API_KEY".to_string()))?;
     let model = std::env::var("ANTHROPIC_MODEL")

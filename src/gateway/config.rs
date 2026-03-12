@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::secrets::resolve_secret_string;
-use crate::{Env, ProviderConfig};
+use crate::config::{Env, ProviderConfig};
+use crate::foundation::secrets::resolve_secret_string;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
@@ -706,6 +706,7 @@ mod tests {
             upstream_api: None,
             normalize_to: None,
             normalize_endpoint: None,
+            openai_compatible: None,
         };
 
         let mut backend = BackendConfig {

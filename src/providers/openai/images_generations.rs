@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use crate::providers::openai_images_common;
 use crate::providers::openai_like;
 
+use crate::capabilities::ImageGenerationModel;
 use crate::config::{Env, ProviderConfig};
-use crate::image::ImageGenerationModel;
+use crate::foundation::error::{DittoError, Result};
 use crate::types::{ImageGenerationRequest, ImageGenerationResponse};
-use crate::{DittoError, Result};
 
 macro_rules! define_openai_like_images {
     (
@@ -107,8 +107,8 @@ define_openai_like_images!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contracts::ImageSource;
     use crate::types::ImageResponseFormat;
-    use crate::types::ImageSource;
     use httpmock::{Method::POST, MockServer};
 
     #[cfg(feature = "openai")]

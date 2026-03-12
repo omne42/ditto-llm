@@ -11,15 +11,17 @@ use serde_json::{Map, Value};
 
 use super::genai;
 use crate::auth::oauth::{OAuthClientCredentials, resolve_oauth_client_credentials};
-use crate::config::{
-    DEFAULT_HTTP_TIMEOUT, Env, HttpAuth, ProviderConfig, build_http_client,
-    resolve_http_provider_config,
-};
-use crate::model::{LanguageModel, StreamResult};
-use crate::types::{ContentPart, GenerateRequest, GenerateResponse, Warning};
+use crate::config::{Env, HttpAuth, ProviderConfig};
+use crate::contracts::StreamChunk;
 #[cfg(feature = "streaming")]
-use crate::types::{StreamChunk, Usage};
-use crate::{DittoError, Result};
+use crate::contracts::Usage;
+use crate::contracts::Warning;
+use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
+use crate::foundation::error::{DittoError, Result};
+use crate::llm_core::model::{LanguageModel, StreamResult};
+use crate::provider_transport::{
+    DEFAULT_HTTP_TIMEOUT, build_http_client, resolve_http_provider_config,
+};
 
 #[derive(Clone)]
 pub struct Vertex {
@@ -189,18 +191,19 @@ impl LanguageModel for Vertex {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?.to_string();
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
-            .map(crate::types::ProviderOptions::from_value)
+            .map(crate::provider_options::ProviderOptions::from_value_ref)
             .transpose()?
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        crate::types::warn_unsupported_provider_options(
+        crate::provider_options::warn_unsupported_provider_options(
             "Vertex GenAI",
             &provider_options,
-            crate::types::ProviderOptionsSupport::NONE,
+            crate::provider_options::ProviderOptionsSupport::NONE,
             &mut warnings,
         );
         crate::types::warn_unsupported_generate_request_options(
@@ -293,7 +296,7 @@ impl LanguageModel for Vertex {
             }
         }
 
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options.as_ref(),
             &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -306,7 +309,8 @@ impl LanguageModel for Vertex {
         let req = self.http.post(url).json(&body);
         let req = self.apply_headers(req);
         let req = self.apply_auth(req).await?;
-        let parsed = crate::utils::http::send_checked_json::<VertexGenerateResponse>(req).await?;
+        let parsed =
+            crate::provider_transport::send_checked_json::<VertexGenerateResponse>(req).await?;
         let mut tool_call_seq = 0u64;
         let mut has_tool_calls = false;
         let mut content = Vec::<ContentPart>::new();
@@ -354,18 +358,22 @@ impl LanguageModel for Vertex {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?.to_string();
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let selected_provider_options =
+                crate::provider_options::request_provider_options_value_for(
+                    &request,
+                    self.provider(),
+                )?;
             let provider_options = selected_provider_options
                 .as_ref()
-                .map(crate::types::ProviderOptions::from_value)
+                .map(crate::provider_options::ProviderOptions::from_value_ref)
                 .transpose()?
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            crate::types::warn_unsupported_provider_options(
+            crate::provider_options::warn_unsupported_provider_options(
                 "Vertex GenAI",
                 &provider_options,
-                crate::types::ProviderOptionsSupport::NONE,
+                crate::provider_options::ProviderOptionsSupport::NONE,
                 &mut warnings,
             );
             crate::types::warn_unsupported_generate_request_options(
@@ -456,7 +464,7 @@ impl LanguageModel for Vertex {
                 }
             }
 
-            crate::types::merge_provider_options_into_body(
+            crate::provider_options::merge_provider_options_into_body(
                 &mut body,
                 selected_provider_options.as_ref(),
                 &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -470,10 +478,10 @@ impl LanguageModel for Vertex {
             let req = self.apply_headers(req);
             let req = req.header("Accept", "text/event-stream").json(&body);
             let req = self.apply_auth(req).await?;
-            let response = crate::utils::http::send_checked(req).await?;
+            let response = crate::provider_transport::send_checked(req).await?;
 
             let (data_stream, buffer) =
-                crate::utils::streaming::init_sse_stream(response, warnings);
+                crate::session_transport::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (

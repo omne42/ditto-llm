@@ -14,7 +14,7 @@ Accepted as the directory-convergence target.
 
 - L0: provider adapters, protocol conversion, SDK primitives
 - L1: gateway / proxy / control-plane
-- L2: agent / application workflows
+- L2: enterprise closed-loop platform in a separate repository
 
 The problem is that the source tree does not consistently enforce that design.
 
@@ -148,9 +148,10 @@ Examples:
 
 ### `agent/`
 
-Higher-level orchestration.
+Higher-level orchestration inside this repository.
 
 `agent` should depend on lower layers, not the reverse.
+It is not the L2 enterprise platform boundary described in the roadmap.
 
 ### `gateway/`
 

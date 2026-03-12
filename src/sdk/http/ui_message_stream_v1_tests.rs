@@ -5,9 +5,10 @@ mod ui_message_stream_v1_tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
-    use crate::DittoError;
-    use crate::StreamResult;
-    use crate::types::{FinishReason, StreamChunk};
+    use crate::foundation::error::DittoError;
+    use crate::llm_core::model::StreamResult;
+    use crate::contracts::FinishReason;
+use crate::contracts::StreamChunk;
 
     #[derive(Debug, PartialEq)]
     enum Frame {
@@ -283,13 +284,15 @@ mod ui_message_stream_v1_tests {
                 Frame::Done => None,
             })
             .collect();
-        assert!(json_frames.iter().any(
-            |frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_1")
-        ));
         assert!(
-            !json_frames.iter().any(
-                |frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_2")
-            )
+            json_frames
+                .iter()
+                .any(|frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_1"))
+        );
+        assert!(
+            !json_frames
+                .iter()
+                .any(|frame| frame.get("toolCallId").and_then(Value::as_str) == Some("call_2"))
         );
     }
 }

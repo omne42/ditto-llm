@@ -5,8 +5,9 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::Result;
-use crate::types::{ModerationRequest, ModerationResponse, ModerationResult, Warning};
+use crate::contracts::Warning;
+use crate::foundation::error::Result;
+use crate::types::{ModerationRequest, ModerationResponse, ModerationResult};
 
 #[derive(Debug, Deserialize)]
 struct ModerationsResponse {
@@ -40,15 +41,17 @@ pub(super) async fn moderate(
         provider_options,
     } = request;
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
 
     let mut body = Map::<String, Value>::new();
     body.insert("model".to_string(), Value::String(model.clone()));
     body.insert("input".to_string(), serde_json::to_value(&input)?);
 
-    crate::types::merge_provider_options_into_body(
+    crate::provider_options::merge_provider_options_into_body(
         &mut body,
         selected_provider_options.as_ref(),
         &["model", "input"],
@@ -57,7 +60,7 @@ pub(super) async fn moderate(
     );
 
     let url = client.endpoint("moderations");
-    let parsed = crate::utils::http::send_checked_json::<ModerationsResponse>(
+    let parsed = crate::provider_transport::send_checked_json::<ModerationsResponse>(
         client.apply_auth(client.http.post(url)).json(&body),
     )
     .await?;

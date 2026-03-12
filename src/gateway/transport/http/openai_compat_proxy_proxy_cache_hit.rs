@@ -1,4 +1,5 @@
-use super::*;
+#[cfg(feature = "gateway-proxy-cache")]
+use super::{GatewayHttpState, cached_proxy_response, emit_json_log};
 
 #[cfg(feature = "gateway-proxy-cache")]
 pub(super) async fn maybe_handle_proxy_cache_hit(

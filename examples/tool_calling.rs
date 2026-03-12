@@ -1,7 +1,7 @@
-use ditto_llm::{
-    ContentPart, DittoError, GenerateRequest, LanguageModel, Message, OpenAICompatible, Tool,
-    ToolChoice,
-};
+use ditto_llm::contracts::{ContentPart, GenerateRequest, Message, Role, Tool, ToolChoice};
+use ditto_llm::foundation::error::{DittoError, Result};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::OpenAICompatible;
 use serde_json::json;
 
 fn add(arguments: &serde_json::Value) -> serde_json::Value {
@@ -11,7 +11,7 @@ fn add(arguments: &serde_json::Value) -> serde_json::Value {
 }
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> Result<()> {
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
     let model = std::env::var("OPENAI_COMPAT_MODEL")
@@ -77,7 +77,7 @@ async fn main() -> ditto_llm::Result<()> {
         };
 
         followup_messages.push(Message {
-            role: ditto_llm::Role::Assistant,
+            role: Role::Assistant,
             content: vec![ContentPart::ToolCall {
                 id: tool_call_id.clone(),
                 name: tool_name,

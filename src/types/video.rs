@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ProviderOptionsEnvelope, VideoReferenceUpload, Warning};
+use super::VideoReferenceUpload;
+use crate::contracts::Warning;
+use crate::provider_options::ProviderOptionsEnvelope;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum VideoListOrder {

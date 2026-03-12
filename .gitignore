@@ -5,6 +5,7 @@ crates/ditto-gateway-contract-guard/Cargo.lock
 **/*.rs.bk
 .DS_Store
 docs/book/
+docs/tmp/
 node_modules/
 **/node_modules/
 dist/
@@ -17,4 +18,6 @@ yarn-error.log*
 pnpm-debug.log*
 .env.local
 .env.local.*
+/.omne_data/
+/.omne-data/
 gateway.local.json

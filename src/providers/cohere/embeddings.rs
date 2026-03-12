@@ -132,7 +132,7 @@ impl EmbeddingModel for CohereEmbeddings {
         let mut req = self.http.post(url);
         req = self.apply_auth(req);
         let parsed =
-            crate::utils::http::send_checked_json::<EmbedResponse>(req.json(&body)).await?;
+            crate::provider_transport::send_checked_json::<EmbedResponse>(req.json(&body)).await?;
         Ok(parsed.embeddings.float)
     }
 }

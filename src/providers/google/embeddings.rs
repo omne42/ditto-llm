@@ -132,7 +132,7 @@ impl EmbeddingModel for GoogleEmbeddings {
         if texts.len() == 1 {
             let url = self.embed_url("embedContent");
             let req = self.http.post(url);
-            let parsed = crate::utils::http::send_checked_json::<SingleEmbedResponse>(
+            let parsed = crate::provider_transport::send_checked_json::<SingleEmbedResponse>(
                 self.apply_auth(req).json(&serde_json::json!({
                     "model": Google::model_path(self.model.as_str()),
                     "content": { "parts": [{ "text": texts[0] }] }
@@ -154,7 +154,7 @@ impl EmbeddingModel for GoogleEmbeddings {
             .collect::<Vec<_>>();
 
         let req = self.http.post(url);
-        let parsed = crate::utils::http::send_checked_json::<BatchEmbedResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<BatchEmbedResponse>(
             self.apply_auth(req)
                 .json(&serde_json::json!({ "requests": requests })),
         )

@@ -22,18 +22,18 @@ impl LanguageModel for Bedrock {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
-            .map(crate::types::ProviderOptions::from_value)
+            .map(crate::provider_options::ProviderOptions::from_value_ref)
             .transpose()?
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        crate::types::warn_unsupported_provider_options(
+        crate::provider_options::warn_unsupported_provider_options(
             "Bedrock Anthropic",
             &provider_options,
-            crate::types::ProviderOptionsSupport::NONE,
+            crate::provider_options::ProviderOptionsSupport::NONE,
             &mut warnings,
         );
         crate::types::warn_unsupported_generate_request_options(
@@ -77,18 +77,18 @@ impl LanguageModel for Bedrock {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
             let provider_options = selected_provider_options
                 .as_ref()
-                .map(crate::types::ProviderOptions::from_value)
+                .map(crate::provider_options::ProviderOptions::from_value_ref)
                 .transpose()?
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            crate::types::warn_unsupported_provider_options(
+            crate::provider_options::warn_unsupported_provider_options(
                 "Bedrock Anthropic",
                 &provider_options,
-                crate::types::ProviderOptionsSupport::NONE,
+                crate::provider_options::ProviderOptionsSupport::NONE,
                 &mut warnings,
             );
             crate::types::warn_unsupported_generate_request_options(

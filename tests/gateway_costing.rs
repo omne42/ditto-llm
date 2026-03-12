@@ -44,7 +44,7 @@ fn build_proxy_backends(
 }
 
 #[tokio::test]
-async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
+async fn cost_budget_blocks_proxy_request() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -119,7 +119,7 @@ async fn cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn cost_budget_rejects_unsupported_endpoint() -> ditto_llm::Result<()> {
+async fn cost_budget_rejects_unsupported_endpoint() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -193,7 +193,7 @@ async fn cost_budget_rejects_unsupported_endpoint() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn cost_budget_allows_get_models() -> ditto_llm::Result<()> {
+async fn cost_budget_allows_get_models() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -265,7 +265,8 @@ async fn cost_budget_allows_get_models() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn cost_budget_rejects_large_multipart_audio_request() -> ditto_llm::Result<()> {
+async fn cost_budget_rejects_large_multipart_audio_request()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -337,7 +338,7 @@ async fn cost_budget_rejects_large_multipart_audio_request() -> ditto_llm::Resul
 }
 
 #[tokio::test]
-async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
+async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -416,7 +417,7 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
+async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -517,7 +518,8 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<()> {
+async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::foundation::error::Result<()>
+{
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -614,7 +616,7 @@ async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_llm::Result<(
 }
 
 #[tokio::test]
-async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
+async fn cache_read_pricing_allows_second_request() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -708,7 +710,8 @@ async fn cache_read_pricing_allows_second_request() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::Result<()> {
+async fn cache_creation_pricing_blocks_second_request() -> ditto_llm::foundation::error::Result<()>
+{
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

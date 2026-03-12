@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 
+use crate::capabilities::embedding::EmbeddingModel;
 use crate::config::{Env, ProviderConfig};
-use crate::embedding::EmbeddingModel;
+use crate::foundation::error::{DittoError, Result};
 use crate::providers::openai_like;
-use crate::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OpenAIEmbeddings {

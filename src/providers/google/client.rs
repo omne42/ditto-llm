@@ -10,20 +10,23 @@ use serde_json::{Map, Value};
 
 use super::genai;
 use crate::config::{
-    DEFAULT_HTTP_TIMEOUT, Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    default_http_client, resolve_http_provider_config, resolve_provider_request_auth_required,
+    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_required,
 };
-use crate::model::{LanguageModel, StreamResult};
+use crate::llm_core::model::{LanguageModel, StreamResult};
+use crate::provider_transport::{
+    DEFAULT_HTTP_TIMEOUT, apply_http_query_params, default_http_client,
+    resolve_http_provider_config,
+};
 #[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
-use crate::types::{
+use crate::contracts::StreamChunk;
+use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Tool, ToolChoice, Usage,
     Warning,
 };
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
 
 #[cfg(feature = "embeddings")]
-use crate::embedding::EmbeddingModel;
+use crate::capabilities::embedding::EmbeddingModel;
 
 const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 

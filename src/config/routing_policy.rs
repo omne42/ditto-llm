@@ -3,8 +3,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::builtin_registry;
-use crate::contracts::{CapabilityKind, OperationKind, RuntimeRouteRequest};
+use crate::contracts::{CapabilityKind, OperationKind};
 
 use super::provider_config::{ProviderConfig, normalize_string_list};
 
@@ -536,11 +535,14 @@ fn validate_runtime_route_for_target(
     let mut errors = Vec::<String>::new();
 
     for &operation in requirement.preferred_operations {
-        match builtin_registry().resolve_runtime_route(
-            RuntimeRouteRequest::new(provider_name, Some(model), operation)
-                .with_provider_config(provider_config)
-                .with_required_capability(requirement.capability),
-        ) {
+        match crate::runtime_registry::builtin_runtime_registry_catalog()
+            .validate_runtime_route_for_provider_config(
+                provider_name,
+                provider_config,
+                model,
+                operation,
+                requirement.capability,
+            ) {
             Ok(_) => return Ok(()),
             Err(err) => errors.push(format!("{operation}: {err}")),
         }
@@ -778,14 +780,20 @@ targets = [{ profile = "thinking", model = "o3" }]
         assert_eq!(thinking.targets[0].model, "o3");
     }
 
+    #[cfg(any(
+        feature = "provider-openai",
+        feature = "provider-openai-compatible",
+        feature = "openai",
+        feature = "openai-compatible"
+    ))]
     #[test]
     fn weighted_selection_returns_primary_then_fallbacks() {
         let raw = r#"
 {
   "profiles": {
-    "a": { "provider": "openai-primary", "default_model": "gpt-4.1", "weight": 9 },
-    "b": { "provider": "openai-primary", "default_model": "gpt-4.1-mini", "weight": 1 },
-    "c": { "provider": "deepseek", "default_model": "deepseek-chat", "weight": 1 }
+    "a": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1", "weight": 9 },
+    "b": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-mini", "weight": 1 },
+    "c": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-nano", "weight": 1 }
   },
   "default": {
     "completion": {

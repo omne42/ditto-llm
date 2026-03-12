@@ -7,15 +7,16 @@ mod google_videos_impl {
     use serde_json::{Map, Number, Value};
 
     use super::Google;
+    use crate::capabilities::file::FileContent;
+    use crate::capabilities::video::VideoGenerationModel;
     use crate::config::{Env, ProviderConfig};
-    use crate::file::FileContent;
+    use crate::provider_options::select_provider_options_value;
     use crate::types::{
         VideoContentVariant, VideoDeleteResponse, VideoGenerationError, VideoGenerationRequest,
         VideoGenerationResponse, VideoGenerationStatus, VideoListRequest, VideoListResponse,
-        VideoReferenceUpload, VideoRemixRequest, Warning, select_provider_options_value,
+        VideoReferenceUpload, VideoRemixRequest, Warning,
     };
-    use crate::video::VideoGenerationModel;
-    use crate::{DittoError, Result};
+    use crate::foundation::error::{DittoError, Result};
 
     #[derive(Clone)]
     pub struct GoogleVideos {
@@ -477,7 +478,7 @@ mod google_videos_impl {
                 body.insert("parameters".to_string(), Value::Object(parameters));
             }
 
-            let raw = crate::utils::http::send_checked_json::<Value>(
+            let raw = crate::provider_transport::send_checked_json::<Value>(
                 self.client
                     .apply_auth(self.client.http.post(self.predict_long_running_url(&model)))
                     .json(&body),
@@ -496,7 +497,7 @@ mod google_videos_impl {
         }
 
         async fn retrieve(&self, video_id: &str) -> Result<VideoGenerationResponse> {
-            let raw = crate::utils::http::send_checked_json::<Value>(
+            let raw = crate::provider_transport::send_checked_json::<Value>(
                 self.client
                     .apply_auth(self.client.http.get(self.operation_url(video_id)?)),
             )
@@ -556,7 +557,8 @@ mod google_videos_impl {
                 )));
             }
 
-            let bytes = crate::utils::http::send_checked_bytes(self.client.http.get(&uri)).await?;
+            let bytes =
+                crate::provider_transport::send_checked_bytes(self.client.http.get(&uri)).await?;
             Ok(FileContent {
                 bytes: bytes.to_vec(),
                 media_type: video.encoding,

@@ -1,6 +1,14 @@
+use std::sync::{Arc, Mutex};
+
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+
+use super::core::{StreamObjectFinal, StreamObjectState};
+use crate::foundation::error::{DittoError, Result};
+
 #[derive(Clone)]
 pub struct StreamObjectHandle {
-    state: Arc<Mutex<StreamObjectState>>,
+    pub(super) state: Arc<Mutex<StreamObjectState>>,
 }
 
 impl StreamObjectHandle {

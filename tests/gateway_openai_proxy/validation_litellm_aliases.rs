@@ -1,6 +1,6 @@
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_request_without_v1_prefix()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

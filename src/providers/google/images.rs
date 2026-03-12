@@ -5,13 +5,13 @@ mod google_images_impl {
     use serde_json::{Map, Number, Value};
 
     use super::Google;
+    use crate::capabilities::ImageGenerationModel;
     use crate::config::{Env, ProviderConfig};
-    use crate::image::ImageGenerationModel;
+    use crate::provider_options::select_provider_options_value;
     use crate::types::{
         ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat, ImageSource, Warning,
-        select_provider_options_value,
     };
-    use crate::{DittoError, Result};
+    use crate::foundation::error::{DittoError, Result};
 
     #[derive(Clone)]
     pub struct GoogleImages {
@@ -286,7 +286,7 @@ mod google_images_impl {
                 body.insert("parameters".to_string(), Value::Object(parameters));
             }
 
-            let raw = crate::utils::http::send_checked_json::<Value>(
+            let raw = crate::provider_transport::send_checked_json::<Value>(
                 self.client
                     .apply_auth(self.client.http.post(self.predict_url(&model)))
                     .json(&body),
@@ -360,7 +360,7 @@ mod google_images_impl {
 
             Ok(ImageGenerationResponse {
                 images,
-                usage: crate::types::Usage::default(),
+                usage: crate::contracts::Usage::default(),
                 warnings,
                 provider_metadata: Some(provider_metadata),
             })

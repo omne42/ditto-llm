@@ -49,9 +49,11 @@ impl Backend for HttpBackend {
 
         let status = response.status();
         if !status.is_success() {
-            let body =
-                crate::utils::http::response_text_truncated(response, MAX_BACKEND_ERROR_BODY_BYTES)
-                    .await;
+            let body = crate::provider_transport::response_text_truncated(
+                response,
+                MAX_BACKEND_ERROR_BODY_BYTES,
+            )
+            .await;
             return Err(GatewayError::Backend {
                 message: format!("backend status {status}: {body}"),
             });

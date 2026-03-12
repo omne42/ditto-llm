@@ -3,10 +3,11 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ditto_llm::{
-    CapabilityImplementationStatus, CapabilityKind, ReferenceCatalogExpectation,
+use ditto_llm::catalog::{
+    CapabilityImplementationStatus, ProviderPluginDescriptor, ReferenceCatalogExpectation,
     ReferenceProviderModelCatalog, builtin_registry, core_provider_reference_catalog_expectations,
 };
+use ditto_llm::contracts::CapabilityKind;
 
 const DEFAULT_OUT: &str = "CATALOG_COMPLETENESS.md";
 const MAX_MODEL_LIST: usize = 12;
@@ -255,7 +256,7 @@ fn render_dashboard() -> Result<String, String> {
 
 fn summarize_provider(
     provider_id: &str,
-    runtime_plugin: Option<&ditto_llm::ProviderPluginDescriptor>,
+    runtime_plugin: Option<&ProviderPluginDescriptor>,
     reference_catalog: Option<&ReferenceProviderModelCatalog>,
     expectation: Option<ReferenceCatalogExpectation>,
 ) -> ProviderSummary {

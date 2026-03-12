@@ -3,8 +3,9 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::Result;
-use crate::types::{Batch, BatchCreateRequest, BatchListResponse, BatchResponse, Warning};
+use crate::contracts::Warning;
+use crate::foundation::error::Result;
+use crate::types::{Batch, BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Debug, Deserialize, Default)]
 struct BatchListObject {
@@ -39,8 +40,10 @@ pub(crate) async fn create(
     client: &OpenAiLikeClient,
     request: BatchCreateRequest,
 ) -> Result<BatchResponse> {
-    let selected_provider_options =
-        crate::types::select_provider_options_value(request.provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        request.provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
 
     let mut body = Map::<String, Value>::new();
@@ -57,7 +60,7 @@ pub(crate) async fn create(
         body.insert("metadata".to_string(), serde_json::to_value(metadata)?);
     }
 
-    crate::types::merge_provider_options_into_body(
+    crate::provider_options::merge_provider_options_into_body(
         &mut body,
         selected_provider_options.as_ref(),
         &[],
@@ -66,9 +69,10 @@ pub(crate) async fn create(
     );
 
     let url = batches_url(client);
-    let response =
-        crate::utils::http::send_checked(client.apply_auth(client.http.post(url)).json(&body))
-            .await?;
+    let response = crate::provider_transport::send_checked(
+        client.apply_auth(client.http.post(url)).json(&body),
+    )
+    .await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -80,7 +84,7 @@ pub(crate) async fn create(
 pub(crate) async fn retrieve(client: &OpenAiLikeClient, batch_id: &str) -> Result<BatchResponse> {
     let url = batch_url(client, batch_id);
     let response =
-        crate::utils::http::send_checked(client.apply_auth(client.http.get(url))).await?;
+        crate::provider_transport::send_checked(client.apply_auth(client.http.get(url))).await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -92,7 +96,7 @@ pub(crate) async fn retrieve(client: &OpenAiLikeClient, batch_id: &str) -> Resul
 pub(crate) async fn cancel(client: &OpenAiLikeClient, batch_id: &str) -> Result<BatchResponse> {
     let url = batch_cancel_url(client, batch_id);
     let response =
-        crate::utils::http::send_checked(client.apply_auth(client.http.post(url))).await?;
+        crate::provider_transport::send_checked(client.apply_auth(client.http.post(url))).await?;
     let (batch, raw) = parse_batch_response(response).await?;
     Ok(BatchResponse {
         batch,
@@ -115,7 +119,7 @@ pub(crate) async fn list(
         req = req.query(&[("after", after)]);
     }
 
-    let raw = crate::utils::http::send_checked_json::<Value>(client.apply_auth(req)).await?;
+    let raw = crate::provider_transport::send_checked_json::<Value>(client.apply_auth(req)).await?;
     let parsed = serde_json::from_value::<BatchListObject>(raw.clone())?;
     let mut batches = Vec::<Batch>::new();
     for item in parsed.data {

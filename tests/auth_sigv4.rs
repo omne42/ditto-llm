@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use ditto_llm::Result;
 use ditto_llm::auth::{SigV4Signer, SigV4Timestamp};
+use ditto_llm::foundation::error::Result;
 
 #[test]
 fn sigv4_headers_match_example_signature() -> Result<()> {

@@ -1331,7 +1331,7 @@ async fn convert_chat_response_to_responses(
             .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
         let reader = StreamReader::new(data_stream);
         let reader = tokio::io::BufReader::new(reader);
-        let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
+        let data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
 
         let stream =
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, fallback_request_id);

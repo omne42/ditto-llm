@@ -1,9 +1,10 @@
 use std::time::Instant;
 
-use ditto_llm::{
-    ContentPart, GenerateRequest, LanguageModel, Message, OpenAICompatible, ProviderOptions,
-    StreamChunk, Usage,
-};
+use ditto_llm::contracts::Usage;
+use ditto_llm::contracts::{ContentPart, GenerateRequest, Message, StreamChunk};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::provider_options::ProviderOptions;
+use ditto_llm::providers::OpenAICompatible;
 use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
@@ -151,10 +152,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         req.user = Some(user_tag.clone());
         req.temperature = Some(0.0);
         req.max_tokens = Some(128);
-        req = req.with_provider_options(ProviderOptions {
-            prompt_cache_key: Some(cache_key.clone()),
-            ..Default::default()
-        })?;
+        req = ditto_llm::provider_options::request_with_provider_options(
+            req,
+            ProviderOptions {
+                prompt_cache_key: Some(cache_key.clone()),
+                ..Default::default()
+            },
+        )?;
 
         let started = Instant::now();
         let mut output_text = String::new();

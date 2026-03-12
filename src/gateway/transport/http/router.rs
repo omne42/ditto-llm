@@ -1,10 +1,30 @@
 use super::a2a::{handle_a2a_agent_card, handle_a2a_invoke};
+#[cfg(feature = "gateway-proxy-cache")]
+use super::admin::purge_proxy_cache;
+use super::admin::{delete_key, list_keys, upsert_key, upsert_key_with_id};
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 use super::admin::{
-    delete_key, export_audit_logs, list_audit_logs, list_backends, list_budget_ledgers,
-    list_cost_ledgers, list_keys, list_project_budget_ledgers, list_project_cost_ledgers,
-    list_tenant_budget_ledgers, list_tenant_cost_ledgers, list_user_budget_ledgers,
-    list_user_cost_ledgers, purge_proxy_cache, reap_reservations, reset_backend, upsert_key,
-    upsert_key_with_id,
+    export_audit_logs, list_audit_logs, list_budget_ledgers, list_project_budget_ledgers,
+    list_tenant_budget_ledgers, list_user_budget_ledgers, reap_reservations,
+};
+#[cfg(feature = "gateway-routing-advanced")]
+use super::admin::{list_backends, reset_backend};
+#[cfg(all(
+    feature = "gateway-costing",
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
+))]
+use super::admin::{
+    list_cost_ledgers, list_project_cost_ledgers, list_tenant_cost_ledgers, list_user_cost_ledgers,
 };
 use super::anthropic::{handle_anthropic_count_tokens, handle_anthropic_messages};
 use super::google_genai::{handle_fallback, handle_google_genai};

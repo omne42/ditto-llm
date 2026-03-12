@@ -3,9 +3,9 @@ use async_trait::async_trait;
 use super::openai_batches_common;
 use super::openai_like;
 
-use crate::Result;
-use crate::batch::BatchClient;
+use crate::capabilities::BatchClient;
 use crate::config::{Env, ProviderConfig};
+use crate::foundation::error::Result;
 use crate::types::{BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
-    use crate::types::Warning;
+    use crate::contracts::Warning;
     use httpmock::Method::GET;
     use httpmock::Method::POST;
     use httpmock::MockServer;

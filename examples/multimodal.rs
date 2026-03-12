@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use ditto_llm::{ContentPart, FileSource, ImageSource, LanguageModel, Message, OpenAI, Role};
+use ditto_llm::contracts::{ContentPart, FileSource, ImageSource, Message, Role};
+use ditto_llm::foundation::error::{DittoError, Result};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::OpenAI;
 
 fn guess_image_media_type(path: &Path) -> &'static str {
     match path
@@ -20,18 +23,16 @@ fn guess_image_media_type(path: &Path) -> &'static str {
     }
 }
 
-fn read_base64(path: &Path) -> ditto_llm::Result<String> {
-    let bytes = std::fs::read(path).map_err(|err| {
-        ditto_llm::DittoError::InvalidResponse(format!("read {}: {err}", path.display()))
-    })?;
+fn read_base64(path: &Path) -> Result<String> {
+    let bytes = std::fs::read(path)
+        .map_err(|err| DittoError::InvalidResponse(format!("read {}: {err}", path.display())))?;
     Ok(STANDARD.encode(bytes))
 }
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".to_string())
-    })?;
+async fn main() -> Result<()> {
+    let api_key = std::env::var("OPENAI_API_KEY")
+        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_API_KEY".to_string()))?;
     let model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
 
     let mut args = std::env::args().skip(1);
@@ -39,7 +40,7 @@ async fn main() -> ditto_llm::Result<()> {
     let pdf_path = args.next().map(PathBuf::from);
 
     if image_path.is_none() && pdf_path.is_none() {
-        return Err(ditto_llm::DittoError::InvalidResponse(
+        return Err(DittoError::InvalidResponse(
             "usage: cargo run --example multimodal -- <image_path?> <pdf_path?>".to_string(),
         ));
     }

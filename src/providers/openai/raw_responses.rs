@@ -1,4 +1,4 @@
-#[cfg(feature = "openai")]
+#[cfg(all(feature = "streaming", feature = "openai"))]
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -7,12 +7,13 @@ use tokio::sync::mpsc;
 #[cfg(all(feature = "streaming", feature = "openai"))]
 use futures_util::StreamExt;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "openai"))]
 use super::OpenAI;
+use crate::contracts::{Tool, ToolChoice};
 #[cfg(feature = "openai")]
-use crate::DittoError;
-use crate::Result;
-use crate::types::{Tool, ToolChoice};
+use crate::foundation::error::DittoError;
+use crate::foundation::error::Result;
+use crate::provider_options::ResponseFormat;
 
 pub struct OpenAIResponsesRawRequest<'a> {
     pub model: &'a str,
@@ -23,9 +24,9 @@ pub struct OpenAIResponsesRawRequest<'a> {
     pub parallel_tool_calls: bool,
     pub store: bool,
     pub stream: bool,
-    pub reasoning_effort: Option<crate::types::ReasoningEffort>,
-    pub reasoning_summary: Option<crate::types::ReasoningSummary>,
-    pub response_format: Option<&'a crate::types::ResponseFormat>,
+    pub reasoning_effort: Option<crate::provider_options::ReasoningEffort>,
+    pub reasoning_summary: Option<crate::provider_options::ReasoningSummary>,
+    pub response_format: Option<&'a ResponseFormat>,
     pub include: Vec<String>,
     pub prompt_cache_key: Option<String>,
     pub extra_headers: reqwest::header::HeaderMap,
@@ -164,7 +165,7 @@ pub(super) async fn process_raw_responses_sse<R>(
         &value[..end]
     }
 
-    let mut data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
+    let mut data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
     loop {
         if tx_event.is_closed() {
             break;
@@ -202,19 +203,21 @@ pub(super) async fn process_raw_responses_sse<R>(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "openai"))]
 mod tests {
     use super::super::client::{
         OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE, apply_provider_options,
         sanitize_openai_responses_provider_options, split_tool_call_id_and_thought_signature,
     };
-    use super::super::responses::{
-        finish_reason_for_final_event, map_responses_finish_reason, parse_openai_output,
-    };
+    #[cfg(feature = "streaming")]
+    use super::super::responses::finish_reason_for_final_event;
+    use super::super::responses::{map_responses_finish_reason, parse_openai_output};
     use super::*;
     use crate::config::{Env, ProviderConfig};
-    use crate::model::LanguageModel;
-    use crate::types::*;
+    use crate::contracts::{
+        ContentPart, FileSource, FinishReason, GenerateRequest, Message, Role, Warning,
+    };
+    use crate::llm_core::model::LanguageModel;
     use httpmock::{Method::GET, Method::POST, MockServer};
     use serde_json::Map;
     use serde_json::json;
@@ -227,11 +230,11 @@ mod tests {
     use tokio::time::{Duration, timeout};
 
     #[tokio::test]
-    async fn from_config_resolves_api_key_and_model() -> crate::Result<()> {
+    async fn from_config_resolves_api_key_and_model() -> crate::foundation::error::Result<()> {
         let config = ProviderConfig {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-model".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
             }),
             ..ProviderConfig::default()
@@ -250,7 +253,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_posts_to_files_endpoint() -> crate::Result<()> {
+    async fn upload_file_posts_to_files_endpoint() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -279,7 +282,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_file_content_is_bounded() -> crate::Result<()> {
+    async fn download_file_content_is_bounded() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -311,7 +314,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compact_responses_history_raw_posts_to_compact_endpoint() -> crate::Result<()> {
+    async fn compact_responses_history_raw_posts_to_compact_endpoint()
+    -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -365,7 +369,7 @@ mod tests {
 
     #[tokio::test]
     #[cfg(feature = "streaming")]
-    async fn raw_responses_sse_parses_expected_events() -> crate::Result<()> {
+    async fn raw_responses_sse_parses_expected_events() -> crate::foundation::error::Result<()> {
         let sse = concat!(
             "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n",
             "data: {\"type\":\"ignored.event\",\"foo\":\"bar\"}\n\n",
@@ -430,7 +434,8 @@ mod tests {
 
     #[tokio::test]
     #[cfg(feature = "streaming")]
-    async fn raw_responses_sse_stops_when_receiver_is_dropped() -> crate::Result<()> {
+    async fn raw_responses_sse_stops_when_receiver_is_dropped()
+    -> crate::foundation::error::Result<()> {
         let (reader, mut writer) = tokio::io::duplex(1024);
         let reader = tokio::io::BufReader::new(reader);
         let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(1);
@@ -459,7 +464,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_uses_query_param_auth() -> crate::Result<()> {
+    async fn upload_file_uses_query_param_auth() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -482,7 +487,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v1")),
             default_model: Some("test-model".to_string()),
-            auth: Some(crate::ProviderAuth::QueryParamEnv {
+            auth: Some(crate::config::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
                 prefix: None,
@@ -502,7 +507,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_includes_default_query_params() -> crate::Result<()> {
+    async fn upload_file_includes_default_query_params() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -530,7 +535,7 @@ mod tests {
                 "api-version".to_string(),
                 "2024-02-01".to_string(),
             )]),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
             }),
             ..ProviderConfig::default()
@@ -750,12 +755,13 @@ mod tests {
     }
 
     #[test]
-    fn apply_provider_options_maps_reasoning_and_response_format() -> crate::Result<()> {
+    fn apply_provider_options_maps_reasoning_and_response_format()
+    -> crate::foundation::error::Result<()> {
         let mut body = Map::<String, Value>::new();
-        let options = crate::ProviderOptions {
-            reasoning_effort: Some(crate::ReasoningEffort::High),
-            response_format: Some(crate::ResponseFormat::JsonSchema {
-                json_schema: crate::JsonSchemaFormat {
+        let options = crate::provider_options::ProviderOptions {
+            reasoning_effort: Some(crate::provider_options::ReasoningEffort::High),
+            response_format: Some(crate::provider_options::ResponseFormat::JsonSchema {
+                json_schema: crate::provider_options::JsonSchemaFormat {
                     name: "unit_test".to_string(),
                     schema: json!({ "type": "object" }),
                     strict: Some(true),
@@ -813,9 +819,10 @@ mod tests {
     }
 
     #[test]
-    fn build_responses_body_merges_only_sanitized_provider_options() -> crate::Result<()> {
+    fn build_responses_body_merges_only_sanitized_provider_options()
+    -> crate::foundation::error::Result<()> {
         let request = GenerateRequest::from(vec![Message::user("hello")]);
-        let provider_options = crate::ProviderOptions::default();
+        let provider_options = crate::provider_options::ProviderOptions::default();
         let (sanitized_provider_options, mut schema_warnings) =
             sanitize_openai_responses_provider_options(
                 Some(json!({

@@ -10,13 +10,13 @@ mod genai;
 pub mod google;
 #[cfg(any(feature = "openai", feature = "openai-compatible"))]
 pub mod openai;
+mod openai_compat_profile;
 #[cfg(feature = "openai-compatible")]
 pub mod openai_compatible;
 #[cfg(all(feature = "audio", feature = "openai-compatible"))]
 pub mod openai_compatible_audio;
 #[cfg(all(feature = "batches", feature = "openai-compatible"))]
 pub mod openai_compatible_batches;
-pub mod openai_compatible_family;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub mod openai_compatible_images;
 #[cfg(all(feature = "moderations", feature = "openai-compatible"))]
@@ -34,6 +34,8 @@ mod openai_audio_common;
     any(feature = "openai", feature = "openai-compatible")
 ))]
 mod openai_batches_common;
+#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+mod openai_chat_completions_core;
 #[cfg(all(
     feature = "embeddings",
     any(feature = "openai", feature = "openai-compatible")
@@ -78,7 +80,7 @@ pub use google::GoogleVideos;
 pub use openai::OpenAI;
 #[cfg(all(feature = "batches", feature = "openai"))]
 pub use openai::OpenAIBatches;
-#[cfg(all(feature = "openai", feature = "openai-compatible"))]
+#[cfg(feature = "openai")]
 pub use openai::OpenAIChatCompletions;
 #[cfg(all(feature = "images", feature = "openai-compatible"))]
 pub use openai::OpenAICompatibleImageEdits;

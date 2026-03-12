@@ -103,9 +103,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let env = if let Some(path) = dotenv_path.as_deref() {
         let raw = std::fs::read_to_string(path)?;
-        ditto_llm::Env::parse_dotenv(&raw)
+        ditto_llm::config::Env::parse_dotenv(&raw)
     } else {
-        ditto_llm::Env {
+        ditto_llm::config::Env {
             dotenv: std::collections::BTreeMap::new(),
         }
     };
@@ -515,12 +515,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             {
                 let provider = backend.provider.as_deref().unwrap_or_default();
                 let provider_config = backend.provider_config.clone().unwrap_or_default();
-                let model = ditto_llm::gateway::translation::build_language_model(
-                    provider,
-                    &provider_config,
-                    &env,
-                )
-                .await?;
+                let model =
+                    ditto_llm::runtime::build_language_model(provider, &provider_config, &env)
+                        .await?;
                 let backend_model = ditto_llm::gateway::TranslationBackend::new(provider, model)
                     .with_env(env.clone())
                     .with_provider_config(provider_config)

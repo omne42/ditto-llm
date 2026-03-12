@@ -55,6 +55,7 @@ pub(super) struct ProxyAttemptParams<'a> {
 pub(super) enum BackendAttemptOutcome {
     Response(axum::response::Response),
     Continue(Option<(StatusCode, Json<OpenAiErrorResponse>)>),
+    #[allow(dead_code)]
     Stop((StatusCode, Json<OpenAiErrorResponse>)),
 }
 

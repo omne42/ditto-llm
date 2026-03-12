@@ -69,18 +69,18 @@ impl LanguageModel for Anthropic {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
-            .map(crate::types::ProviderOptions::from_value)
+            .map(crate::provider_options::ProviderOptions::from_value_ref)
             .transpose()?
             .unwrap_or_default();
 
         let mut warnings = Vec::<Warning>::new();
-        crate::types::warn_unsupported_provider_options(
+        crate::provider_options::warn_unsupported_provider_options(
             "Anthropic Messages API",
             &provider_options,
-            crate::types::ProviderOptionsSupport::NONE,
+            crate::provider_options::ProviderOptionsSupport::NONE,
             &mut warnings,
         );
         crate::types::warn_unsupported_generate_request_options(
@@ -190,7 +190,7 @@ impl LanguageModel for Anthropic {
             }
         }
 
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options.as_ref(),
             &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -209,7 +209,7 @@ impl LanguageModel for Anthropic {
             request_builder = request_builder.header("anthropic-beta", betas.join(","));
         }
 
-        let parsed = crate::utils::http::send_checked_json::<MessagesApiResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<MessagesApiResponse>(
             request_builder.json(&body),
         )
         .await?;
@@ -242,18 +242,18 @@ impl LanguageModel for Anthropic {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
             let provider_options = selected_provider_options
                 .as_ref()
-                .map(crate::types::ProviderOptions::from_value)
+                .map(crate::provider_options::ProviderOptions::from_value_ref)
                 .transpose()?
                 .unwrap_or_default();
 
             let mut warnings = Vec::<Warning>::new();
-            crate::types::warn_unsupported_provider_options(
+            crate::provider_options::warn_unsupported_provider_options(
                 "Anthropic Messages API",
                 &provider_options,
-                crate::types::ProviderOptionsSupport::NONE,
+                crate::provider_options::ProviderOptionsSupport::NONE,
                 &mut warnings,
             );
             crate::types::warn_unsupported_generate_request_options(
@@ -353,7 +353,7 @@ impl LanguageModel for Anthropic {
                 }
             }
 
-            crate::types::merge_provider_options_into_body(
+            crate::provider_options::merge_provider_options_into_body(
                 &mut body,
                 selected_provider_options.as_ref(),
                 &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -373,10 +373,10 @@ impl LanguageModel for Anthropic {
                 request_builder = request_builder.header("anthropic-beta", betas.join(","));
             }
 
-            let response = crate::utils::http::send_checked(request_builder.json(&body)).await?;
+            let response = crate::provider_transport::send_checked(request_builder.json(&body)).await?;
 
             let (data_stream, buffer) =
-                crate::utils::streaming::init_sse_stream(response, warnings);
+                crate::session_transport::init_sse_stream(response, warnings);
 
             #[derive(Debug, Deserialize)]
             struct StreamEvent {

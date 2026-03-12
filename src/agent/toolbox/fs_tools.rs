@@ -217,7 +217,9 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_mkdir join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!("fs_mkdir join error: {err}")))
+        })?;
 
         let resp = match mkdir_result {
             Ok(resp) => resp,
@@ -273,7 +275,9 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_move join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!("fs_move join error: {err}")))
+        })?;
 
         let resp = match move_result {
             Ok(resp) => resp,
@@ -331,7 +335,11 @@ impl FsToolExecutor {
             })
         })
         .await
-        .map_err(|err| DittoError::Io(std::io::Error::other(format!("fs_copy_file join error: {err}"))))?;
+        .map_err(|err| {
+            DittoError::Io(std::io::Error::other(format!(
+                "fs_copy_file join error: {err}"
+            )))
+        })?;
 
         let resp = match copy_result {
             Ok(resp) => resp,

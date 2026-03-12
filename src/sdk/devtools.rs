@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::Result;
+use crate::foundation::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DevtoolsRecord {

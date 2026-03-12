@@ -47,7 +47,9 @@ mod tests {
         frame.extend_from_slice(&0u32.to_be_bytes());
         decoder.push(&frame).expect("push frame");
 
-        let first = decoder.next_message().expect("invalid frame should produce error");
+        let first = decoder
+            .next_message()
+            .expect("invalid frame should produce error");
         assert!(first.is_err());
         assert!(
             decoder.next_message().is_none(),
@@ -73,8 +75,8 @@ mod tests {
             decoder.push(chunk).expect("push chunk");
             while let Some(message) = decoder.next_message() {
                 let message = message.expect("decode message");
-                let payload: Value = serde_json::from_slice(message.payload.as_ref())
-                    .expect("payload is json");
+                let payload: Value =
+                    serde_json::from_slice(message.payload.as_ref()).expect("payload is json");
                 parsed.push(payload);
             }
         }

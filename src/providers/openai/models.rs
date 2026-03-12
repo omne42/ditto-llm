@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::Result;
+use crate::foundation::error::Result;
 
 use super::OpenAI;
 
@@ -59,9 +59,10 @@ impl OpenAI {
     pub async fn list_models(&self) -> Result<Vec<OpenAIModelObject>> {
         let url = self.client.endpoint("models");
         let req = self.client.http.get(url);
-        let parsed =
-            crate::utils::http::send_checked_json::<OpenAIModelsListResponse>(self.apply_auth(req))
-                .await?;
+        let parsed = crate::provider_transport::send_checked_json::<OpenAIModelsListResponse>(
+            self.apply_auth(req),
+        )
+        .await?;
         Ok(parsed.data)
     }
 
@@ -80,7 +81,8 @@ impl OpenAI {
     pub async fn retrieve_model(&self, model_id: &str) -> Result<OpenAIModelObject> {
         let url = self.client.endpoint(&format!("models/{}", model_id.trim()));
         let req = self.client.http.get(url);
-        crate::utils::http::send_checked_json::<OpenAIModelObject>(self.apply_auth(req)).await
+        crate::provider_transport::send_checked_json::<OpenAIModelObject>(self.apply_auth(req))
+            .await
     }
 }
 
@@ -90,7 +92,7 @@ mod tests {
     use httpmock::{Method::GET, MockServer};
 
     #[tokio::test]
-    async fn list_models_hits_models_endpoint() -> crate::Result<()> {
+    async fn list_models_hits_models_endpoint() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -133,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retrieve_model_hits_model_resource_endpoint() -> crate::Result<()> {
+    async fn retrieve_model_hits_model_resource_endpoint() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -166,7 +168,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_model_ids_sorts_and_deduplicates() -> crate::Result<()> {
+    async fn list_model_ids_sorts_and_deduplicates() -> crate::foundation::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }

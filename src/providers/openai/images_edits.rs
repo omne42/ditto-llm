@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use crate::providers::openai_images_common;
 use crate::providers::openai_like;
 
+use crate::capabilities::ImageEditModel;
 use crate::config::{Env, ProviderConfig};
-use crate::image_edit::ImageEditModel;
+use crate::foundation::error::{DittoError, Result};
 use crate::types::{ImageEditRequest, ImageEditResponse};
-use crate::{DittoError, Result};
 
 macro_rules! define_openai_like_image_edits {
     (
@@ -104,7 +104,8 @@ define_openai_like_image_edits!(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ImageEditUpload, ImageResponseFormat, ImageSource};
+    use crate::contracts::ImageSource;
+    use crate::types::{ImageEditUpload, ImageResponseFormat};
     use httpmock::{Method::POST, MockServer};
 
     #[cfg(feature = "openai")]

@@ -6,11 +6,11 @@ mod google_realtime_impl {
     use reqwest::Url;
 
     use super::Google;
-    use crate::config::{Env, ProviderConfig, RequestAuth};
-    use crate::realtime::{
+    use crate::capabilities::realtime::{
         RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
     };
-    use crate::{DittoError, Result};
+    use crate::config::{Env, ProviderConfig, RequestAuth};
+    use crate::foundation::error::{DittoError, Result};
 
     #[derive(Clone)]
     pub struct GoogleRealtime {
@@ -63,7 +63,7 @@ mod google_realtime_impl {
         }
 
         fn websocket_root_and_version(&self) -> Result<(String, String)> {
-            let websocket_base = crate::utils::http::to_websocket_base_url(&self.client.base_url);
+            let websocket_base = crate::session_transport::to_websocket_base_url(&self.client.base_url);
             let mut url = Url::parse(&websocket_base).map_err(|err| {
                 DittoError::InvalidResponse(format!(
                     "invalid google realtime base_url {:?}: {err}",

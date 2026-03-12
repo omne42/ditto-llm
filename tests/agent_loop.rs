@@ -9,10 +9,11 @@ use serde_json::json;
 use ditto_llm::agent::{
     ToolApproval, ToolCall, ToolExecutor, ToolLoopAgent, ToolLoopStopReason, ToolResult,
 };
-use ditto_llm::{
-    ContentPart, DittoError, FinishReason, GenerateRequest, GenerateResponse, LanguageModel,
-    Message, Result, Role, StreamResult, Tool,
+use ditto_llm::contracts::{
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool,
 };
+use ditto_llm::foundation::error::{DittoError, Result};
+use ditto_llm::llm_core::model::{LanguageModel, StreamResult};
 
 fn lock_or_err<'a, T>(mutex: &'a Mutex<T>, context: &str) -> Result<MutexGuard<'a, T>> {
     mutex

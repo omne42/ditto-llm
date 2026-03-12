@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::audio::SpeechModel;
+use crate::capabilities::audio::SpeechModel;
 use crate::config::{Env, ProviderConfig};
+use crate::foundation::error::{DittoError, Result};
 use crate::providers::{openai_audio_common, openai_like};
 use crate::types::{SpeechRequest, SpeechResponse};
-use crate::{DittoError, Result};
 
 macro_rules! define_openai_like_speech {
     (

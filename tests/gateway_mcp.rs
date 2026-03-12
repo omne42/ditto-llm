@@ -30,7 +30,8 @@ fn base_config() -> GatewayConfig {
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_llm::Result<()> {
+async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -110,7 +111,8 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_llm
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_list_autopaginates_until_complete()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -206,7 +208,8 @@ async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_llm::Res
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -284,7 +287,7 @@ async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_llm::
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -345,7 +348,8 @@ async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
 }
 
 #[tokio::test]
-async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected() -> ditto_llm::Result<()> {
+async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -448,8 +452,8 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected() -> dit
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix() -> ditto_llm::Result<()>
-{
+async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -537,7 +541,7 @@ async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix() -> 
 
 #[tokio::test]
 async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -611,7 +615,8 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -662,7 +667,8 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server() -> ditto
 }
 
 #[tokio::test]
-async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_llm::Result<()> {
+async fn gateway_mcp_bounded_backend_response_prevents_oom()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -733,7 +739,8 @@ async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_llm::Resul
 }
 
 #[tokio::test]
-async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_llm::Result<()> {
+async fn gateway_mcp_requires_virtual_key_when_configured()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -810,7 +817,8 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_llm::Result
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error() -> ditto_llm::Result<()> {
+async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -838,7 +846,8 @@ async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error() -> ditto_llm::R
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params() -> ditto_llm::Result<()> {
+async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -880,7 +889,8 @@ async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params() -> ditto_ll
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers() -> ditto_llm::Result<()> {
+async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -914,7 +924,8 @@ async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers() -> ditto_llm:
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_invalid_json_returns_400() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_list_http_invalid_json_returns_400()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -941,7 +952,8 @@ async fn gateway_mcp_tools_list_http_invalid_json_returns_400() -> ditto_llm::Re
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_http_invalid_json_returns_400() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_call_http_invalid_json_returns_400()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -969,7 +981,7 @@ async fn gateway_mcp_tools_call_http_invalid_json_returns_400() -> ditto_llm::Re
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_http_get_rejects_when_no_servers_configured()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -1001,7 +1013,8 @@ async fn gateway_mcp_tools_list_http_get_rejects_when_no_servers_configured()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_unknown_server_returns_404() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_list_http_unknown_server_returns_404()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -1034,7 +1047,8 @@ async fn gateway_mcp_tools_list_http_unknown_server_returns_404() -> ditto_llm::
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_http_unknown_server_returns_404() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_call_http_unknown_server_returns_404()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_llm::gateway::http::router(state);
@@ -1064,7 +1078,7 @@ async fn gateway_mcp_tools_call_http_unknown_server_returns_404() -> ditto_llm::
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_selected()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1122,7 +1136,8 @@ async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_select
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502() -> ditto_llm::Result<()> {
+async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

@@ -1,7 +1,9 @@
 #![cfg(feature = "vertex")]
 
 use ditto_llm::auth::OAuthClientCredentials;
-use ditto_llm::{GenerateRequest, LanguageModel, Message, Tool, ToolChoice, Vertex};
+use ditto_llm::contracts::{GenerateRequest, Message, Tool, ToolChoice};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::Vertex;
 use httpmock::{Method::POST, MockServer};
 use serde_json::json;
 
@@ -11,7 +13,7 @@ fn approx_eq(actual: Option<f64>, expected: f64) -> bool {
 }
 
 #[tokio::test]
-async fn vertex_generate_maps_genai_request() -> ditto_llm::Result<()> {
+async fn vertex_generate_maps_genai_request() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

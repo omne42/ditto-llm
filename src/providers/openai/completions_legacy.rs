@@ -7,15 +7,15 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::OpenAI;
-use crate::model::{LanguageModel, StreamResult};
 #[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
+use crate::contracts::StreamChunk;
 #[cfg(all(test, feature = "streaming"))]
-use crate::types::Usage;
-use crate::types::{
+use crate::contracts::Usage;
+use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Warning,
 };
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
+use crate::llm_core::model::{LanguageModel, StreamResult};
 
 const OPENAI_LEGACY_COMPLETIONS_RESERVED_PROVIDER_OPTION_KEYS: &[&str] = &[
     "model",
@@ -142,8 +142,8 @@ impl OpenAICompletionsLegacy {
         }
     }
 
-    fn parse_usage(value: &Value) -> crate::types::Usage {
-        let mut usage = crate::types::Usage::default();
+    fn parse_usage(value: &Value) -> crate::contracts::Usage {
+        let mut usage = crate::contracts::Usage::default();
         if let Some(obj) = value.as_object() {
             usage.input_tokens = obj
                 .get("input_tokens")
@@ -343,9 +343,10 @@ impl OpenAICompletionsLegacy {
             });
         }
 
-        let selected_provider_options = request.provider_options_value_for("openai")?;
+        let selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, "openai")?;
         Self::warn_unsupported_provider_options(selected_provider_options.as_ref(), &mut warnings);
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options.as_ref(),
             OPENAI_LEGACY_COMPLETIONS_RESERVED_PROVIDER_OPTION_KEYS,
@@ -419,7 +420,7 @@ impl LanguageModel for OpenAICompletionsLegacy {
 
         let url = self.completions_url();
         let req = self.client.client.http.post(url);
-        let parsed = crate::utils::http::send_checked_json::<LegacyCompletionResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<LegacyCompletionResponse>(
             self.client.apply_auth(req).json(&body),
         )
         .await?;
@@ -465,7 +466,7 @@ impl LanguageModel for OpenAICompletionsLegacy {
 
             let url = self.completions_url();
             let req = self.client.client.http.post(url);
-            let response = crate::utils::http::send_checked(
+            let response = crate::provider_transport::send_checked(
                 self.client
                     .apply_auth(req)
                     .header("Accept", "text/event-stream")
@@ -475,7 +476,7 @@ impl LanguageModel for OpenAICompletionsLegacy {
 
             let warning_chunk =
                 (!warnings.is_empty()).then_some(StreamChunk::Warnings { warnings });
-            let data_stream = crate::utils::sse::sse_data_stream_from_response(response);
+            let data_stream = crate::session_transport::sse_data_stream_from_response(response);
             let state = LegacyCompletionStreamState::default();
             let stream = stream::try_unfold(
                 (
@@ -537,7 +538,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn generate_posts_to_legacy_completions_surface() -> crate::Result<()> {
+    async fn generate_posts_to_legacy_completions_surface() -> crate::foundation::error::Result<()>
+    {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -594,7 +596,7 @@ mod tests {
 
     #[cfg(feature = "streaming")]
     #[test]
-    fn parses_legacy_completion_stream_chunks() -> crate::Result<()> {
+    fn parses_legacy_completion_stream_chunks() -> crate::foundation::error::Result<()> {
         let mut state = LegacyCompletionStreamState::default();
         let chunks = parse_stream_data(
             &mut state,

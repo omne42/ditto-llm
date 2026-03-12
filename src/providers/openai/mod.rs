@@ -15,7 +15,7 @@ mod audio_transcriptions;
 mod audio_translations;
 #[cfg(all(feature = "batches", feature = "openai"))]
 mod batches;
-#[cfg(all(feature = "openai", feature = "openai-compatible"))]
+#[cfg(feature = "openai")]
 mod chat_completions;
 mod client;
 #[cfg(feature = "openai")]
@@ -59,7 +59,7 @@ pub use audio_transcriptions::OpenAIAudioTranscription;
 pub use audio_transcriptions::OpenAICompatibleAudioTranscription;
 #[cfg(all(feature = "batches", feature = "openai"))]
 pub use batches::OpenAIBatches;
-#[cfg(all(feature = "openai", feature = "openai-compatible"))]
+#[cfg(feature = "openai")]
 pub use chat_completions::OpenAIChatCompletions;
 pub use client::OpenAI;
 #[cfg(feature = "openai")]

@@ -2,11 +2,16 @@
 
 use std::collections::BTreeSet;
 
-use ditto_llm::{
-    BehaviorSupport, CacheUsageReportingKind, CapabilityKind, ContextCacheModeId, Env,
-    OperationKind, ProviderConfig, RealtimeSessionRequest, ReasoningActivationKind,
-    ReasoningOutputMode, builtin_registry,
+use ditto_llm::capabilities::RealtimeSessionRequest;
+use ditto_llm::catalog::{
+    BehaviorSupport, CacheUsageReportingKind, ReasoningActivationKind, ReasoningOutputMode,
+    builtin_registry,
 };
+use ditto_llm::config::{Env, ProviderConfig};
+use ditto_llm::contracts::{
+    CapabilityKind, ContextCacheModeId, OperationKind, RuntimeRouteRequest,
+};
+use ditto_llm::runtime::resolve_builtin_runtime_route;
 
 fn openai_env() -> Env {
     Env::parse_dotenv("OPENAI_API_KEY=sk-test\n")
@@ -115,13 +120,12 @@ fn openai_catalog_runtime_spec_matches_enabled_capabilities() {
                 .capability_resolution(Some("gpt-realtime"))
                 .effective_supports(CapabilityKind::REALTIME)
         );
-        let route = builtin_registry()
-            .resolve_runtime_route(ditto_llm::RuntimeRouteRequest::new(
-                "openai",
-                Some("gpt-realtime"),
-                OperationKind::REALTIME_SESSION,
-            ))
-            .expect("official realtime route should resolve");
+        let route = resolve_builtin_runtime_route(RuntimeRouteRequest::new(
+            "openai",
+            Some("gpt-realtime"),
+            OperationKind::REALTIME_SESSION,
+        ))
+        .expect("official realtime route should resolve");
         assert_eq!(
             route.url,
             "wss://api.openai.com/v1/realtime?model=gpt-realtime"
@@ -135,13 +139,12 @@ fn openai_catalog_runtime_spec_matches_enabled_capabilities() {
                 .capability_resolution(Some("sora-2"))
                 .effective_supports(CapabilityKind::VIDEO_GENERATION)
         );
-        let route = builtin_registry()
-            .resolve_runtime_route(ditto_llm::RuntimeRouteRequest::new(
-                "openai",
-                Some("sora-2"),
-                OperationKind::VIDEO_GENERATION,
-            ))
-            .expect("official video route should resolve");
+        let route = resolve_builtin_runtime_route(RuntimeRouteRequest::new(
+            "openai",
+            Some("sora-2"),
+            OperationKind::VIDEO_GENERATION,
+        ))
+        .expect("official video route should resolve");
         assert_eq!(route.url, "https://api.openai.com/v1/videos");
         assert_eq!(route.invocation.surface.as_str(), "video.generation.async");
         assert_eq!(route.invocation.wire_protocol.as_str(), "openai.videos");
@@ -292,8 +295,9 @@ fn openai_text_model_routes_and_behaviors_match_official_catalog() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_llm() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
+async fn gateway_builder_constructs_official_openai_llm() -> ditto_llm::foundation::error::Result<()>
+{
+    let model = ditto_llm::runtime::build_language_model(
         "openai",
         &openai_config("gpt-4.1"),
         &openai_env(),
@@ -311,13 +315,11 @@ async fn gateway_builder_constructs_official_openai_llm() -> ditto_llm::Result<(
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_chat_only_model() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
-        "openai",
-        &openai_config("gpt-4"),
-        &openai_env(),
-    )
-    .await?;
+async fn gateway_builder_constructs_official_openai_chat_only_model()
+-> ditto_llm::foundation::error::Result<()> {
+    let model =
+        ditto_llm::runtime::build_language_model("openai", &openai_config("gpt-4"), &openai_env())
+            .await?;
 
     assert_eq!(model.provider(), "openai");
     assert_eq!(model.model_id(), "gpt-4");
@@ -331,8 +333,8 @@ async fn gateway_builder_constructs_official_openai_chat_only_model() -> ditto_l
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_legacy_completion_model()
--> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_language_model(
         "openai",
         &openai_config("davinci-002"),
         &openai_env(),
@@ -350,8 +352,9 @@ async fn gateway_builder_constructs_official_openai_legacy_completion_model()
     feature = "cap-embedding"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_embeddings() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_embedding_model(
+async fn gateway_builder_constructs_official_openai_embeddings()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_embedding_model(
         "openai",
         &openai_config("text-embedding-3-small"),
         &openai_env(),
@@ -370,8 +373,9 @@ async fn gateway_builder_constructs_official_openai_embeddings() -> ditto_llm::R
     feature = "cap-image-generation"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_image_generation() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_image_generation_model(
+async fn gateway_builder_constructs_official_openai_image_generation()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_image_generation_model(
         "openai",
         &openai_config("gpt-image-1"),
         &openai_env(),
@@ -390,8 +394,9 @@ async fn gateway_builder_constructs_official_openai_image_generation() -> ditto_
     feature = "cap-image-edit"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_image_edit() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_image_edit_model(
+async fn gateway_builder_constructs_official_openai_image_edit()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_image_edit_model(
         "openai",
         &openai_config("gpt-image-1"),
         &openai_env(),
@@ -410,8 +415,9 @@ async fn gateway_builder_constructs_official_openai_image_edit() -> ditto_llm::R
     feature = "cap-audio-transcription"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_audio_transcription() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_audio_transcription_model(
+async fn gateway_builder_constructs_official_openai_audio_transcription()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_audio_transcription_model(
         "openai",
         &openai_config("whisper-1"),
         &openai_env(),
@@ -430,14 +436,12 @@ async fn gateway_builder_constructs_official_openai_audio_transcription() -> dit
     feature = "cap-audio-speech"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_speech() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_speech_model(
-        "openai",
-        &openai_config("tts-1"),
-        &openai_env(),
-    )
-    .await?
-    .expect("speech builder should return a model");
+async fn gateway_builder_constructs_official_openai_speech()
+-> ditto_llm::foundation::error::Result<()> {
+    let model =
+        ditto_llm::runtime::build_speech_model("openai", &openai_config("tts-1"), &openai_env())
+            .await?
+            .expect("speech builder should return a model");
 
     assert_eq!(model.provider(), "openai");
     assert_eq!(model.model_id(), "tts-1");
@@ -450,8 +454,9 @@ async fn gateway_builder_constructs_official_openai_speech() -> ditto_llm::Resul
     feature = "cap-moderation"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_moderation() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_moderation_model(
+async fn gateway_builder_constructs_official_openai_moderation()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_moderation_model(
         "openai",
         &openai_config("omni-moderation-latest"),
         &openai_env(),
@@ -470,14 +475,12 @@ async fn gateway_builder_constructs_official_openai_moderation() -> ditto_llm::R
     feature = "cap-batch"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_batch_client() -> ditto_llm::Result<()> {
-    let client = ditto_llm::gateway::translation::build_batch_client(
-        "openai",
-        &openai_config("gpt-4.1"),
-        &openai_env(),
-    )
-    .await?
-    .expect("batch builder should return a client");
+async fn gateway_builder_constructs_official_openai_batch_client()
+-> ditto_llm::foundation::error::Result<()> {
+    let client =
+        ditto_llm::runtime::build_batch_client("openai", &openai_config("gpt-4.1"), &openai_env())
+            .await?
+            .expect("batch builder should return a client");
 
     assert_eq!(client.provider(), "openai");
     Ok(())
@@ -489,8 +492,9 @@ async fn gateway_builder_constructs_official_openai_batch_client() -> ditto_llm:
     feature = "videos"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_video_generation() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_video_generation_model(
+async fn gateway_builder_constructs_official_openai_video_generation()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_video_generation_model(
         "openai",
         &openai_config("sora-2"),
         &openai_env(),
@@ -509,8 +513,9 @@ async fn gateway_builder_constructs_official_openai_video_generation() -> ditto_
     feature = "cap-realtime"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_realtime() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_realtime_session_model(
+async fn gateway_builder_constructs_official_openai_realtime()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_realtime_session_model(
         "openai",
         &openai_config("gpt-realtime"),
         &openai_env(),

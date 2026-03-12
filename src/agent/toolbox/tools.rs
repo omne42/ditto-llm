@@ -8,8 +8,8 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::types::Tool;
-use crate::{DittoError, Result};
+use crate::contracts::Tool;
+use crate::foundation::error::{DittoError, Result};
 
 use super::{ToolCall, ToolExecutor, ToolResult};
 
@@ -813,10 +813,8 @@ impl ToolExecutor for ShellToolExecutor {
         };
 
         let exit_code = status.as_ref().and_then(|status| status.code());
-        let ok = exit_code == Some(0)
-            && !timed_out
-            && wait_error.is_none()
-            && stdin_error.is_none();
+        let ok =
+            exit_code == Some(0) && !timed_out && wait_error.is_none() && stdin_error.is_none();
 
         let is_error = timed_out || wait_error.is_some() || stdin_error.is_some();
 

@@ -2,6 +2,8 @@
 //!
 //! This namespace groups the public capability traits and DTOs by modality,
 //! without exposing provider-specific implementation details.
+// CAPABILITIES-FACADE-NOT-L0-OWNER: this is a northbound convenience surface
+// over runtime/model adapters, not a separate L0 ownership boundary.
 
 pub mod audio;
 pub mod batch;
@@ -17,10 +19,7 @@ pub mod rerank;
 pub mod text;
 pub mod video;
 
-pub use audio::{
-    AudioTranscriptionModel, AudioTranslationModel, AudioTranslationRequest,
-    AudioTranslationResponse, SpeechModel,
-};
+pub use audio::{AudioTranscriptionModel, AudioTranslationModel, SpeechModel};
 pub use batch::BatchClient;
 pub use context_cache::{ContextCacheMode, ContextCacheModel, ContextCacheProfile};
 pub use embedding::{EmbeddingModel, EmbeddingModelExt};

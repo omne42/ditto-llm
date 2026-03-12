@@ -1,3 +1,11 @@
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+use super::admin_persistence::append_admin_audit_log;
+use super::admin_persistence::persist_virtual_keys;
 use super::*;
 
 // inlined from admin/handlers.rs

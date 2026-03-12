@@ -8,13 +8,16 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use tokio::sync::mpsc;
 
-use crate::model::{LanguageModel, StreamResult};
-use crate::types::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, JsonSchemaFormat, ResponseFormat,
-    StreamChunk, Tool, ToolChoice, Usage, Warning,
+use super::handle::StreamObjectHandle;
+use super::json::{parse_json_from_response_text, parse_partial_json};
+use crate::contracts::{
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Tool, ToolChoice,
+    Usage, Warning,
 };
+use crate::foundation::error::{DittoError, Result};
+use crate::llm_core::model::{LanguageModel, StreamResult};
+use crate::provider_options::{JsonSchemaFormat, ResponseFormat};
 use crate::utils::task::AbortOnDrop;
-use crate::{DittoError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObjectOutput {
@@ -65,23 +68,23 @@ pub struct StreamObjectFinal {
 }
 
 #[derive(Debug, Default)]
-struct StreamObjectState {
-    text_buffer: String,
-    tool_buffer: String,
-    text_truncated: bool,
-    tool_truncated: bool,
-    last_emitted: Option<Value>,
-    last_emitted_element: usize,
-    final_object: Option<Value>,
-    final_error: Option<String>,
-    done: bool,
-    response_id: Option<String>,
-    warnings: Vec<Warning>,
-    finish_reason: FinishReason,
-    usage: Usage,
-    tool_call_id: Option<String>,
-    output: ObjectOutput,
-    strategy: ObjectStrategy,
+pub(super) struct StreamObjectState {
+    pub(super) text_buffer: String,
+    pub(super) tool_buffer: String,
+    pub(super) text_truncated: bool,
+    pub(super) tool_truncated: bool,
+    pub(super) last_emitted: Option<Value>,
+    pub(super) last_emitted_element: usize,
+    pub(super) final_object: Option<Value>,
+    pub(super) final_error: Option<String>,
+    pub(super) done: bool,
+    pub(super) response_id: Option<String>,
+    pub(super) warnings: Vec<Warning>,
+    pub(super) finish_reason: FinishReason,
+    pub(super) usage: Usage,
+    pub(super) tool_call_id: Option<String>,
+    pub(super) output: ObjectOutput,
+    pub(super) strategy: ObjectStrategy,
 }
 
 pub struct StreamObjectResult {
@@ -299,16 +302,16 @@ pub fn stream_object_from_stream(stream: StreamResult) -> StreamObjectResult {
 }
 
 #[derive(Debug, Clone)]
-struct StreamObjectConfig {
-    output: ObjectOutput,
-    strategy: ObjectStrategy,
-    tool_name: String,
+pub(super) struct StreamObjectConfig {
+    pub(super) output: ObjectOutput,
+    pub(super) strategy: ObjectStrategy,
+    pub(super) tool_name: String,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct StreamObjectBufferLimits {
-    max_text_bytes: usize,
-    max_tool_bytes: usize,
+pub(super) struct StreamObjectBufferLimits {
+    pub(super) max_text_bytes: usize,
+    pub(super) max_tool_bytes: usize,
 }
 
 impl Default for StreamObjectBufferLimits {
@@ -320,7 +323,7 @@ impl Default for StreamObjectBufferLimits {
     }
 }
 
-fn stream_object_from_stream_with_config(
+pub(super) fn stream_object_from_stream_with_config(
     stream: StreamResult,
     config: StreamObjectConfig,
 ) -> StreamObjectResult {
@@ -331,7 +334,7 @@ fn stream_object_from_stream_with_config(
     )
 }
 
-fn stream_object_from_stream_with_config_and_limits(
+pub(super) fn stream_object_from_stream_with_config_and_limits(
     stream: StreamResult,
     config: StreamObjectConfig,
     buffer_limits: StreamObjectBufferLimits,
@@ -731,7 +734,11 @@ fn request_with_json_schema(
     let response_format = ResponseFormat::JsonSchema {
         json_schema: schema,
     };
-    request.with_provider_response_format(provider, response_format)
+    crate::provider_options::request_with_provider_response_format(
+        request,
+        provider,
+        response_format,
+    )
 }
 
 fn resolve_object_strategy(provider: &str, requested: ObjectStrategy) -> ObjectStrategy {

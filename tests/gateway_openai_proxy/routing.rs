@@ -1152,7 +1152,7 @@ async fn openai_compat_proxy_rejects_banned_regex() {
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1225,7 +1225,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_images_generations_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1294,7 +1294,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_images_generation
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_speech_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

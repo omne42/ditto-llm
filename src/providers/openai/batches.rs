@@ -3,9 +3,9 @@ use async_trait::async_trait;
 use crate::providers::openai_batches_common;
 use crate::providers::openai_like;
 
-use crate::Result;
-use crate::batch::BatchClient;
+use crate::capabilities::BatchClient;
 use crate::config::{Env, ProviderConfig};
+use crate::foundation::error::Result;
 use crate::types::{BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Clone)]

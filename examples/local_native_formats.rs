@@ -1,9 +1,12 @@
-use ditto_llm::{Anthropic, GenerateRequest, LanguageModel, Message};
+use ditto_llm::contracts::{GenerateRequest, Message};
+use ditto_llm::foundation::error::Result;
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::Anthropic;
 use httpmock::{Method::POST, MockServer};
 use serde_json::{Value, json};
 
 #[cfg(feature = "google")]
-use ditto_llm::Google;
+use ditto_llm::providers::Google;
 
 static PRINT_CLAUDE_REQ: std::sync::Once = std::sync::Once::new();
 #[cfg(feature = "google")]
@@ -21,7 +24,7 @@ fn google_disabled_note() {
 }
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         eprintln!("httpmock disabled in this environment; skipping.");
         return Ok(());

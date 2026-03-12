@@ -5,14 +5,14 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::Result;
-use crate::file::FileContent;
+use crate::capabilities::file::FileContent;
+use crate::foundation::error::Result;
+use crate::foundation::error::{DittoError, Result as DittoResult};
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationError, VideoGenerationRequest,
     VideoGenerationResponse, VideoGenerationStatus, VideoListOrder, VideoListRequest,
     VideoListResponse, VideoRemixRequest, Warning,
 };
-use crate::{DittoError, Result as DittoResult};
 
 #[derive(Debug, Deserialize, Default)]
 struct VideoObject {
@@ -188,8 +188,10 @@ pub(super) async fn create(
         provider_options,
     } = request;
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let selected_model = model
         .as_deref()
         .map(str::trim)
@@ -238,7 +240,7 @@ pub(super) async fn create(
             body.insert("size".to_string(), Value::String(size.to_string()));
         }
 
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options.as_ref(),
             &["prompt", "input_reference", "model", "seconds", "size"],
@@ -251,7 +253,7 @@ pub(super) async fn create(
             .json(&body)
     };
 
-    let raw = crate::utils::http::send_checked_json::<Value>(req).await?;
+    let raw = crate::provider_transport::send_checked_json::<Value>(req).await?;
     let mut response = parse_video_response(raw, warnings)?;
     if response.model.is_none() {
         response.model = selected_model;
@@ -272,7 +274,7 @@ pub(super) async fn retrieve(
     client: &OpenAiLikeClient,
     video_id: &str,
 ) -> Result<VideoGenerationResponse> {
-    let raw = crate::utils::http::send_checked_json::<Value>(
+    let raw = crate::provider_transport::send_checked_json::<Value>(
         client.apply_auth(client.http.get(video_url(client, video_id))),
     )
     .await?;
@@ -303,7 +305,7 @@ pub(super) async fn list(
         req = req.query(&[("order", value)]);
     }
 
-    let raw = crate::utils::http::send_checked_json::<Value>(req).await?;
+    let raw = crate::provider_transport::send_checked_json::<Value>(req).await?;
     let parsed = serde_json::from_value::<VideoListObject>(raw.clone())?;
     let mut videos = Vec::<VideoGenerationResponse>::with_capacity(parsed.data.len());
     for item in parsed.data {
@@ -323,7 +325,7 @@ pub(super) async fn delete(
     client: &OpenAiLikeClient,
     video_id: &str,
 ) -> Result<VideoDeleteResponse> {
-    crate::utils::http::send_checked_json::<VideoDeleteResponse>(
+    crate::provider_transport::send_checked_json::<VideoDeleteResponse>(
         client.apply_auth(client.http.delete(video_url(client, video_id))),
     )
     .await
@@ -346,13 +348,13 @@ pub(super) async fn download_content(
         req = req.query(&[("variant", value)]);
     }
 
-    let response = crate::utils::http::send_checked(req).await?;
+    let response = crate::provider_transport::send_checked(req).await?;
     let headers = response.headers().clone();
     let media_type = headers
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .map(str::to_string);
-    let bytes = crate::utils::http::read_reqwest_body_bytes_bounded_with_content_length(
+    let bytes = crate::provider_transport::read_reqwest_body_bytes_bounded_with_content_length(
         response,
         &headers,
         client.max_binary_response_bytes,
@@ -371,12 +373,14 @@ pub(super) async fn remix(
     video_id: &str,
     request: VideoRemixRequest,
 ) -> Result<VideoGenerationResponse> {
-    let selected_provider_options =
-        crate::types::select_provider_options_value(request.provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        request.provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
     let mut body = Map::<String, Value>::new();
     body.insert("prompt".to_string(), Value::String(request.prompt));
-    crate::types::merge_provider_options_into_body(
+    crate::provider_options::merge_provider_options_into_body(
         &mut body,
         selected_provider_options.as_ref(),
         &["prompt"],
@@ -384,7 +388,7 @@ pub(super) async fn remix(
         &mut warnings,
     );
 
-    let raw = crate::utils::http::send_checked_json::<Value>(
+    let raw = crate::provider_transport::send_checked_json::<Value>(
         client
             .apply_auth(client.http.post(video_remix_url(client, video_id)))
             .json(&body),

@@ -2,9 +2,9 @@ mod builtin;
 mod generated;
 mod provider_runtime;
 mod reference_schema;
-mod resolver;
 
-pub use crate::contracts::{
+#[allow(unused_imports)]
+pub(crate) use crate::contracts::{
     ApiSurfaceId, AuthMethodKind, CapabilityKind, ContextCacheModeId, EndpointQueryParam,
     EndpointTemplate, EvidenceLevel, EvidenceRef, HttpMethod, InvocationHints, ModelBinding,
     ModelSelector, OperationKind, ProtocolQuirks, ProviderAuthHint, ProviderClass, ProviderId,
@@ -279,6 +279,20 @@ impl CatalogRegistry {
         self.plugin(provider)?
             .resolve_with_hints(model, operation, hints)
     }
+
+    pub fn supports_operation(
+        &self,
+        provider: &str,
+        model: &str,
+        operation: OperationKind,
+    ) -> bool {
+        let model = model.trim();
+        if model.is_empty() {
+            return false;
+        }
+
+        self.resolve(provider, model, operation).is_some()
+    }
 }
 
 #[cfg(test)]
@@ -354,6 +368,14 @@ mod tests {
                 .supported_operations
                 .contains(&OperationKind::CHAT_COMPLETION)
         );
+    }
+
+    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[test]
+    fn builtin_registry_supports_operation_queries() {
+        let registry = builtin_registry();
+        assert!(registry.supports_operation("openai", "gpt-4.1", OperationKind::CHAT_COMPLETION));
+        assert!(!registry.supports_operation("openai", "", OperationKind::CHAT_COMPLETION));
     }
 
     #[cfg(all(

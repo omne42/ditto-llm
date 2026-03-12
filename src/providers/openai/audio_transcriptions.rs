@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
-use crate::audio::AudioTranscriptionModel;
+use crate::capabilities::audio::AudioTranscriptionModel;
 use crate::config::{Env, ProviderConfig};
+use crate::foundation::error::{DittoError, Result};
 use crate::providers::{openai_audio_common, openai_like};
 use crate::types::{AudioTranscriptionRequest, AudioTranscriptionResponse};
-use crate::{DittoError, Result};
 
 macro_rules! define_openai_like_audio_transcription {
     (

@@ -1,8 +1,10 @@
 #![cfg(feature = "integration")]
 
 #[cfg(feature = "embeddings")]
-use ditto_llm::EmbeddingModel;
-use ditto_llm::{GenerateRequest, LanguageModel, Message, Result};
+use ditto_llm::capabilities::EmbeddingModel;
+use ditto_llm::contracts::{GenerateRequest, Message};
+use ditto_llm::foundation::error::Result;
+use ditto_llm::llm_core::model::LanguageModel;
 
 fn env_nonempty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
@@ -17,7 +19,7 @@ async fn openai_generate_smoke() -> Result<()> {
         return Ok(());
     };
 
-    let client = ditto_llm::OpenAI::new(api_key).with_model(model);
+    let client = ditto_llm::providers::OpenAI::new(api_key).with_model(model);
     let mut request: GenerateRequest = vec![
         Message::system("You are a minimal integration test."),
         Message::user("Reply with the single word: ok"),
@@ -41,7 +43,7 @@ async fn openai_compatible_generate_smoke() -> Result<()> {
     };
 
     let api_key = env_nonempty("OPENAI_COMPAT_API_KEY").unwrap_or_default();
-    let client = ditto_llm::OpenAICompatible::new(api_key)
+    let client = ditto_llm::providers::OpenAICompatible::new(api_key)
         .with_base_url(base_url)
         .with_model(model);
 
@@ -67,7 +69,7 @@ async fn openai_embeddings_smoke() -> Result<()> {
         return Ok(());
     };
 
-    let client = ditto_llm::OpenAIEmbeddings::new(api_key).with_model(model);
+    let client = ditto_llm::providers::OpenAIEmbeddings::new(api_key).with_model(model);
     let vector = client.embed_single("ok".to_string()).await?;
     assert!(!vector.is_empty());
     Ok(())
@@ -84,7 +86,7 @@ async fn openai_compatible_embeddings_smoke() -> Result<()> {
 
     let api_key = env_nonempty("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 
-    let client = ditto_llm::OpenAICompatibleEmbeddings::new(api_key)
+    let client = ditto_llm::providers::OpenAICompatibleEmbeddings::new(api_key)
         .with_base_url(base_url)
         .with_model(model);
 

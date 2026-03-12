@@ -2,6 +2,16 @@
 
 pub mod http;
 
+#[cfg(all(
+    feature = "gateway-costing",
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    )
+))]
+use super::CostLedgerRecord;
 use super::LimitsConfig;
 use super::ProxyBackend;
 #[cfg(feature = "gateway-costing")]
@@ -12,11 +22,17 @@ use super::metrics_prometheus;
 use super::proxy_cache;
 #[cfg(feature = "gateway-tokenizer")]
 use super::token_count;
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+use super::{AuditLogRecord, BudgetLedgerRecord};
 use super::{
-    AuditLogRecord, BudgetConfig, BudgetLedgerRecord, CostLedgerRecord, Gateway, GatewayError,
-    GatewayPreparedRequest, GatewayRequest, GatewayResponse, GatewayStateFile,
-    ObservabilitySnapshot, RouterConfig, VirtualKeyConfig, budget, interop, limits,
-    lock_unpoisoned, multipart, observability, redaction, responses_shim,
+    BudgetConfig, Gateway, GatewayError, GatewayPreparedRequest, GatewayRequest, GatewayResponse,
+    GatewayStateFile, ObservabilitySnapshot, RouterConfig, VirtualKeyConfig, budget, interop,
+    limits, lock_unpoisoned, multipart, observability, redaction, responses_shim,
 };
 #[cfg(feature = "gateway-store-mysql")]
 use super::{MySqlStore, MySqlStoreError};

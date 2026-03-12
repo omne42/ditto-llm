@@ -1,11 +1,17 @@
 # Ditto-LLM Docs
 
-Ditto-LLM 的目标是成为 **LiteLLM Proxy + Vercel AI SDK 的能力超集**，但以 Rust-first 的方式交付：
+Ditto-LLM 的长期方向仍然对标 **LiteLLM Proxy + AI SDK Core**，但近期实现范围会主动收敛：
 
 - **Rust SDK（AI SDK Core-like）**：在 Rust 中以统一类型调用多个大模型提供方（providers），并显式暴露兼容性差异（Warnings）。
 - **Gateway（LiteLLM-like）**：可选启用的 OpenAI-compatible HTTP gateway，支持路由/限流/预算/缓存/审计/观测等控制面能力，并可选启用 MCP（`/mcp*`）/ A2A（`/a2a/*`）等协议端点。
 - **JS/React Clients（AI SDK UI-like）**：面向前端/JS 侧的最小 stream 协议解析与 hook（不试图复刻完整 AI SDK UI 生态）。
 - **Passthrough vs Translation**：既支持 OpenAI `/v1/*` passthrough（不变形），也支持将 OpenAI 输入/输出翻译到 native providers（translation）。
+
+近期边界是：
+
+- L0 先把模型调用与协议转化做稳，
+- L1 先把 LiteLLM-like 的常见服务能力做稳，
+- 完整企业平台能力放到独立仓库承接。
 
 本 docs 目录定位为“可复制落地”的工程手册：你可以从快速开始直接跑起来，然后按需深入 SDK / Clients / Gateway 的各个主题。
 
@@ -17,10 +23,12 @@ LLM 集成的复杂度通常来自三件事：
 2) **工程化落地**：需要可测试、可审计、可观测、可控依赖的代码与接口边界。  
 3) **平台能力**：当调用方变多时，网关侧需要 keys/limits/budgets/routing/audit/metrics。
 
-Ditto-LLM 的取舍是：
+Ditto-LLM 的近期取舍是：
 
 - Rust 侧以统一 traits/types 提供 AI SDK 风格的“语义一致性”，并用 `Warning` 显式暴露降级与忽略字段（避免 silent fallback）。
-- 网关侧以 LiteLLM 风格的 OpenAI-compatible surface 做“平台化控制面”，并保留 passthrough 与 translation 两条路径。
+- 网关侧以 LiteLLM 风格的 OpenAI-compatible surface 做“常见服务控制面”，并保留 passthrough 与 translation 两条路径。
+- 近期一等支持面优先收敛为 OpenAI `chat.completions` / `responses`、Gemini native、CC native，以及“所有模型到 OpenAI chat”的互转。
+- 企业级闭环能力不继续堆在本仓库，而是进入独立仓库。
 
 ## 3 个入口（按你的使用方式选）
 

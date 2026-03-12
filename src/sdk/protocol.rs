@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::types::StreamChunk;
-use crate::{DittoError, Result};
+use crate::contracts::StreamChunk;
+use crate::foundation::error::{DittoError, Result};
 
 pub const STREAM_PROTOCOL_VERSION: u8 = 1;
 
@@ -72,7 +72,7 @@ pub fn decode_v1(input: &str) -> Result<StreamEventV1> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::StreamChunk;
+    use crate::contracts::StreamChunk;
 
     #[test]
     fn protocol_roundtrip_v1() {

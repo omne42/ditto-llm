@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
-#[cfg(feature = "openai-compatible")]
 use super::OpenAIChatCompletions;
 use super::{OpenAI, OpenAICompletionsLegacy};
 use crate::config::{Env, ProviderApi, ProviderConfig};
 use crate::contracts::OperationKind;
-use crate::model::{LanguageModel, StreamResult};
-use crate::{DittoError, GenerateRequest, GenerateResponse, Result, builtin_registry};
+use crate::contracts::{GenerateRequest, GenerateResponse};
+use crate::foundation::error::{DittoError, Result};
+use crate::llm_core::model::{LanguageModel, StreamResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OpenAITextSurface {
@@ -15,13 +17,15 @@ enum OpenAITextSurface {
     LegacyCompletions,
 }
 
+type OpenAiTextOperationSupportResolver = dyn Fn(&str, OperationKind) -> bool + Send + Sync;
+
 #[derive(Clone)]
 pub struct OpenAITextModel {
     responses: OpenAI,
-    #[cfg(feature = "openai-compatible")]
     chat_completions: OpenAIChatCompletions,
     legacy_completions: OpenAICompletionsLegacy,
     preferred_surface: Option<OpenAITextSurface>,
+    operation_support_resolver: Arc<OpenAiTextOperationSupportResolver>,
 }
 
 impl OpenAITextModel {
@@ -29,10 +33,14 @@ impl OpenAITextModel {
         let preferred_surface = preferred_surface_from_config(config.upstream_api)?;
         Ok(Self {
             responses: OpenAI::from_config(config, env).await?,
-            #[cfg(feature = "openai-compatible")]
             chat_completions: OpenAIChatCompletions::from_config(config, env).await?,
             legacy_completions: OpenAICompletionsLegacy::from_config(config, env).await?,
             preferred_surface,
+            // OPENAI-TEXT-SELF-SUFFICIENT-CONSTRUCTOR: public constructors must
+            // build a semantically complete adapter. Runtime may still override
+            // this resolver internally, but direct users no longer get a
+            // half-initialized object that fails only at first request.
+            operation_support_resolver: default_operation_support_resolver(),
         })
     }
 
@@ -42,27 +50,18 @@ impl OpenAITextModel {
 
     fn surface_for_model(&self, model: &str) -> Result<OpenAITextSurface> {
         if let Some(surface) = self.preferred_surface {
-            return ensure_surface_supported(model, surface);
+            return self.ensure_surface_supported(model, surface);
         }
 
-        if builtin_registry()
-            .resolve("openai", model, OperationKind::RESPONSE)
-            .is_some()
-        {
+        if self.supports_operation(model, OperationKind::RESPONSE)? {
             return Ok(OpenAITextSurface::Responses);
         }
 
-        if builtin_registry()
-            .resolve("openai", model, OperationKind::CHAT_COMPLETION)
-            .is_some()
-        {
-            return ensure_surface_supported(model, OpenAITextSurface::ChatCompletions);
+        if self.supports_operation(model, OperationKind::CHAT_COMPLETION)? {
+            return self.ensure_surface_supported(model, OpenAITextSurface::ChatCompletions);
         }
 
-        if builtin_registry()
-            .resolve("openai", model, OperationKind::TEXT_COMPLETION)
-            .is_some()
-        {
+        if self.supports_operation(model, OperationKind::TEXT_COMPLETION)? {
             return Ok(OpenAITextSurface::LegacyCompletions);
         }
 
@@ -70,6 +69,52 @@ impl OpenAITextModel {
             "openai model {model} has no supported text invocation surface in the builtin catalog"
         )))
     }
+
+    fn ensure_surface_supported(
+        &self,
+        model: &str,
+        surface: OpenAITextSurface,
+    ) -> Result<OpenAITextSurface> {
+        match surface {
+            OpenAITextSurface::Responses => {
+                if self.supports_operation(model, OperationKind::RESPONSE)? {
+                    Ok(surface)
+                } else {
+                    Err(DittoError::InvalidResponse(format!(
+                        "openai model {model} does not support /v1/responses"
+                    )))
+                }
+            }
+            OpenAITextSurface::ChatCompletions => {
+                if self.supports_operation(model, OperationKind::CHAT_COMPLETION)? {
+                    Ok(surface)
+                } else {
+                    Err(DittoError::InvalidResponse(format!(
+                        "openai model {model} does not support /v1/chat/completions"
+                    )))
+                }
+            }
+            OpenAITextSurface::LegacyCompletions => {
+                if self.supports_operation(model, OperationKind::TEXT_COMPLETION)? {
+                    Ok(surface)
+                } else {
+                    Err(DittoError::InvalidResponse(format!(
+                        "openai model {model} does not support /v1/completions"
+                    )))
+                }
+            }
+        }
+    }
+
+    fn supports_operation(&self, model: &str, operation: OperationKind) -> Result<bool> {
+        Ok((self.operation_support_resolver)(model, operation))
+    }
+}
+
+fn default_operation_support_resolver() -> Arc<OpenAiTextOperationSupportResolver> {
+    Arc::new(|model, operation| {
+        crate::catalog::builtin_registry().supports_operation("openai", model, operation)
+    })
 }
 
 fn preferred_surface_from_config(
@@ -77,71 +122,13 @@ fn preferred_surface_from_config(
 ) -> Result<Option<OpenAITextSurface>> {
     match upstream_api {
         Some(ProviderApi::OpenaiResponses) => Ok(Some(OpenAITextSurface::Responses)),
-        Some(ProviderApi::OpenaiChatCompletions) => {
-            ensure_chat_surface_compiled()?;
-            Ok(Some(OpenAITextSurface::ChatCompletions))
-        }
+        Some(ProviderApi::OpenaiChatCompletions) => Ok(Some(OpenAITextSurface::ChatCompletions)),
         Some(ProviderApi::GeminiGenerateContent) | Some(ProviderApi::AnthropicMessages) => {
             Err(DittoError::InvalidResponse(
                 "openai text model cannot be configured with a non-openai upstream_api".to_string(),
             ))
         }
         None => Ok(None),
-    }
-}
-
-fn ensure_surface_supported(model: &str, surface: OpenAITextSurface) -> Result<OpenAITextSurface> {
-    match surface {
-        OpenAITextSurface::Responses => {
-            if builtin_registry()
-                .resolve("openai", model, OperationKind::RESPONSE)
-                .is_some()
-            {
-                Ok(surface)
-            } else {
-                Err(DittoError::InvalidResponse(format!(
-                    "openai model {model} does not support /v1/responses"
-                )))
-            }
-        }
-        OpenAITextSurface::ChatCompletions => {
-            ensure_chat_surface_compiled()?;
-            if builtin_registry()
-                .resolve("openai", model, OperationKind::CHAT_COMPLETION)
-                .is_some()
-            {
-                Ok(surface)
-            } else {
-                Err(DittoError::InvalidResponse(format!(
-                    "openai model {model} does not support /v1/chat/completions"
-                )))
-            }
-        }
-        OpenAITextSurface::LegacyCompletions => {
-            if builtin_registry()
-                .resolve("openai", model, OperationKind::TEXT_COMPLETION)
-                .is_some()
-            {
-                Ok(surface)
-            } else {
-                Err(DittoError::InvalidResponse(format!(
-                    "openai model {model} does not support /v1/completions"
-                )))
-            }
-        }
-    }
-}
-
-fn ensure_chat_surface_compiled() -> Result<()> {
-    #[cfg(feature = "openai-compatible")]
-    {
-        Ok(())
-    }
-    #[cfg(not(feature = "openai-compatible"))]
-    {
-        Err(DittoError::InvalidResponse(
-            "ditto-llm built without openai-compatible feature required for openai chat/completions surface".to_string(),
-        ))
     }
 }
 
@@ -159,19 +146,7 @@ impl LanguageModel for OpenAITextModel {
         let model = self.resolve_model(&request)?;
         match self.surface_for_model(model)? {
             OpenAITextSurface::Responses => self.responses.generate(request).await,
-            OpenAITextSurface::ChatCompletions => {
-                #[cfg(feature = "openai-compatible")]
-                {
-                    self.chat_completions.generate(request).await
-                }
-                #[cfg(not(feature = "openai-compatible"))]
-                {
-                    let _ = request;
-                    Err(DittoError::InvalidResponse(
-                        "ditto-llm built without openai-compatible feature required for openai chat/completions surface".to_string(),
-                    ))
-                }
-            }
+            OpenAITextSurface::ChatCompletions => self.chat_completions.generate(request).await,
             OpenAITextSurface::LegacyCompletions => self.legacy_completions.generate(request).await,
         }
     }
@@ -180,19 +155,7 @@ impl LanguageModel for OpenAITextModel {
         let model = self.resolve_model(&request)?;
         match self.surface_for_model(model)? {
             OpenAITextSurface::Responses => self.responses.stream(request).await,
-            OpenAITextSurface::ChatCompletions => {
-                #[cfg(feature = "openai-compatible")]
-                {
-                    self.chat_completions.stream(request).await
-                }
-                #[cfg(not(feature = "openai-compatible"))]
-                {
-                    let _ = request;
-                    Err(DittoError::InvalidResponse(
-                        "ditto-llm built without openai-compatible feature required for openai chat/completions surface".to_string(),
-                    ))
-                }
-            }
+            OpenAITextSurface::ChatCompletions => self.chat_completions.stream(request).await,
             OpenAITextSurface::LegacyCompletions => self.legacy_completions.stream(request).await,
         }
     }
@@ -203,13 +166,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn auto_selects_surface_from_catalog() -> crate::Result<()> {
+    fn auto_selects_surface_from_catalog() -> crate::foundation::error::Result<()> {
         let model = OpenAITextModel {
             responses: OpenAI::new("sk-test").with_model("gpt-5"),
-            #[cfg(feature = "openai-compatible")]
             chat_completions: OpenAIChatCompletions::new("sk-test").with_model("gpt-5"),
             legacy_completions: OpenAICompletionsLegacy::new("sk-test").with_model("gpt-5"),
             preferred_surface: None,
+            operation_support_resolver: default_operation_support_resolver(),
         };
 
         assert_eq!(
@@ -229,7 +192,18 @@ mod tests {
 
     #[test]
     fn explicit_surface_is_validated_against_catalog() {
-        let err = ensure_surface_supported("gpt-5", OpenAITextSurface::LegacyCompletions)
+        let model = OpenAITextModel {
+            responses: OpenAI::new("sk-test").with_model("gpt-5"),
+            chat_completions: OpenAIChatCompletions::new("sk-test").with_model("gpt-5"),
+            legacy_completions: OpenAICompletionsLegacy::new("sk-test").with_model("gpt-5"),
+            preferred_surface: None,
+            operation_support_resolver: Arc::new(|model, operation| {
+                crate::catalog::builtin_registry().supports_operation("openai", model, operation)
+            }),
+        };
+
+        let err = model
+            .ensure_surface_supported("gpt-5", OpenAITextSurface::LegacyCompletions)
             .expect_err("gpt-5 should reject legacy completions");
         assert!(err.to_string().contains("does not support /v1/completions"));
     }

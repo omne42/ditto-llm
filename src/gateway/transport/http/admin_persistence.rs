@@ -1,5 +1,11 @@
 use super::*;
 
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 pub(super) async fn append_admin_audit_log(
     state: &GatewayHttpState,
     kind: &str,

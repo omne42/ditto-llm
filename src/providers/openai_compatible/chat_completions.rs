@@ -408,14 +408,15 @@ impl LanguageModel for OpenAICompatible {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let raw_selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let request_quirks = self.request_quirks_for_model(model);
+        let raw_selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = raw_selected_provider_options
             .as_ref()
-            .map(crate::types::ProviderOptions::from_value)
+            .map(crate::provider_options::ProviderOptions::from_value_ref)
             .transpose()?
             .unwrap_or_default();
         let schema = apply_openai_compatible_provider_options_schema(
-            self.request_quirks.family,
+            request_quirks.family,
             raw_selected_provider_options,
             OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
             "generate.provider_options",
@@ -424,7 +425,7 @@ impl LanguageModel for OpenAICompatible {
         let (body, mut warnings) = Self::build_chat_completions_body(
             &request,
             model,
-            self.request_quirks,
+            request_quirks,
             &provider_options,
             selected_provider_options.as_ref(),
             false,
@@ -436,7 +437,7 @@ impl LanguageModel for OpenAICompatible {
         let mut req = self.client.http.post(url);
         req = self.apply_auth(req);
         let parsed =
-            crate::utils::http::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
+            crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
                 .await?;
         let choice = parsed.choices.first().ok_or_else(|| {
             DittoError::InvalidResponse("chat/completions response has no choices".to_string())
@@ -464,7 +465,7 @@ impl LanguageModel for OpenAICompatible {
                 for tool_call in tool_calls {
                     let arguments_raw = tool_call.function.arguments.as_str();
                     let context = format!("id={}", tool_call.id);
-                    let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                    let arguments = crate::contracts::parse_tool_call_arguments_json_or_string(
                         arguments_raw,
                         &context,
                         &mut warnings,
@@ -500,7 +501,7 @@ impl LanguageModel for OpenAICompatible {
                     if !name.is_empty() {
                         let arguments_raw = function_call.arguments.as_str();
                         let context = format!("name={name}");
-                        let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                        let arguments = crate::contracts::parse_tool_call_arguments_json_or_string(
                             arguments_raw,
                             &context,
                             &mut warnings,
@@ -549,15 +550,16 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
+            let request_quirks = self.request_quirks_for_model(model);
             let raw_selected_provider_options =
-                request.provider_options_value_for(self.provider())?;
+                crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
             let provider_options = raw_selected_provider_options
                 .as_ref()
-                .map(crate::types::ProviderOptions::from_value)
+                .map(crate::provider_options::ProviderOptions::from_value_ref)
                 .transpose()?
                 .unwrap_or_default();
             let schema = apply_openai_compatible_provider_options_schema(
-                self.request_quirks.family,
+                request_quirks.family,
                 raw_selected_provider_options,
                 OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS,
                 "stream.provider_options",
@@ -566,7 +568,7 @@ impl LanguageModel for OpenAICompatible {
             let (body, mut warnings) = Self::build_chat_completions_body(
                 &request,
                 model,
-                self.request_quirks,
+                request_quirks,
                 &provider_options,
                 selected_provider_options.as_ref(),
                 true,
@@ -581,10 +583,10 @@ impl LanguageModel for OpenAICompatible {
                 .post(url)
                 .header("Accept", "text/event-stream")
                 .json(&body);
-            let response = crate::utils::http::send_checked(self.apply_auth(req)).await?;
+            let response = crate::provider_transport::send_checked(self.apply_auth(req)).await?;
 
             let (data_stream, buffer) =
-                crate::utils::streaming::init_sse_stream(response, warnings);
+                crate::session_transport::init_sse_stream(response, warnings);
             let stream = stream::unfold(
                 (data_stream, buffer, StreamState::default(), false),
                 |(mut data_stream, mut buffer, mut state, mut done)| async move {

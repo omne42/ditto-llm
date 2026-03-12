@@ -44,7 +44,8 @@ fn build_proxy_backends(
 }
 
 #[tokio::test]
-async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Result<()> {
+async fn prometheus_metrics_endpoint_tracks_proxy_counters()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -161,7 +162,8 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_llm::Resul
 
 #[cfg(feature = "gateway-proxy-cache")]
 #[tokio::test]
-async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_llm::Result<()> {
+async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters()
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -286,7 +288,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_llm:
 
 #[tokio::test]
 async fn prometheus_metrics_endpoint_redacts_labels_with_observability_policy()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

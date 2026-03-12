@@ -58,6 +58,9 @@
 
 - [参考](./reference/index.md)
   - [Providers 能力矩阵](./reference/providers.md)
+  - [Yunwu Gemini Native（Bearer + Streaming）](./reference/yunwu-gemini-native.md)
+  - [代码审查：`src/utils/http.rs`（2026-03-10）](./reference/review-http-utils-20260310.md)
+  - [代码审查：L0 架构边界（2026-03-11）](./reference/review-l0-architecture-20260311.md)
   - [CLI 选项（ditto-gateway）](./reference/cli.md)
   - [常见问题（FAQ）](./reference/faq.md)
   - [术语表](./reference/glossary.md)
@@ -69,6 +72,7 @@
 - [Roadmap](./roadmap/index.md)
   - [Rust Native Provider Catalog](./roadmap/rust-native-provider-catalog.md)
   - [Provider Runtime Rollout](./roadmap/provider-runtime-rollout.md)
+  - [架构总览：内核、服务、分层与企业仓库边界](./roadmap/kernel-service-enterprise-boundaries.md)
   - [Architecture Decision](./roadmap/architecture-decision.md)
   - [Module Boundaries](./roadmap/module-boundaries.md)
   - [Superset Contract（兼容性口径）](./roadmap/contract.md)

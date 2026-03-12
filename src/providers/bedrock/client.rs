@@ -16,17 +16,18 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::auth::sigv4::{SigV4Signer, SigV4Timestamp, resolve_sigv4_signer};
-use crate::config::{
-    DEFAULT_HTTP_TIMEOUT, Env, ProviderConfig, build_http_client, resolve_http_provider_config,
+use crate::config::{Env, ProviderConfig};
+use crate::llm_core::model::{LanguageModel, StreamResult};
+use crate::provider_transport::{
+    DEFAULT_HTTP_TIMEOUT, build_http_client, resolve_http_provider_config,
 };
-use crate::model::{LanguageModel, StreamResult};
 #[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
-use crate::types::{
+use crate::contracts::StreamChunk;
+use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, Tool, ToolChoice, Usage, Warning,
 };
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
 
 const DEFAULT_VERSION: &str = "bedrock-2023-05-31";
 
@@ -573,9 +574,9 @@ impl Bedrock {
             }
         }
 
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
-            request.provider_options_value_for("bedrock")?.as_ref(),
+            crate::provider_options::request_provider_options_value_for(&request, "bedrock")?.as_ref(),
             &["reasoning_effort", "response_format", "parallel_tool_calls"],
             "bedrock.provider_options",
             warnings,
@@ -615,6 +616,6 @@ impl Bedrock {
         }
         req = signed.headers.apply(req);
 
-        crate::utils::http::send_checked(req).await
+        crate::provider_transport::send_checked(req).await
     }
 }

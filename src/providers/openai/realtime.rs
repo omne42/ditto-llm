@@ -4,9 +4,11 @@ use async_trait::async_trait;
 
 use crate::providers::openai_like;
 
+use crate::capabilities::realtime::{
+    RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
+};
 use crate::config::{Env, ProviderConfig, RequestAuth};
-use crate::realtime::{RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest};
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
 
 const OPENAI_REALTIME_BETA_HEADER: &str = "realtime=v1";
 
@@ -103,7 +105,7 @@ impl RealtimeSessionModel for OpenAIRealtime {
             }
         }
 
-        let base_url = crate::utils::http::to_websocket_base_url(&self.client.base_url);
+        let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
         let mut url = reqwest::Url::parse(&openai_like::join_endpoint(&base_url, "realtime"))
             .map_err(|err| {
                 DittoError::InvalidResponse(format!(
@@ -139,7 +141,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some("https://api.openai.com/v1".to_string()),
             default_model: Some("gpt-realtime".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
             }),
             ..ProviderConfig::default()
@@ -182,7 +184,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some("https://proxy.example/v1".to_string()),
             default_model: Some("gpt-realtime-mini".to_string()),
-            auth: Some(crate::ProviderAuth::QueryParamEnv {
+            auth: Some(crate::config::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
                 prefix: None,

@@ -75,7 +75,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-model".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
             }),
             ..ProviderConfig::default()
@@ -117,7 +117,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v1")),
             default_model: Some("test-model".to_string()),
-            auth: Some(crate::ProviderAuth::HttpHeaderEnv {
+            auth: Some(crate::config::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
@@ -168,7 +168,7 @@ mod tests {
                 "api-version".to_string(),
                 "2024-02-01".to_string(),
             )]),
-            auth: Some(crate::ProviderAuth::HttpHeaderEnv {
+            auth: Some(crate::config::ProviderAuth::HttpHeaderEnv {
                 header: "api-key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
@@ -214,7 +214,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v1")),
             default_model: Some("test-model".to_string()),
-            auth: Some(crate::ProviderAuth::QueryParamEnv {
+            auth: Some(crate::config::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,
@@ -242,7 +242,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-embed-model".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
             }),
             ..ProviderConfig::default()
@@ -283,7 +283,7 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v1")),
             default_model: Some("test-embed-model".to_string()),
-            auth: Some(crate::ProviderAuth::QueryParamEnv {
+            auth: Some(crate::config::ProviderAuth::QueryParamEnv {
                 param: "api_key".to_string(),
                 keys: vec!["DITTO_TEST_OPENAI_COMPAT_KEY".to_string()],
                 prefix: None,

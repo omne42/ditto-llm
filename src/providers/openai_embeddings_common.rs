@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::Result;
+use crate::foundation::error::Result;
 
 #[derive(Debug, Deserialize)]
 struct EmbeddingsResponse {
@@ -21,7 +21,7 @@ pub(crate) async fn embed(
     texts: Vec<String>,
 ) -> Result<Vec<Vec<f32>>> {
     let url = client.endpoint("embeddings");
-    let parsed = crate::utils::http::send_checked_json::<EmbeddingsResponse>(
+    let parsed = crate::provider_transport::send_checked_json::<EmbeddingsResponse>(
         client
             .apply_auth(client.http.post(url))
             .json(&serde_json::json!({ "model": model, "input": texts })),

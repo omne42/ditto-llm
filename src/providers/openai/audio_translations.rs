@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
-use crate::Result;
-use crate::audio::AudioTranslationModel;
+use crate::capabilities::audio::AudioTranslationModel;
+use crate::foundation::error::Result;
 use crate::types::{AudioTranscriptionRequest, AudioTranscriptionResponse};
 
 #[cfg(feature = "openai")]

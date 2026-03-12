@@ -4,14 +4,15 @@
     feature = "openai-compatible"
 ))]
 
-use ditto_llm::gateway::translation::{
+use ditto_llm::config::{Env, ProviderConfig};
+use ditto_llm::runtime::{
     build_audio_transcription_model, build_batch_client, build_embedding_model, build_file_client,
     build_image_generation_model, build_language_model, build_moderation_model, build_speech_model,
 };
-use ditto_llm::{Env, ProviderConfig};
 
 #[tokio::test]
-async fn generic_openai_compatible_provider_aliases_build_models() -> ditto_llm::Result<()> {
+async fn generic_openai_compatible_provider_aliases_build_models()
+-> ditto_llm::foundation::error::Result<()> {
     let env = Env::default();
     let config = ProviderConfig::default();
 

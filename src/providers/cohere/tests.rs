@@ -50,16 +50,13 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v2")),
             default_model: Some("command-r".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_COHERE_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([(
-                "DITTO_TEST_COHERE_KEY".to_string(),
-                "sk-test".to_string(),
-            )]),
+            dotenv: BTreeMap::from([("DITTO_TEST_COHERE_KEY".to_string(), "sk-test".to_string())]),
         };
 
         let tool = Tool {
@@ -155,7 +152,7 @@ mod tests {
         let stream = client
             .stream(GenerateRequest::from(vec![Message::user("hi")]))
             .await?;
-        let collected = crate::collect_stream(stream).await?;
+        let collected = crate::llm_core::stream::collect_stream(stream).await?;
 
         mock.assert_async().await;
 
@@ -217,16 +214,13 @@ mod tests {
         let config = ProviderConfig {
             base_url: Some(server.url("/v2")),
             default_model: Some("rerank-v3.5".to_string()),
-            auth: Some(crate::ProviderAuth::ApiKeyEnv {
+            auth: Some(crate::config::ProviderAuth::ApiKeyEnv {
                 keys: vec!["DITTO_TEST_COHERE_KEY".to_string()],
             }),
             ..ProviderConfig::default()
         };
         let env = Env {
-            dotenv: BTreeMap::from([(
-                "DITTO_TEST_COHERE_KEY".to_string(),
-                "sk-test".to_string(),
-            )]),
+            dotenv: BTreeMap::from([("DITTO_TEST_COHERE_KEY".to_string(), "sk-test".to_string())]),
         };
 
         let client = CohereRerank::from_config(&config, &env).await?;

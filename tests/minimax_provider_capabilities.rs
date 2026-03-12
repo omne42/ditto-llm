@@ -2,10 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use ditto_llm::{
-    CapabilityKind, Env, OperationKind, ProviderAuth, ProviderConfig, ProviderProtocolFamily,
-    builtin_registry,
-};
+use ditto_llm::catalog::builtin_registry;
+use ditto_llm::config::{Env, ProviderAuth, ProviderConfig};
+use ditto_llm::contracts::{CapabilityKind, OperationKind, ProviderProtocolFamily};
 
 fn minimax_env() -> Env {
     Env::parse_dotenv("MINIMAX_API_KEY=sk-test\n")
@@ -71,8 +70,9 @@ fn minimax_catalog_runtime_spec_includes_context_cache() {
     feature = "openai-compatible"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_minimax_context_cache_profile() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_context_cache_model(
+async fn gateway_builder_constructs_minimax_context_cache_profile()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_context_cache_model(
         "minimax",
         &minimax_config("MiniMax-M2"),
         &minimax_env(),
@@ -86,12 +86,10 @@ async fn gateway_builder_constructs_minimax_context_cache_profile() -> ditto_llm
     assert!(
         model
             .context_cache_profile()
-            .supports_mode(ditto_llm::ContextCacheMode::Passive)
+            .supports_mode(ditto_llm::capabilities::context_cache::ContextCacheMode::Passive)
     );
-    assert!(
-        model
-            .context_cache_profile()
-            .supports_mode(ditto_llm::ContextCacheMode::AnthropicCompatible)
-    );
+    assert!(model.context_cache_profile().supports_mode(
+        ditto_llm::capabilities::context_cache::ContextCacheMode::AnthropicCompatible
+    ));
     Ok(())
 }

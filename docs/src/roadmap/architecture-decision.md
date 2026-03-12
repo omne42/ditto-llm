@@ -2,6 +2,11 @@
 
 This document freezes the architectural direction referenced by `todo.md` Phase 0. It is the baseline for future refactors.
 
+Scope note:
+
+- this document defines the long-term packaging and capability-boundary rules,
+- the near-term supported surfaces, layering method, L0/L1/L2 repo split, and enterprise-repo boundary are defined in [架构总览：内核、服务、分层与企业仓库边界](./kernel-service-enterprise-boundaries.md).
+
 ## Status
 
 Accepted.

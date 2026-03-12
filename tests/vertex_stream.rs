@@ -1,12 +1,15 @@
 #![cfg(all(feature = "vertex", feature = "streaming"))]
 
 use ditto_llm::auth::OAuthClientCredentials;
-use ditto_llm::{FinishReason, GenerateRequest, LanguageModel, Message, StreamChunk, Vertex};
+use ditto_llm::contracts::FinishReason;
+use ditto_llm::contracts::{GenerateRequest, Message, StreamChunk};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::Vertex;
 use futures_util::StreamExt;
 use httpmock::{Method::POST, MockServer};
 
 #[tokio::test]
-async fn vertex_stream_parses_sse_chunks() -> ditto_llm::Result<()> {
+async fn vertex_stream_parses_sse_chunks() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

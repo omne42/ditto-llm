@@ -6,12 +6,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use ditto_llm::DittoError;
+use ditto_llm::contracts::{FinishReason, Usage};
+use ditto_llm::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
+use ditto_llm::foundation::error::DittoError;
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
-use ditto_llm::model::{LanguageModel, StreamResult};
-use ditto_llm::types::{FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Usage};
+use ditto_llm::llm_core::model::{LanguageModel, StreamResult};
 use futures_util::{StreamExt, stream};
 use serde_json::json;
 use tower::util::ServiceExt;
@@ -29,13 +30,19 @@ impl LanguageModel for FakeModel {
         "fake-model"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::Result<GenerateResponse> {
+    async fn generate(
+        &self,
+        _request: GenerateRequest,
+    ) -> ditto_llm::foundation::error::Result<GenerateResponse> {
         Err(DittoError::InvalidResponse(
             "FakeModel.generate should not be called".to_string(),
         ))
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::Result<StreamResult> {
+    async fn stream(
+        &self,
+        _request: GenerateRequest,
+    ) -> ditto_llm::foundation::error::Result<StreamResult> {
         let chunks = vec![
             Ok(StreamChunk::ResponseId {
                 id: "chatcmpl_fake".to_string(),
@@ -74,7 +81,8 @@ fn base_gateway() -> Gateway {
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_stream_include_usage() -> ditto_llm::Result<()> {
+async fn gateway_translation_chat_completions_stream_include_usage()
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -115,7 +123,7 @@ async fn gateway_translation_chat_completions_stream_include_usage() -> ditto_ll
 
 #[tokio::test]
 async fn gateway_translation_chat_completions_stream_defaults_without_usage()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(

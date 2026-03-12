@@ -4,11 +4,11 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::foundation::error::{DittoError, Result};
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, SpeechRequest, SpeechResponse,
     SpeechResponseFormat, TranscriptionResponseFormat, Warning,
 };
-use crate::{DittoError, Result};
 
 #[derive(Debug, Deserialize)]
 struct TranscriptionJsonResponse {
@@ -144,8 +144,10 @@ async fn transcribe_to_endpoint(
         provider_options,
     } = request;
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
 
     let mut file_part = Part::bytes(audio).file_name(filename);
@@ -194,7 +196,7 @@ async fn transcribe_to_endpoint(
     );
 
     let url = client.endpoint(endpoint);
-    let body = crate::utils::http::send_checked_bytes(
+    let body = crate::provider_transport::send_checked_bytes(
         client.apply_auth(client.http.post(url)).multipart(form),
     )
     .await?;
@@ -244,8 +246,10 @@ pub(super) async fn speak(
         provider_options,
     } = request;
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
 
     let mut body = Map::<String, Value>::new();
@@ -274,7 +278,7 @@ pub(super) async fn speak(
         }
     }
 
-    crate::types::merge_provider_options_into_body(
+    crate::provider_options::merge_provider_options_into_body(
         &mut body,
         selected_provider_options.as_ref(),
         &["model", "input", "voice", "response_format", "speed"],
@@ -283,9 +287,10 @@ pub(super) async fn speak(
     );
 
     let url = client.endpoint("audio/speech");
-    let response =
-        crate::utils::http::send_checked(client.apply_auth(client.http.post(url)).json(&body))
-            .await?;
+    let response = crate::provider_transport::send_checked(
+        client.apply_auth(client.http.post(url)).json(&body),
+    )
+    .await?;
 
     let headers = response.headers().clone();
     let media_type = headers
@@ -293,7 +298,7 @@ pub(super) async fn speak(
         .and_then(|v| v.to_str().ok())
         .map(|v| v.to_string());
     let max_bytes = client.max_binary_response_bytes;
-    let bytes = crate::utils::http::read_reqwest_body_bytes_bounded_with_content_length(
+    let bytes = crate::provider_transport::read_reqwest_body_bytes_bounded_with_content_length(
         response, &headers, max_bytes,
     )
     .await

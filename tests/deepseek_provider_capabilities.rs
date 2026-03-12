@@ -2,12 +2,16 @@
 
 use std::collections::BTreeSet;
 
-use ditto_llm::{
-    AssistantToolFollowupRequirement, BehaviorSupport, CacheUsageReportingKind, CapabilityKind,
-    ContextCacheModeId, DittoError, Env, OperationKind, ProviderAuth, ProviderConfig,
-    ProviderProtocolFamily, ProviderResolutionError, ReasoningActivationKind, ReasoningOutputMode,
-    builtin_registry,
+use ditto_llm::catalog::{
+    AssistantToolFollowupRequirement, BehaviorSupport, CacheUsageReportingKind, builtin_registry,
 };
+use ditto_llm::catalog::{ReasoningActivationKind, ReasoningOutputMode};
+use ditto_llm::config::{Env, ProviderAuth, ProviderConfig};
+use ditto_llm::contracts::{
+    CapabilityKind, ContextCacheModeId, OperationKind, ProviderProtocolFamily,
+};
+use ditto_llm::foundation::error::DittoError;
+use ditto_llm::foundation::error::ProviderResolutionError;
 
 fn deepseek_env() -> Env {
     Env::parse_dotenv("DEEPSEEK_API_KEY=sk-test\n")
@@ -155,8 +159,8 @@ fn deepseek_catalog_exposes_beta_fim_route_and_model_behaviors() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_deepseek_llm() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
+async fn gateway_builder_constructs_deepseek_llm() -> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_language_model(
         "deepseek",
         &deepseek_config("deepseek-reasoner"),
         &deepseek_env(),
@@ -175,7 +179,7 @@ async fn gateway_builder_constructs_deepseek_llm() -> ditto_llm::Result<()> {
 ))]
 #[tokio::test]
 async fn gateway_builder_rejects_unimplemented_deepseek_embedding_capability() {
-    let err = match ditto_llm::gateway::translation::build_embedding_model(
+    let err = match ditto_llm::runtime::build_embedding_model(
         "deepseek",
         &deepseek_config("deepseek-chat"),
         &deepseek_env(),
@@ -198,8 +202,9 @@ async fn gateway_builder_rejects_unimplemented_deepseek_embedding_capability() {
 
 #[cfg(all(feature = "gateway-translation", feature = "provider-deepseek"))]
 #[tokio::test]
-async fn gateway_builder_constructs_deepseek_context_cache_profile() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_context_cache_model(
+async fn gateway_builder_constructs_deepseek_context_cache_profile()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_context_cache_model(
         "deepseek",
         &deepseek_config("deepseek-reasoner"),
         &deepseek_env(),
@@ -213,7 +218,7 @@ async fn gateway_builder_constructs_deepseek_context_cache_profile() -> ditto_ll
     assert!(
         model
             .context_cache_profile()
-            .supports_mode(ditto_llm::ContextCacheMode::Passive)
+            .supports_mode(ditto_llm::capabilities::context_cache::ContextCacheMode::Passive)
     );
     Ok(())
 }

@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ProviderOptionsEnvelope, Warning};
+use crate::contracts::Warning;
+use crate::provider_options::ProviderOptionsEnvelope;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ModerationInput {

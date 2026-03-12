@@ -1,17 +1,17 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use crate::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
+use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
 #[cfg(any(feature = "openai", feature = "openai-compatible"))]
 use crate::config::resolve_provider_request_auth_required;
 use crate::config::{
-    Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    resolve_http_provider_config, resolve_provider_request_auth_optional,
+    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_optional,
 };
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
+use crate::provider_transport::{apply_http_query_params, resolve_http_provider_config};
 
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const HTTP_TIMEOUT: Duration = Duration::from_secs(300);
@@ -28,7 +28,7 @@ pub(crate) fn join_endpoint(base_url: &str, endpoint: &str) -> String {
 }
 
 pub(crate) fn default_http_client() -> reqwest::Client {
-    crate::config::default_http_client(HTTP_TIMEOUT)
+    crate::provider_transport::default_http_client(HTTP_TIMEOUT)
 }
 
 pub(crate) fn auth_from_api_key(api_key: &str) -> Option<RequestAuth> {
@@ -235,7 +235,8 @@ pub(crate) async fn upload_file_with_purpose(
     let mut req = http.post(url);
     req = apply_auth(req, auth, http_query_params);
     let parsed =
-        crate::utils::http::send_checked_json::<FilesUploadResponse>(req.multipart(form)).await?;
+        crate::provider_transport::send_checked_json::<FilesUploadResponse>(req.multipart(form))
+            .await?;
     Ok(parsed.id)
 }
 
@@ -252,7 +253,7 @@ pub(crate) async fn list_files(
 
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    let parsed = crate::utils::http::send_checked_json::<FilesListResponse>(req).await?;
+    let parsed = crate::provider_transport::send_checked_json::<FilesListResponse>(req).await?;
     Ok(parsed.data)
 }
 
@@ -264,7 +265,7 @@ pub(crate) async fn retrieve_file(
 ) -> Result<FileObject> {
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    crate::utils::http::send_checked_json::<FileObject>(req).await
+    crate::provider_transport::send_checked_json::<FileObject>(req).await
 }
 
 pub(crate) async fn delete_file(
@@ -275,7 +276,7 @@ pub(crate) async fn delete_file(
 ) -> Result<FileDeleteResponse> {
     let mut req = http.delete(url);
     req = apply_auth(req, auth, http_query_params);
-    crate::utils::http::send_checked_json::<FileDeleteResponse>(req).await
+    crate::provider_transport::send_checked_json::<FileDeleteResponse>(req).await
 }
 
 pub(crate) async fn download_file_content(
@@ -287,14 +288,14 @@ pub(crate) async fn download_file_content(
 ) -> Result<FileContent> {
     let mut req = http.get(url);
     req = apply_auth(req, auth, http_query_params);
-    let response = crate::utils::http::send_checked(req).await?;
+    let response = crate::provider_transport::send_checked(req).await?;
 
     let headers = response.headers().clone();
     let media_type = headers
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_string());
-    let bytes = crate::utils::http::read_reqwest_body_bytes_bounded_with_content_length(
+    let bytes = crate::provider_transport::read_reqwest_body_bytes_bounded_with_content_length(
         response, &headers, max_bytes,
     )
     .await

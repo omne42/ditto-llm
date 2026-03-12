@@ -1,4 +1,9 @@
-fn parse_json_from_response_text(text: &str) -> Result<(Value, Option<Warning>)> {
+use serde_json::Value;
+
+use crate::contracts::Warning;
+use crate::foundation::error::{DittoError, Result};
+
+pub(super) fn parse_json_from_response_text(text: &str) -> Result<(Value, Option<Warning>)> {
     let raw = text.trim();
     if raw.is_empty() {
         return Err(DittoError::InvalidResponse(
@@ -98,7 +103,7 @@ fn extract_balanced_json(text: &str) -> Option<&str> {
     last_end.map(|end| &text[start..end])
 }
 
-fn parse_partial_json(text: &str) -> Option<Value> {
+pub(super) fn parse_partial_json(text: &str) -> Option<Value> {
     let start = text.find(['{', '['])?;
     let bytes = text.as_bytes();
     let mut in_string = false;

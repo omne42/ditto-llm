@@ -578,7 +578,7 @@ async fn openai_compat_proxy_spends_usage_tokens_when_available() {
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_project_budget_is_shared_across_virtual_keys() -> ditto_llm::Result<()>
+async fn openai_compat_proxy_project_budget_is_shared_across_virtual_keys() -> ditto_llm::foundation::error::Result<()>
 {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
@@ -690,7 +690,7 @@ async fn openai_compat_proxy_project_budget_is_shared_across_virtual_keys() -> d
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_tenant_budget_is_shared_across_virtual_keys() -> ditto_llm::Result<()>
+async fn openai_compat_proxy_tenant_budget_is_shared_across_virtual_keys() -> ditto_llm::foundation::error::Result<()>
 {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
@@ -865,7 +865,7 @@ async fn openai_compat_proxy_streams_text_event_stream() {
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> ditto_llm::Result<()>
+async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> ditto_llm::foundation::error::Result<()>
 {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
@@ -994,7 +994,7 @@ async fn openai_compat_proxy_stream_usage_settles_budget_using_usage_chunk() -> 
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_large_multipart_requests_stream_to_upstream() -> ditto_llm::Result<()> {
+async fn openai_compat_proxy_large_multipart_requests_stream_to_upstream() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

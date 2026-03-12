@@ -67,7 +67,7 @@ fn base_config() -> GatewayConfig {
 }
 
 #[tokio::test]
-async fn gateway_http_routes_and_metrics() -> ditto_llm::Result<()> {
+async fn gateway_http_routes_and_metrics() -> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -111,7 +111,8 @@ async fn gateway_http_routes_and_metrics() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_llm::Result<()> {
+async fn gateway_http_admin_requires_token_and_supports_crud()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -182,7 +183,8 @@ async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_llm::Res
 }
 
 #[tokio::test]
-async fn gateway_http_admin_config_versions_support_rollback() -> ditto_llm::Result<()> {
+async fn gateway_http_admin_config_versions_support_rollback()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -734,7 +736,8 @@ async fn gateway_http_admin_config_versions_support_rollback() -> ditto_llm::Res
 }
 
 #[tokio::test]
-async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_llm::Result<()> {
+async fn gateway_http_admin_config_router_upsert_and_rollback()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -978,7 +981,8 @@ async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_llm::Re
 }
 
 #[tokio::test]
-async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_llm::Result<()> {
+async fn gateway_http_admin_routes_are_disabled_without_admin_token()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -997,8 +1001,8 @@ async fn gateway_http_admin_routes_are_disabled_without_admin_token() -> ditto_l
 }
 
 #[tokio::test]
-async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token() -> ditto_llm::Result<()>
-{
+async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1017,7 +1021,8 @@ async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token() -> d
 }
 
 #[tokio::test]
-async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm::Result<()> {
+async fn gateway_http_litellm_key_generate_info_delete_round_trip()
+-> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1273,7 +1278,8 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_llm
 }
 
 #[tokio::test]
-async fn gateway_http_tenant_scoped_admin_tokens_are_isolated() -> ditto_llm::Result<()> {
+async fn gateway_http_tenant_scoped_admin_tokens_are_isolated()
+-> ditto_llm::foundation::error::Result<()> {
     let mut config = base_config();
     config.virtual_keys = vec![
         {
@@ -1361,7 +1367,7 @@ async fn gateway_http_tenant_scoped_admin_tokens_are_isolated() -> ditto_llm::Re
 }
 
 #[tokio::test]
-async fn gateway_http_tenant_read_token_is_read_only() -> ditto_llm::Result<()> {
+async fn gateway_http_tenant_read_token_is_read_only() -> ditto_llm::foundation::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1394,7 +1400,8 @@ async fn gateway_http_tenant_read_token_is_read_only() -> ditto_llm::Result<()> 
 
 #[cfg(feature = "gateway-store-sqlite")]
 #[tokio::test]
-async fn gateway_http_audit_export_jsonl_has_hash_chain() -> ditto_llm::Result<()> {
+async fn gateway_http_audit_export_jsonl_has_hash_chain() -> ditto_llm::foundation::error::Result<()>
+{
     use ditto_llm::gateway::SqliteStore;
 
     let dir = tempfile::tempdir().expect("tempdir");

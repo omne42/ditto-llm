@@ -3,8 +3,8 @@ use std::time::Duration;
 use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
+use crate::foundation::error::{DittoError, Result};
 use crate::foundation::secrets::{DefaultSecretResolver, SecretResolver};
-use crate::{DittoError, Result};
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};
@@ -503,4 +503,93 @@ where
     }
 
     Ok((out, truncated))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn resolves_auth_token_with_custom_default_keys() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
+        assert_eq!(token, "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_auth_token_from_secret_spec_in_env_value() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([
+                (
+                    "DITTO_TEST_KEY".to_string(),
+                    "secret://env/REAL_TEST_KEY".to_string(),
+                ),
+                ("REAL_TEST_KEY".to_string(), "sk-test".to_string()),
+            ]),
+        };
+        let auth = ProviderAuth::ApiKeyEnv {
+            keys: vec!["DITTO_TEST_KEY".to_string()],
+        };
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
+        assert_eq!(token, "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_http_header_env_auth() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::HttpHeaderEnv {
+            header: "api-key".to_string(),
+            keys: vec!["DITTO_TEST_KEY".to_string()],
+            prefix: None,
+        };
+        let resolved = resolve_request_auth_with_default_keys(
+            &auth,
+            &env,
+            &["DITTO_TEST_KEY"],
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let RequestAuth::Http(resolved) = resolved else {
+            panic!("expected http header auth");
+        };
+        assert_eq!(resolved.header.as_str(), "api-key");
+        assert_eq!(resolved.value.to_str().unwrap_or_default(), "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_query_param_env_auth() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
+        };
+        let auth = ProviderAuth::QueryParamEnv {
+            param: "api_key".to_string(),
+            keys: vec!["DITTO_TEST_KEY".to_string()],
+            prefix: None,
+        };
+        let resolved = resolve_request_auth_with_default_keys(
+            &auth,
+            &env,
+            &["DITTO_TEST_KEY"],
+            "authorization",
+            Some("Bearer "),
+        )
+        .await?;
+        let RequestAuth::QueryParam(resolved) = resolved else {
+            panic!("expected query param auth");
+        };
+        assert_eq!(resolved.param, "api_key");
+        assert_eq!(resolved.value, "sk-test");
+        Ok(())
+    }
 }

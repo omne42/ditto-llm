@@ -157,7 +157,7 @@ pub(super) async fn handle_anthropic_messages(
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
             let reader = tokio::io::BufReader::new(reader);
-            let data_stream = crate::utils::sse::sse_data_stream_from_reader(reader);
+            let data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);

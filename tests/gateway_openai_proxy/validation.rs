@@ -1,5 +1,5 @@
 #[tokio::test]
-async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_llm::Result<()> {
+async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -62,7 +62,7 @@ async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_llm::Result<()
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -128,7 +128,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_reque
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -195,7 +195,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_reque
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -261,7 +261,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -328,7 +328,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_transcriptions_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -401,7 +401,7 @@ abc\r\n\
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_files_upload_request()
--> ditto_llm::Result<()> {
+-> ditto_llm::foundation::error::Result<()> {
     if ditto_llm::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

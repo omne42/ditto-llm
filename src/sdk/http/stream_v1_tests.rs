@@ -3,10 +3,10 @@ mod tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
-    use crate::DittoError;
-    use crate::StreamResult;
+    use crate::foundation::error::DittoError;
+    use crate::llm_core::model::StreamResult;
     use crate::sdk::protocol::{StreamEventV1, decode_v1};
-    use crate::types::StreamChunk;
+    use crate::contracts::StreamChunk;
 
     async fn collect_ndjson_events(stream: StreamResult) -> Vec<StreamEventV1> {
         let mut out = super::stream_v1_ndjson(stream);

@@ -9,10 +9,11 @@ use futures_util::StreamExt;
 use futures_util::stream;
 use tokio::sync::Mutex;
 
-use crate::layer::LanguageModelLayer;
-use crate::model::LanguageModel;
-use crate::types::{GenerateRequest, GenerateResponse, StreamChunk};
-use crate::{Result, StreamResult};
+use crate::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
+use crate::foundation::error::Result;
+use crate::llm_core::layer::LanguageModelLayer;
+use crate::llm_core::model::LanguageModel;
+use crate::llm_core::model::StreamResult;
 
 #[derive(Debug, Clone)]
 pub struct CacheLayer {
@@ -452,33 +453,33 @@ impl<H: Hasher> io::Write for HasherWriter<'_, H> {
     }
 }
 
-impl ApproxBytes for crate::types::ContentPart {
+impl ApproxBytes for crate::contracts::ContentPart {
     fn approx_bytes(&self) -> usize {
         match self {
-            crate::types::ContentPart::Text { text } => text.len(),
-            crate::types::ContentPart::Reasoning { text } => text.len(),
-            crate::types::ContentPart::Image { source } => match source {
-                crate::types::ImageSource::Url { url } => url.len(),
-                crate::types::ImageSource::Base64 { media_type, data } => {
+            crate::contracts::ContentPart::Text { text } => text.len(),
+            crate::contracts::ContentPart::Reasoning { text } => text.len(),
+            crate::contracts::ContentPart::Image { source } => match source {
+                crate::contracts::ImageSource::Url { url } => url.len(),
+                crate::contracts::ImageSource::Base64 { media_type, data } => {
                     media_type.len().saturating_add(data.len())
                 }
             },
-            crate::types::ContentPart::File {
+            crate::contracts::ContentPart::File {
                 filename,
                 media_type,
                 source,
             } => {
                 let source_bytes = match source {
-                    crate::types::FileSource::Url { url } => url.len(),
-                    crate::types::FileSource::Base64 { data } => data.len(),
-                    crate::types::FileSource::FileId { file_id } => file_id.len(),
+                    crate::contracts::FileSource::Url { url } => url.len(),
+                    crate::contracts::FileSource::Base64 { data } => data.len(),
+                    crate::contracts::FileSource::FileId { file_id } => file_id.len(),
                 };
                 media_type
                     .len()
                     .saturating_add(filename.as_deref().map(str::len).unwrap_or(0))
                     .saturating_add(source_bytes)
             }
-            crate::types::ContentPart::ToolCall {
+            crate::contracts::ContentPart::ToolCall {
                 id,
                 name,
                 arguments,
@@ -486,7 +487,7 @@ impl ApproxBytes for crate::types::ContentPart {
                 .len()
                 .saturating_add(name.len())
                 .saturating_add(approx_json_value_bytes(arguments)),
-            crate::types::ContentPart::ToolResult {
+            crate::contracts::ContentPart::ToolResult {
                 tool_call_id,
                 content,
                 is_error,
@@ -498,20 +499,20 @@ impl ApproxBytes for crate::types::ContentPart {
     }
 }
 
-fn approx_warning_bytes(warning: &crate::types::Warning) -> usize {
+fn approx_warning_bytes(warning: &crate::contracts::Warning) -> usize {
     match warning {
-        crate::types::Warning::Unsupported { feature, details } => feature
+        crate::contracts::Warning::Unsupported { feature, details } => feature
             .len()
             .saturating_add(details.as_deref().map(str::len).unwrap_or(0)),
-        crate::types::Warning::Clamped {
+        crate::contracts::Warning::Clamped {
             parameter,
             original: _,
             clamped_to: _,
         } => parameter.len().saturating_add(16),
-        crate::types::Warning::Compatibility { feature, details } => {
+        crate::contracts::Warning::Compatibility { feature, details } => {
             feature.len().saturating_add(details.len())
         }
-        crate::types::Warning::Other { message } => message.len(),
+        crate::contracts::Warning::Other { message } => message.len(),
     }
 }
 
@@ -553,7 +554,8 @@ mod tests {
     use futures_util::stream;
 
     use super::*;
-    use crate::types::{ContentPart, FinishReason, Message, Usage, Warning};
+    use crate::contracts::{ContentPart, Message};
+    use crate::contracts::{FinishReason, Usage, Warning};
 
     #[derive(Clone)]
     struct FakeModel {
@@ -612,7 +614,8 @@ mod tests {
             stream_calls: Arc::new(AtomicUsize::new(0)),
         };
 
-        let cached = crate::LayeredLanguageModel::new(Arc::new(model), CacheLayer::new());
+        let cached =
+            crate::llm_core::layer::LayeredLanguageModel::new(Arc::new(model), CacheLayer::new());
         let req: GenerateRequest = vec![Message::user("hi")].into();
 
         let a = cached.generate(req.clone()).await?;
@@ -667,7 +670,7 @@ mod tests {
         let model = LargeToolArgsModel {
             calls: Arc::clone(&calls),
         };
-        let cached = crate::LayeredLanguageModel::new(
+        let cached = crate::llm_core::layer::LayeredLanguageModel::new(
             Arc::new(model),
             CacheLayer::new().with_max_value_bytes(512),
         );
@@ -706,7 +709,8 @@ mod tests {
             stream_calls: Arc::clone(&stream_calls),
         };
 
-        let cached = crate::LayeredLanguageModel::new(Arc::new(model), CacheLayer::new());
+        let cached =
+            crate::llm_core::layer::LayeredLanguageModel::new(Arc::new(model), CacheLayer::new());
         let req: GenerateRequest = vec![Message::user("hi")].into();
 
         let a_chunks: Vec<StreamChunk> = cached
@@ -781,7 +785,7 @@ mod tests {
             stream_calls: Arc::clone(&stream_calls),
         };
 
-        let cached = crate::LayeredLanguageModel::new(
+        let cached = crate::llm_core::layer::LayeredLanguageModel::new(
             Arc::new(model),
             CacheLayer::new().with_max_value_bytes(256),
         );

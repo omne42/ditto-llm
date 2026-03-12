@@ -11,11 +11,12 @@ use super::client::{
     encode_tool_call_id_with_thought_signature, sanitize_openai_responses_provider_options,
 };
 
-use crate::model::{LanguageModel, StreamResult};
 #[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
-use crate::types::{ContentPart, FinishReason, GenerateRequest, GenerateResponse, Warning};
-use crate::{DittoError, Result};
+use crate::contracts::StreamChunk;
+use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
+use crate::contracts::{FinishReason, Warning};
+use crate::foundation::error::{DittoError, Result};
+use crate::llm_core::model::{LanguageModel, StreamResult};
 
 #[derive(Debug, Deserialize)]
 struct ResponsesApiResponse {
@@ -137,7 +138,7 @@ pub(super) fn parse_openai_output(
                     encode_tool_call_id_with_thought_signature(call_id, thought_signature);
                 let arguments_raw = item.get("arguments").and_then(Value::as_str).unwrap_or("");
                 let context = format!("id={call_id}");
-                let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+                let arguments = crate::contracts::parse_tool_call_arguments_json_or_string(
                     arguments_raw,
                     &context,
                     warnings,
@@ -167,10 +168,11 @@ impl LanguageModel for OpenAI {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let raw_selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let raw_selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = raw_selected_provider_options
             .as_ref()
-            .map(crate::types::ProviderOptions::from_value)
+            .map(crate::provider_options::ProviderOptions::from_value_ref)
             .transpose()?
             .unwrap_or_default();
         let (selected_provider_options, mut schema_warnings) =
@@ -191,7 +193,7 @@ impl LanguageModel for OpenAI {
 
         let url = self.responses_url();
         let req = self.client.http.post(url);
-        let parsed = crate::utils::http::send_checked_json::<ResponsesApiResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<ResponsesApiResponse>(
             self.apply_auth(req).json(&body),
         )
         .await?;
@@ -236,10 +238,13 @@ impl LanguageModel for OpenAI {
         {
             let model = self.resolve_model(&request)?;
             let raw_selected_provider_options =
-                request.provider_options_value_for(self.provider())?;
+                crate::provider_options::request_provider_options_value_for(
+                    &request,
+                    self.provider(),
+                )?;
             let provider_options = raw_selected_provider_options
                 .as_ref()
-                .map(crate::types::ProviderOptions::from_value)
+                .map(crate::provider_options::ProviderOptions::from_value_ref)
                 .transpose()?
                 .unwrap_or_default();
             let (selected_provider_options, mut schema_warnings) =
@@ -260,7 +265,7 @@ impl LanguageModel for OpenAI {
 
             let url = self.responses_url();
             let req = self.client.http.post(url);
-            let response = crate::utils::http::send_checked(
+            let response = crate::provider_transport::send_checked(
                 self.apply_auth(req)
                     .header("Accept", "text/event-stream")
                     .json(&body),
@@ -268,7 +273,7 @@ impl LanguageModel for OpenAI {
             .await?;
 
             let (data_stream, buffer) =
-                crate::utils::streaming::init_sse_stream(response, warnings);
+                crate::session_transport::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (data_stream, buffer, false, false, None::<String>),

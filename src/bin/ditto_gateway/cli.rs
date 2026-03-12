@@ -643,7 +643,7 @@ fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>>
 #[cfg(feature = "gateway")]
 pub(crate) async fn resolve_cli_secret(
     raw: String,
-    env: &ditto_llm::Env,
+    env: &ditto_llm::config::Env,
     label: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let raw = raw.trim().to_string();
@@ -651,7 +651,7 @@ pub(crate) async fn resolve_cli_secret(
         return Ok(raw);
     }
 
-    let resolved = ditto_llm::secrets::resolve_secret_string(raw.as_str(), env)
+    let resolved = ditto_llm::foundation::secrets::resolve_secret_string(raw.as_str(), env)
         .await
         .map_err(|err| format!("failed to resolve {label}: {err}"))?;
     if resolved.trim().is_empty() {

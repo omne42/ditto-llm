@@ -1,4 +1,5 @@
-use crate::types::{GenerateRequest, Warning};
+use crate::contracts::GenerateRequest;
+use crate::contracts::Warning;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GenerateRequestSupport {

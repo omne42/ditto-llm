@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use crate::config::{Env, ProviderAuth};
-use crate::{DittoError, Result};
+use crate::foundation::error::{DittoError, Result};
 
 #[derive(Clone)]
 pub struct OAuthToken {
@@ -124,7 +124,7 @@ impl OAuthClientCredentials {
             params.push((key.clone(), value.clone()));
         }
 
-        let parsed = crate::utils::http::send_checked_json::<TokenResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<TokenResponse>(
             http.post(self.token_url.as_str()).form(&params),
         )
         .await?;

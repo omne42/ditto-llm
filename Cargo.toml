@@ -10,9 +10,12 @@ default = ["provider-openai-compatible", "cap-llm"]
 # Modules
 agent = ["dep:regex", "dep:safe-fs-tools"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
+config-editing = ["dep:toml_edit"]
+config-interactive = ["config-editing"]
 sdk = []
 sdk-axum = ["sdk", "dep:axum"]
-gateway = ["dep:axum", "dep:getrandom", "dep:regex", "dep:sha2"]
+gateway = ["dep:axum", "dep:getrandom", "dep:regex", "dep:sha2", "config-editing"]
+gateway-cli-interactive = ["gateway", "config-interactive"]
 gateway-config-yaml = ["gateway", "dep:serde_yaml"]
 gateway-devtools = ["gateway", "sdk"]
 gateway-translation = ["gateway"]
@@ -47,7 +50,7 @@ vertex = ["auth"]
 
 # Public provider packs.
 provider-openai-compatible = ["openai-compatible"]
-provider-openai = ["openai", "openai-compatible"]
+provider-openai = ["openai"]
 provider-anthropic = ["anthropic"]
 provider-google = ["google"]
 provider-cohere = ["cohere"]
@@ -115,7 +118,7 @@ toml = "0.8"
 time = { version = "0.3", features = ["formatting", "macros"], optional = true }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["io"] }
-toml_edit = "0.22"
+toml_edit = { version = "0.22", optional = true }
 rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
 redis = { version = "0.32", optional = true, features = ["tokio-comp", "safe_iterators"] }
 sqlx = { version = "0.8", optional = true, default-features = false, features = ["runtime-tokio-rustls"] }

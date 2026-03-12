@@ -1,33 +1,31 @@
-
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use ditto_llm::audio::{AudioTranscriptionModel, SpeechModel};
-use ditto_llm::batch::BatchClient;
-use ditto_llm::embedding::EmbeddingModel;
-use ditto_llm::file::FileContent;
+use ditto_llm::capabilities::BatchClient;
+use ditto_llm::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
+use ditto_llm::capabilities::embedding::EmbeddingModel;
+use ditto_llm::capabilities::file::FileContent;
+use ditto_llm::capabilities::video::VideoGenerationModel;
+use ditto_llm::capabilities::{ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel};
+use ditto_llm::contracts::{
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    StreamChunk, Usage,
+};
 use ditto_llm::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
-use ditto_llm::image::ImageGenerationModel;
-use ditto_llm::image_edit::ImageEditModel;
-use ditto_llm::model::{LanguageModel, StreamResult};
-use ditto_llm::moderation::ModerationModel;
-use ditto_llm::video::VideoGenerationModel;
-use ditto_llm::rerank::RerankModel;
+use ditto_llm::llm_core::model::{LanguageModel, StreamResult};
 use ditto_llm::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
-    BatchListResponse, BatchResponse, BatchStatus, ContentPart, FinishReason, GenerateRequest,
-    GenerateResponse, ImageEditRequest, ImageEditResponse, ImageGenerationRequest,
-    ImageGenerationResponse, ImageResponseFormat, ImageSource, Message, ModerationInput,
-    ModerationRequest, ModerationResponse, ModerationResult, RerankRequest,
-    RerankResponse, RerankResult, SpeechRequest, SpeechResponse, StreamChunk, Usage,
-    VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
-    VideoGenerationStatus, VideoListOrder, VideoListRequest, VideoListResponse,
-    VideoRemixRequest,
+    BatchListResponse, BatchResponse, BatchStatus, ImageEditRequest, ImageEditResponse,
+    ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat, ModerationInput,
+    ModerationRequest, ModerationResponse, ModerationResult, RerankRequest, RerankResponse,
+    RerankResult, SpeechRequest, SpeechResponse, VideoContentVariant, VideoDeleteResponse,
+    VideoGenerationRequest, VideoGenerationResponse, VideoGenerationStatus, VideoListOrder,
+    VideoListRequest, VideoListResponse, VideoRemixRequest,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -46,7 +44,7 @@ impl LanguageModel for FakeModel {
         "fake-model"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::Result<GenerateResponse> {
+    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::foundation::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::Text {
                 text: "hello".to_string(),
@@ -64,7 +62,7 @@ impl LanguageModel for FakeModel {
         })
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::Result<StreamResult> {
+    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::foundation::error::Result<StreamResult> {
         let chunks = vec![
             Ok(StreamChunk::ResponseId {
                 id: "resp_fake".to_string(),
@@ -98,7 +96,7 @@ impl LanguageModel for FakeCompactionModel {
         "fake-compaction"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::Result<GenerateResponse> {
+    async fn generate(&self, _request: GenerateRequest) -> ditto_llm::foundation::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::ToolCall {
                 id: "call_0".to_string(),
@@ -126,8 +124,8 @@ impl LanguageModel for FakeCompactionModel {
         })
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::Result<StreamResult> {
-        let chunks: Vec<ditto_llm::Result<StreamChunk>> = Vec::new();
+    async fn stream(&self, _request: GenerateRequest) -> ditto_llm::foundation::error::Result<StreamResult> {
+        let chunks: Vec<ditto_llm::foundation::error::Result<StreamChunk>> = Vec::new();
         Ok(futures_util::stream::iter(chunks).boxed())
     }
 }
@@ -145,7 +143,7 @@ impl EmbeddingModel for FakeEmbeddingModel {
         "fake-embed"
     }
 
-    async fn embed(&self, texts: Vec<String>) -> ditto_llm::Result<Vec<Vec<f32>>> {
+    async fn embed(&self, texts: Vec<String>) -> ditto_llm::foundation::error::Result<Vec<Vec<f32>>> {
         Ok(texts
             .into_iter()
             .enumerate()
@@ -167,7 +165,7 @@ impl ModerationModel for FakeModerationModel {
         "fake-moderation"
     }
 
-    async fn moderate(&self, request: ModerationRequest) -> ditto_llm::Result<ModerationResponse> {
+    async fn moderate(&self, request: ModerationRequest) -> ditto_llm::foundation::error::Result<ModerationResponse> {
         let flagged = matches!(request.input, ModerationInput::Text(ref text) if text == "bad");
         Ok(ModerationResponse {
             id: Some("modr_fake".to_string()),
@@ -204,7 +202,7 @@ impl ImageGenerationModel for FakeImageModel {
     async fn generate(
         &self,
         _request: ImageGenerationRequest,
-    ) -> ditto_llm::Result<ImageGenerationResponse> {
+    ) -> ditto_llm::foundation::error::Result<ImageGenerationResponse> {
         Ok(ImageGenerationResponse {
             images: vec![
                 ImageSource::Url {
@@ -235,12 +233,15 @@ impl ImageEditModel for FakeImageEditModel {
         "fake-image-edit"
     }
 
-    async fn edit(&self, request: ImageEditRequest) -> ditto_llm::Result<ImageEditResponse> {
+    async fn edit(&self, request: ImageEditRequest) -> ditto_llm::foundation::error::Result<ImageEditResponse> {
         assert_eq!(request.prompt, "remove background");
         assert_eq!(request.model.as_deref(), Some("image-edit-v2"));
         assert_eq!(request.n, Some(2));
         assert_eq!(request.size.as_deref(), Some("1024x1024"));
-        assert_eq!(request.response_format, Some(ImageResponseFormat::Base64Json));
+        assert_eq!(
+            request.response_format,
+            Some(ImageResponseFormat::Base64Json)
+        );
         assert_eq!(request.images.len(), 1);
         assert_eq!(request.images[0].filename, "image.png");
         assert_eq!(request.images[0].media_type.as_deref(), Some("image/png"));
@@ -283,7 +284,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
     async fn create(
         &self,
         request: VideoGenerationRequest,
-    ) -> ditto_llm::Result<VideoGenerationResponse> {
+    ) -> ditto_llm::foundation::error::Result<VideoGenerationResponse> {
         match request.prompt.as_str() {
             "road at dusk" => {
                 assert!(request.input_reference.is_none());
@@ -322,13 +323,13 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
                     ..Default::default()
                 })
             }
-            other => Err(ditto_llm::DittoError::InvalidResponse(format!(
+            other => Err(ditto_llm::foundation::error::DittoError::InvalidResponse(format!(
                 "unexpected video prompt: {other}"
             ))),
         }
     }
 
-    async fn retrieve(&self, video_id: &str) -> ditto_llm::Result<VideoGenerationResponse> {
+    async fn retrieve(&self, video_id: &str) -> ditto_llm::foundation::error::Result<VideoGenerationResponse> {
         assert_eq!(video_id, "vid_123");
         Ok(VideoGenerationResponse {
             id: "vid_123".to_string(),
@@ -342,7 +343,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         })
     }
 
-    async fn list(&self, request: VideoListRequest) -> ditto_llm::Result<VideoListResponse> {
+    async fn list(&self, request: VideoListRequest) -> ditto_llm::foundation::error::Result<VideoListResponse> {
         assert_eq!(request.limit, Some(2));
         assert_eq!(request.after.as_deref(), Some("vid_111"));
         assert_eq!(request.order, Some(VideoListOrder::Desc));
@@ -361,7 +362,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         })
     }
 
-    async fn delete(&self, video_id: &str) -> ditto_llm::Result<VideoDeleteResponse> {
+    async fn delete(&self, video_id: &str) -> ditto_llm::foundation::error::Result<VideoDeleteResponse> {
         assert_eq!(video_id, "vid_123");
         Ok(VideoDeleteResponse {
             id: "vid_123".to_string(),
@@ -374,7 +375,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         &self,
         video_id: &str,
         variant: Option<VideoContentVariant>,
-    ) -> ditto_llm::Result<FileContent> {
+    ) -> ditto_llm::foundation::error::Result<FileContent> {
         assert_eq!(video_id, "vid_123");
         assert_eq!(variant, Some(VideoContentVariant::Thumbnail));
         Ok(FileContent {
@@ -387,7 +388,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         &self,
         video_id: &str,
         request: VideoRemixRequest,
-    ) -> ditto_llm::Result<VideoGenerationResponse> {
+    ) -> ditto_llm::foundation::error::Result<VideoGenerationResponse> {
         assert_eq!(video_id, "vid_123");
         assert_eq!(request.prompt, "change angle");
         assert!(request.provider_options.is_none());
@@ -419,7 +420,7 @@ impl AudioTranscriptionModel for FakeAudioTranscriptionModel {
     async fn transcribe(
         &self,
         request: AudioTranscriptionRequest,
-    ) -> ditto_llm::Result<AudioTranscriptionResponse> {
+    ) -> ditto_llm::foundation::error::Result<AudioTranscriptionResponse> {
         let model = request.model.unwrap_or_default();
         Ok(AudioTranscriptionResponse {
             text: format!("transcribed:{model}"),
@@ -442,7 +443,7 @@ impl SpeechModel for FakeSpeechModel {
         "fake-speech"
     }
 
-    async fn speak(&self, request: SpeechRequest) -> ditto_llm::Result<SpeechResponse> {
+    async fn speak(&self, request: SpeechRequest) -> ditto_llm::foundation::error::Result<SpeechResponse> {
         let _ = request;
         Ok(SpeechResponse {
             audio: vec![0, 1, 2, 3],
@@ -462,7 +463,7 @@ impl BatchClient for FakeBatchClient {
         "fake"
     }
 
-    async fn create(&self, request: BatchCreateRequest) -> ditto_llm::Result<BatchResponse> {
+    async fn create(&self, request: BatchCreateRequest) -> ditto_llm::foundation::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: "batch_created".to_string(),
@@ -477,7 +478,7 @@ impl BatchClient for FakeBatchClient {
         })
     }
 
-    async fn retrieve(&self, batch_id: &str) -> ditto_llm::Result<BatchResponse> {
+    async fn retrieve(&self, batch_id: &str) -> ditto_llm::foundation::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: batch_id.to_string(),
@@ -489,7 +490,7 @@ impl BatchClient for FakeBatchClient {
         })
     }
 
-    async fn cancel(&self, batch_id: &str) -> ditto_llm::Result<BatchResponse> {
+    async fn cancel(&self, batch_id: &str) -> ditto_llm::foundation::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: batch_id.to_string(),
@@ -505,7 +506,7 @@ impl BatchClient for FakeBatchClient {
         &self,
         _limit: Option<u32>,
         _after: Option<String>,
-    ) -> ditto_llm::Result<BatchListResponse> {
+    ) -> ditto_llm::foundation::error::Result<BatchListResponse> {
         Ok(BatchListResponse {
             batches: vec![
                 Batch {
@@ -541,7 +542,7 @@ impl RerankModel for FakeRerankModel {
         "fake-rerank"
     }
 
-    async fn rerank(&self, _request: RerankRequest) -> ditto_llm::Result<RerankResponse> {
+    async fn rerank(&self, _request: RerankRequest) -> ditto_llm::foundation::error::Result<RerankResponse> {
         Ok(RerankResponse {
             ranking: vec![
                 RerankResult {
@@ -582,7 +583,7 @@ fn base_gateway() -> Gateway {
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_non_streaming() -> ditto_llm::Result<()> {
+async fn gateway_translation_chat_completions_non_streaming() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -636,7 +637,7 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_llm::Resu
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_streaming() -> ditto_llm::Result<()> {
+async fn gateway_translation_chat_completions_streaming() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -675,7 +676,7 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_llm::Result<(
 }
 
 #[tokio::test]
-async fn gateway_translation_completions_non_streaming() -> ditto_llm::Result<()> {
+async fn gateway_translation_completions_non_streaming() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -747,7 +748,7 @@ async fn gateway_translation_completions_non_streaming() -> ditto_llm::Result<()
 }
 
 #[tokio::test]
-async fn gateway_translation_completions_streaming() -> ditto_llm::Result<()> {
+async fn gateway_translation_completions_streaming() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -787,7 +788,7 @@ async fn gateway_translation_completions_streaming() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn gateway_translation_models_list() -> ditto_llm::Result<()> {
+async fn gateway_translation_models_list() -> ditto_llm::foundation::error::Result<()> {
     use std::collections::BTreeMap;
 
     let gateway = base_gateway();
@@ -852,7 +853,7 @@ async fn gateway_translation_models_list() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn gateway_translation_models_retrieve() -> ditto_llm::Result<()> {
+async fn gateway_translation_models_retrieve() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -897,7 +898,7 @@ async fn gateway_translation_models_retrieve() -> ditto_llm::Result<()> {
 }
 
 #[tokio::test]
-async fn gateway_translation_models_retrieve_unknown() -> ditto_llm::Result<()> {
+async fn gateway_translation_models_retrieve_unknown() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -923,7 +924,7 @@ async fn gateway_translation_models_retrieve_unknown() -> ditto_llm::Result<()> 
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_non_streaming() -> ditto_llm::Result<()> {
+async fn gateway_translation_responses_non_streaming() -> ditto_llm::foundation::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(

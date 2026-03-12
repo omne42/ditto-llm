@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::Result;
+use crate::foundation::error::Result;
 use crate::types::{
     ImageEditRequest, ImageEditResponse, ImageEditUpload, ImageGenerationRequest,
     ImageGenerationResponse, ImageResponseFormat, ImageSource, Usage, Warning,
@@ -184,7 +184,7 @@ fn image_part(upload: ImageEditUpload) -> Result<Part> {
     let mut part = Part::bytes(upload.data).file_name(upload.filename);
     if let Some(media_type) = upload.media_type.as_deref() {
         part = part.mime_str(media_type).map_err(|err| {
-            crate::DittoError::InvalidResponse(format!(
+            crate::foundation::error::DittoError::InvalidResponse(format!(
                 "invalid image edit media type {media_type:?}: {err}"
             ))
         })?;
@@ -207,8 +207,10 @@ pub(super) async fn generate_images(
         provider_options,
     } = request;
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
 
     let mut body = Map::<String, Value>::new();
@@ -224,7 +226,7 @@ pub(super) async fn generate_images(
         body.insert("response_format".to_string(), serde_json::to_value(format)?);
     }
 
-    crate::types::merge_provider_options_into_body(
+    crate::provider_options::merge_provider_options_into_body(
         &mut body,
         selected_provider_options.as_ref(),
         &["model", "prompt", "n", "size", "response_format"],
@@ -233,7 +235,7 @@ pub(super) async fn generate_images(
     );
 
     let url = client.endpoint("images/generations");
-    let parsed = crate::utils::http::send_checked_json::<ImagesResponse>(
+    let parsed = crate::provider_transport::send_checked_json::<ImagesResponse>(
         client.apply_auth(client.http.post(url)).json(&body),
     )
     .await?;
@@ -259,13 +261,15 @@ pub(super) async fn edit_images(
     } = request;
 
     if images.is_empty() {
-        return Err(crate::DittoError::InvalidResponse(
+        return Err(crate::foundation::error::DittoError::InvalidResponse(
             "image edit requires at least one input image".to_string(),
         ));
     }
 
-    let selected_provider_options =
-        crate::types::select_provider_options_value(provider_options.as_ref(), provider)?;
+    let selected_provider_options = crate::provider_options::select_provider_options_value(
+        provider_options.as_ref(),
+        provider,
+    )?;
     let mut warnings = Vec::<Warning>::new();
     let mut form = Form::new()
         .text("model", model.clone())
@@ -302,7 +306,7 @@ pub(super) async fn edit_images(
     );
 
     let url = client.endpoint("images/edits");
-    let parsed = crate::utils::http::send_checked_json::<ImagesResponse>(
+    let parsed = crate::provider_transport::send_checked_json::<ImagesResponse>(
         client.apply_auth(client.http.post(url)).multipart(form),
     )
     .await?;

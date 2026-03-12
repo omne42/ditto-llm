@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::types::{ContentPart, GenerateRequest, GenerateResponse, Message, Role};
+use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse, Message, Role};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToolCall {

@@ -4,12 +4,12 @@ use httpmock::Method::GET;
 use httpmock::MockServer;
 use serde_json::json;
 
-use ditto_llm::Result;
 use ditto_llm::agent::{
     FsToolExecutor, HttpToolExecutor, ShellToolExecutor, TOOL_FS_COPY_FILE, TOOL_FS_DELETE_FILE,
     TOOL_FS_FIND, TOOL_FS_GREP, TOOL_FS_LIST_DIR, TOOL_FS_MKDIR, TOOL_FS_MOVE, TOOL_FS_READ_FILE,
     TOOL_FS_STAT, TOOL_FS_WRITE_FILE, TOOL_HTTP_FETCH, TOOL_SHELL_EXEC, ToolCall, ToolExecutor,
 };
+use ditto_llm::foundation::error::Result;
 
 #[tokio::test]
 async fn http_fetch_tool_executes_get() -> Result<()> {

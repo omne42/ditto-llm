@@ -2,17 +2,268 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "gateway")]
-use ditto_llm::{
+use ditto_llm::config::ProviderApi;
+#[cfg(feature = "gateway")]
+use ditto_llm::config_editing::{
     ConfigScope, ModelDeleteRequest, ModelListRequest, ModelShowRequest, ModelUpsertRequest,
-    ProviderApi, ProviderAuthType, ProviderDeleteRequest, ProviderListRequest, ProviderNamespace,
-    ProviderShowRequest, ProviderUpsertRequest, complete_model_upsert_request_interactive,
-    complete_provider_upsert_request_interactive, delete_model_config, delete_provider_config,
+    ProviderAuthType, ProviderDeleteRequest, ProviderListRequest, ProviderNamespace,
+    ProviderShowRequest, ProviderUpsertRequest, delete_model_config, delete_provider_config,
     list_model_configs, list_provider_configs, show_model_config, show_provider_config,
     upsert_model_config, upsert_provider_config,
 };
+#[cfg(feature = "config-interactive")]
+use ditto_llm::config_editing::{
+    complete_model_upsert_request_interactive, complete_provider_upsert_request_interactive,
+};
+#[cfg(feature = "gateway")]
+use ditto_llm::foundation::error::DittoError;
 
 #[cfg(feature = "gateway")]
 use serde_json::Value;
+
+#[cfg(all(feature = "gateway", feature = "config-interactive"))]
+fn maybe_complete_provider_request_interactive(
+    request: ProviderUpsertRequest,
+    use_interactive: bool,
+) -> ditto_llm::foundation::error::Result<ProviderUpsertRequest> {
+    if use_interactive {
+        complete_provider_upsert_request_interactive(request)
+    } else {
+        Ok(request)
+    }
+}
+
+#[cfg(all(feature = "gateway", not(feature = "config-interactive")))]
+fn maybe_complete_provider_request_interactive(
+    request: ProviderUpsertRequest,
+    use_interactive: bool,
+) -> ditto_llm::foundation::error::Result<ProviderUpsertRequest> {
+    if use_interactive {
+        Err(DittoError::Config(
+            "interactive config editing requires the `gateway-cli-interactive` feature".to_string(),
+        ))
+    } else {
+        Ok(request)
+    }
+}
+
+#[cfg(all(feature = "gateway", feature = "config-interactive"))]
+fn maybe_complete_model_request_interactive(
+    request: ModelUpsertRequest,
+    use_interactive: bool,
+) -> ditto_llm::foundation::error::Result<ModelUpsertRequest> {
+    if use_interactive {
+        complete_model_upsert_request_interactive(request)
+    } else {
+        Ok(request)
+    }
+}
+
+#[cfg(all(feature = "gateway", not(feature = "config-interactive")))]
+fn maybe_complete_model_request_interactive(
+    request: ModelUpsertRequest,
+    use_interactive: bool,
+) -> ditto_llm::foundation::error::Result<ModelUpsertRequest> {
+    if use_interactive {
+        Err(DittoError::Config(
+            "interactive config editing requires the `gateway-cli-interactive` feature".to_string(),
+        ))
+    } else {
+        Ok(request)
+    }
+}
+
+#[cfg(feature = "gateway")]
+async fn maybe_resolve_provider_request_discovery(
+    mut request: ProviderUpsertRequest,
+) -> ditto_llm::foundation::error::Result<ProviderUpsertRequest> {
+    if !request.discover_models || !request.model_whitelist.is_empty() {
+        if let Some(limit) = request.model_limit {
+            request.model_whitelist.truncate(limit);
+        }
+        return Ok(request);
+    }
+
+    // Provider model discovery is a CLI-side effect. `config_editing` only
+    // consumes the resolved whitelist so L0 stays a pure config mutation layer.
+    request.model_whitelist = discover_models_for_provider(&request).await?;
+    if let Some(limit) = request.model_limit {
+        request.model_whitelist.truncate(limit);
+    }
+    Ok(request)
+}
+
+#[cfg(feature = "gateway")]
+async fn discover_models_for_provider(
+    request: &ProviderUpsertRequest,
+) -> ditto_llm::foundation::error::Result<Vec<String>> {
+    let base_url = request
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            DittoError::Config(
+                "provider base_url is required when --discover-models is resolved outside config_editing".to_string(),
+            )
+        })?;
+    let api = infer_discovery_api(request);
+    if matches!(api, ProviderApi::AnthropicMessages) {
+        return Err(DittoError::Config(
+            "discover_models for anthropic_messages is not implemented".to_string(),
+        ));
+    }
+
+    let key = resolve_discovery_key(request)?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(DittoError::Http)?;
+    let endpoint = format!("{}/models", base_url.trim_end_matches('/'));
+    let mut http_request = client.get(endpoint);
+
+    match request.auth_type {
+        ProviderAuthType::ApiKeyEnv => {
+            http_request = http_request.bearer_auth(&key);
+        }
+        ProviderAuthType::QueryParamEnv => {
+            let param = request
+                .auth_param
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("key");
+            http_request = http_request.query(&[(param, key.as_str())]);
+        }
+        ProviderAuthType::HttpHeaderEnv => {
+            let header = request
+                .auth_header
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Authorization");
+            let auth_value = if let Some(prefix) = request
+                .auth_prefix
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                format!("{prefix}{key}")
+            } else if header.eq_ignore_ascii_case("authorization") {
+                format!("Bearer {key}")
+            } else {
+                key.clone()
+            };
+            http_request = http_request.header(header, auth_value);
+        }
+        ProviderAuthType::Command => {
+            http_request = http_request.bearer_auth(&key);
+        }
+    }
+
+    let response = http_request.send().await.map_err(DittoError::Http)?;
+    let response = response.error_for_status().map_err(DittoError::Http)?;
+    let payload = response.json::<Value>().await.map_err(DittoError::Http)?;
+
+    let mut models = match api {
+        ProviderApi::OpenaiChatCompletions | ProviderApi::OpenaiResponses => {
+            parse_openai_models(&payload)
+        }
+        ProviderApi::GeminiGenerateContent => parse_gemini_models(&payload),
+        ProviderApi::AnthropicMessages => Vec::new(),
+    };
+    models.sort_unstable();
+    models.dedup();
+    Ok(models)
+}
+
+#[cfg(feature = "gateway")]
+fn infer_discovery_api(request: &ProviderUpsertRequest) -> ProviderApi {
+    request.upstream_api.unwrap_or(match request.namespace {
+        ProviderNamespace::Google | ProviderNamespace::Gemini => ProviderApi::GeminiGenerateContent,
+        ProviderNamespace::Claude | ProviderNamespace::Anthropic => ProviderApi::AnthropicMessages,
+        ProviderNamespace::Openai => ProviderApi::OpenaiChatCompletions,
+    })
+}
+
+#[cfg(feature = "gateway")]
+fn resolve_discovery_key(
+    request: &ProviderUpsertRequest,
+) -> ditto_llm::foundation::error::Result<String> {
+    if let Some(api_key) = request
+        .discovery_api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(api_key.to_string());
+    }
+
+    for key in &request.auth_keys {
+        if let Ok(value) = std::env::var(key) {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Ok(value.to_string());
+            }
+        }
+    }
+
+    Err(DittoError::Config(
+        "discover_models needs discovery_api_key or auth_keys env var".to_string(),
+    ))
+}
+
+#[cfg(feature = "gateway")]
+fn parse_openai_models(payload: &Value) -> Vec<String> {
+    payload
+        .get("data")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("id").and_then(Value::as_str))
+        .filter_map(|id| {
+            let id = id.trim();
+            if id.is_empty() {
+                None
+            } else {
+                Some(id.to_string())
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "gateway")]
+fn parse_gemini_models(payload: &Value) -> Vec<String> {
+    let mut out = Vec::<String>::new();
+    for item in payload
+        .get("models")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let supports_generate_content = item
+            .get("supportedGenerationMethods")
+            .and_then(Value::as_array)
+            .is_none_or(|methods| {
+                methods
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .any(|method| method.eq_ignore_ascii_case("generateContent"))
+            });
+        if !supports_generate_content {
+            continue;
+        }
+
+        let Some(name) = item.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let name = name.trim().trim_start_matches("models/");
+        if !name.is_empty() {
+            out.push(name.to_string());
+        }
+    }
+    out
+}
 
 #[cfg(feature = "gateway")]
 #[derive(Debug, Parser)]
@@ -427,7 +678,11 @@ pub(crate) async fn maybe_run_config_cli(
         ConfigCommand::Provider { command } => match command {
             ProviderCommand::Add(args) => {
                 let args = *args;
-                let use_interactive = !args.no_interactive || args.interactive;
+                let use_interactive = if cfg!(feature = "config-interactive") {
+                    !args.no_interactive || args.interactive
+                } else {
+                    args.interactive
+                };
                 let mut request = ProviderUpsertRequest {
                     name: args.name,
                     config_path: args.config_path,
@@ -457,12 +712,12 @@ pub(crate) async fn maybe_run_config_cli(
                     prompt_cache: args.prompt_cache,
                     discover_models: args.discover_models,
                     discovery_api_key: args.api_key,
+                    model_whitelist: Vec::new(),
                     register_models: args.register_models,
                     model_limit: args.model_limit,
                 };
-                if use_interactive {
-                    request = complete_provider_upsert_request_interactive(request)?;
-                }
+                request = maybe_complete_provider_request_interactive(request, use_interactive)?;
+                request = maybe_resolve_provider_request_discovery(request).await?;
                 let report = upsert_provider_config(request).await?;
                 print_json_or_pretty(args.json, &serde_json::to_value(report)?)?;
             }
@@ -505,7 +760,11 @@ pub(crate) async fn maybe_run_config_cli(
         ConfigCommand::Model { command } => match command {
             ModelCommand::Add(args) => {
                 let args = *args;
-                let use_interactive = !args.no_interactive || args.interactive;
+                let use_interactive = if cfg!(feature = "config-interactive") {
+                    !args.no_interactive || args.interactive
+                } else {
+                    args.interactive
+                };
                 let mut request = ModelUpsertRequest {
                     name: args.name,
                     config_path: args.config_path,
@@ -519,9 +778,7 @@ pub(crate) async fn maybe_run_config_cli(
                     auto_compact_token_limit: args.auto_compact_token_limit,
                     prompt_cache: args.prompt_cache,
                 };
-                if use_interactive {
-                    request = complete_model_upsert_request_interactive(request)?;
-                }
+                request = maybe_complete_model_request_interactive(request, use_interactive)?;
                 let report = upsert_model_config(request).await?;
                 print_json_or_pretty(args.json, &serde_json::to_value(report)?)?;
             }

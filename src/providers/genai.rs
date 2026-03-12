@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use serde_json::{Map, Value};
 
-use crate::Result;
-use crate::types::{
+use crate::contracts::{
     ContentPart, FileSource, FinishReason, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
+use crate::foundation::error::Result;
 
 const GOOGLE_TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
 

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{ImageSource, ProviderOptionsEnvelope, Usage, Warning};
+use crate::contracts::{ImageSource, Usage, Warning};
+use crate::provider_options::ProviderOptionsEnvelope;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ImageResponseFormat {
     #[serde(rename = "url")]

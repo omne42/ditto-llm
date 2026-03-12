@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use crate::foundation::secrets::SecretEnvironment;
+
 #[derive(Clone, Default)]
 pub struct Env {
     pub dotenv: BTreeMap<String, String>,
@@ -26,6 +28,12 @@ impl Env {
         std::env::var(key)
             .ok()
             .filter(|value| !value.trim().is_empty())
+    }
+}
+
+impl SecretEnvironment for Env {
+    fn get_secret_env(&self, key: &str) -> Option<String> {
+        self.get(key)
     }
 }
 
@@ -64,4 +72,27 @@ pub fn parse_dotenv(contents: &str) -> BTreeMap<String, String> {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_dotenv_basic() {
+        let parsed = parse_dotenv(
+            r#"
+# comment
+export OPENAI_COMPAT_API_KEY="sk-test"
+FOO=bar
+EMPTY=
+"#,
+        );
+        assert_eq!(
+            parsed.get("OPENAI_COMPAT_API_KEY").map(String::as_str),
+            Some("sk-test")
+        );
+        assert_eq!(parsed.get("FOO").map(String::as_str), Some("bar"));
+        assert_eq!(parsed.get("EMPTY"), None);
+    }
 }

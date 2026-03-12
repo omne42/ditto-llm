@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::types::Tool;
+use crate::contracts::Tool;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpTool {

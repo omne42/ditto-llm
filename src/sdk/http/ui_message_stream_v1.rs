@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::types::{FinishReason, StreamChunk};
+use crate::contracts::FinishReason;
+use crate::contracts::StreamChunk;
 
 type UiStreamItem = std::result::Result<bytes::Bytes, std::io::Error>;
 

@@ -1,2 +1,12 @@
-pub use crate::image_edit::ImageEditModel;
-pub use crate::types::{ImageEditRequest, ImageEditResponse, ImageEditUpload, ImageSource};
+use async_trait::async_trait;
+
+use crate::foundation::error::Result;
+use crate::types::{ImageEditRequest, ImageEditResponse};
+
+#[async_trait]
+pub trait ImageEditModel: Send + Sync {
+    fn provider(&self) -> &str;
+    fn model_id(&self) -> &str;
+
+    async fn edit(&self, request: ImageEditRequest) -> Result<ImageEditResponse>;
+}

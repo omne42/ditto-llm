@@ -10,24 +10,27 @@ use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::config::{
-    DEFAULT_HTTP_TIMEOUT, Env, HttpAuth, ProviderConfig, RequestAuth, apply_http_query_params,
-    default_http_client, resolve_http_provider_config, resolve_provider_request_auth_required,
-};
-#[cfg(feature = "embeddings")]
-use crate::embedding::EmbeddingModel;
-use crate::model::{LanguageModel, StreamResult};
 #[cfg(feature = "rerank")]
-use crate::rerank::RerankModel;
+use crate::capabilities::RerankModel;
+#[cfg(feature = "embeddings")]
+use crate::capabilities::embedding::EmbeddingModel;
+use crate::config::{
+    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_required,
+};
+use crate::llm_core::model::{LanguageModel, StreamResult};
+use crate::provider_transport::{
+    DEFAULT_HTTP_TIMEOUT, apply_http_query_params, default_http_client,
+    resolve_http_provider_config,
+};
 #[cfg(feature = "streaming")]
-use crate::types::StreamChunk;
-use crate::types::{
+use crate::contracts::StreamChunk;
+use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool, ToolChoice,
     Usage, Warning,
 };
 #[cfg(feature = "rerank")]
-use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
-use crate::{DittoError, Result};
+use crate::contracts::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
+use crate::foundation::error::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";
 

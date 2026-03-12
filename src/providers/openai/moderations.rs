@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use crate::providers::openai_like;
 use crate::providers::openai_moderations_common;
 
+use crate::capabilities::ModerationModel;
 use crate::config::{Env, ProviderConfig};
-use crate::moderation::ModerationModel;
+use crate::foundation::error::{DittoError, Result};
 use crate::types::{ModerationRequest, ModerationResponse};
-use crate::{DittoError, Result};
 
 macro_rules! define_openai_like_moderations {
     (
@@ -106,8 +106,8 @@ mod tests {
     #[cfg(feature = "openai")]
     mod openai {
         use super::super::OpenAIModerations;
-        use crate::Result;
-        use crate::moderation::ModerationModel;
+        use crate::capabilities::ModerationModel;
+        use crate::foundation::error::Result;
         use crate::types::{ModerationInput, ModerationRequest};
         use httpmock::{Method::POST, MockServer};
 
@@ -169,8 +169,8 @@ mod tests {
     #[cfg(feature = "openai-compatible")]
     mod openai_compatible {
         use super::super::OpenAICompatibleModerations;
-        use crate::Result;
-        use crate::moderation::ModerationModel;
+        use crate::capabilities::ModerationModel;
+        use crate::foundation::error::Result;
         use crate::types::{ModerationInput, ModerationRequest};
         use httpmock::{Method::POST, MockServer};
 

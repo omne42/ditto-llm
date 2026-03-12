@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::contracts::{RuntimeProviderApi, RuntimeProviderHints, RuntimeRouteRequest};
+use crate::contracts::{RuntimeProviderApi, RuntimeProviderHints};
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {
@@ -292,6 +292,16 @@ impl ProviderCapabilities {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct OpenAiCompatibleConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_prompt_cache_key: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_tool_call_thought_signature: Option<bool>,
+}
+
 impl ProviderConfig {
     pub fn runtime_hints(&self) -> RuntimeProviderHints<'_> {
         RuntimeProviderHints {
@@ -303,13 +313,6 @@ impl ProviderConfig {
                 .then_some(&self.http_query_params),
             upstream_api: self.upstream_api.map(ProviderApi::runtime_api),
         }
-    }
-}
-
-impl<'a> RuntimeRouteRequest<'a> {
-    pub fn with_provider_config(mut self, provider_config: &'a ProviderConfig) -> Self {
-        self.provider_hints = provider_config.runtime_hints();
-        self
     }
 }
 
@@ -339,6 +342,8 @@ pub struct ProviderConfig {
     pub normalize_to: Option<ProviderApi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub normalize_endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openai_compatible: Option<OpenAiCompatibleConfig>,
 }
 
 pub fn merge_provider_config(
@@ -402,6 +407,9 @@ pub fn merge_provider_config(
     {
         base.normalize_endpoint = Some(normalize_endpoint.to_string());
     }
+    if let Some(openai_compatible) = overrides.openai_compatible.clone() {
+        base.openai_compatible = Some(openai_compatible);
+    }
     base
 }
 
@@ -445,4 +453,172 @@ pub fn filter_models_whitelist(models: Vec<String>, whitelist: &[String]) -> Vec
         .into_iter()
         .filter(|m| allow.contains(m))
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thinking_intensity_defaults_to_medium() {
+        let parsed = toml::from_str::<ModelConfig>("").expect("parse toml");
+        assert_eq!(parsed.thinking, ThinkingIntensity::Medium);
+        assert_eq!(parsed.prompt_cache, None);
+    }
+
+    #[test]
+    fn model_config_accepts_best_and_max_context_aliases() {
+        let parsed = toml::from_str::<ModelConfig>(
+            r#"
+max_context = 12345
+best_context = 9000
+"#,
+        )
+        .expect("parse toml");
+        assert_eq!(parsed.context_window, Some(12345));
+        assert_eq!(parsed.auto_compact_token_limit, Some(9000));
+    }
+
+    #[test]
+    fn model_config_parses_prompt_cache() {
+        let parsed = toml::from_str::<ModelConfig>(
+            r#"
+prompt_cache = false
+"#,
+        )
+        .expect("parse toml");
+        assert_eq!(parsed.prompt_cache, Some(false));
+    }
+
+    #[test]
+    fn selects_exact_then_wildcard_model_config() {
+        let models = BTreeMap::from([
+            (
+                "*".to_string(),
+                ModelConfig {
+                    thinking: ThinkingIntensity::High,
+                    ..Default::default()
+                },
+            ),
+            (
+                "gpt-4.1".to_string(),
+                ModelConfig {
+                    thinking: ThinkingIntensity::XHigh,
+                    ..Default::default()
+                },
+            ),
+        ]);
+        assert_eq!(
+            select_model_config(&models, "gpt-4.1").map(|c| c.thinking),
+            Some(ThinkingIntensity::XHigh)
+        );
+        assert_eq!(
+            select_model_config(&models, "other").map(|c| c.thinking),
+            Some(ThinkingIntensity::High)
+        );
+    }
+
+    #[test]
+    fn parses_provider_capabilities_from_toml() {
+        let parsed = toml::from_str::<ProviderConfig>(
+            r#"
+base_url = "https://example.com/v1"
+
+[capabilities]
+tools = true
+vision = false
+reasoning = true
+json_schema = true
+streaming = false
+"#,
+        )
+        .expect("parse toml");
+        assert_eq!(
+            parsed.capabilities,
+            Some(ProviderCapabilities {
+                tools: true,
+                vision: false,
+                reasoning: true,
+                json_schema: true,
+                streaming: false,
+                prompt_cache: true,
+            })
+        );
+    }
+
+    #[test]
+    fn parses_provider_protocol_fields_from_toml() {
+        let parsed = toml::from_str::<ProviderConfig>(
+            r#"
+base_url = "https://example.com/v1"
+upstream_api = "gemini_generate_content"
+normalize_to = "openai_chat_completions"
+normalize_endpoint = "/v1/chat/completions"
+"#,
+        )
+        .expect("parse toml");
+        assert_eq!(
+            parsed.upstream_api,
+            Some(ProviderApi::GeminiGenerateContent)
+        );
+        assert_eq!(
+            parsed.normalize_to,
+            Some(ProviderApi::OpenaiChatCompletions)
+        );
+        assert_eq!(
+            parsed.normalize_endpoint.as_deref(),
+            Some("/v1/chat/completions")
+        );
+    }
+
+    #[test]
+    fn merge_openai_provider_config_merges_overrides() {
+        let base = ProviderConfig {
+            provider: None,
+            enabled_capabilities: Vec::new(),
+            base_url: Some("https://upstream.example/v1".to_string()),
+            default_model: Some("base-model".to_string()),
+            model_whitelist: vec!["old".to_string()],
+            http_headers: BTreeMap::from([("x-base".to_string(), "0".to_string())]),
+            http_query_params: BTreeMap::new(),
+            auth: None,
+            capabilities: None,
+            upstream_api: None,
+            normalize_to: None,
+            normalize_endpoint: None,
+            openai_compatible: None,
+        };
+        let overrides = ProviderConfig {
+            provider: None,
+            enabled_capabilities: Vec::new(),
+            base_url: Some("https://example.com/v1".to_string()),
+            default_model: Some("my-model".to_string()),
+            model_whitelist: vec!["m1".to_string(), "m1".to_string(), "m2".to_string()],
+            http_headers: BTreeMap::from([("x-test".to_string(), "1".to_string())]),
+            http_query_params: BTreeMap::new(),
+            auth: None,
+            capabilities: None,
+            upstream_api: None,
+            normalize_to: None,
+            normalize_endpoint: None,
+            openai_compatible: None,
+        };
+
+        let resolved = merge_provider_config(base, &overrides);
+
+        assert_eq!(resolved.base_url.as_deref(), Some("https://example.com/v1"));
+        assert_eq!(resolved.default_model.as_deref(), Some("my-model"));
+        assert_eq!(
+            resolved.model_whitelist,
+            vec!["m1".to_string(), "m2".to_string()]
+        );
+        assert_eq!(
+            resolved.http_headers.get("x-base").map(String::as_str),
+            Some("0")
+        );
+        assert_eq!(
+            resolved.http_headers.get("x-test").map(String::as_str),
+            Some("1")
+        );
+    }
 }

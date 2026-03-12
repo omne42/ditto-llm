@@ -1,7 +1,10 @@
-use ditto_llm::{DittoError, LanguageModel, Message, OpenAICompatible};
+use ditto_llm::contracts::Message;
+use ditto_llm::foundation::error::{DittoError, Result};
+use ditto_llm::llm_core::model::LanguageModel;
+use ditto_llm::providers::OpenAICompatible;
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> Result<()> {
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
     let model = std::env::var("OPENAI_COMPAT_MODEL")

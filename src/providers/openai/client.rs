@@ -4,31 +4,35 @@ use futures_util::TryStreamExt;
 use serde::Deserialize;
 #[cfg(feature = "openai")]
 use serde_json::{Map, Value};
-#[cfg(feature = "openai")]
+#[cfg(all(feature = "streaming", feature = "openai"))]
 use tokio::sync::mpsc;
 #[cfg(all(feature = "streaming", feature = "openai"))]
 use tokio_util::io::StreamReader;
 
 #[cfg(feature = "openai")]
 use super::raw_responses::{
-    OpenAIResponsesCompactionRequest, OpenAIResponsesRawEvent, OpenAIResponsesRawEventStream,
-    OpenAIResponsesRawRequest, process_raw_responses_sse,
+    OpenAIResponsesCompactionRequest, OpenAIResponsesRawEventStream, OpenAIResponsesRawRequest,
 };
+#[cfg(all(feature = "streaming", feature = "openai"))]
+use super::raw_responses::{OpenAIResponsesRawEvent, process_raw_responses_sse};
+use crate::providers::openai_compat_profile::OpenAiCompatibilityProfile;
 use crate::providers::openai_like;
 
-#[cfg(feature = "openai")]
-use crate::DittoError;
-use crate::Result;
 use crate::config::{Env, ProviderConfig};
 #[cfg(feature = "openai")]
-use crate::types::{
+use crate::contracts::{
     ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
+#[cfg(feature = "openai")]
+use crate::foundation::error::DittoError;
+use crate::foundation::error::Result;
 
 #[derive(Clone)]
 pub struct OpenAI {
     pub(super) client: openai_like::OpenAiLikeClient,
+    compatibility_profile: OpenAiCompatibilityProfile,
+    tool_call_thought_signature_passthrough: Option<bool>,
 }
 
 #[cfg(feature = "openai")]
@@ -65,17 +69,6 @@ pub(super) const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
 #[cfg(feature = "openai")]
 pub(super) const OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE: &str =
     "skip_thought_signature_validator";
-
-#[cfg(feature = "openai")]
-pub(super) fn env_flag_is_true(name: &str) -> bool {
-    let Ok(raw) = std::env::var(name) else {
-        return false;
-    };
-    matches!(
-        raw.trim().to_ascii_lowercase().as_str(),
-        "1" | "true" | "yes" | "on"
-    )
-}
 
 #[cfg(feature = "openai")]
 pub(super) fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
@@ -129,8 +122,15 @@ pub(super) fn encode_tool_call_id_with_thought_signature(
 
 impl OpenAI {
     pub fn new(api_key: impl Into<String>) -> Self {
+        let client = openai_like::OpenAiLikeClient::new(api_key);
         Self {
-            client: openai_like::OpenAiLikeClient::new(api_key),
+            compatibility_profile: OpenAiCompatibilityProfile::resolve(
+                "openai",
+                &client.base_url,
+                None,
+            ),
+            client,
+            tool_call_thought_signature_passthrough: None,
         }
     }
 
@@ -141,11 +141,18 @@ impl OpenAI {
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.client = self.client.with_base_url(base_url);
+        self.compatibility_profile =
+            OpenAiCompatibilityProfile::resolve("openai", &self.client.base_url, None);
         self
     }
 
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.client = self.client.with_model(model);
+        self
+    }
+
+    pub fn with_tool_call_thought_signature_passthrough(mut self, enabled: bool) -> Self {
+        self.tool_call_thought_signature_passthrough = Some(enabled);
         self
     }
 
@@ -156,9 +163,22 @@ impl OpenAI {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         const DEFAULT_KEYS: &[&str] = &["OPENAI_API_KEY"];
+        let client =
+            openai_like::OpenAiLikeClient::from_config_required(config, env, DEFAULT_KEYS).await?;
         Ok(Self {
-            client: openai_like::OpenAiLikeClient::from_config_required(config, env, DEFAULT_KEYS)
-                .await?,
+            compatibility_profile: OpenAiCompatibilityProfile::resolve(
+                config.provider.as_deref().unwrap_or("openai"),
+                &client.base_url,
+                Some(config),
+            ),
+            client,
+            // OPENAI-CONFIG-NO-ENV-QUIRKS: provider-side thought-signature
+            // passthrough is driven by explicit config or request-derived
+            // compatibility heuristics, never by ambient process env flags.
+            tool_call_thought_signature_passthrough: config
+                .openai_compatible
+                .as_ref()
+                .and_then(|explicit| explicit.send_tool_call_thought_signature),
         })
     }
 
@@ -235,14 +255,11 @@ impl OpenAI {
 
     #[cfg(feature = "openai")]
     pub(super) fn should_send_function_call_thought_signature(&self, model: &str) -> bool {
-        env_flag_is_true("DITTO_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
-            || env_flag_is_true("OMNE_OPENAI_RESPONSES_SEND_TOOL_CALL_THOUGHT_SIGNATURE")
-            || (self
-                .client
-                .base_url
-                .to_ascii_lowercase()
-                .contains("litellm")
-                && model.to_ascii_lowercase().contains("gemini"))
+        self.tool_call_thought_signature_passthrough
+            .unwrap_or_else(|| {
+                self.compatibility_profile
+                    .should_send_tool_call_thought_signature(model)
+            })
     }
 
     #[cfg(feature = "openai")]
@@ -473,7 +490,7 @@ impl OpenAI {
     pub(super) fn build_responses_body(
         request: &GenerateRequest,
         model: &str,
-        provider_options: &crate::types::ProviderOptions,
+        provider_options: &crate::provider_options::ProviderOptions,
         selected_provider_options: Option<&Value>,
         stream: bool,
         provider_options_context: &'static str,
@@ -561,7 +578,7 @@ impl OpenAI {
         }
 
         apply_provider_options(&mut body, provider_options)?;
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options,
             OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS,
@@ -584,7 +601,7 @@ impl OpenAI {
 
         let url = self.responses_compact_url();
         let req = self.client.http.post(url);
-        let parsed = crate::utils::http::send_checked_json::<CompactionResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<CompactionResponse>(
             self.apply_auth(req).json(request),
         )
         .await?;
@@ -675,7 +692,7 @@ impl OpenAI {
                 req = req.header(name, value);
             }
             req = req.header("Accept", "text/event-stream");
-            let response = crate::utils::http::send_checked(req).await?;
+            let response = crate::provider_transport::send_checked(req).await?;
 
             let byte_stream = response.bytes_stream().map_err(std::io::Error::other);
             let reader = StreamReader::new(byte_stream);
@@ -691,7 +708,7 @@ impl OpenAI {
 #[cfg(feature = "openai")]
 pub(super) fn apply_provider_options(
     body: &mut Map<String, Value>,
-    provider_options: &crate::types::ProviderOptions,
+    provider_options: &crate::provider_options::ProviderOptions,
 ) -> Result<()> {
     if provider_options.reasoning_effort.is_some() {
         let mut reasoning = Map::<String, Value>::new();
@@ -755,4 +772,53 @@ pub(super) fn sanitize_openai_responses_provider_options(
         },
         warnings,
     )
+}
+
+#[cfg(all(test, feature = "openai"))]
+mod tests {
+    use super::*;
+    use crate::config::{OpenAiCompatibleConfig, ProviderAuth};
+
+    #[test]
+    fn thought_signature_passthrough_defaults_to_explicit_input_heuristics() {
+        let litellm = OpenAI::new("sk-test").with_base_url("https://litellm.example/v1");
+        assert!(litellm.should_send_function_call_thought_signature("gemini-2.5-pro"));
+        assert!(!litellm.should_send_function_call_thought_signature("gpt-5"));
+
+        let plain = OpenAI::new("sk-test").with_base_url("https://api.openai.com/v1");
+        assert!(!plain.should_send_function_call_thought_signature("gemini-2.5-pro"));
+    }
+
+    #[test]
+    fn explicit_passthrough_override_can_disable_or_enable_heuristics() {
+        let disabled = OpenAI::new("sk-test")
+            .with_base_url("https://litellm.example/v1")
+            .with_tool_call_thought_signature_passthrough(false);
+        assert!(!disabled.should_send_function_call_thought_signature("gemini-2.5-pro"));
+
+        let enabled = OpenAI::new("sk-test")
+            .with_base_url("https://api.openai.com/v1")
+            .with_tool_call_thought_signature_passthrough(true);
+        assert!(enabled.should_send_function_call_thought_signature("gpt-5"));
+    }
+
+    #[tokio::test]
+    async fn from_config_reads_explicit_passthrough_override() -> Result<()> {
+        let config = ProviderConfig {
+            auth: Some(ProviderAuth::ApiKeyEnv {
+                keys: vec!["DITTO_TEST_OPENAI_KEY".to_string()],
+            }),
+            openai_compatible: Some(OpenAiCompatibleConfig {
+                family: None,
+                send_prompt_cache_key: None,
+                send_tool_call_thought_signature: Some(false),
+            }),
+            ..ProviderConfig::default()
+        };
+        let env = Env::parse_dotenv("DITTO_TEST_OPENAI_KEY=sk-test\n");
+
+        let client = OpenAI::from_config(&config, &env).await?;
+        assert!(!client.should_send_function_call_thought_signature("gemini-2.5-pro"));
+        Ok(())
+    }
 }

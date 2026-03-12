@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{FileSource, Role};
+    use crate::contracts::{FileSource, Role};
     use serde_json::json;
 
     #[test]
-    fn converts_system_to_system_instruction() -> crate::Result<()> {
+    fn converts_system_to_system_instruction() -> crate::foundation::error::Result<()> {
         let mut warnings = Vec::new();
         let tool_names = HashMap::new();
         let (contents, system) = Google::convert_messages(
@@ -21,7 +21,7 @@ mod tests {
     }
 
     #[test]
-    fn late_system_message_is_downgraded_to_user_content() -> crate::Result<()> {
+    fn late_system_message_is_downgraded_to_user_content() -> crate::foundation::error::Result<()> {
         let mut warnings = Vec::new();
         let tool_names = HashMap::new();
         let (contents, system) = Google::convert_messages(
@@ -205,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn assistant_tool_call_replays_google_thought_signature() -> crate::Result<()> {
+    fn assistant_tool_call_replays_google_thought_signature() -> crate::foundation::error::Result<()> {
         let mut warnings = Vec::new();
         let tool_names = HashMap::new();
         let (contents, _system) = Google::convert_messages(
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn converts_pdf_file_part_to_inline_data() -> crate::Result<()> {
+    fn converts_pdf_file_part_to_inline_data() -> crate::foundation::error::Result<()> {
         let mut warnings = Vec::new();
         let tool_names = HashMap::new();
         let (contents, _system) = Google::convert_messages(

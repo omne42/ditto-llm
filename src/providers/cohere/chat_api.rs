@@ -62,7 +62,7 @@ impl LanguageModel for Cohere {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = request.provider_options_value_for(self.provider())?;
+        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
 
         let (messages, mut warnings) = Self::messages_to_cohere_messages(&request.messages);
         crate::types::warn_unsupported_generate_request_options(
@@ -138,7 +138,7 @@ impl LanguageModel for Cohere {
             });
         }
 
-        crate::types::merge_provider_options_into_body(
+        crate::provider_options::merge_provider_options_into_body(
             &mut body,
             selected_provider_options.as_ref(),
             &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -148,7 +148,7 @@ impl LanguageModel for Cohere {
 
         let url = self.chat_url();
         let req = self.http.post(url);
-        let parsed = crate::utils::http::send_checked_json::<CohereChatResponse>(
+        let parsed = crate::provider_transport::send_checked_json::<CohereChatResponse>(
             self.apply_auth(req).json(&body),
         )
         .await?;
@@ -190,7 +190,7 @@ impl LanguageModel for Cohere {
             }
 
             let arguments_raw = call.function.arguments.as_str();
-            let arguments = crate::types::parse_tool_call_arguments_json_or_string(
+            let arguments = crate::contracts::parse_tool_call_arguments_json_or_string(
                 arguments_raw,
                 &format!("id={id}"),
                 &mut warnings,
@@ -247,7 +247,7 @@ impl LanguageModel for Cohere {
         #[cfg(feature = "streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = request.provider_options_value_for(self.provider())?;
+            let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
 
             let (messages, mut warnings) = Self::messages_to_cohere_messages(&request.messages);
             crate::types::warn_unsupported_generate_request_options(
@@ -325,7 +325,7 @@ impl LanguageModel for Cohere {
                 });
             }
 
-            crate::types::merge_provider_options_into_body(
+            crate::provider_options::merge_provider_options_into_body(
                 &mut body,
                 selected_provider_options.as_ref(),
                 &["reasoning_effort", "response_format", "parallel_tool_calls"],
@@ -335,7 +335,7 @@ impl LanguageModel for Cohere {
 
             let url = self.chat_url();
             let req = self.http.post(url);
-            let response = crate::utils::http::send_checked(
+            let response = crate::provider_transport::send_checked(
                 self.apply_auth(req)
                     .header("Accept", "text/event-stream")
                     .json(&body),
@@ -343,7 +343,7 @@ impl LanguageModel for Cohere {
             .await?;
 
             let (data_stream, buffer) =
-                crate::utils::streaming::init_sse_stream(response, warnings);
+                crate::session_transport::init_sse_stream(response, warnings);
 
             let stream = stream::unfold(
                 (

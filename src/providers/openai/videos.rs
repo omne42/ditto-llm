@@ -3,14 +3,14 @@ use async_trait::async_trait;
 use crate::providers::openai_like;
 use crate::providers::openai_videos_common;
 
-use crate::Result;
+use crate::capabilities::file::FileContent;
+use crate::capabilities::video::VideoGenerationModel;
 use crate::config::{Env, ProviderConfig};
-use crate::file::FileContent;
+use crate::foundation::error::Result;
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
     VideoListRequest, VideoListResponse, VideoRemixRequest,
 };
-use crate::video::VideoGenerationModel;
 
 #[derive(Clone)]
 pub struct OpenAIVideos {

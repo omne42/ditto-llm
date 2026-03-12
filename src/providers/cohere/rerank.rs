@@ -152,7 +152,7 @@ impl RerankModel for CohereRerank {
 
         let model = self.resolve_model(&request)?.to_string();
 
-        let selected_provider_options = crate::types::select_provider_options_value(
+        let selected_provider_options = crate::provider_options::select_provider_options_value(
             request.provider_options.as_ref(),
             self.provider(),
         )?;
@@ -195,8 +195,7 @@ impl RerankModel for CohereRerank {
 
         let mut req = self.http.post(url);
         req = self.apply_auth(req);
-        let parsed =
-            crate::utils::http::send_checked_json::<WireResponse>(req.json(&body)).await?;
+        let parsed = crate::provider_transport::send_checked_json::<WireResponse>(req.json(&body)).await?;
         Ok(RerankResponse {
             ranking: parsed
                 .results

@@ -2,10 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use ditto_llm::{
-    CapabilityKind, DittoError, Env, OperationKind, ProviderConfig, ProviderProtocolFamily,
-    ProviderResolutionError, builtin_registry,
-};
+use ditto_llm::catalog::builtin_registry;
+use ditto_llm::config::{Env, ProviderConfig};
+use ditto_llm::contracts::{CapabilityKind, OperationKind, ProviderProtocolFamily};
+use ditto_llm::foundation::error::{DittoError, ProviderResolutionError};
 
 fn anthropic_env() -> Env {
     Env::parse_dotenv("ANTHROPIC_API_KEY=sk-ant-test\n")
@@ -58,8 +58,8 @@ fn anthropic_catalog_runtime_spec_matches_enabled_capabilities() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_anthropic_llm() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
+async fn gateway_builder_constructs_anthropic_llm() -> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_language_model(
         "anthropic",
         &anthropic_config("claude-3-7-sonnet-20250219"),
         &anthropic_env(),
@@ -78,7 +78,7 @@ async fn gateway_builder_constructs_anthropic_llm() -> ditto_llm::Result<()> {
 ))]
 #[tokio::test]
 async fn gateway_builder_rejects_unimplemented_anthropic_embedding_capability() {
-    let err = match ditto_llm::gateway::translation::build_embedding_model(
+    let err = match ditto_llm::runtime::build_embedding_model(
         "anthropic",
         &anthropic_config("claude-3-7-sonnet-20250219"),
         &anthropic_env(),

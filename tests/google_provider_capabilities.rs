@@ -2,10 +2,13 @@
 
 use std::collections::BTreeSet;
 
-use ditto_llm::{
-    CapabilityKind, Env, OperationKind, ProviderConfig, ProviderProtocolFamily,
-    RealtimeSessionRequest, builtin_registry,
+use ditto_llm::capabilities::RealtimeSessionRequest;
+use ditto_llm::catalog::builtin_registry;
+use ditto_llm::config::{Env, ProviderConfig};
+use ditto_llm::contracts::{
+    CapabilityKind, OperationKind, ProviderProtocolFamily, RuntimeRouteRequest,
 };
+use ditto_llm::runtime::resolve_builtin_runtime_route;
 
 fn google_env() -> Env {
     Env::parse_dotenv("GOOGLE_API_KEY=test-google-key\n")
@@ -65,13 +68,12 @@ fn google_catalog_runtime_spec_matches_enabled_capabilities() {
                 .capability_resolution(Some("imagen-4"))
                 .effective_supports(CapabilityKind::IMAGE_GENERATION)
         );
-        let route = builtin_registry()
-            .resolve_runtime_route(ditto_llm::RuntimeRouteRequest::new(
-                "google",
-                Some("imagen-4"),
-                OperationKind::IMAGE_GENERATION,
-            ))
-            .expect("google image generation route should resolve");
+        let route = resolve_builtin_runtime_route(RuntimeRouteRequest::new(
+            "google",
+            Some("imagen-4"),
+            OperationKind::IMAGE_GENERATION,
+        ))
+        .expect("google image generation route should resolve");
         assert_eq!(
             route.url,
             "https://generativelanguage.googleapis.com/v1beta/models/imagen-4:predict"
@@ -86,13 +88,12 @@ fn google_catalog_runtime_spec_matches_enabled_capabilities() {
                 .capability_resolution(Some("gemini-2.5-flash-live"))
                 .effective_supports(CapabilityKind::REALTIME)
         );
-        let route = builtin_registry()
-            .resolve_runtime_route(ditto_llm::RuntimeRouteRequest::new(
-                "google",
-                Some("gemini-2.5-flash-live"),
-                OperationKind::REALTIME_SESSION,
-            ))
-            .expect("google realtime route should resolve");
+        let route = resolve_builtin_runtime_route(RuntimeRouteRequest::new(
+            "google",
+            Some("gemini-2.5-flash-live"),
+            OperationKind::REALTIME_SESSION,
+        ))
+        .expect("google realtime route should resolve");
         assert_eq!(
             route.url,
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
@@ -107,13 +108,12 @@ fn google_catalog_runtime_spec_matches_enabled_capabilities() {
                 .capability_resolution(Some("veo-2.0-generate-001"))
                 .effective_supports(CapabilityKind::VIDEO_GENERATION)
         );
-        let route = builtin_registry()
-            .resolve_runtime_route(ditto_llm::RuntimeRouteRequest::new(
-                "google",
-                Some("veo-2.0-generate-001"),
-                OperationKind::VIDEO_GENERATION,
-            ))
-            .expect("google video generation route should resolve");
+        let route = resolve_builtin_runtime_route(RuntimeRouteRequest::new(
+            "google",
+            Some("veo-2.0-generate-001"),
+            OperationKind::VIDEO_GENERATION,
+        ))
+        .expect("google video generation route should resolve");
         assert_eq!(
             route.url,
             "https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning"
@@ -134,8 +134,8 @@ fn google_catalog_runtime_spec_matches_enabled_capabilities() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_llm() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_language_model(
+async fn gateway_builder_constructs_google_llm() -> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_language_model(
         "google",
         &google_config("gemini-3.1-pro"),
         &google_env(),
@@ -153,8 +153,9 @@ async fn gateway_builder_constructs_google_llm() -> ditto_llm::Result<()> {
     feature = "cap-embedding"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_embeddings() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_embedding_model(
+async fn gateway_builder_constructs_google_embeddings() -> ditto_llm::foundation::error::Result<()>
+{
+    let model = ditto_llm::runtime::build_embedding_model(
         "google",
         &google_config("gemini-embedding"),
         &google_env(),
@@ -173,8 +174,9 @@ async fn gateway_builder_constructs_google_embeddings() -> ditto_llm::Result<()>
     feature = "cap-image-generation"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_image_generation() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_image_generation_model(
+async fn gateway_builder_constructs_google_image_generation()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_image_generation_model(
         "google",
         &google_config("imagen-4"),
         &google_env(),
@@ -193,8 +195,9 @@ async fn gateway_builder_constructs_google_image_generation() -> ditto_llm::Resu
     feature = "videos"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_video_generation() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_video_generation_model(
+async fn gateway_builder_constructs_google_video_generation()
+-> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_video_generation_model(
         "google",
         &google_config("veo-2.0-generate-001"),
         &google_env(),
@@ -213,8 +216,8 @@ async fn gateway_builder_constructs_google_video_generation() -> ditto_llm::Resu
     feature = "cap-realtime"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_realtime() -> ditto_llm::Result<()> {
-    let model = ditto_llm::gateway::translation::build_realtime_session_model(
+async fn gateway_builder_constructs_google_realtime() -> ditto_llm::foundation::error::Result<()> {
+    let model = ditto_llm::runtime::build_realtime_session_model(
         "google",
         &google_config("gemini-2.5-flash-live"),
         &google_env(),

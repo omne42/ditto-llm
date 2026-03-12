@@ -1,4 +1,5 @@
-use super::*;
+#[cfg(feature = "gateway-costing")]
+use super::{GatewayHttpState, max_option_u64};
 
 #[cfg(feature = "gateway-costing")]
 pub(super) fn estimate_charge_cost_usd_micros(

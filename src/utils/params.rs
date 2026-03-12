@@ -5,12 +5,13 @@ use serde_json::Number;
     feature = "bedrock",
     feature = "cohere",
     feature = "google",
+    feature = "openai",
     feature = "openai-compatible",
     feature = "vertex"
 ))]
 use std::collections::HashSet;
 
-use crate::types::Warning;
+use crate::contracts::Warning;
 
 pub(crate) fn clamped_number_from_f32(
     parameter: &str,
@@ -52,6 +53,7 @@ pub(crate) fn clamped_number_from_f32(
     feature = "bedrock",
     feature = "cohere",
     feature = "google",
+    feature = "openai",
     feature = "openai-compatible",
     feature = "vertex"
 ))]

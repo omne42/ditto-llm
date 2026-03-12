@@ -32,7 +32,6 @@ mod translation_backend;
 pub use self::a2a::A2aAgentState;
 use self::admin::{error_response, map_gateway_error};
 use self::admin_auth::{ensure_admin_read, ensure_admin_write};
-use self::admin_persistence::{append_admin_audit_log, persist_virtual_keys};
 use self::config_versions::{
     ConfigVersionHistory, ConfigVersionInfo, diff_config_versions, export_config,
     get_config_version, get_config_version_by_id, list_config_versions, rollback_config_version,
@@ -68,11 +67,29 @@ use self::openai_compat_proxy_streaming_multipart::{
 };
 use self::proxy_backend::attempt_proxy_backend;
 use self::proxy_bounded_body::read_reqwest_body_bytes_bounded_with_content_length;
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 use self::proxy_budget_reservations::{
-    ProxyBudgetReservationParams, ProxyPermitOutcome, reserve_proxy_cost_budgets_for_request,
-    reserve_proxy_token_budgets_for_request, rollback_proxy_cost_budget_reservations,
-    rollback_proxy_token_budget_reservations, settle_proxy_cost_budget_reservations,
-    settle_proxy_token_budget_reservations, try_acquire_proxy_permits,
+    ProxyBudgetReservationParams, reserve_proxy_token_budgets_for_request,
+    rollback_proxy_token_budget_reservations, settle_proxy_token_budget_reservations,
+};
+use self::proxy_budget_reservations::{ProxyPermitOutcome, try_acquire_proxy_permits};
+#[cfg(all(
+    feature = "gateway-costing",
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
+))]
+use self::proxy_budget_reservations::{
+    reserve_proxy_cost_budgets_for_request, rollback_proxy_cost_budget_reservations,
+    settle_proxy_cost_budget_reservations,
 };
 use self::proxy_gateway_context::{
     ResolveOpenAiCompatProxyGatewayContextRequest, ResolvedGatewayContext,
@@ -304,10 +321,12 @@ pub struct GatewayHttpState {
     budget: Arc<StdMutex<BudgetTracker>>,
     observability: Arc<StdMutex<Observability>>,
     config_versions: Arc<Mutex<ConfigVersionHistory>>,
+    #[allow(dead_code)]
     redactor: Arc<GatewayRedactor>,
     observability_policy: Arc<GatewayObservabilityPolicy>,
     backends: GatewayRuntimeBackends,
     admin: GatewayAdminState,
+    #[allow(dead_code)]
     stores: GatewayPersistenceState,
     proxy: GatewayProxyRuntimeState,
 }
@@ -991,6 +1010,7 @@ fn synthesize_bearer_header(token: &str) -> Option<axum::http::HeaderValue> {
 #[cfg(feature = "gateway-routing-advanced")]
 use std::time::Duration;
 
+#[allow(dead_code)]
 fn clamp_u64_to_u32(value: u64) -> u32 {
     if value > u64::from(u32::MAX) {
         u32::MAX
@@ -1589,6 +1609,12 @@ async fn proxy_response(
 
         impl StreamState {
             async fn finalize(&mut self, end: ProxyStreamEnd) {
+                #[cfg(not(any(
+                    feature = "gateway-proxy-cache",
+                    feature = "gateway-metrics-prometheus"
+                )))]
+                let _ = end;
+
                 #[cfg(feature = "gateway-proxy-cache")]
                 if matches!(end, ProxyStreamEnd::Completed) {
                     if let Some(cache_completion) = self.cache_completion.take() {
@@ -1793,7 +1819,7 @@ async fn responses_shim_response(
         .to_ascii_lowercase();
 
     if content_type.starts_with("text/event-stream") {
-        let data_stream = crate::utils::sse::sse_data_stream_from_response(upstream);
+        let data_stream = crate::session_transport::sse_data_stream_from_response(upstream);
         let stream =
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, request_id.clone());
         let upstream_stream: ProxyBodyStream = stream.boxed();
@@ -1839,6 +1865,12 @@ async fn responses_shim_response(
 
         impl StreamState {
             async fn finalize(&mut self, end: ProxyStreamEnd) {
+                #[cfg(not(any(
+                    feature = "gateway-proxy-cache",
+                    feature = "gateway-metrics-prometheus"
+                )))]
+                let _ = end;
+
                 #[cfg(feature = "gateway-proxy-cache")]
                 if matches!(end, ProxyStreamEnd::Completed) {
                     if let Some(cache_completion) = self.cache_completion.take() {

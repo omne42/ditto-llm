@@ -1,7 +1,7 @@
 #![cfg(all(feature = "gateway", feature = "gateway-translation"))]
 
-use ditto_llm::gateway::translation::{build_embedding_model, build_language_model};
-use ditto_llm::{Env, ProviderApi, ProviderConfig};
+use ditto_llm::config::{Env, ProviderApi, ProviderConfig};
+use ditto_llm::runtime::{build_embedding_model, build_language_model};
 
 fn mixed_env() -> Env {
     Env::parse_dotenv(
@@ -11,7 +11,8 @@ fn mixed_env() -> Env {
 
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_defaults_to_generic_openai_compatible_runtime() -> ditto_llm::Result<()> {
+async fn custom_provider_defaults_to_generic_openai_compatible_runtime()
+-> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-openai",
         &ProviderConfig {
@@ -30,7 +31,8 @@ async fn custom_provider_defaults_to_generic_openai_compatible_runtime() -> ditt
 
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_openai_upstream_api_runtime_selection() -> ditto_llm::Result<()> {
+async fn custom_provider_respects_openai_upstream_api_runtime_selection()
+-> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-openai-chat",
         &ProviderConfig {
@@ -50,8 +52,8 @@ async fn custom_provider_respects_openai_upstream_api_runtime_selection() -> dit
 
 #[cfg(all(feature = "provider-anthropic", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_anthropic_upstream_api_runtime_selection() -> ditto_llm::Result<()>
-{
+async fn custom_provider_respects_anthropic_upstream_api_runtime_selection()
+-> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-claude-native",
         &ProviderConfig {
@@ -71,7 +73,8 @@ async fn custom_provider_respects_anthropic_upstream_api_runtime_selection() -> 
 
 #[cfg(all(feature = "provider-google", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_google_upstream_api_runtime_selection() -> ditto_llm::Result<()> {
+async fn custom_provider_respects_google_upstream_api_runtime_selection()
+-> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-gemini-native",
         &ProviderConfig {
@@ -91,7 +94,8 @@ async fn custom_provider_respects_google_upstream_api_runtime_selection() -> dit
 
 #[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
 #[tokio::test]
-async fn custom_provider_respects_google_upstream_api_for_embeddings() -> ditto_llm::Result<()> {
+async fn custom_provider_respects_google_upstream_api_for_embeddings()
+-> ditto_llm::foundation::error::Result<()> {
     let model = build_embedding_model(
         "yunwu-gemini-embed",
         &ProviderConfig {
