@@ -9,8 +9,7 @@ use crate::catalog::{
 };
 use crate::config::{ProviderApi, ProviderCapabilities, ProviderConfig};
 use crate::contracts::{
-    CapabilityKind, ContextCacheModeId, InvocationHints, OperationKind, ProviderClass, ProviderId,
-    WireProtocol,
+    CapabilityKind, ContextCacheModeId, InvocationHints, OperationKind, ProviderClass, WireProtocol,
 };
 use crate::foundation::error::{ProviderResolutionError, Result};
 
@@ -317,22 +316,11 @@ fn resolve_builder_catalog_plugin(
 ) -> Option<&'static ProviderPluginDescriptor> {
     let provider = provider_name_hint.trim();
     if provider.is_empty() {
-        return builder_plugin_from_upstream_api(registry, provider_config).or_else(|| {
-            registry
-                .plugin("openai-compatible")
-                .or_else(|| registry.plugin("openai"))
-        });
+        return builder_plugin_from_upstream_api(registry, provider_config);
     }
 
-    registry
-        .plugin(provider)
-        .or_else(|| registry.plugin_for_runtime_request(provider, provider_config.runtime_hints()))
-        .or_else(|| builder_plugin_from_upstream_api(registry, provider_config))
-        .or_else(|| {
-            registry
-                .plugin("openai-compatible")
-                .or_else(|| registry.plugin("openai"))
-        })
+    resolve_explicit_catalog_plugin(registry, provider)
+        .or_else(|| resolve_configured_catalog_plugin_hint(registry, provider_config))
 }
 
 fn resolve_configured_catalog_plugin(
@@ -346,25 +334,98 @@ fn resolve_configured_catalog_plugin(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        return registry
-            .plugin_by_id(ProviderId::new(provider))
-            .or_else(|| registry.plugin_by_hint(provider))
-            .ok_or_else(|| {
-                ProviderResolutionError::ConfiguredProviderNotFound {
-                    provider: provider.to_string(),
-                }
-                .into()
-            });
+        return resolve_explicit_catalog_plugin(registry, provider).ok_or_else(|| {
+            ProviderResolutionError::ConfiguredProviderNotFound {
+                provider: provider.to_string(),
+            }
+            .into()
+        });
+    }
+
+    let provider = provider_name_hint.trim();
+    if provider.is_empty() {
+        return builder_plugin_from_upstream_api(registry, provider_config).ok_or_else(|| {
+            ProviderResolutionError::CatalogProviderNotFound {
+                provider: provider.to_string(),
+            }
+            .into()
+        });
+    }
+
+    resolve_explicit_catalog_plugin(registry, provider).ok_or_else(|| {
+        ProviderResolutionError::CatalogProviderNotFound {
+            provider: provider.to_string(),
+        }
+        .into()
+    })
+}
+
+fn resolve_explicit_catalog_plugin(
+    registry: CatalogRegistry,
+    provider_name_hint: &str,
+) -> Option<&'static ProviderPluginDescriptor> {
+    let provider = provider_name_hint.trim();
+    if provider.is_empty() {
+        return None;
     }
 
     registry
-        .plugin_for_runtime_request(provider_name_hint, provider_config.runtime_hints())
-        .ok_or_else(|| {
-            ProviderResolutionError::CatalogProviderNotFound {
-                provider: provider_name_hint.trim().to_string(),
-            }
-            .into()
-        })
+        .plugin(provider)
+        .or_else(|| namespaced_catalog_plugin(registry, provider))
+        .or_else(|| legacy_builder_alias_plugin(registry, provider))
+}
+
+fn resolve_configured_catalog_plugin_hint(
+    registry: CatalogRegistry,
+    provider_config: &ProviderConfig,
+) -> Option<&'static ProviderPluginDescriptor> {
+    provider_config
+        .provider
+        .as_deref()
+        .and_then(|provider| resolve_explicit_catalog_plugin(registry, provider))
+}
+
+fn namespaced_catalog_plugin(
+    registry: CatalogRegistry,
+    provider_name_hint: &str,
+) -> Option<&'static ProviderPluginDescriptor> {
+    let (namespace, _) = provider_name_hint.split_once(".providers.")?;
+    resolve_explicit_catalog_plugin(registry, namespace)
+}
+
+fn legacy_builder_alias_plugin(
+    registry: CatalogRegistry,
+    provider_name_hint: &str,
+) -> Option<&'static ProviderPluginDescriptor> {
+    let generic_openai = || {
+        registry
+            .plugin("openai-compatible")
+            .or_else(|| registry.plugin("openai"))
+    };
+
+    match normalized_provider_alias(provider_name_hint).as_str() {
+        "openaicompatible" | "litellm" | "azure" | "azureopenai" | "groq" | "mistral"
+        | "together" | "togetherai" | "fireworks" | "perplexity" | "ollama" | "qwen" => {
+            generic_openai()
+        }
+        "openrouter" => registry.plugin("openrouter").or_else(generic_openai),
+        "deepseek" => registry.plugin("deepseek").or_else(generic_openai),
+        "moonshot" | "moonshotai" | "kimi" => registry.plugin("kimi").or_else(generic_openai),
+        "minimax" => registry.plugin("minimax").or_else(generic_openai),
+        "glm" | "zhipu" => registry.plugin("zhipu").or_else(generic_openai),
+        "doubao" | "ark" => registry.plugin("doubao").or_else(generic_openai),
+        "xai" | "grok" => registry.plugin("xai").or_else(generic_openai),
+        _ => None,
+    }
+}
+
+fn normalized_provider_alias(value: &str) -> String {
+    value
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(|ch| ch.to_lowercase())
+        .collect()
 }
 
 fn parse_enabled_capability_list(enabled_capabilities: &[String]) -> Result<Vec<CapabilityKind>> {
@@ -652,8 +713,29 @@ mod tests {
 
     #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
     #[test]
-    fn resolves_unknown_openai_like_provider_to_generic_catalog_profile() {
+    fn rejects_unknown_openai_like_provider_without_explicit_owner() {
         let config = ProviderConfig {
+            base_url: Some("https://proxy.example/v1".to_string()),
+            default_model: Some("custom-model".to_string()),
+            ..ProviderConfig::default()
+        };
+
+        let err = builtin_runtime_registry_catalog()
+            .resolve_openai_compatible_provider_capability_profile("my-proxy", &config)
+            .expect_err("unknown provider should fail closed without explicit owner");
+        assert!(matches!(
+            err,
+            crate::foundation::error::DittoError::ProviderResolution(
+                crate::foundation::error::ProviderResolutionError::CatalogProviderNotFound { .. }
+            )
+        ));
+    }
+
+    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[test]
+    fn resolves_explicit_openai_compatible_owner_for_custom_provider_node() {
+        let config = ProviderConfig {
+            provider: Some("openai-compatible".to_string()),
             base_url: Some("https://proxy.example/v1".to_string()),
             default_model: Some("custom-model".to_string()),
             ..ProviderConfig::default()
@@ -661,7 +743,7 @@ mod tests {
 
         let profile = builtin_runtime_registry_catalog()
             .resolve_openai_compatible_provider_capability_profile("my-proxy", &config)
-            .expect("unknown provider should fall back to generic openai-compatible plugin");
+            .expect("explicit configured provider should resolve generic openai-compatible");
         assert_eq!(profile.provider, "openai-compatible");
         assert!(profile.resolution.effective_supports(CapabilityKind::LLM));
         assert!(profile.effective_capabilities.streaming);
@@ -681,6 +763,17 @@ mod tests {
             .expect("gemini upstream should resolve a google builder");
         assert_eq!(resolved.catalog_provider, "google");
         assert_eq!(resolved.builder_provider, "google");
+    }
+
+    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[test]
+    fn resolve_builtin_builder_provider_keeps_known_openai_aliases() {
+        let resolved = builtin_runtime_registry_catalog()
+            .resolve_builder_provider("azure-openai", &ProviderConfig::default())
+            .expect("known legacy alias should still resolve");
+
+        assert_eq!(resolved.catalog_provider, "openai-compatible");
+        assert_eq!(resolved.builder_provider, "openai-compatible");
     }
 
     #[cfg(feature = "provider-deepseek")]
@@ -723,6 +816,7 @@ mod tests {
     #[test]
     fn builtin_provider_supports_file_builder_accepts_generic_openai_family() {
         let config = ProviderConfig {
+            provider: Some("openai-compatible".to_string()),
             base_url: Some("https://proxy.example/v1".to_string()),
             ..ProviderConfig::default()
         };

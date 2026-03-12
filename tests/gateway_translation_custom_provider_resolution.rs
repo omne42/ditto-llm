@@ -1,7 +1,9 @@
 #![cfg(all(feature = "gateway", feature = "gateway-translation"))]
 
 use ditto_llm::config::{Env, ProviderApi, ProviderConfig};
-use ditto_llm::runtime::{build_embedding_model, build_language_model};
+#[cfg(feature = "cap-embedding")]
+use ditto_llm::runtime::build_embedding_model;
+use ditto_llm::runtime::build_language_model;
 
 fn mixed_env() -> Env {
     Env::parse_dotenv(
@@ -11,9 +13,9 @@ fn mixed_env() -> Env {
 
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_defaults_to_generic_openai_compatible_runtime()
+async fn custom_provider_requires_explicit_openai_compatible_owner()
 -> ditto_llm::foundation::error::Result<()> {
-    let model = build_language_model(
+    let err = build_language_model(
         "yunwu-openai",
         &ProviderConfig {
             base_url: Some("https://proxy.example/v1".to_string()),
@@ -22,20 +24,25 @@ async fn custom_provider_defaults_to_generic_openai_compatible_runtime()
         },
         &mixed_env(),
     )
-    .await?;
+    .await
+    .err()
+    .expect("unknown custom provider should fail closed");
 
-    assert_eq!(model.provider(), "openai-compatible");
-    assert_eq!(model.model_id(), "chat-model");
+    assert!(
+        err.to_string()
+            .contains("unsupported provider backend: yunwu-openai")
+    );
     Ok(())
 }
 
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_openai_upstream_api_runtime_selection()
+async fn custom_provider_resolves_through_explicit_openai_compatible_owner()
 -> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-openai-chat",
         &ProviderConfig {
+            provider: Some("openai-compatible".to_string()),
             base_url: Some("https://proxy.example/v1".to_string()),
             default_model: Some("chat-model".to_string()),
             upstream_api: Some(ProviderApi::OpenaiChatCompletions),
@@ -52,11 +59,12 @@ async fn custom_provider_respects_openai_upstream_api_runtime_selection()
 
 #[cfg(all(feature = "provider-anthropic", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_anthropic_upstream_api_runtime_selection()
+async fn custom_provider_resolves_through_explicit_anthropic_owner()
 -> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-claude-native",
         &ProviderConfig {
+            provider: Some("anthropic".to_string()),
             base_url: Some("https://api.anthropic.com/v1".to_string()),
             default_model: Some("claude-3-7-sonnet-20250219".to_string()),
             upstream_api: Some(ProviderApi::AnthropicMessages),
@@ -73,11 +81,12 @@ async fn custom_provider_respects_anthropic_upstream_api_runtime_selection()
 
 #[cfg(all(feature = "provider-google", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_respects_google_upstream_api_runtime_selection()
+async fn custom_provider_resolves_through_explicit_google_owner()
 -> ditto_llm::foundation::error::Result<()> {
     let model = build_language_model(
         "yunwu-gemini-native",
         &ProviderConfig {
+            provider: Some("google.providers.yunwu".to_string()),
             base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
             default_model: Some("gemini-3.1-pro".to_string()),
             upstream_api: Some(ProviderApi::GeminiGenerateContent),
@@ -94,11 +103,12 @@ async fn custom_provider_respects_google_upstream_api_runtime_selection()
 
 #[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
 #[tokio::test]
-async fn custom_provider_respects_google_upstream_api_for_embeddings()
+async fn custom_provider_resolves_embeddings_through_explicit_google_owner()
 -> ditto_llm::foundation::error::Result<()> {
     let model = build_embedding_model(
         "yunwu-gemini-embed",
         &ProviderConfig {
+            provider: Some("google.providers.yunwu".to_string()),
             base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
             default_model: Some("gemini-embedding".to_string()),
             upstream_api: Some(ProviderApi::GeminiGenerateContent),

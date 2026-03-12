@@ -295,8 +295,8 @@ mod tests {
 
     #[cfg(feature = "provider-openai-compatible")]
     #[test]
-    fn builder_assembly_keeps_strict_custom_provider_defaulting() {
-        let runtime = resolve_builder_assembly(BuilderAssemblyRequest::new(
+    fn builder_assembly_rejects_unknown_custom_provider_without_explicit_owner() {
+        let err = resolve_builder_assembly(BuilderAssemblyRequest::new(
             "yunwu-openai",
             &ProviderConfig {
                 base_url: Some("https://proxy.example/v1".to_string()),
@@ -305,7 +305,28 @@ mod tests {
             },
             CapabilityKind::LLM,
         ))
-        .expect("custom provider should keep generic openai-compatible runtime");
+        .expect_err("unknown custom provider should fail closed");
+
+        assert!(
+            err.to_string()
+                .contains("unsupported provider backend: yunwu-openai")
+        );
+    }
+
+    #[cfg(feature = "provider-openai-compatible")]
+    #[test]
+    fn builder_assembly_uses_explicit_configured_provider_for_custom_node() {
+        let runtime = resolve_builder_assembly(BuilderAssemblyRequest::new(
+            "yunwu-openai",
+            &ProviderConfig {
+                provider: Some("openai-compatible".to_string()),
+                base_url: Some("https://proxy.example/v1".to_string()),
+                default_model: Some("chat-model".to_string()),
+                ..ProviderConfig::default()
+            },
+            CapabilityKind::LLM,
+        ))
+        .expect("explicit configured provider should keep generic openai-compatible runtime");
 
         assert_eq!(runtime.provider, "openai-compatible");
         assert_eq!(

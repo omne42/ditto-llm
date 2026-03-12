@@ -113,7 +113,8 @@ impl OpenAITextModel {
 
 fn default_operation_support_resolver() -> Arc<OpenAiTextOperationSupportResolver> {
     Arc::new(|model, operation| {
-        crate::catalog::builtin_registry().supports_operation("openai", model, operation)
+        crate::runtime_registry::builtin_runtime_registry_catalog()
+            .provider_supports_operation("openai", model, operation)
     })
 }
 
@@ -198,7 +199,8 @@ mod tests {
             legacy_completions: OpenAICompletionsLegacy::new("sk-test").with_model("gpt-5"),
             preferred_surface: None,
             operation_support_resolver: Arc::new(|model, operation| {
-                crate::catalog::builtin_registry().supports_operation("openai", model, operation)
+                crate::runtime_registry::builtin_runtime_registry_catalog()
+                    .provider_supports_operation("openai", model, operation)
             }),
         };
 

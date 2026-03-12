@@ -63,15 +63,19 @@ pub(crate) struct OpenAiCompatibilityProfile {
 impl OpenAiCompatibilityProfile {
     pub(crate) fn resolve(provider: &str, base_url: &str, config: Option<&ProviderConfig>) -> Self {
         let explicit_family = config.and_then(explicit_family_override);
-        let family =
-            explicit_family.unwrap_or_else(|| infer_openai_provider_family(provider, base_url));
-        let catalog_provider = config
-            .and_then(|provider_config| {
-                builtin_runtime_registry_catalog()
-                    .resolve_builder_provider(provider, provider_config)
-                    .map(|resolved| resolved.catalog_provider)
+        let resolved_catalog_provider = config.and_then(|provider_config| {
+            builtin_runtime_registry_catalog()
+                .resolve_builder_provider(provider, provider_config)
+                .map(|resolved| resolved.catalog_provider)
+        });
+        let family = explicit_family
+            .or_else(|| {
+                resolved_catalog_provider.and_then(openai_provider_family_for_catalog_provider)
             })
-            .or_else(|| default_catalog_provider_for_family(family));
+            .or_else(|| parse_openai_provider_family(provider))
+            .unwrap_or_else(|| infer_openai_provider_family(provider, base_url));
+        let catalog_provider =
+            resolved_catalog_provider.or_else(|| default_catalog_provider_for_family(family));
 
         let prompt_cache_usage_reporting = match family {
             OpenAiProviderFamily::Qwen
@@ -181,6 +185,20 @@ impl OpenAiCompatibilityProfile {
             },
             _ => ContextCacheProfile::default(),
         }
+    }
+}
+
+fn openai_provider_family_for_catalog_provider(provider: &str) -> Option<OpenAiProviderFamily> {
+    match provider {
+        "openai" => Some(OpenAiProviderFamily::OpenAi),
+        "openrouter" => Some(OpenAiProviderFamily::OpenRouter),
+        "deepseek" => Some(OpenAiProviderFamily::DeepSeek),
+        "kimi" => Some(OpenAiProviderFamily::Kimi),
+        "minimax" => Some(OpenAiProviderFamily::MiniMax),
+        "zhipu" => Some(OpenAiProviderFamily::Glm),
+        "doubao" => Some(OpenAiProviderFamily::Doubao),
+        "openai-compatible" => Some(OpenAiProviderFamily::GenericOpenAiCompatible),
+        _ => None,
     }
 }
 
@@ -304,5 +322,24 @@ mod tests {
         );
         assert_eq!(profile.family(), OpenAiProviderFamily::OpenRouter);
         assert!(profile.prompt_cache_usage_may_be_missing());
+    }
+
+    #[test]
+    fn configured_provider_truth_beats_provider_name_heuristics() {
+        let profile = OpenAiCompatibilityProfile::resolve(
+            "openrouter",
+            "https://proxy.example/v1",
+            Some(&ProviderConfig {
+                provider: Some("openai-compatible".to_string()),
+                base_url: Some("https://proxy.example/v1".to_string()),
+                ..ProviderConfig::default()
+            }),
+        );
+
+        assert_eq!(
+            profile.family(),
+            OpenAiProviderFamily::GenericOpenAiCompatible
+        );
+        assert!(!profile.prompt_cache_usage_may_be_missing());
     }
 }
