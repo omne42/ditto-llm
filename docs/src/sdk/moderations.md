@@ -15,12 +15,12 @@ Ditto 通过 `ModerationModel` trait 对齐 OpenAI/OpenAI-compatible 的 `/v1/mo
 ## 最小示例
 
 ```rust
-use ditto_llm::{ModerationInput, ModerationModel, ModerationRequest, OpenAIModerations};
+use ditto_core::{ModerationInput, ModerationModel, ModerationRequest, OpenAIModerations};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let client = OpenAIModerations::new(api_key).with_model("omni-moderation-latest");
 

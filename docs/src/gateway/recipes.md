@@ -66,7 +66,7 @@ REDIS_URL=redis://127.0.0.1:6379
 ### 3) 启动
 
 ```bash
-cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --listen 0.0.0.0:8080 \
   --dotenv .env \
   --admin-token-env DITTO_ADMIN_TOKEN \
@@ -143,7 +143,7 @@ curl -sS http://127.0.0.1:8080/admin/keys -H "Authorization: Bearer ${DITTO_ADMI
 示例：
 
 ```bash
-cargo run --features "gateway gateway-proxy-cache gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-proxy-cache gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --dotenv .env --redis-env REDIS_URL --redis-prefix ditto \
   --proxy-cache --proxy-cache-ttl 60 --proxy-cache-max-entries 2048
 ```
@@ -191,7 +191,7 @@ cargo run --features "gateway gateway-proxy-cache gateway-store-redis" --bin dit
 启动（示意）：
 
 ```bash
-cargo run --features "gateway gateway-costing gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-costing gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --pricing-litellm ./pricing.json \
   --redis redis://127.0.0.1:6379 --redis-prefix ditto
 ```
@@ -214,7 +214,7 @@ cargo run --features "gateway gateway-costing gateway-store-redis" --bin ditto-g
 示例：
 
 ```bash
-cargo run --features "gateway gateway-routing-advanced" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-routing-advanced" --bin ditto-gateway -- ./gateway.json \
   --proxy-retry --proxy-retry-max-attempts 2 \
   --proxy-circuit-breaker --proxy-cb-failure-threshold 3 --proxy-cb-cooldown-secs 30 \
   --proxy-health-checks --proxy-health-check-path /v1/models --proxy-health-check-interval-secs 10
@@ -248,7 +248,7 @@ cargo run --features "gateway gateway-routing-advanced" --bin ditto-gateway -- .
 export TALES_LITELLM_API_KEY='...'
 export DITTO_VK='vk-local'
 
-cargo run --features gateway --bin ditto-gateway -- ./deploy/gateway.litellm.talesofai.cn.glm47.json \
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./deploy/gateway.litellm.talesofai.cn.glm47.json \
   --listen 127.0.0.1:18080
 ```
 

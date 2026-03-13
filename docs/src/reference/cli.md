@@ -1,6 +1,6 @@
 # CLI 选项（ditto-gateway）
 
-本页是 `ditto-gateway` 的运行参数速查（实现见 `src/bin/ditto_gateway/cli.rs` + `src/bin/ditto-gateway.rs`）。
+本页是 `ditto-gateway` 的运行参数速查（实现见 `crates/ditto-server/src/bin/ditto_gateway/cli.rs` + `crates/ditto-server/src/bin/ditto-gateway.rs`）。
 
 > 当前 CLI 采用轻量参数解析：**没有 `--help`**。运行时缺少必填参数会打印 usage（并退出）。
 
@@ -19,7 +19,7 @@ ditto-gateway <gateway.(json|yaml)> [flags...]
 开发期常见用法：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 ### 配置子命令（provider/model add）
@@ -29,7 +29,7 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 ```bash
 # `add` 与 `set` 等价（互为别名）
 # 增量更新 provider（不会整文件覆盖）
-cargo run --features gateway --bin ditto-gateway -- \
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- \
   provider add openrouter \
   --namespace google \
   --upstream-api gemini_generate_content \
@@ -39,28 +39,28 @@ cargo run --features gateway --bin ditto-gateway -- \
   --scope workspace
 
 # 增量更新 model（不会整文件覆盖）
-cargo run --features gateway --bin ditto-gateway -- \
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- \
   model add gemini-3.1-pro \
   --provider google.providers.openrouter \
   --set-default \
   --scope workspace
 
 # 列表 / 查看 / 删除
-cargo run --features gateway --bin ditto-gateway -- provider list --namespace google
-cargo run --features gateway --bin ditto-gateway -- provider show openrouter --namespace google
-cargo run --features gateway --bin ditto-gateway -- provider delete openrouter --namespace google
-cargo run --features gateway --bin ditto-gateway -- model list
-cargo run --features gateway --bin ditto-gateway -- model show gemini-3.1-pro
-cargo run --features gateway --bin ditto-gateway -- model delete gemini-3.1-pro
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- provider list --namespace google
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- provider show openrouter --namespace google
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- provider delete openrouter --namespace google
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- model list
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- model show gemini-3.1-pro
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- model delete gemini-3.1-pro
 
 # 多步交互默认开启（参数可预填，剩余项交互补全）
-cargo run --features gateway --bin ditto-gateway -- \
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- \
   provider add openrouter \
   --namespace google \
   --upstream-api gemini_generate_content
 
 # 非交互（脚本场景）
-cargo run --features gateway --bin ditto-gateway -- \
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- \
   provider add openrouter \
   --namespace google \
   --upstream-api gemini_generate_content \
@@ -69,7 +69,7 @@ cargo run --features gateway --bin ditto-gateway -- \
 
 说明：
 
-- `provider/model add` 的底层实现在 `ditto-llm` 库（`upsert_provider_config` / `upsert_model_config`），Omne 也复用同一套方法。
+- `provider/model add` 的底层实现在 `ditto-server` 库（`upsert_provider_config` / `upsert_model_config`），Omne 也复用同一套方法。
 - 默认是 merge update（增量更新）；不会清空已有无关配置。
 
 ---

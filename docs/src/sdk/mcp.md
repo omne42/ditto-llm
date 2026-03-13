@@ -2,7 +2,7 @@
 
 Ditto 在 `sdk` feature 里提供了 MCP tool schema 的轻量互转（只做结构映射，不是 MCP client/server 实现）。
 
-实现位置：`src/sdk/mcp.rs`。
+实现位置：`crates/ditto-core/src/sdk/mcp.rs`。
 
 如果你需要 **Gateway 级别** 的 MCP proxy（`/mcp*`）与 MCP tools 集成（`/v1/chat/completions` / `/v1/responses` 的 `tools: [{"type":"mcp", ...}]`），请看「Gateway → MCP Gateway（/mcp + tools）」。
 
@@ -22,7 +22,7 @@ Ditto 在 `sdk` feature 里提供了 MCP tool schema 的轻量互转（只做结
 ## 2) 从 Ditto Tool 转 MCP Tool
 
 ```rust
-use ditto_llm::sdk::mcp::to_mcp_tool;
+use ditto_core::sdk::mcp::to_mcp_tool;
 
 let mcp = to_mcp_tool(&tool);
 ```
@@ -32,7 +32,7 @@ let mcp = to_mcp_tool(&tool);
 ## 3) 从 MCP Tool 转 Ditto Tool
 
 ```rust
-use ditto_llm::sdk::mcp::from_mcp_tool;
+use ditto_core::sdk::mcp::from_mcp_tool;
 
 let tool = from_mcp_tool(&mcp);
 ```

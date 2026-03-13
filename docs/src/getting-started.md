@@ -12,19 +12,19 @@ Ditto-LLM 有三种常见使用方式：
 
 ```toml
 [dependencies]
-ditto-llm = "0.1"
+ditto-core = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
 最小用法（以 OpenAI 为例）：
 
 ```rust
-use ditto_llm::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::{LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key);
     let req = vec![
@@ -43,7 +43,7 @@ async fn main() -> ditto_llm::Result<()> {
 启动一个本地 gateway：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 然后你可以用 OpenAI-compatible 的方式调用：

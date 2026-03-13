@@ -539,25 +539,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ditto-llm"
-version = "1.0.0"
-dependencies = [
- "async-trait",
- "base64",
- "bytes",
- "ditto-core",
- "ditto-gateway-contract-types",
- "futures-util",
- "httpmock",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tower",
-]
-
-[[package]]
 name = "ditto-server"
 version = "1.0.0"
 dependencies = [

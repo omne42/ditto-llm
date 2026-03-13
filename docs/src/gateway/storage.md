@@ -5,7 +5,7 @@ Ditto Gateway 的“存储”主要用于两类数据：
 - **配置态（virtual keys + router）**：允许用 Admin API 动态改配置，并在重启后保留。
 - **运行态（审计/预算/成本/缓存）**：用于运维观测与多副本一致性（视 feature 而定）。
 
-启动参数解析见 `src/bin/ditto-gateway.rs`。当前可以同时启用多个持久层（例如 `--sqlite` + `--pg` 双写）。
+启动参数解析见 `crates/ditto-server/src/bin/ditto-gateway.rs`。当前可以同时启用多个持久层（例如 `--sqlite` + `--pg` 双写）。
 
 ---
 
@@ -30,7 +30,7 @@ Ditto Gateway 的“存储”主要用于两类数据：
 启用方式：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --state ./gateway.state.json
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --state ./gateway.state.json
 ```
 
 行为（启动时）：
@@ -59,7 +59,7 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --state ./gat
 启用方式：
 
 ```bash
-cargo run --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.json \
   --sqlite ./ditto-gateway.sqlite
 ```
 
@@ -95,7 +95,7 @@ cargo run --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gat
 启用方式：
 
 ```bash
-cargo run --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.json \
   --pg postgresql://user:pass@localhost:5432/ditto
 ```
 
@@ -128,7 +128,7 @@ cargo run --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./g
 启用方式：
 
 ```bash
-cargo run --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.json \
   --mysql mysql://user:pass@localhost:3306/ditto
 ```
 
@@ -162,14 +162,14 @@ cargo run --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gate
 启用方式：
 
 ```bash
-cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --redis redis://127.0.0.1:6379 --redis-prefix ditto
 ```
 
 也可以从 env 读取（配合 `--dotenv`）：
 
 ```bash
-cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --dotenv .env --redis-env REDIS_URL --redis-prefix ditto
 ```
 
@@ -239,7 +239,7 @@ cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gate
 示例：
 
 ```bash
-cargo run --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.json \
   --pg postgresql://user:pass@localhost:5432/ditto \
   --db-doctor
 ```

@@ -30,7 +30,7 @@ OPENAI_API_KEY=...
 最小网关（仅转发 /v1/*）：
 
 ```bash
-cargo build --features gateway --bin ditto-gateway
+cargo build -p ditto-server --features gateway --bin ditto-gateway
 ```
 
 常见套餐：
@@ -100,13 +100,13 @@ cargo build --features gateway --bin ditto-gateway
 `ditto-gateway` 的第一个参数必须是 `gateway.json` 路径；如果你想用 `gateway.yaml`，需要编译启用 feature `gateway-config-yaml`：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 如果你把 token 放在 `.env` 文件里（推荐），可以：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --dotenv .env --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --dotenv .env --listen 0.0.0.0:8080
 ```
 
 ## 4) 验证

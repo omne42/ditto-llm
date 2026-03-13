@@ -5,7 +5,7 @@ Ditto 的 `Telemetry` 是一个非常小的抽象（feature `sdk`）：
 - 你可以向 `Telemetry` 发事件（`TelemetryEvent`）
 - 由你实现的 `TelemetrySink` 决定如何处理（写日志、发指标、写 tracing span、上报到你的平台）
 
-实现位置：`src/sdk/telemetry.rs`。
+实现位置：`crates/ditto-core/src/sdk/telemetry.rs`。
 
 > 现阶段 Telemetry 是“通用积木”，不会自动帮你埋点；它的价值在于让你用统一接口把 Ditto 集成到你现有的观测体系里。
 
@@ -22,7 +22,7 @@ Ditto 的 `Telemetry` 是一个非常小的抽象（feature `sdk`）：
 ## 2) 最小示例：接入 tracing
 
 ```rust
-use ditto_llm::sdk::telemetry::{Telemetry, TelemetryEvent, TelemetrySink};
+use ditto_core::sdk::telemetry::{Telemetry, TelemetryEvent, TelemetrySink};
 use serde_json::Value;
 
 struct TracingSink;

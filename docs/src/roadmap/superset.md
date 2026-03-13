@@ -33,12 +33,12 @@
 
 **涉及模块**：
 
-- store：`src/gateway/redis_store/budget.rs`、`src/gateway/redis_store/store.rs`（以及后续的 `sqlite_store`）
-- admin：`src/gateway/http/*`
+- store：`crates/ditto-server/src/gateway/redis_store.rs`、`crates/ditto-server/src/gateway/sqlite_store.rs`
+- admin：`crates/ditto-server/src/gateway/transport/http/*`
 
 **验收/验证**：
 
-- `cargo test -p ditto-llm`（包含 reaper 的单测；redis 部分可用 `DITTO_REDIS_URL` 跑）
+- `cargo test -p ditto-server --all-targets`（包含 reaper 的单测；redis 部分可用 `DITTO_REDIS_URL` 跑）
 - 启用 `gateway-store-redis` 后，通过 `POST /admin/...` dry-run 可看到将回收的数量；非 dry-run 会减少 ledger 的 `reserved_*`。
 
 ---
@@ -54,9 +54,9 @@
 
 **涉及模块**：
 
-- admin auth：`src/gateway/http/admin/auth.rs`
-- admin handlers：`src/gateway/http/admin/*`
-- 配置/启动参数：`src/bin/ditto-gateway.rs`（入口）+ `src/bin/ditto_gateway/cli.rs`（参数解析）+ `src/bin/ditto_gateway/attach.rs`（feature-gated attach）
+- admin auth：`crates/ditto-server/src/gateway/transport/http/admin_auth.rs`
+- admin handlers：`crates/ditto-server/src/gateway/transport/http/*`
+- 配置/启动参数：`crates/ditto-server/src/bin/ditto-gateway.rs`（入口）+ `crates/ditto-server/src/bin/ditto_gateway/cli.rs`（参数解析）+ `crates/ditto-server/src/bin/ditto_gateway/attach.rs`（feature-gated attach）
 
 **验收/验证**：
 

@@ -179,7 +179,7 @@ jobs:
 
       - name: llms.txt up to date
         working-directory: ditto-llm
-        run: cargo run -p ditto-llm --bin ditto-llms-txt -- --check
+        run: cargo run -p ditto-core --bin ditto-llms-txt -- --check
 
       - name: gateway contract types check
         working-directory: ditto-llm
@@ -189,25 +189,21 @@ jobs:
         working-directory: ditto-llm
         run: cargo test -p ditto-core --lib
 
-      - name: cargo test (ditto-llm compatibility targets)
-        working-directory: ditto-llm
-        run: cargo test -p ditto-llm --all-targets
-
       - name: cargo test (ditto-server targets compile)
         working-directory: ditto-llm
         run: cargo test -p ditto-server --all-targets --no-run
 
       - name: cargo check (default examples)
         working-directory: ditto-llm
-        run: cargo check -p ditto-llm --examples
+        run: cargo check -p ditto-core --examples
 
       - name: cargo clippy (ditto-core all features)
         working-directory: ditto-llm
         run: cargo clippy -p ditto-core --lib --all-features -- -D warnings
 
-      - name: cargo clippy (ditto-llm compatibility lib)
+      - name: cargo clippy (ditto-server all features)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --lib --all-features -- -D warnings
+        run: cargo clippy -p ditto-server --lib --all-features -- -D warnings
 
       - name: cargo test (ditto-core all features)
         working-directory: ditto-llm
@@ -221,9 +217,9 @@ jobs:
         working-directory: ditto-llm
         run: cargo check -p ditto-core --no-default-features
 
-      - name: cargo check (ditto-llm compatibility no default features)
+      - name: cargo check (ditto-server no default features)
         working-directory: ditto-llm
-        run: cargo check -p ditto-llm --no-default-features
+        run: cargo check -p ditto-server --no-default-features
 
       - name: cargo test (openai feature matrix)
         working-directory: ditto-llm

@@ -3,6 +3,7 @@ name = "ditto-core"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
+autoexamples = false
 
 [features]
 default = ["provider-openai-compatible", "cap-llm"]
@@ -95,3 +96,58 @@ toml = "0.8"
 httpmock = "0.8.2"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+
+[[example]]
+name = "anthropic_messages"
+path = "examples/anthropic_messages.rs"
+required-features = ["provider-anthropic", "cap-llm"]
+
+[[example]]
+name = "batches"
+path = "examples/batches.rs"
+required-features = ["provider-openai-compatible", "cap-batch"]
+
+[[example]]
+name = "cache_bench_deepseek_direct"
+path = "examples/cache_bench_deepseek_direct.rs"
+required-features = ["provider-openai-compatible", "cap-llm"]
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+required-features = ["provider-openai-compatible", "cap-llm"]
+
+[[example]]
+name = "embeddings"
+path = "examples/embeddings.rs"
+required-features = ["provider-openai", "cap-embedding"]
+
+[[example]]
+name = "local_native_formats"
+path = "examples/local_native_formats.rs"
+required-features = ["provider-anthropic", "cap-llm"]
+
+[[example]]
+name = "multimodal"
+path = "examples/multimodal.rs"
+required-features = ["provider-openai", "cap-llm", "base64"]
+
+[[example]]
+name = "openai_compatible"
+path = "examples/openai_compatible.rs"
+required-features = ["provider-openai-compatible", "cap-llm"]
+
+[[example]]
+name = "openai_compatible_embeddings"
+path = "examples/openai_compatible_embeddings.rs"
+required-features = ["provider-openai-compatible", "cap-embedding"]
+
+[[example]]
+name = "streaming"
+path = "examples/streaming.rs"
+required-features = ["provider-openai-compatible", "cap-llm"]
+
+[[example]]
+name = "tool_calling"
+path = "examples/tool_calling.rs"
+required-features = ["provider-openai-compatible", "cap-llm"]

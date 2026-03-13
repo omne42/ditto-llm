@@ -1,6 +1,6 @@
 # 错误处理
 
-Ditto 统一使用 `ditto_llm::Result<T>`（即 `Result<T, DittoError>`）。
+Ditto 统一使用 `ditto_core::Result<T>`（即 `Result<T, DittoError>`）。
 
 ## DittoError 结构
 

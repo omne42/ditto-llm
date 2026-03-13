@@ -13,7 +13,7 @@ Ditto 提供了一个轻量基准工具：`ditto-store-bench`。
 仅 sqlite：
 
 ```bash
-cargo run --features "gateway gateway-store-sqlite" --bin ditto-store-bench -- \
+cargo run -p ditto-server --features "gateway gateway-store-sqlite" --bin ditto-store-bench -- \
   --sqlite /tmp/ditto-bench.sqlite \
   --audit-ops 5000 \
   --reap-ops 2000
@@ -22,7 +22,7 @@ cargo run --features "gateway gateway-store-sqlite" --bin ditto-store-bench -- \
 sqlite + postgres + mysql：
 
 ```bash
-cargo run --features "gateway gateway-store-sqlite gateway-store-postgres gateway-store-mysql" \
+cargo run -p ditto-server --features "gateway gateway-store-sqlite gateway-store-postgres gateway-store-mysql" \
   --bin ditto-store-bench -- \
   --sqlite /tmp/ditto-bench.sqlite \
   --pg "${DITTO_POSTGRES_URL}" \
@@ -50,7 +50,7 @@ cargo run --features "gateway gateway-store-sqlite gateway-store-postgres gatewa
 命令：
 
 ```bash
-cargo run --features "gateway gateway-store-sqlite" --bin ditto-store-bench -- \
+cargo run -p ditto-server --features "gateway gateway-store-sqlite" --bin ditto-store-bench -- \
   --sqlite /tmp/ditto-bench.sqlite \
   --audit-ops 3000 \
   --reap-ops 1500

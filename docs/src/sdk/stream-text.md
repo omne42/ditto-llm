@@ -11,12 +11,12 @@
 
 ```rust
 use futures_util::StreamExt;
-use ditto_llm::{GenerateRequest, LanguageModelTextExt, Message, OpenAI};
+use ditto_core::{GenerateRequest, LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 
@@ -49,7 +49,7 @@ async fn main() -> ditto_llm::Result<()> {
 
 ```rust
 use futures_util::StreamExt;
-use ditto_llm::{GenerateRequest, LanguageModelTextExt, Message, OpenAI, StreamChunk};
+use ditto_core::{GenerateRequest, LanguageModelTextExt, Message, OpenAI, StreamChunk};
 
 let (handle, mut full_stream) =
     llm.stream_text(GenerateRequest::from(vec![Message::user("hi")])).await?.into_full_stream();

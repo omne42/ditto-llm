@@ -120,7 +120,7 @@ while IFS= read -r line; do
     continue
   fi
   [[ -z "$current_file" ]] && continue
-  if [[ "$current_file" != src/gateway/* && "$current_file" != src/bin/ditto_gateway/* ]]; then
+  if [[ "$current_file" != crates/ditto-server/src/gateway/* && "$current_file" != crates/ditto-server/src/bin/ditto_gateway/* ]]; then
     continue
   fi
   if [[ "$line" == +* ]] && [[ "$line" != "+++"* ]]; then
@@ -155,15 +155,19 @@ echo "pre-commit: running Rust gates in $repo_root" >&2
 
 (
   cd "$repo_root"
-  cargo fmt -p ditto-llm -- --check
-  cargo check -p ditto-llm --all-targets
-  cargo clippy -p ditto-llm --all-targets -- -D warnings
+  cargo fmt --all -- --check
+  cargo check -p ditto-core --all-targets
+  cargo check -p ditto-server --all-targets
+  cargo clippy -p ditto-core --all-targets -- -D warnings
+  cargo clippy -p ditto-server --all-targets -- -D warnings
 )
 
 needs_gateway_regression=0
 while IFS= read -r path; do
   [[ -z "$path" ]] && continue
-  if [[ "$path" == src/gateway/* || "$path" == src/bin/ditto_gateway/* || "$path" == tests/gateway* ]]; then
+  if [[ "$path" == crates/ditto-server/src/gateway/* ||
+        "$path" == crates/ditto-server/src/bin/ditto_gateway/* ||
+        "$path" == crates/ditto-server/tests/gateway* ]]; then
     needs_gateway_regression=1
     break
   fi
@@ -173,7 +177,7 @@ if [[ "$needs_gateway_regression" -eq 1 ]]; then
   echo "pre-commit: running gateway regression checks" >&2
   (
     cd "$repo_root"
-    cargo test -p ditto-llm --features gateway prepare_handle_request_reserves_budget_until_completed_or_rolled_back -- --nocapture
-    cargo test -p ditto-llm --features "gateway gateway-proxy-cache" --test gateway_openai_proxy openai_compat_proxy_cache_varies_by_semantic_request_headers -- --nocapture
+    cargo test -p ditto-server --features gateway prepare_handle_request_reserves_budget_until_completed_or_rolled_back -- --nocapture
+    cargo test -p ditto-server --features "gateway gateway-proxy-cache" --test gateway_openai_proxy openai_compat_proxy_cache_varies_by_semantic_request_headers -- --nocapture
   )
 fi

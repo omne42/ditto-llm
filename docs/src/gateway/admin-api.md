@@ -10,10 +10,10 @@ Admin API 用于“管理与观测控制面状态”：
 
 实现位置：
 
-- 路由挂载：`src/gateway/http/core.rs`
-- 鉴权：`src/gateway/http/admin/auth.rs`
-- config versions handlers：`src/gateway/http/admin/config_versions.rs`
-- other handlers：`src/gateway/http/admin/handlers.rs`
+- 路由挂载：`crates/ditto-server/src/gateway/transport/http/router.rs`
+- 鉴权：`crates/ditto-server/src/gateway/transport/http/admin_auth.rs`
+- config versions handlers：`crates/ditto-server/src/gateway/transport/http/config_versions.rs`
+- other handlers：`crates/ditto-server/src/gateway/transport/http/admin.rs`
 
 仓库内还保留一个可选 Admin UI（React）资产用于快速试用与演示；它不属于默认核心交付或默认 CI 路径：
 

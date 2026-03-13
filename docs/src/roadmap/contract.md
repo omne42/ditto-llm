@@ -94,8 +94,8 @@ Ditto 的策略不是“把差异藏起来”，而是：
 下面这些不是“建议做一下”的检查，而是新的结构演进门槛。涉及核心结构、feature、provider、catalog、gateway 主路径的改动，默认都应把这些 gate 维持为绿色：
 
 ```bash
-cargo fmt -- --check
-cargo run --bin ditto-llms-txt -- --check
+cargo fmt --all -- --check
+cargo run -p ditto-core --bin ditto-llms-txt -- --check
 cargo check
 cargo test --all-targets                # default core: provider-openai-compatible + cap-llm
 cargo check --examples                  # default examples must stay generic openai-compatible
@@ -109,13 +109,13 @@ cargo clippy --no-default-features -- -D warnings
 feature matrix（至少覆盖 CI 当前维护的 provider-only 组合）：
 
 ```bash
-cargo clippy -p ditto-llm --no-default-features --features openai --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features openai-compatible --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features anthropic --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features google --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features cohere --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features bedrock --all-targets -- -D warnings
-cargo clippy -p ditto-llm --no-default-features --features vertex --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features openai --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features openai-compatible --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features anthropic --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features google --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features cohere --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features bedrock --all-targets -- -D warnings
+cargo clippy -p ditto-core --no-default-features --features vertex --all-targets -- -D warnings
 ```
 
 Node/前端：默认 gate 只覆盖 `packages/*`；`apps/admin-ui` 作为可选资产单独验证。

@@ -8,10 +8,10 @@
 
 实现位置：
 
-- `src/gateway/limits.rs`
-- `src/gateway/budget.rs`
-- `src/gateway/costing.rs`（可选）
-- `/v1/*` proxy 预算预留：`src/gateway/http/openai_compat_proxy.rs` + `src/gateway/http/proxy/budget_reservations.rs`
+- `crates/ditto-server/src/gateway/limits.rs`
+- `crates/ditto-server/src/gateway/budget.rs`
+- `crates/ditto-server/src/gateway/costing.rs`（可选）
+- `/v1/*` proxy 预算预留：`crates/ditto-server/src/gateway/transport/http/openai_compat_proxy_handler.rs` + `crates/ditto-server/src/gateway/transport/http/proxy_budget_reservations.rs`
 
 ---
 

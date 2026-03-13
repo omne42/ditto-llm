@@ -8,7 +8,7 @@ Ditto 通过 `EmbeddingModel` trait 统一 embeddings 调用，并提供 `Embedd
 ## 最小示例
 
 ```rust
-use ditto_llm::EmbeddingModelExt;
+use ditto_core::EmbeddingModelExt;
 
 let vectors = embeddings
     .embed_many(vec!["hello".to_string(), "world".to_string()])

@@ -2,8 +2,8 @@
 
 本页覆盖两类“路由”：
 
-1) **RouterConfig（静态路由）**：按 `model` 选择 backend，支持 rule + 权重 + fallback（见 `src/gateway/router.rs`）。  
-2) **Proxy routing（运行时鲁棒性）**：重试 / 熔断 / 健康检查（feature `gateway-routing-advanced`，见 `src/gateway/proxy_routing.rs` 与 `src/gateway/http/proxy/core.rs`）。
+1) **RouterConfig（静态路由）**：按 `model` 选择 backend，支持 rule + 权重 + fallback（见 `crates/ditto-server/src/gateway/router.rs`）。  
+2) **Proxy routing（运行时鲁棒性）**：重试 / 熔断 / 健康检查（feature `gateway-routing-advanced`，见 `crates/ditto-server/src/gateway/proxy_routing.rs` 与 `crates/ditto-server/src/gateway/transport/http/openai_compat_proxy_handler.rs`）。
 
 ---
 

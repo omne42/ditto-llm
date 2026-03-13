@@ -67,6 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Build: turn the repo into a virtual Cargo workspace, split the old root crate into `crates/ditto-core` and `crates/ditto-server`, and remove the temporary top-level `ditto-llm` compatibility package/re-export layer.
+- Dev/Docs: update active Cargo commands, generator hints, CI hooks, and mdBook references to use package-scoped workspace invocations (`ditto-core` / `ditto-server`).
 - release: bump crate version to `1.0.0`.
 - Gateway: optimize proxy backend URL joining (`join_base_url`) to avoid intermediate `String` allocations on request hot paths.
 - Gateway MCP: build a single `request_with_tools` base payload per request and reuse it across auto-exec rounds, reducing repeated `tools` JSON cloning in chat-completions/responses MCP loops.

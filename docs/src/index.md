@@ -37,10 +37,10 @@ Ditto-LLM 的近期取舍是：
 最小示例（文本生成）：
 
 ```rust
-use ditto_llm::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::{LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").expect("missing OPENAI_API_KEY");
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
     let req = vec![Message::user("Say hello in one sentence.")].into();
@@ -60,7 +60,7 @@ async fn main() -> ditto_llm::Result<()> {
 启动本地网关：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 验证：
@@ -106,7 +106,7 @@ Ditto 提供最小 JS/React 客户端用于解析 **Stream Protocol v1**（SSE/N
 如需刷新：
 
 ```bash
-cargo run --bin ditto-llms-txt
+cargo run -p ditto-core --bin ditto-llms-txt
 ```
 
 ## 本地构建（推荐）

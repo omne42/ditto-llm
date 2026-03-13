@@ -1,6 +1,6 @@
 # HTTP Endpoints
 
-Gateway 的 HTTP 路由见 `src/gateway/http/core.rs`。
+Gateway 的 HTTP 路由见 `crates/ditto-server/src/gateway/transport/http/router.rs`。
 
 如果你要做跨仓库/跨语言对接（例如 rust-ui），可优先参考冻结的 v0.1 契约产物：
 

@@ -2,7 +2,7 @@
 
 ## Rust 版本要求
 
-`ditto-llm` 使用 Rust 2024 edition，并声明 `rust-version = 1.85`（见 `Cargo.toml`）。
+`ditto-core` 使用 Rust 2024 edition，并声明 `rust-version = 1.85`（见 `Cargo.toml`）。
 
 ## 依赖引入
 
@@ -14,7 +14,7 @@
 
 ```toml
 [dependencies]
-ditto-llm = "0.1"
+ditto-core = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -24,7 +24,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 ```toml
 [dependencies]
-ditto-llm = { version = "0.1", default-features = false, features = ["provider-openai", "cap-llm"] }
+ditto-core = { version = "0.1", default-features = false, features = ["provider-openai", "cap-llm"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -32,7 +32,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 ```toml
 [dependencies]
-ditto-llm = { version = "0.1", default-features = false, features = ["provider-openai-compatible", "cap-llm"] }
+ditto-core = { version = "0.1", default-features = false, features = ["provider-openai-compatible", "cap-llm"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -43,12 +43,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 需要 features：`provider-openai + cap-llm`。
 
 ```rust
-use ditto_llm::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::{LanguageModelTextExt, Message, OpenAI};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY")
-        .map_err(|_| ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
+        .map_err(|_| ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
 
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 
@@ -76,10 +76,10 @@ OpenAI-compatible 适配器的关键在于：
 示例（从 `ProviderConfig` 构建）：
 
 ```rust
-use ditto_llm::{Env, OpenAICompatible, ProviderAuth, ProviderConfig};
+use ditto_core::{Env, OpenAICompatible, ProviderAuth, ProviderConfig};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let env = Env::default();
     let config = ProviderConfig {
         base_url: Some("http://127.0.0.1:4000/v1".to_string()),
@@ -92,7 +92,7 @@ async fn main() -> ditto_llm::Result<()> {
 
     let llm = OpenAICompatible::from_config(&config, &env).await?;
     let out = llm
-        .generate(vec![ditto_llm::Message::user("Say hi.")].into())
+        .generate(vec![ditto_core::Message::user("Say hi.")].into())
         .await?;
     println!("{}", out.text());
     Ok(())

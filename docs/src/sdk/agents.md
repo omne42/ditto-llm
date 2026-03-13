@@ -4,7 +4,7 @@
 
 > 默认的 `generate_text` / `generate_object_json` / `generate` 都是“单次请求”：不会自动执行工具、不会自动循环。
 
-实现位置：`src/agent/tool_loop.rs`、`src/agent/types.rs`、`src/agent/toolbox/*`。
+实现位置：`crates/ditto-core/src/agent/tool_loop.rs`、`crates/ditto-core/src/agent/types.rs`、`crates/ditto-core/src/agent/toolbox/*`。
 
 ---
 
@@ -32,15 +32,15 @@
 示例（伪代码风格，展示结构）：
 
 ```rust
-use ditto_llm::{
+use ditto_core::{
     agent::{ToolLoopAgent, ToolboxExecutor},
     Message, OpenAI,
 };
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 

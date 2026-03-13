@@ -22,12 +22,12 @@ Ditto 提供一个轻量的 `FileClient` trait，用于对齐 OpenAI/OpenAI-comp
 ## 最小示例：上传并下载
 
 ```rust
-use ditto_llm::{FileClient, FileUploadRequest, OpenAI};
+use ditto_core::{FileClient, FileUploadRequest, OpenAI};
 
 #[tokio::main]
-async fn main() -> ditto_llm::Result<()> {
+async fn main() -> ditto_core::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_llm::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let client = OpenAI::new(api_key);
 

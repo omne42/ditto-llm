@@ -2,7 +2,7 @@
 
 Ditto Gateway 的部署目标是“尽量无状态”，把状态放到外部 store（尤其是 Redis），从而支持多副本与滚动升级。
 
-本页的建议以当前实现为准（见 `src/bin/ditto-gateway.rs`、`src/gateway/http/core.rs`、`src/gateway/redis_store/*`）。
+本页的建议以当前实现为准（见 `crates/ditto-server/src/bin/ditto-gateway.rs`、`crates/ditto-server/src/gateway/transport/http/router.rs`、`crates/ditto-server/src/gateway/redis_store.rs`）。
 
 ---
 
@@ -23,7 +23,7 @@ Ditto Gateway 的部署目标是“尽量无状态”，把状态放到外部 st
 启动：
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 健康检查：
@@ -52,7 +52,7 @@ cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.
 - 启动时传 `--redis <url>`（建议配置 `--redis-prefix`）
 
 ```bash
-cargo run --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-store-redis" --bin ditto-gateway -- ./gateway.json \
   --redis redis://redis:6379 --redis-prefix ditto \
   --listen 0.0.0.0:8080
 ```

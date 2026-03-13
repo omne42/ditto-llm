@@ -5,7 +5,7 @@
 
 ## 1) Snapshot（2026-03-08）
 
-来自 `cargo run --all-features --bin ditto-catalog-dashboard` 的当前结论：
+来自 `cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard` 的当前结论：
 
 - 所有 reference catalog provider 都已达到 reference/runtime 对齐：
   - `anthropic`
@@ -127,10 +127,10 @@
 每次继续推进 capability 公共化或新增 provider runtime 时，至少重新通过下面这组检查：
 
 ```bash
-cargo run --all-features --bin ditto-catalog-dashboard
-cargo run --all-features --bin ditto-catalog-dashboard -- --check
-cargo run --bin ditto-llms-txt
-cargo run --bin ditto-llms-txt -- --check
+cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard
+cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard -- --check
+cargo run -p ditto-core --bin ditto-llms-txt
+cargo run -p ditto-core --bin ditto-llms-txt -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 ```

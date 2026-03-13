@@ -5,7 +5,7 @@ Ditto 的 `DevtoolsLogger` 是一个非常轻量的 JSONL 记录器（feature `s
 - 在开发/集成测试阶段记录请求/响应/事件，方便重放与离线分析
 - 在 Gateway 里记录管理面与部分关键事件（通过 `--devtools` 启用）
 
-实现位置：`src/sdk/devtools.rs`，Gateway 集成点：`src/bin/ditto-gateway.rs`（`--devtools`）。
+实现位置：`crates/ditto-core/src/sdk/devtools.rs`，Gateway 集成点：`crates/ditto-server/src/bin/ditto-gateway.rs`（`--devtools`）。
 
 ---
 
@@ -28,10 +28,10 @@ Ditto 的 `DevtoolsLogger` 是一个非常轻量的 JSONL 记录器（feature `s
 ## 2) 在你自己的服务里使用
 
 ```rust
-use ditto_llm::sdk::devtools::DevtoolsLogger;
+use ditto_core::sdk::devtools::DevtoolsLogger;
 use serde_json::json;
 
-fn main() -> ditto_llm::Result<()> {
+fn main() -> ditto_core::Result<()> {
     let logger = DevtoolsLogger::new("./logs/devtools.jsonl");
     logger.log_event("app.start", json!({ "ok": true }))?;
     Ok(())
@@ -49,7 +49,7 @@ fn main() -> ditto_llm::Result<()> {
 启动：
 
 ```bash
-cargo run --features "gateway-devtools" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway-devtools" --bin ditto-gateway -- ./gateway.json \
   --devtools ./logs/ditto-gateway.jsonl
 ```
 

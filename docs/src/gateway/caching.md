@@ -7,8 +7,8 @@ Ditto Gateway 有两类缓存，面向不同使用场景：
 
 实现位置：
 
-- Control-plane：`src/gateway/cache.rs` + `src/gateway/mod.rs`
-- Proxy cache：`src/gateway/proxy_cache.rs` + `src/gateway/http/proxy/core.rs` + `src/gateway/redis_store/virtual_keys_and_proxy_cache.rs`
+- Control-plane：`crates/ditto-server/src/gateway/cache.rs` + `crates/ditto-server/src/gateway/mod.rs`
+- Proxy cache：`crates/ditto-server/src/gateway/proxy_cache.rs` + `crates/ditto-server/src/gateway/transport/http/openai_compat_proxy_handler.rs` + `crates/ditto-server/src/gateway/redis_store.rs`
 
 ---
 
@@ -68,7 +68,7 @@ Proxy cache 需要：
 常用启动例子：
 
 ```bash
-cargo run --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-proxy-cache" --bin ditto-gateway -- ./gateway.json \
   --proxy-cache \
   --proxy-cache-ttl 60 \
   --proxy-cache-max-entries 2048 \

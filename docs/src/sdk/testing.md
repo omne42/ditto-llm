@@ -34,7 +34,7 @@ cargo test --features all
 - warnings 生成逻辑是否正确
 - gateway 路由/缓存/预算等行为
 
-如果运行环境禁止 bind `127.0.0.1`，这些测试会自动跳过（见 `src/utils/test_support.rs`）。
+如果运行环境禁止 bind `127.0.0.1`，这些测试会自动跳过（见 `crates/ditto-core/src/utils/test_support.rs`）。
 
 ## integration smoke tests（真实调用，可选）
 

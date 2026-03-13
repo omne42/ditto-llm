@@ -130,7 +130,7 @@ cargo run --example batches --features "provider-openai-compatible cap-batch" --
 Run the HTTP gateway (feature `gateway`):
 
 ```bash
-cargo run --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
+cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.json --listen 0.0.0.0:8080
 ```
 
 YAML config is optional (feature `gateway-config-yaml`):
@@ -300,7 +300,7 @@ If you want to consume a streaming response but still produce a final unified `G
 use `collect_stream`:
 
 ```rust
-use ditto_llm::{collect_stream, GenerateRequest, LanguageModel};
+use ditto_core::{collect_stream, GenerateRequest, LanguageModel};
 
 let stream = llm.stream(GenerateRequest::from(messages)).await?;
 let collected = collect_stream(stream).await?;
@@ -312,7 +312,7 @@ println!("{}", collected.response.text());
 Single-step text helpers (no tool execution loop):
 
 ```rust
-use ditto_llm::{GenerateRequest, LanguageModelTextExt};
+use ditto_core::{GenerateRequest, LanguageModelTextExt};
 
 let out = llm.generate_text(GenerateRequest::from(messages)).await?;
 println!("{}", out.text);
@@ -322,7 +322,7 @@ Streaming:
 
 ```rust
 use futures_util::StreamExt;
-use ditto_llm::{GenerateRequest, LanguageModelTextExt};
+use ditto_core::{GenerateRequest, LanguageModelTextExt};
 
 let (handle, mut text_stream) = llm
     .stream_text(GenerateRequest::from(messages))
@@ -348,7 +348,7 @@ Defaults (`ObjectOptions::default()`):
 - `output = Object` (top-level object)
 
 ```rust
-use ditto_llm::{GenerateRequest, JsonSchemaFormat, LanguageModelObjectExt, Message};
+use ditto_core::{GenerateRequest, JsonSchemaFormat, LanguageModelObjectExt, Message};
 use serde_json::json;
 
 let schema = JsonSchemaFormat {
@@ -383,7 +383,7 @@ println!("{final_obj}");
 Streaming arrays (AI SDK `elementStream`):
 
 ```rust
-use ditto_llm::{ObjectOptions, ObjectOutput};
+use ditto_core::{ObjectOptions, ObjectOutput};
 use futures_util::StreamExt;
 
 let mut result = llm
@@ -407,7 +407,7 @@ while let Some(element) = result.element_stream.next().await {
 If you need an explicit abort handle (instead of relying on drop semantics), wrap the stream:
 
 ```rust
-use ditto_llm::{abortable_stream, GenerateRequest, LanguageModel};
+use ditto_core::{abortable_stream, GenerateRequest, LanguageModel};
 
 let stream = llm.stream(GenerateRequest::from(messages)).await?;
 let abortable = abortable_stream(stream);
@@ -419,7 +419,7 @@ abortable.handle.abort();
 `EmbeddingModelExt` provides AI SDK-style aliases:
 
 ```rust
-use ditto_llm::EmbeddingModelExt;
+use ditto_core::EmbeddingModelExt;
 
 let vectors = embeddings.embed_many(vec!["hello".to_string(), "world".to_string()]).await?;
 let one = embeddings.embed_one("hi".to_string()).await?;
@@ -432,7 +432,7 @@ headers (e.g. enterprise gateways):
 
 ```rust
 let http = reqwest::Client::builder().build()?;
-let llm = ditto_llm::OpenAI::new(api_key).with_http_client(http);
+let llm = ditto_core::OpenAI::new(api_key).with_http_client(http);
 ```
 
 When building providers from config, you can also set per-node default headers via
@@ -523,15 +523,17 @@ This enforces Conventional Commits and requires each commit to include `CHANGELO
 默认结构 gate 以 Rust 主线为准，目标是让“默认 core + all-features + no-default-features + provider feature matrix”都持续可构建、可 lint。对应的本地最小命令集：
 
 ```bash
-cargo fmt -- --check
-cargo run --bin ditto-llms-txt -- --check
-cargo check
-cargo test --all-targets
-cargo check --examples
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-cargo check --no-default-features
-cargo clippy --no-default-features -- -D warnings
+cargo fmt --all -- --check
+cargo run -p ditto-core --bin ditto-llms-txt -- --check
+cargo check --workspace
+cargo test --workspace --all-targets
+cargo check -p ditto-core --examples
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets --all-features
+cargo check -p ditto-core --no-default-features
+cargo clippy -p ditto-core --no-default-features -- -D warnings
+cargo check -p ditto-server --no-default-features
+cargo clippy -p ditto-server --no-default-features -- -D warnings
 ```
 
 Node 默认只验证 `packages/*`：

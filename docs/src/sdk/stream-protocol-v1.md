@@ -6,8 +6,8 @@ Ditto 的底层 streaming 统一输出为 `StreamChunk` 序列（见「核心概
 
 实现位置：
 
-- 协议：`src/sdk/protocol.rs`（`StreamEventV1` / `encode_v1` / `decode_v1`）
-- HTTP 编码：`src/sdk/http/stream_v1.rs`（NDJSON / SSE）
+- 协议：`crates/ditto-core/src/sdk/protocol.rs`（`StreamEventV1` / `encode_v1` / `decode_v1`）
+- HTTP 编码：`crates/ditto-core/src/sdk/http/stream_v1.rs`（NDJSON / SSE）
 
 ---
 
@@ -38,7 +38,7 @@ Ditto 提供两种等价但适配不同生态的输出：
 
 入口函数：
 
-- `ditto_llm::sdk::http::stream_v1_ndjson(stream)`
+- `ditto_core::sdk::http::stream_v1_ndjson(stream)`
 
 ### 2.2 SSE（`data: <json>\n\n`）
 
@@ -47,7 +47,7 @@ Ditto 提供两种等价但适配不同生态的输出：
 
 入口函数：
 
-- `ditto_llm::sdk::http::stream_v1_sse(stream)`
+- `ditto_core::sdk::http::stream_v1_sse(stream)`
 
 ---
 
@@ -89,15 +89,15 @@ Ditto 提供两种等价但适配不同生态的输出：
 
 Ditto 提供一个最小适配器（feature `sdk`）：
 
-- `ditto_llm::sdk::http::ui_message_stream_v1_sse(stream)`：把 Ditto `StreamResult` 转为 UI Message Stream SSE（末尾以 `data: [DONE]` 结束）
+- `ditto_core::sdk::http::ui_message_stream_v1_sse(stream)`：把 Ditto `StreamResult` 转为 UI Message Stream SSE（末尾以 `data: [DONE]` 结束）
 
 输出中会包含基础的 step 边界事件（`start-step` / `finish-step`），并在 Ditto 侧额外附带一些 `data-ditto-*` 的诊断事件（例如 usage/warnings；客户端可忽略）。
 
 HTTP 响应侧需要额外设置：
 
 - `x-vercel-ai-ui-message-stream: v1`
-- 推荐同时设置其它常用 SSE headers（`content-type` / `cache-control` / `connection` / `x-accel-buffering`），Ditto 提供了一个常量便于复用：`ditto_llm::sdk::http::UI_MESSAGE_STREAM_V1_HEADERS`
+- 推荐同时设置其它常用 SSE headers（`content-type` / `cache-control` / `connection` / `x-accel-buffering`），Ditto 提供了一个常量便于复用：`ditto_core::sdk::http::UI_MESSAGE_STREAM_V1_HEADERS`
 
 如果你使用的是 `axum`：
 
-- 开启 `--features sdk-axum`（或已开启 `--features gateway`）后，可以直接用 `ditto_llm::sdk::http::ui_message_stream_v1_sse_response(stream)` 生成带 headers 的 streaming response。
+- 开启 `--features sdk-axum`（或已开启 `--features gateway`）后，可以直接用 `ditto_core::sdk::http::ui_message_stream_v1_sse_response(stream)` 生成带 headers 的 streaming response。

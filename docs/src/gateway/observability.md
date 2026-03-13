@@ -8,10 +8,10 @@ Ditto Gateway 的观测分三层：
 
 实现位置：
 
-- request id / 响应头：`src/gateway/http/proxy/core.rs`
-- JSON metrics：`src/gateway/observability.rs` + `GET /metrics`
-- Prometheus：`src/gateway/metrics_prometheus.rs` + `GET /metrics/prometheus`
-- OTel：`src/gateway/otel.rs`
+- request id / 响应头：`crates/ditto-server/src/gateway/transport/http/openai_compat_proxy_handler.rs`
+- JSON metrics：`crates/ditto-server/src/gateway/observability.rs` + `GET /metrics`
+- Prometheus：`crates/ditto-server/src/gateway/metrics_prometheus.rs` + `GET /metrics/prometheus`
+- OTel：`crates/ditto-server/src/gateway/otel.rs`
 
 ---
 
@@ -92,7 +92,7 @@ Prometheus 的最大坑是“label 基数爆炸”。Ditto 提供一组上限参
 
 #### Labels 与基数控制
 
-- `path`：不是原始 URL，而是**归一化后的 OpenAI 路径**（实现：`src/gateway/metrics_prometheus.rs` 的 `normalize_proxy_path_label`）。
+- `path`：不是原始 URL，而是**归一化后的 OpenAI 路径**（实现：`crates/ditto-server/src/gateway/metrics_prometheus.rs` 的 `normalize_proxy_path_label`）。
   - 例如：`/v1/models/<id>` 会归一化为 `/v1/models/*`，未知路径会归一化为 `/v1/*`。
 - `virtual_key_id`：未启用 virtual key 或未命中时为 `public`。
 - `model`：仅在请求体里可解析到 `model` 时才打点。
@@ -207,7 +207,7 @@ Prometheus label 值会应用 `observability.redaction` 的统一脱敏策略；
 
 ```bash
 RUST_LOG=info \
-cargo run --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.json \
+cargo run -p ditto-server --features "gateway gateway-otel" --bin ditto-gateway -- ./gateway.json \
   --otel --otel-endpoint http://127.0.0.1:4318/v1/traces
 ```
 

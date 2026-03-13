@@ -1,6 +1,6 @@
 # Feature Flags
 
-Ditto-LLM now exposes two public feature namespaces:
+`ditto-core` now exposes two public feature namespaces:
 
 - `provider-*`: upstream provider packs
 - `cap-*`: user-visible capability packs
@@ -71,13 +71,13 @@ Rule:
 
 ## Recommended Combinations
 
-- Default SDK core: `cargo add ditto-llm` or `--features provider-openai-compatible,cap-llm`
+- Default SDK core: `cargo add ditto-core` or `--features provider-openai-compatible,cap-llm`
 - Official OpenAI LLM: `--no-default-features --features provider-openai,cap-llm`
 - Anthropic LLM: `--no-default-features --features provider-anthropic,cap-llm`
 - Google LLM: `--no-default-features --features provider-google,cap-llm`
 - OpenAI-compatible embeddings: `--no-default-features --features provider-openai-compatible,cap-embedding`
 - Official OpenAI multimodal/image/audio surface: add the matching capability packs on top of `provider-openai`
-- Gateway core: `--no-default-features --features provider-openai-compatible,cap-llm,gateway`
+- Gateway core: use `ditto-server` with `--no-default-features --features gateway,provider-openai-compatible,cap-llm`
 
 ## Capability-Gated Provider Packs
 
@@ -104,7 +104,7 @@ Cargo cannot enforce all semantic constraints, but these combinations are intent
 
 ## Gateway Features
 
-Gateway remains opt-in and orthogonal to provider/capability packs:
+Gateway remains opt-in and is exposed by `ditto-server`, orthogonal to `ditto-core` provider/capability packs:
 
 - `gateway`
 - `gateway-translation`
