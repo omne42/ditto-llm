@@ -8,10 +8,7 @@ use crate::foundation::error::{DittoError, Result};
 
 use super::policy::HttpResponseBodyPolicy;
 
-pub(crate) async fn response_text_truncated(
-    response: reqwest::Response,
-    max_bytes: usize,
-) -> String {
+pub async fn response_text_truncated(response: reqwest::Response, max_bytes: usize) -> String {
     let (bytes, truncated) = match response_bytes_truncated(response, max_bytes).await {
         Ok((bytes, truncated)) => (bytes, truncated),
         Err(err) => return format!("failed to read response body: {err}"),

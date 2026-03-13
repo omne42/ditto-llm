@@ -4,10 +4,11 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::contracts::{ImageSource, Usage, Warning};
 use crate::foundation::error::Result;
 use crate::types::{
     ImageEditRequest, ImageEditResponse, ImageEditUpload, ImageGenerationRequest,
-    ImageGenerationResponse, ImageResponseFormat, ImageSource, Usage, Warning,
+    ImageGenerationResponse, ImageResponseFormat,
 };
 
 #[derive(Debug, Deserialize)]

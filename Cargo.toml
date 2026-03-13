@@ -1,141 +1,145 @@
+[workspace]
+members = [
+  ".",
+  "crates/ditto-core",
+  "crates/ditto-server",
+  "crates/ditto-gateway-contract-guard",
+  "crates/ditto-gateway-contract-types",
+]
+resolver = "2"
+
 [package]
 name = "ditto-llm"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
+autobins = false
+autotests = false
 
 [features]
 default = ["provider-openai-compatible", "cap-llm"]
 
-# Modules
-agent = ["dep:regex", "dep:safe-fs-tools"]
-auth = ["dep:hmac", "dep:sha2", "dep:time"]
-config-editing = ["dep:toml_edit"]
-config-interactive = ["config-editing"]
-sdk = []
-sdk-axum = ["sdk", "dep:axum"]
-gateway = ["dep:axum", "dep:getrandom", "dep:regex", "dep:sha2", "config-editing"]
-gateway-cli-interactive = ["gateway", "config-interactive"]
-gateway-config-yaml = ["gateway", "dep:serde_yaml"]
-gateway-devtools = ["gateway", "sdk"]
-gateway-translation = ["gateway"]
-gateway-proxy-cache = ["gateway"]
-gateway-routing-advanced = ["gateway"]
-gateway-metrics-prometheus = ["gateway"]
-gateway-costing = ["gateway"]
-gateway-tokenizer = ["gateway", "dep:tiktoken-rs"]
-gateway-store-sqlite = ["gateway", "dep:rusqlite"]
-gateway-store-redis = ["gateway", "dep:redis"]
-gateway-store-postgres = ["gateway", "dep:sqlx", "sqlx/postgres"]
-gateway-store-mysql = ["gateway", "dep:sqlx", "sqlx/mysql"]
-gateway-otel = [
-  "gateway",
-  "dep:tracing",
-  "dep:tracing-subscriber",
-  "dep:opentelemetry",
-  "dep:opentelemetry_sdk",
-  "dep:opentelemetry-otlp",
-  "dep:tracing-opentelemetry",
-]
-base64 = ["dep:base64"]
+agent = ["ditto_core/agent"]
+auth = ["ditto_core/auth"]
+sdk = ["ditto_core/sdk"]
+sdk-axum = ["ditto_core/sdk-axum"]
+base64 = ["dep:base64", "ditto_core/base64"]
 
 # Internal protocol/provider implementation toggles retained for cfg compatibility.
-openai = []
-anthropic = []
-google = []
-openai-compatible = []
-cohere = []
-bedrock = ["auth", "base64"]
-vertex = ["auth"]
+openai = ["ditto_core/openai"]
+anthropic = ["ditto_core/anthropic"]
+google = ["ditto_core/google"]
+openai-compatible = ["ditto_core/openai-compatible"]
+cohere = ["ditto_core/cohere"]
+bedrock = ["ditto_core/bedrock"]
+vertex = ["ditto_core/vertex"]
 
 # Public provider packs.
-provider-openai-compatible = ["openai-compatible"]
-provider-openai = ["openai"]
-provider-anthropic = ["anthropic"]
-provider-google = ["google"]
-provider-cohere = ["cohere"]
-provider-bedrock = ["bedrock"]
-provider-vertex = ["vertex"]
-provider-bailian = []
-provider-deepseek = ["provider-openai-compatible"]
-provider-doubao = []
-provider-hunyuan = []
-provider-kimi = ["provider-openai-compatible"]
-provider-minimax = []
-provider-openrouter = ["provider-openai-compatible"]
-provider-qianfan = []
-provider-xai = ["provider-openai-compatible"]
-provider-zhipu = []
+provider-openai-compatible = ["ditto_core/provider-openai-compatible"]
+provider-openai = ["ditto_core/provider-openai"]
+provider-anthropic = ["ditto_core/provider-anthropic"]
+provider-google = ["ditto_core/provider-google"]
+provider-cohere = ["ditto_core/provider-cohere"]
+provider-bedrock = ["ditto_core/provider-bedrock"]
+provider-vertex = ["ditto_core/provider-vertex"]
+provider-bailian = ["ditto_core/provider-bailian"]
+provider-deepseek = ["ditto_core/provider-deepseek"]
+provider-doubao = ["ditto_core/provider-doubao"]
+provider-hunyuan = ["ditto_core/provider-hunyuan"]
+provider-kimi = ["ditto_core/provider-kimi"]
+provider-minimax = ["ditto_core/provider-minimax"]
+provider-openrouter = ["ditto_core/provider-openrouter"]
+provider-qianfan = ["ditto_core/provider-qianfan"]
+provider-xai = ["ditto_core/provider-xai"]
+provider-zhipu = ["ditto_core/provider-zhipu"]
 
 # Internal capability toggles retained for cfg compatibility.
-streaming = []
-tools = []
-embeddings = []
-images = []
-videos = ["dep:base64"]
-audio = []
-moderations = []
-rerank = []
-batches = []
-realtime = []
+streaming = ["ditto_core/streaming"]
+tools = ["ditto_core/tools"]
+embeddings = ["ditto_core/embeddings"]
+images = ["ditto_core/images"]
+videos = ["ditto_core/videos"]
+audio = ["ditto_core/audio"]
+moderations = ["ditto_core/moderations"]
+rerank = ["ditto_core/rerank"]
+batches = ["ditto_core/batches"]
+realtime = ["ditto_core/realtime"]
 
 # Public capability packs.
-cap-llm = ["streaming", "tools"]
-cap-embedding = ["embeddings"]
-cap-image-generation = ["images"]
-cap-image-edit = ["images"]
-cap-audio-transcription = ["audio"]
-cap-audio-speech = ["audio"]
-cap-moderation = ["moderations"]
-cap-rerank = ["rerank"]
-cap-batch = ["batches"]
-cap-realtime = ["realtime"]
+cap-llm = ["ditto_core/cap-llm"]
+cap-embedding = ["ditto_core/cap-embedding"]
+cap-image-generation = ["ditto_core/cap-image-generation"]
+cap-image-edit = ["ditto_core/cap-image-edit"]
+cap-audio-transcription = ["ditto_core/cap-audio-transcription"]
+cap-audio-speech = ["ditto_core/cap-audio-speech"]
+cap-moderation = ["ditto_core/cap-moderation"]
+cap-rerank = ["ditto_core/cap-rerank"]
+cap-batch = ["ditto_core/cap-batch"]
+cap-realtime = ["ditto_core/cap-realtime"]
 
 # Bundles.
-all-providers = ["provider-openai-compatible", "provider-openai", "provider-anthropic", "provider-google", "provider-cohere", "provider-bedrock", "provider-vertex", "provider-bailian", "provider-deepseek", "provider-doubao", "provider-hunyuan", "provider-kimi", "provider-minimax", "provider-openrouter", "provider-qianfan", "provider-xai", "provider-zhipu"]
-all-capabilities = ["cap-llm", "cap-embedding", "cap-image-generation", "cap-image-edit", "cap-audio-transcription", "cap-audio-speech", "cap-moderation", "cap-rerank", "cap-batch", "cap-realtime"]
-all = ["all-providers", "all-capabilities"]
+all-providers = ["ditto_core/all-providers"]
+all-capabilities = ["ditto_core/all-capabilities"]
+all = ["ditto_core/all"]
 
-integration = []
+integration = ["ditto_core/integration"]
 
 [dependencies]
+ditto_core = { package = "ditto-core", path = "crates/ditto-core", default-features = false }
 async-trait = "0.1"
-axum = { version = "0.7", optional = true, features = ["json"] }
 base64 = { version = "0.22", optional = true }
 bytes = "1"
-clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
-getrandom = { version = "0.4", optional = true }
-hmac = { version = "0.12", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
-safe-fs-tools = { path = "../safe-fs-tools", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = { version = "0.9", optional = true }
-sha2 = { version = "0.10", optional = true }
-thiserror = "1"
-toml = "0.8"
-time = { version = "0.3", features = ["formatting", "macros"], optional = true }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }
-tokio-util = { version = "0.7", features = ["io"] }
-toml_edit = { version = "0.22", optional = true }
-rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
-redis = { version = "0.32", optional = true, features = ["tokio-comp", "safe_iterators"] }
-sqlx = { version = "0.8", optional = true, default-features = false, features = ["runtime-tokio-rustls"] }
-regex = { version = "1", optional = true }
-opentelemetry = { version = "0.31", optional = true, default-features = false, features = ["trace"] }
-opentelemetry_sdk = { version = "0.31", optional = true, default-features = false, features = ["rt-tokio", "trace"] }
-opentelemetry-otlp = { version = "0.31", optional = true, default-features = false, features = ["http-proto", "reqwest-rustls", "trace"] }
-tracing = { version = "0.1", optional = true, features = ["attributes"] }
-tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "json"] }
-tracing-opentelemetry = { version = "0.32", optional = true }
-tiktoken-rs = { version = "0.9.1", optional = true }
 
 [dev-dependencies]
 ditto-gateway-contract-types = { path = "crates/ditto-gateway-contract-types" }
 httpmock = "0.8.2"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "ditto-catalog-dashboard"
+path = "src/bin/ditto-catalog-dashboard.rs"
+
+[[bin]]
+name = "ditto-llms-txt"
+path = "src/bin/ditto-llms-txt.rs"
+
+[[test]]
+name = "default_core_contract"
+path = "tests/default_core_contract.rs"
+
+[[test]]
+name = "catalog_resolver_contract"
+path = "tests/catalog_resolver_contract.rs"
+
+[[test]]
+name = "runtime_explain_contract"
+path = "tests/runtime_explain_contract.rs"
+
+[[test]]
+name = "runtime_registry_contract"
+path = "tests/runtime_registry_contract.rs"
+
+[[test]]
+name = "runtime_route_contract"
+path = "tests/runtime_route_contract.rs"
+
+[[test]]
+name = "runtime_transport_contract"
+path = "tests/runtime_transport_contract.rs"
+
+[[test]]
+name = "transport_policy_contract"
+path = "tests/transport_policy_contract.rs"
+
+[[test]]
+name = "integration_smoke"
+path = "tests/integration_smoke.rs"
 
 [[example]]
 name = "anthropic_messages"

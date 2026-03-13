@@ -23,7 +23,7 @@ impl RuntimeRegistrySnapshot {
             .iter()
             .map(RuntimeRegistryProviderEntry::from_plugin)
             .collect();
-        providers.sort_by(|left, right| left.provider.cmp(&right.provider));
+        providers.sort_by(|left, right| left.provider.cmp(right.provider));
         Self { providers }
     }
 
@@ -111,7 +111,7 @@ impl RuntimeRegistryProviderEntry {
     pub fn model(&self, model: &str) -> Option<&RuntimeRegistryModelEntry> {
         self.models
             .iter()
-            .find(|entry| entry.model == model || entry.aliases.iter().any(|alias| *alias == model))
+            .find(|entry| entry.model == model || entry.aliases.contains(&model))
     }
 }
 

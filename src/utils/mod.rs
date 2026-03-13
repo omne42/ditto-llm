@@ -12,7 +12,7 @@ pub mod json_schema;
 ))]
 pub mod params;
 
-pub(crate) mod task;
+pub mod task;
 
 #[doc(hidden)]
 pub mod test_support;

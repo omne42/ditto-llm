@@ -1,7 +1,7 @@
 use crate::catalog::generated::providers::{OPENAI_BEHAVIORS, OPENAI_MODELS};
 use crate::catalog::{
-    ApiSurfaceId, AuthMethodKind, EndpointTemplate, EvidenceLevel, EvidenceRef, HttpMethod,
-    ModelBinding, ModelSelector, OperationKind, ProviderAuthHint, ProviderClass,
+    ApiSurfaceId, AuthMethodKind, EndpointQueryParam, EndpointTemplate, EvidenceLevel, EvidenceRef,
+    HttpMethod, ModelBinding, ModelSelector, OperationKind, ProviderAuthHint, ProviderClass,
     ProviderPluginDescriptor, TransportKind, VerificationStatus, WireProtocol,
 };
 

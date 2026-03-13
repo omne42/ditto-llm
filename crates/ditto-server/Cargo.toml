@@ -1,0 +1,283 @@
+[package]
+name = "ditto-server"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85"
+autobins = false
+autotests = false
+
+[lib]
+name = "ditto_llm"
+
+[features]
+default = ["gateway", "provider-openai-compatible", "cap-llm"]
+
+config-editing = ["dep:toml_edit"]
+config-interactive = ["config-editing"]
+gateway = [
+  "dep:axum",
+  "dep:clap",
+  "dep:getrandom",
+  "dep:regex",
+  "dep:sha2",
+  "config-editing",
+]
+gateway-cli-interactive = ["gateway", "config-interactive"]
+gateway-config-yaml = ["gateway", "dep:serde_yaml"]
+gateway-devtools = ["gateway", "sdk"]
+gateway-translation = ["gateway"]
+gateway-proxy-cache = ["gateway"]
+gateway-routing-advanced = ["gateway"]
+gateway-metrics-prometheus = ["gateway"]
+gateway-costing = ["gateway"]
+gateway-tokenizer = ["gateway", "dep:tiktoken-rs"]
+gateway-store-sqlite = ["gateway", "dep:rusqlite"]
+gateway-store-redis = ["gateway", "dep:redis"]
+gateway-store-postgres = ["gateway", "dep:sqlx", "sqlx/postgres"]
+gateway-store-mysql = ["gateway", "dep:sqlx", "sqlx/mysql"]
+gateway-otel = [
+  "gateway",
+  "dep:tracing",
+  "dep:tracing-subscriber",
+  "dep:opentelemetry",
+  "dep:opentelemetry_sdk",
+  "dep:opentelemetry-otlp",
+  "dep:tracing-opentelemetry",
+]
+
+agent = ["ditto_core/agent"]
+auth = ["ditto_core/auth"]
+sdk = ["ditto_core/sdk"]
+sdk-axum = ["ditto_core/sdk-axum"]
+base64 = ["ditto_core/base64"]
+
+openai = ["ditto_core/openai"]
+anthropic = ["ditto_core/anthropic"]
+google = ["ditto_core/google"]
+openai-compatible = ["ditto_core/openai-compatible"]
+cohere = ["ditto_core/cohere"]
+bedrock = ["ditto_core/bedrock"]
+vertex = ["ditto_core/vertex"]
+
+provider-openai-compatible = ["ditto_core/provider-openai-compatible"]
+provider-openai = ["ditto_core/provider-openai"]
+provider-anthropic = ["ditto_core/provider-anthropic"]
+provider-google = ["ditto_core/provider-google"]
+provider-cohere = ["ditto_core/provider-cohere"]
+provider-bedrock = ["ditto_core/provider-bedrock"]
+provider-vertex = ["ditto_core/provider-vertex"]
+provider-bailian = ["ditto_core/provider-bailian"]
+provider-deepseek = ["ditto_core/provider-deepseek"]
+provider-doubao = ["ditto_core/provider-doubao"]
+provider-hunyuan = ["ditto_core/provider-hunyuan"]
+provider-kimi = ["ditto_core/provider-kimi"]
+provider-minimax = ["ditto_core/provider-minimax"]
+provider-openrouter = ["ditto_core/provider-openrouter"]
+provider-qianfan = ["ditto_core/provider-qianfan"]
+provider-xai = ["ditto_core/provider-xai"]
+provider-zhipu = ["ditto_core/provider-zhipu"]
+
+streaming = ["ditto_core/streaming"]
+tools = ["ditto_core/tools"]
+embeddings = ["ditto_core/embeddings"]
+images = ["ditto_core/images"]
+videos = ["ditto_core/videos"]
+audio = ["ditto_core/audio"]
+moderations = ["ditto_core/moderations"]
+rerank = ["ditto_core/rerank"]
+batches = ["ditto_core/batches"]
+realtime = ["ditto_core/realtime"]
+
+cap-llm = ["ditto_core/cap-llm"]
+cap-embedding = ["ditto_core/cap-embedding"]
+cap-image-generation = ["ditto_core/cap-image-generation"]
+cap-image-edit = ["ditto_core/cap-image-edit"]
+cap-audio-transcription = ["ditto_core/cap-audio-transcription"]
+cap-audio-speech = ["ditto_core/cap-audio-speech"]
+cap-moderation = ["ditto_core/cap-moderation"]
+cap-rerank = ["ditto_core/cap-rerank"]
+cap-batch = ["ditto_core/cap-batch"]
+cap-realtime = ["ditto_core/cap-realtime"]
+
+all-providers = ["ditto_core/all-providers"]
+all-capabilities = ["ditto_core/all-capabilities"]
+all = ["ditto_core/all", "gateway", "gateway-translation"]
+
+integration = ["ditto_core/integration"]
+
+[dependencies]
+ditto_core = { package = "ditto-core", path = "../ditto-core", default-features = false }
+async-trait = "0.1"
+axum = { version = "0.7", optional = true, features = ["json"] }
+bytes = "1"
+clap = { version = "4.5", optional = true, features = ["derive"] }
+futures-util = "0.3"
+getrandom = { version = "0.4", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = { version = "0.9", optional = true }
+sha2 = { version = "0.10", optional = true }
+thiserror = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["io"] }
+toml_edit = { version = "0.22", optional = true }
+rusqlite = { version = "0.32", optional = true, features = ["bundled"] }
+redis = { version = "0.32", optional = true, features = ["tokio-comp", "safe_iterators"] }
+sqlx = { version = "0.8", optional = true, default-features = false, features = ["runtime-tokio-rustls"] }
+regex = { version = "1", optional = true }
+opentelemetry = { version = "0.31", optional = true, default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.31", optional = true, default-features = false, features = ["rt-tokio", "trace"] }
+opentelemetry-otlp = { version = "0.31", optional = true, default-features = false, features = ["http-proto", "reqwest-rustls", "trace"] }
+tracing = { version = "0.1", optional = true, features = ["attributes"] }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "json"] }
+tracing-opentelemetry = { version = "0.32", optional = true }
+tiktoken-rs = { version = "0.9.1", optional = true }
+
+[dev-dependencies]
+ditto-gateway-contract-types = { path = "../ditto-gateway-contract-types" }
+httpmock = "0.8.2"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "ditto-gateway"
+path = "src/bin/ditto-gateway.rs"
+
+[[bin]]
+name = "ditto-audit-export"
+path = "src/bin/ditto-audit-export.rs"
+
+[[bin]]
+name = "ditto-audit-verify"
+path = "src/bin/ditto-audit-verify.rs"
+
+[[bin]]
+name = "ditto-store-bench"
+path = "src/bin/ditto-store-bench.rs"
+
+[[test]]
+name = "config_editing_contract"
+path = "../../tests/config_editing_contract.rs"
+required-features = ["config-editing"]
+
+[[test]]
+name = "config_interactive"
+path = "../../tests/config_interactive.rs"
+required-features = ["config-interactive"]
+
+[[test]]
+name = "module_namespace_contract"
+path = "../../tests/module_namespace_contract.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "anthropic_provider_capabilities"
+path = "../../tests/anthropic_provider_capabilities.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "deepseek_provider_capabilities"
+path = "../../tests/deepseek_provider_capabilities.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "google_provider_capabilities"
+path = "../../tests/google_provider_capabilities.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "minimax_provider_capabilities"
+path = "../../tests/minimax_provider_capabilities.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "openai_provider_capabilities"
+path = "../../tests/openai_provider_capabilities.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "gateway_alt_protocols"
+path = "../../tests/gateway_alt_protocols.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_contract_v0_1"
+path = "../../tests/gateway_contract_v0_1.rs"
+required-features = ["gateway", "gateway-store-sqlite", "gateway-costing"]
+
+[[test]]
+name = "gateway_control_plane"
+path = "../../tests/gateway_control_plane.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_costing"
+path = "../../tests/gateway_costing.rs"
+required-features = ["gateway", "gateway-costing"]
+
+[[test]]
+name = "gateway_google_genai_stream"
+path = "../../tests/gateway_google_genai_stream.rs"
+required-features = ["gateway", "streaming"]
+
+[[test]]
+name = "gateway_http"
+path = "../../tests/gateway_http.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_mcp"
+path = "../../tests/gateway_mcp.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_openai_proxy"
+path = "../../tests/gateway_openai_proxy.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_prometheus_metrics"
+path = "../../tests/gateway_prometheus_metrics.rs"
+required-features = ["gateway", "gateway-metrics-prometheus"]
+
+[[test]]
+name = "gateway_responses_shim"
+path = "../../tests/gateway_responses_shim.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_sqlite_persistence"
+path = "../../tests/gateway_sqlite_persistence.rs"
+required-features = ["gateway-store-sqlite"]
+
+[[test]]
+name = "gateway_state_file"
+path = "../../tests/gateway_state_file.rs"
+required-features = ["gateway"]
+
+[[test]]
+name = "gateway_translation"
+path = "../../tests/gateway_translation.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "gateway_translation_custom_provider_resolution"
+path = "../../tests/gateway_translation_custom_provider_resolution.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "gateway_translation_files"
+path = "../../tests/gateway_translation_files.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "gateway_translation_provider_aliases"
+path = "../../tests/gateway_translation_provider_aliases.rs"
+required-features = ["gateway", "gateway-translation"]
+
+[[test]]
+name = "gateway_translation_stream_options"
+path = "../../tests/gateway_translation_stream_options.rs"
+required-features = ["gateway", "gateway-translation"]

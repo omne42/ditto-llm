@@ -10,11 +10,12 @@ mod google_videos_impl {
     use crate::capabilities::file::FileContent;
     use crate::capabilities::video::VideoGenerationModel;
     use crate::config::{Env, ProviderConfig};
+    use crate::contracts::Warning;
     use crate::provider_options::select_provider_options_value;
     use crate::types::{
         VideoContentVariant, VideoDeleteResponse, VideoGenerationError, VideoGenerationRequest,
         VideoGenerationResponse, VideoGenerationStatus, VideoListRequest, VideoListResponse,
-        VideoReferenceUpload, VideoRemixRequest, Warning,
+        VideoReferenceUpload, VideoRemixRequest,
     };
     use crate::foundation::error::{DittoError, Result};
 

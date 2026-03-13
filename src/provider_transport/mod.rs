@@ -39,8 +39,9 @@ pub(crate) use config::{
 #[cfg(any(feature = "gateway", feature = "openai", feature = "openai-compatible"))]
 #[allow(unused_imports)]
 pub(crate) use http::read_reqwest_body_bytes_bounded_with_content_length;
+pub use http::response_text_truncated;
 #[allow(unused_imports)]
 pub(crate) use http::{
-    response_text_truncated, send_checked, send_checked_bytes, send_checked_bytes_with_policy,
-    send_checked_json, send_checked_json_with_policy, send_checked_with_policy,
+    send_checked, send_checked_bytes, send_checked_bytes_with_policy, send_checked_json,
+    send_checked_json_with_policy, send_checked_with_policy,
 };

@@ -338,9 +338,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
+checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "colorchoice"
@@ -495,11 +495,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "ditto-core"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64",
+ "bytes",
+ "futures-util",
+ "hmac",
+ "httpmock",
+ "regex",
+ "reqwest",
+ "safe-fs-tools",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tower",
+]
+
+[[package]]
+name = "ditto-gateway-contract-guard"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde_yaml",
+ "toml",
+]
+
+[[package]]
 name = "ditto-gateway-contract-types"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -507,14 +543,32 @@ name = "ditto-llm"
 version = "1.0.0"
 dependencies = [
  "async-trait",
- "axum",
  "base64",
  "bytes",
+ "ditto-core",
+ "ditto-gateway-contract-types",
+ "futures-util",
+ "httpmock",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tower",
+]
+
+[[package]]
+name = "ditto-server"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "bytes",
  "clap",
+ "ditto-core",
  "ditto-gateway-contract-types",
  "futures-util",
  "getrandom 0.4.0",
- "hmac",
  "httpmock",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -523,7 +577,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rusqlite",
- "safe-fs-tools",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -532,7 +585,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tiktoken-rs",
- "time",
  "tokio",
  "tokio-util",
  "toml",

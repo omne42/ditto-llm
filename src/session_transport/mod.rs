@@ -15,7 +15,7 @@ pub use policy::{
 pub use sse::SseLimits;
 
 #[allow(unused_imports)]
-pub(crate) use sse::{
+pub use sse::{
     sse_data_stream_from_reader, sse_data_stream_from_reader_with_limits,
     sse_data_stream_from_response,
 };

@@ -100,17 +100,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--base" => {
-                parsed.base_openapi = Some(
-                    args.next()
-                        .ok_or("missing value for --base")?
-                        .into(),
-                );
+                parsed.base_openapi = Some(args.next().ok_or("missing value for --base")?.into());
             }
             "--head" => {
-                parsed.head_openapi = args
-                    .next()
-                    .ok_or("missing value for --head")?
-                    .into();
+                parsed.head_openapi = args.next().ok_or("missing value for --head")?.into();
             }
             "--contract-lib" => {
                 parsed.contract_lib = args
@@ -272,19 +265,16 @@ fn extract_openapi_contract_id(doc: &Value) -> Result<String, String> {
 }
 
 fn extract_contract_lib_const(path: &Path, const_name: &str) -> Result<String, String> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|err| format!("read `{}`: {err}", path.display()))?;
+    let raw =
+        std::fs::read_to_string(path).map_err(|err| format!("read `{}`: {err}", path.display()))?;
     let pattern = format!(
         r#"(?m)^\s*pub\s+const\s+{}\s*:\s*&str\s*=\s*"([^"]+)""#,
         regex::escape(const_name)
     );
     let re = Regex::new(&pattern).map_err(|err| format!("compile regex: {err}"))?;
-    let captures = re.captures(&raw).ok_or_else(|| {
-        format!(
-            "constant `{const_name}` not found in `{}`",
-            path.display()
-        )
-    })?;
+    let captures = re
+        .captures(&raw)
+        .ok_or_else(|| format!("constant `{const_name}` not found in `{}`", path.display()))?;
     Ok(captures
         .get(1)
         .map(|m| m.as_str().to_string())
@@ -292,10 +282,10 @@ fn extract_contract_lib_const(path: &Path, const_name: &str) -> Result<String, S
 }
 
 fn extract_contract_cargo_version(path: &Path) -> Result<String, String> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|err| format!("read `{}`: {err}", path.display()))?;
-    let doc: toml::Value = toml::from_str(&raw)
-        .map_err(|err| format!("parse `{}` as toml: {err}", path.display()))?;
+    let raw =
+        std::fs::read_to_string(path).map_err(|err| format!("read `{}`: {err}", path.display()))?;
+    let doc: toml::Value =
+        toml::from_str(&raw).map_err(|err| format!("parse `{}` as toml: {err}", path.display()))?;
     doc.get("package")
         .and_then(|pkg| pkg.get("version"))
         .and_then(toml::Value::as_str)
@@ -481,11 +471,14 @@ fn diff_shape(base: &ContractShape, head: &ContractShape) -> DiffResult {
             }
             Some(head_op) => {
                 for required in head_op.required_params.difference(&base_op.required_params) {
-                    breaking.insert(format!("operation `{op}` added required param `{required}`"));
+                    breaking.insert(format!(
+                        "operation `{op}` added required param `{required}`"
+                    ));
                 }
                 for required in base_op.required_params.difference(&head_op.required_params) {
-                    non_breaking
-                        .insert(format!("operation `{op}` removed required param `{required}`"));
+                    non_breaking.insert(format!(
+                        "operation `{op}` removed required param `{required}`"
+                    ));
                 }
                 if !base_op.request_body_required && head_op.request_body_required {
                     breaking.insert(format!("operation `{op}` requestBody became required"));
@@ -514,10 +507,16 @@ fn diff_shape(base: &ContractShape, head: &ContractShape) -> DiffResult {
                 breaking.insert(format!("removed schema `{schema}`"));
             }
             Some(head_schema) => {
-                for field in head_schema.required_fields.difference(&base_schema.required_fields) {
+                for field in head_schema
+                    .required_fields
+                    .difference(&base_schema.required_fields)
+                {
                     breaking.insert(format!("schema `{schema}` added required field `{field}`"));
                 }
-                for field in base_schema.required_fields.difference(&head_schema.required_fields) {
+                for field in base_schema
+                    .required_fields
+                    .difference(&head_schema.required_fields)
+                {
                     non_breaking.insert(format!(
                         "schema `{schema}` removed required constraint for field `{field}`"
                     ));
@@ -759,9 +758,6 @@ components:
         assert!(parse_semver("0.1").is_err());
         assert!(parse_semver("x.y.z").is_err());
         assert!(parse_semver("1.2.3.4").is_err());
-        assert_eq!(
-            parse_semver("1.2.3").expect("parse").to_string(),
-            "1.2.3"
-        );
+        assert_eq!(parse_semver("1.2.3").expect("parse").to_string(), "1.2.3");
     }
 }

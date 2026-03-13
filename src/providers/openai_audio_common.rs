@@ -4,10 +4,11 @@ use serde_json::{Map, Value};
 
 use super::openai_like::OpenAiLikeClient;
 
+use crate::contracts::Warning;
 use crate::foundation::error::{DittoError, Result};
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, SpeechRequest, SpeechResponse,
-    SpeechResponseFormat, TranscriptionResponseFormat, Warning,
+    SpeechResponseFormat, TranscriptionResponseFormat,
 };
 
 #[derive(Debug, Deserialize)]

@@ -11,27 +11,34 @@ use crate::capabilities::context_cache::ContextCacheProfile;
 use crate::capabilities::embedding::EmbeddingModel;
 use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::config::{Env, ProviderConfig};
+use crate::contracts::ContentPart;
+#[cfg(test)]
+use crate::contracts::{FileSource, Message, Role, Tool, ToolChoice};
 #[cfg(feature = "streaming")]
 use crate::contracts::StreamChunk;
-use crate::contracts::{ContentPart, FileSource, FinishReason, GenerateResponse, Message, Role};
-use crate::contracts::{GenerateRequest, Tool, ToolChoice, Usage, Warning};
+use crate::contracts::{FinishReason, GenerateRequest, GenerateResponse, Usage, Warning};
 use crate::foundation::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::providers::openai_chat_completions_core::{
-    OPENAI_CHAT_COMPLETIONS_DUMMY_THOUGHT_SIGNATURE,
     OPENAI_CHAT_COMPLETIONS_RESERVED_PROVIDER_OPTION_KEYS,
     OpenAiChatCompletionsModelBehaviorResolver, OpenAiChatCompletionsRequestQuirks,
     apply_explicit_config_quirks,
     build_chat_completions_body as shared_build_chat_completions_body,
     encode_tool_call_id_with_thought_signature,
-    messages_to_chat_messages as shared_messages_to_chat_messages,
     parse_finish_reason as shared_parse_finish_reason, parse_usage as shared_parse_usage,
-    resolve_request_quirks, split_tool_call_id_and_thought_signature,
-    tool_choice_to_openai as shared_tool_choice_to_openai,
+    resolve_request_quirks,
 };
 use crate::providers::openai_compat_profile::{
-    OpenAiCompatibilityProfile, OpenAiCompatibleModelBehavior, OpenAiProviderFamily,
+    OpenAiCompatibilityProfile, OpenAiCompatibleModelBehavior,
 };
+#[cfg(test)]
+use crate::providers::openai_chat_completions_core::{
+    OPENAI_CHAT_COMPLETIONS_DUMMY_THOUGHT_SIGNATURE,
+    messages_to_chat_messages as shared_messages_to_chat_messages,
+    split_tool_call_id_and_thought_signature,
+};
+#[cfg(test)]
+use crate::providers::openai_compat_profile::OpenAiProviderFamily;
 #[cfg(feature = "streaming")]
 use futures_util::StreamExt;
 #[cfg(feature = "streaming")]
@@ -49,6 +56,7 @@ type OpenAiCompatibleRequestQuirks = OpenAiChatCompletionsRequestQuirks;
 type OpenAiCompatibleModelBehaviorResolver = OpenAiChatCompletionsModelBehaviorResolver;
 const OPENAI_COMPAT_RESERVED_PROVIDER_OPTION_KEYS: &[&str] =
     OPENAI_CHAT_COMPLETIONS_RESERVED_PROVIDER_OPTION_KEYS;
+#[cfg(test)]
 const OPENAI_COMPAT_DUMMY_THOUGHT_SIGNATURE: &str = OPENAI_CHAT_COMPLETIONS_DUMMY_THOUGHT_SIGNATURE;
 
 impl OpenAICompatible {
@@ -228,10 +236,12 @@ impl OpenAICompatible {
         )
     }
 
+    #[cfg(test)]
     fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
-        shared_tool_choice_to_openai(choice)
+        crate::providers::openai_chat_completions_core::tool_choice_to_openai(choice)
     }
 
+    #[cfg(test)]
     fn messages_to_chat_messages(
         messages: &[Message],
         model: &str,

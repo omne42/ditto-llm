@@ -6,12 +6,13 @@ use serde_json::{Map, Value};
 use super::openai_like::OpenAiLikeClient;
 
 use crate::capabilities::file::FileContent;
+use crate::contracts::Warning;
 use crate::foundation::error::Result;
 use crate::foundation::error::{DittoError, Result as DittoResult};
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationError, VideoGenerationRequest,
     VideoGenerationResponse, VideoGenerationStatus, VideoListOrder, VideoListRequest,
-    VideoListResponse, VideoRemixRequest, Warning,
+    VideoListResponse, VideoRemixRequest,
 };
 
 #[derive(Debug, Deserialize, Default)]

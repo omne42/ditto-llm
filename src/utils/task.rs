@@ -1,7 +1,7 @@
-pub(crate) struct AbortOnDrop(tokio::task::AbortHandle);
+pub struct AbortOnDrop(tokio::task::AbortHandle);
 
 impl AbortOnDrop {
-    pub(crate) fn new(handle: tokio::task::AbortHandle) -> Self {
+    pub fn new(handle: tokio::task::AbortHandle) -> Self {
         Self(handle)
     }
 }

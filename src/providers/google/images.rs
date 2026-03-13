@@ -7,9 +7,10 @@ mod google_images_impl {
     use super::Google;
     use crate::capabilities::ImageGenerationModel;
     use crate::config::{Env, ProviderConfig};
+    use crate::contracts::{ImageSource, Warning};
     use crate::provider_options::select_provider_options_value;
     use crate::types::{
-        ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat, ImageSource, Warning,
+        ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat,
     };
     use crate::foundation::error::{DittoError, Result};
 

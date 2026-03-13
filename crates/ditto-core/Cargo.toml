@@ -1,0 +1,97 @@
+[package]
+name = "ditto-core"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.85"
+
+[features]
+default = ["provider-openai-compatible", "cap-llm"]
+
+agent = ["dep:regex", "dep:safe-fs-tools"]
+auth = ["dep:hmac", "dep:sha2", "dep:time"]
+sdk = []
+sdk-axum = ["sdk", "dep:axum"]
+base64 = ["dep:base64"]
+
+# Internal protocol/provider implementation toggles retained for cfg compatibility.
+openai = []
+anthropic = []
+google = []
+openai-compatible = []
+cohere = []
+bedrock = ["auth", "base64"]
+vertex = ["auth"]
+
+# Public provider packs.
+provider-openai-compatible = ["openai-compatible"]
+provider-openai = ["openai"]
+provider-anthropic = ["anthropic"]
+provider-google = ["google"]
+provider-cohere = ["cohere"]
+provider-bedrock = ["bedrock"]
+provider-vertex = ["vertex"]
+provider-bailian = []
+provider-deepseek = ["provider-openai-compatible"]
+provider-doubao = []
+provider-hunyuan = []
+provider-kimi = ["provider-openai-compatible"]
+provider-minimax = []
+provider-openrouter = ["provider-openai-compatible"]
+provider-qianfan = []
+provider-xai = ["provider-openai-compatible"]
+provider-zhipu = []
+
+# Internal capability toggles retained for cfg compatibility.
+streaming = []
+tools = []
+embeddings = []
+images = []
+videos = ["dep:base64"]
+audio = []
+moderations = []
+rerank = []
+batches = []
+realtime = []
+
+# Public capability packs.
+cap-llm = ["streaming", "tools"]
+cap-embedding = ["embeddings"]
+cap-image-generation = ["images"]
+cap-image-edit = ["images"]
+cap-audio-transcription = ["audio"]
+cap-audio-speech = ["audio"]
+cap-moderation = ["moderations"]
+cap-rerank = ["rerank"]
+cap-batch = ["batches"]
+cap-realtime = ["realtime"]
+
+# Bundles.
+all-providers = ["provider-openai-compatible", "provider-openai", "provider-anthropic", "provider-google", "provider-cohere", "provider-bedrock", "provider-vertex", "provider-bailian", "provider-deepseek", "provider-doubao", "provider-hunyuan", "provider-kimi", "provider-minimax", "provider-openrouter", "provider-qianfan", "provider-xai", "provider-zhipu"]
+all-capabilities = ["cap-llm", "cap-embedding", "cap-image-generation", "cap-image-edit", "cap-audio-transcription", "cap-audio-speech", "cap-moderation", "cap-rerank", "cap-batch", "cap-realtime"]
+all = ["all-providers", "all-capabilities"]
+
+integration = []
+
+[dependencies]
+async-trait = "0.1"
+axum = { version = "0.7", optional = true, features = ["json"] }
+base64 = { version = "0.22", optional = true }
+bytes = "1"
+futures-util = "0.3"
+hmac = { version = "0.12", optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+regex = { version = "1", optional = true }
+safe-fs-tools = { path = "../../../safe-fs-tools", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = { version = "0.10", optional = true }
+thiserror = "1"
+time = { version = "0.3", features = ["formatting", "macros"], optional = true }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["io"] }
+toml = "0.8"
+
+[dev-dependencies]
+httpmock = "0.8.2"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

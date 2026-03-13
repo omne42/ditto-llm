@@ -139,7 +139,8 @@ impl Google {
         provider_options_scope: &'static str,
     ) -> Result<PreparedGoogleRequest> {
         let model = self.resolve_model(request)?.to_string();
-        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+        let selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
             .map(crate::provider_options::ProviderOptions::from_value_ref)

@@ -29,7 +29,7 @@ use crate::contracts::{
     Usage, Warning,
 };
 #[cfg(feature = "rerank")]
-use crate::contracts::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
+use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
 use crate::foundation::error::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";

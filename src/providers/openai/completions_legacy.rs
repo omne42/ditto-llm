@@ -344,7 +344,7 @@ impl OpenAICompletionsLegacy {
         }
 
         let selected_provider_options =
-            crate::provider_options::request_provider_options_value_for(&request, "openai")?;
+            crate::provider_options::request_provider_options_value_for(request, "openai")?;
         Self::warn_unsupported_provider_options(selected_provider_options.as_ref(), &mut warnings);
         crate::provider_options::merge_provider_options_into_body(
             &mut body,

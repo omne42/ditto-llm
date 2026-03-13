@@ -175,35 +175,55 @@ jobs:
 
       - name: cargo fmt
         working-directory: ditto-llm
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
       - name: llms.txt up to date
         working-directory: ditto-llm
-        run: cargo run --bin ditto-llms-txt -- --check
+        run: cargo run -p ditto-llm --bin ditto-llms-txt -- --check
 
       - name: gateway contract types check
         working-directory: ditto-llm
         run: cargo test --manifest-path crates/ditto-gateway-contract-types/Cargo.toml
 
-      - name: cargo test (default core)
+      - name: cargo test (ditto-core lib)
         working-directory: ditto-llm
-        run: cargo test --all-targets
+        run: cargo test -p ditto-core --lib
+
+      - name: cargo test (ditto-llm compatibility targets)
+        working-directory: ditto-llm
+        run: cargo test -p ditto-llm --all-targets
+
+      - name: cargo test (ditto-server targets compile)
+        working-directory: ditto-llm
+        run: cargo test -p ditto-server --all-targets --no-run
 
       - name: cargo check (default examples)
         working-directory: ditto-llm
-        run: cargo check --examples
+        run: cargo check -p ditto-llm --examples
 
-      - name: cargo clippy (all features)
+      - name: cargo clippy (ditto-core all features)
         working-directory: ditto-llm
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy -p ditto-core --lib --all-features -- -D warnings
 
-      - name: cargo test (all features)
+      - name: cargo clippy (ditto-llm compatibility lib)
         working-directory: ditto-llm
-        run: cargo test --all-targets --all-features
+        run: cargo clippy -p ditto-llm --lib --all-features -- -D warnings
 
-      - name: cargo check (no default features)
+      - name: cargo test (ditto-core all features)
         working-directory: ditto-llm
-        run: cargo check --no-default-features
+        run: cargo test -p ditto-core --lib --all-features
+
+      - name: cargo test (ditto-server all targets compile)
+        working-directory: ditto-llm
+        run: cargo test -p ditto-server --all-targets --no-run --all-features
+
+      - name: cargo check (ditto-core no default features)
+        working-directory: ditto-llm
+        run: cargo check -p ditto-core --no-default-features
+
+      - name: cargo check (ditto-llm compatibility no default features)
+        working-directory: ditto-llm
+        run: cargo check -p ditto-llm --no-default-features
 
       - name: cargo test (openai feature matrix)
         working-directory: ditto-llm
@@ -212,7 +232,7 @@ jobs:
           set -euo pipefail
           while IFS='|' read -r label features; do
             echo "::group::${label}"
-            cargo test --lib --no-default-features --features "${features}" -q
+            cargo test -p ditto-core --lib --no-default-features --features "${features}" -q
             echo "::endgroup::"
           done <<'EOF'
           openai|openai
@@ -221,37 +241,37 @@ jobs:
           provider-openai+cap-llm|provider-openai,cap-llm
           EOF
 
-      - name: cargo clippy (no default features)
+      - name: cargo check (ditto-server gateway translation slice)
         working-directory: ditto-llm
-        run: cargo clippy --no-default-features -- -D warnings
+        run: cargo check -p ditto-server --lib --no-default-features --features "gateway gateway-translation provider-openai-compatible cap-llm"
 
       - name: cargo clippy (no default features + openai)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features openai --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features openai --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + openai-compatible)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features openai-compatible --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features openai-compatible --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + anthropic)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features anthropic --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features anthropic --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + google)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features google --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features google --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + cohere)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features cohere --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features cohere --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + bedrock)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features bedrock --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features bedrock --all-targets -- -D warnings
 
       - name: cargo clippy (no default features + vertex)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-llm --no-default-features --features vertex --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features vertex --all-targets -- -D warnings
 
   gateway-store-matrix:
     runs-on: ubuntu-latest
@@ -325,22 +345,22 @@ jobs:
         if: matrix.store == 'sqlite'
         working-directory: ditto-llm
         run: |
-          cargo test --features "gateway gateway-store-sqlite" sqlite_store_round_trips_virtual_keys
-          cargo run --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.ci.json --sqlite ./gateway.ci.sqlite --db-doctor
+          cargo test -p ditto-server --features "gateway gateway-store-sqlite" sqlite_store_round_trips_virtual_keys
+          cargo run -p ditto-server --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.ci.json --sqlite ./gateway.ci.sqlite --db-doctor
 
       - name: Run postgres store tests
         if: matrix.store == 'postgres'
         working-directory: ditto-llm
         run: |
-          cargo test --features "gateway gateway-store-postgres" postgres_store_round_trips_config_audit_and_ledgers
-          cargo run --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.ci.json --pg "${DITTO_POSTGRES_URL}" --db-doctor
+          cargo test -p ditto-server --features "gateway gateway-store-postgres" postgres_store_round_trips_config_audit_and_ledgers
+          cargo run -p ditto-server --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.ci.json --pg "${DITTO_POSTGRES_URL}" --db-doctor
 
       - name: Run mysql store tests
         if: matrix.store == 'mysql'
         working-directory: ditto-llm
         run: |
-          cargo test --features "gateway gateway-store-mysql" mysql_store_round_trips_config_audit_and_ledgers
-          cargo run --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.ci.json --mysql "${DITTO_MYSQL_URL}" --db-doctor
+          cargo test -p ditto-server --features "gateway gateway-store-mysql" mysql_store_round_trips_config_audit_and_ledgers
+          cargo run -p ditto-server --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.ci.json --mysql "${DITTO_MYSQL_URL}" --db-doctor
 
   gateway-store-bench:
     runs-on: ubuntu-latest
@@ -395,7 +415,7 @@ jobs:
       - name: Run store benchmark matrix
         working-directory: ditto-llm
         run: |
-          cargo run --features "gateway gateway-store-sqlite gateway-store-postgres gateway-store-mysql" --bin ditto-store-bench -- \
+          cargo run -p ditto-server --features "gateway gateway-store-sqlite gateway-store-postgres gateway-store-mysql" --bin ditto-store-bench -- \
             --sqlite ./target/ci-store-bench.sqlite \
             --pg "${DITTO_POSTGRES_URL}" \
             --mysql "${DITTO_MYSQL_URL}" \

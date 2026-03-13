@@ -576,7 +576,8 @@ impl Bedrock {
 
         crate::provider_options::merge_provider_options_into_body(
             &mut body,
-            crate::provider_options::request_provider_options_value_for(&request, "bedrock")?.as_ref(),
+            crate::provider_options::request_provider_options_value_for(request, "bedrock")?
+                .as_ref(),
             &["reasoning_effort", "response_format", "parallel_tool_calls"],
             "bedrock.provider_options",
             warnings,

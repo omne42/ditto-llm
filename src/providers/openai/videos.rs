@@ -159,7 +159,7 @@ mod tests {
 
         mock.assert_async().await;
         assert_eq!(response.id, "vid_123");
-        assert_eq!(response.status, crate::VideoGenerationStatus::Queued);
+        assert_eq!(response.status, crate::types::VideoGenerationStatus::Queued);
         assert_eq!(response.model.as_deref(), Some("sora-2"));
         assert_eq!(response.seconds.as_deref(), Some("4"));
         Ok(())
@@ -216,7 +216,7 @@ mod tests {
             .list(VideoListRequest {
                 limit: Some(1),
                 after: None,
-                order: Some(crate::VideoListOrder::Desc),
+                order: Some(crate::types::VideoListOrder::Desc),
             })
             .await?;
         let deleted = client.delete("vid_123").await?;
@@ -248,7 +248,10 @@ mod tests {
 
         let client = OpenAIVideos::new("").with_base_url(server.url("/v1"));
         let content = client
-            .download_content("vid_123", Some(crate::VideoContentVariant::Thumbnail))
+            .download_content(
+                "vid_123",
+                Some(crate::types::VideoContentVariant::Thumbnail),
+            )
             .await?;
 
         mock.assert_async().await;
