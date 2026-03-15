@@ -118,11 +118,11 @@ fn candidate_from_plugin_model(
 mod tests {
     #[cfg(feature = "provider-google")]
     use crate::contracts::AuthMethodKind;
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     use crate::contracts::CapabilityKind;
     use crate::runtime_registry::builtin_runtime_registry_catalog;
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn builtin_provider_presets_include_generic_openai_compatible() {
         let preset = builtin_runtime_registry_catalog()
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(auth_hint.env_keys, &["GOOGLE_API_KEY", "GEMINI_API_KEY"]);
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn builtin_provider_capability_summary_reports_llm_capability() {
         let summary = builtin_runtime_registry_catalog()

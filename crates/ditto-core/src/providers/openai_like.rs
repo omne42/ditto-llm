@@ -5,12 +5,12 @@ use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject, Fil
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
-#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 use crate::config::resolve_provider_request_auth_required;
 use crate::config::{
     Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_optional,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::provider_transport::{apply_http_query_params, resolve_http_provider_config};
 
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
@@ -96,7 +96,7 @@ impl OpenAiLikeClient {
         self
     }
 
-    #[cfg(any(feature = "openai", feature = "openai-compatible"))]
+    #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
     pub(crate) async fn from_config_required(
         config: &ProviderConfig,
         env: &Env,
@@ -118,14 +118,14 @@ impl OpenAiLikeClient {
         if let Some(base_url) = resolved.base_url {
             out = out.with_base_url(base_url);
         }
-        #[cfg(any(feature = "openai", feature = "openai-compatible"))]
+        #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
         if let Some(model) = resolved.default_model {
             out = out.with_model(model);
         }
         Ok(out)
     }
 
-    #[cfg(feature = "openai-compatible")]
+    #[cfg(feature = "provider-openai-compatible")]
     pub(crate) async fn from_config_optional(
         config: &ProviderConfig,
         env: &Env,
@@ -147,7 +147,7 @@ impl OpenAiLikeClient {
         if let Some(base_url) = resolved.base_url {
             out = out.with_base_url(base_url);
         }
-        #[cfg(any(feature = "openai", feature = "openai-compatible"))]
+        #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
         if let Some(model) = resolved.default_model {
             out = out.with_model(model);
         }
@@ -224,7 +224,7 @@ pub(crate) async fn upload_file_with_purpose(
     let mut file_part = Part::bytes(request.bytes).file_name(request.filename);
     if let Some(media_type) = request.media_type.as_deref() {
         file_part = file_part.mime_str(media_type).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid file upload media type: {err}"))
+            DittoError::invalid_response_text(format!("invalid file upload media type: {err}"))
         })?;
     }
 
@@ -300,7 +300,7 @@ pub(crate) async fn download_file_content(
     )
     .await
     .map_err(|err| {
-        DittoError::InvalidResponse(format!(
+        DittoError::invalid_response_text(format!(
             "files download response too large (max={max_bytes}): {err}"
         ))
     })?

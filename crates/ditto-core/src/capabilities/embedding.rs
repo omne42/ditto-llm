@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 #[async_trait]
 pub trait EmbeddingModel: Send + Sync {
@@ -12,9 +12,7 @@ pub trait EmbeddingModel: Send + Sync {
     async fn embed_single(&self, text: String) -> Result<Vec<f32>> {
         let embeddings = self.embed(vec![text]).await?;
         embeddings.into_iter().next().ok_or_else(|| {
-            crate::foundation::error::DittoError::InvalidResponse(
-                "embedding response is empty".into(),
-            )
+            crate::error::DittoError::invalid_response_text("embedding response is empty")
         })
     }
 }

@@ -6,7 +6,11 @@ use std::time::Duration;
 use rusqlite::OptionalExtension;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
+use super::{
+    AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, ProxyRequestFingerprint,
+    ProxyRequestIdempotencyBeginOutcome, ProxyRequestIdempotencyRecord,
+    ProxyRequestIdempotencyState, ProxyRequestReplayOutcome, RouterConfig, VirtualKeyConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct SqliteStore {
@@ -78,6 +82,7 @@ impl SqliteStore {
             require_sqlite_table(&conn, "budget_reservations")?;
             require_sqlite_table(&conn, "cost_ledger")?;
             require_sqlite_table(&conn, "cost_reservations")?;
+            require_sqlite_table(&conn, "proxy_request_idempotency")?;
 
             require_sqlite_column_type(&conn, "virtual_keys", "id", "TEXT")?;
             require_sqlite_column_type(&conn, "virtual_keys", "value_json", "TEXT")?;
@@ -88,6 +93,14 @@ impl SqliteStore {
             require_sqlite_column_type(&conn, "audit_logs", "payload_json", "TEXT")?;
             require_sqlite_column_type(&conn, "budget_reservations", "ts_ms", "INTEGER")?;
             require_sqlite_column_type(&conn, "cost_reservations", "ts_ms", "INTEGER")?;
+            require_sqlite_column_type(&conn, "proxy_request_idempotency", "state", "TEXT")?;
+            require_sqlite_column_type(&conn, "proxy_request_idempotency", "record_json", "TEXT")?;
+            require_sqlite_column_type(
+                &conn,
+                "proxy_request_idempotency",
+                "expires_at_ms",
+                "INTEGER",
+            )?;
 
             require_sqlite_index(
                 &conn,
@@ -103,7 +116,27 @@ impl SqliteStore {
             require_sqlite_index(&conn, "cost_reservations", "idx_cost_reservations_ts_ms")?;
             require_sqlite_index(&conn, "audit_logs", "idx_audit_logs_ts_ms")?;
             require_sqlite_index(&conn, "audit_logs", "idx_audit_logs_kind_ts_ms")?;
+            require_sqlite_index(
+                &conn,
+                "proxy_request_idempotency",
+                "idx_proxy_request_idempotency_expires_at_ms",
+            )?;
+            require_sqlite_index(
+                &conn,
+                "proxy_request_idempotency",
+                "idx_proxy_request_idempotency_state_lease_until_ms",
+            )?;
 
+            Ok(())
+        })
+        .await?
+    }
+
+    pub async fn ping(&self) -> Result<(), SqliteStoreError> {
+        let path = self.path.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
+            let conn = open_connection(path)?;
+            conn.query_row("SELECT 1", [], |_| Ok(()))?;
             Ok(())
         })
         .await?
@@ -136,7 +169,10 @@ impl SqliteStore {
         let path = self.path.clone();
         let serialized: Vec<(String, String)> = keys
             .iter()
-            .map(|key| Ok((key.id.clone(), serde_json::to_string(key)?)))
+            .map(|key| {
+                let key = key.sanitized_for_persistence();
+                Ok((key.id.clone(), serde_json::to_string(&key)?))
+            })
             .collect::<Result<_, serde_json::Error>>()?;
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
@@ -1000,6 +1036,305 @@ impl SqliteStore {
         })
         .await?
     }
+
+    pub async fn begin_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        fingerprint: &ProxyRequestFingerprint,
+        fingerprint_key: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<ProxyRequestIdempotencyBeginOutcome, SqliteStoreError> {
+        let path = self.path.clone();
+        let request_id = request_id.to_string();
+        let fingerprint = fingerprint.clone();
+        let fingerprint_key = fingerprint_key.to_string();
+        let owner_token = owner_token.to_string();
+        let now_ms_i64 = tokens_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = tokens_to_i64(lease_until_ms);
+
+        tokio::task::spawn_blocking(
+            move || -> Result<ProxyRequestIdempotencyBeginOutcome, SqliteStoreError> {
+                let mut conn = open_connection(path)?;
+                init_schema(&conn)?;
+                let tx = conn.transaction()?;
+                tx.execute(
+                    "DELETE FROM proxy_request_idempotency WHERE expires_at_ms < ?1",
+                    rusqlite::params![now_ms_i64],
+                )?;
+
+                let existing: Option<String> = tx
+                    .query_row(
+                        "SELECT record_json
+                         FROM proxy_request_idempotency
+                         WHERE request_id = ?1",
+                        rusqlite::params![request_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+
+                if let Some(raw) = existing {
+                    let record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+                    if record.fingerprint_key != fingerprint_key {
+                        tx.commit()?;
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict { record });
+                    }
+                    if record.expires_at_ms >= now_ms {
+                        match record.state {
+                            ProxyRequestIdempotencyState::Completed => {
+                                tx.commit()?;
+                                return Ok(ProxyRequestIdempotencyBeginOutcome::Replay { record });
+                            }
+                            ProxyRequestIdempotencyState::InFlight => {
+                                tx.commit()?;
+                                return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight {
+                                    record,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                let record = new_proxy_request_idempotency_record(
+                    request_id.clone(),
+                    fingerprint,
+                    fingerprint_key,
+                    owner_token.clone(),
+                    now_ms,
+                    lease_until_ms,
+                );
+                let record_json = serde_json::to_string(&record)?;
+                tx.execute(
+                    "INSERT INTO proxy_request_idempotency (
+                         request_id,
+                         state,
+                         owner_token,
+                         lease_until_ms,
+                         expires_at_ms,
+                         updated_at_ms,
+                         record_json
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                     ON CONFLICT(request_id) DO UPDATE SET
+                         state = excluded.state,
+                         owner_token = excluded.owner_token,
+                         lease_until_ms = excluded.lease_until_ms,
+                         expires_at_ms = excluded.expires_at_ms,
+                         updated_at_ms = excluded.updated_at_ms,
+                         record_json = excluded.record_json",
+                    rusqlite::params![
+                        request_id,
+                        proxy_request_idempotency_state_label(record.state),
+                        owner_token,
+                        lease_until_ms_i64,
+                        lease_until_ms_i64,
+                        now_ms_i64,
+                        record_json,
+                    ],
+                )?;
+                tx.commit()?;
+                Ok(ProxyRequestIdempotencyBeginOutcome::Acquired)
+            },
+        )
+        .await?
+    }
+
+    pub async fn get_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        now_ms: u64,
+    ) -> Result<Option<ProxyRequestIdempotencyRecord>, SqliteStoreError> {
+        let path = self.path.clone();
+        let request_id = request_id.to_string();
+        let now_ms_i64 = tokens_to_i64(now_ms);
+
+        tokio::task::spawn_blocking(
+            move || -> Result<Option<ProxyRequestIdempotencyRecord>, SqliteStoreError> {
+                let conn = open_connection(path)?;
+                init_schema(&conn)?;
+                let raw: Option<String> = conn
+                    .query_row(
+                        "SELECT record_json
+                         FROM proxy_request_idempotency
+                         WHERE request_id = ?1 AND expires_at_ms >= ?2",
+                        rusqlite::params![request_id, now_ms_i64],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+                let Some(raw) = raw else {
+                    return Ok(None);
+                };
+                Ok(Some(serde_json::from_str(&raw)?))
+            },
+        )
+        .await?
+    }
+
+    pub async fn refresh_proxy_request_idempotency_lease(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<bool, SqliteStoreError> {
+        let path = self.path.clone();
+        let request_id = request_id.to_string();
+        let owner_token = owner_token.to_string();
+        let now_ms_i64 = tokens_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = tokens_to_i64(lease_until_ms);
+
+        tokio::task::spawn_blocking(move || -> Result<bool, SqliteStoreError> {
+            let mut conn = open_connection(path)?;
+            init_schema(&conn)?;
+            let tx = conn.transaction()?;
+            let raw: Option<String> = tx
+                .query_row(
+                    "SELECT record_json
+                     FROM proxy_request_idempotency
+                     WHERE request_id = ?1",
+                    rusqlite::params![request_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let Some(raw) = raw else {
+                tx.commit()?;
+                return Ok(false);
+            };
+            let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+            if record.state != ProxyRequestIdempotencyState::InFlight
+                || record.owner_token.as_deref() != Some(owner_token.as_str())
+            {
+                tx.commit()?;
+                return Ok(false);
+            }
+
+            record.updated_at_ms = now_ms;
+            record.lease_until_ms = Some(lease_until_ms);
+            record.expires_at_ms = lease_until_ms;
+            let record_json = serde_json::to_string(&record)?;
+            let updated = tx.execute(
+                "UPDATE proxy_request_idempotency
+                 SET lease_until_ms = ?3,
+                     expires_at_ms = ?4,
+                     updated_at_ms = ?5,
+                     record_json = ?6
+                 WHERE request_id = ?1 AND owner_token = ?2 AND state = ?7",
+                rusqlite::params![
+                    request_id,
+                    owner_token,
+                    lease_until_ms_i64,
+                    lease_until_ms_i64,
+                    now_ms_i64,
+                    record_json,
+                    proxy_request_idempotency_state_label(ProxyRequestIdempotencyState::InFlight),
+                ],
+            )?;
+            tx.commit()?;
+            Ok(updated > 0)
+        })
+        .await?
+    }
+
+    pub async fn complete_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        outcome: &ProxyRequestReplayOutcome,
+        now_ms: u64,
+        replay_ttl_ms: u64,
+    ) -> Result<bool, SqliteStoreError> {
+        let path = self.path.clone();
+        let request_id = request_id.to_string();
+        let owner_token = owner_token.to_string();
+        let outcome = outcome.clone();
+        let now_ms_i64 = tokens_to_i64(now_ms);
+        let expires_at_ms = now_ms.saturating_add(replay_ttl_ms);
+        let expires_at_ms_i64 = tokens_to_i64(expires_at_ms);
+
+        tokio::task::spawn_blocking(move || -> Result<bool, SqliteStoreError> {
+            let mut conn = open_connection(path)?;
+            init_schema(&conn)?;
+            let tx = conn.transaction()?;
+            let raw: Option<String> = tx
+                .query_row(
+                    "SELECT record_json
+                     FROM proxy_request_idempotency
+                     WHERE request_id = ?1",
+                    rusqlite::params![request_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            let Some(raw) = raw else {
+                tx.commit()?;
+                return Ok(false);
+            };
+            let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+            if record.state != ProxyRequestIdempotencyState::InFlight
+                || record.owner_token.as_deref() != Some(owner_token.as_str())
+            {
+                tx.commit()?;
+                return Ok(false);
+            }
+
+            record.state = ProxyRequestIdempotencyState::Completed;
+            record.owner_token = None;
+            record.lease_until_ms = None;
+            record.completed_at_ms = Some(now_ms);
+            record.updated_at_ms = now_ms;
+            record.expires_at_ms = expires_at_ms;
+            record.outcome = Some(outcome);
+            let record_json = serde_json::to_string(&record)?;
+            let updated = tx.execute(
+                "UPDATE proxy_request_idempotency
+                 SET state = ?2,
+                     owner_token = NULL,
+                     lease_until_ms = NULL,
+                     expires_at_ms = ?3,
+                     updated_at_ms = ?4,
+                     record_json = ?5
+                 WHERE request_id = ?1 AND owner_token = ?6",
+                rusqlite::params![
+                    request_id,
+                    proxy_request_idempotency_state_label(record.state),
+                    expires_at_ms_i64,
+                    now_ms_i64,
+                    record_json,
+                    owner_token,
+                ],
+            )?;
+            tx.commit()?;
+            Ok(updated > 0)
+        })
+        .await?
+    }
+
+    pub async fn release_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+    ) -> Result<bool, SqliteStoreError> {
+        let path = self.path.clone();
+        let request_id = request_id.to_string();
+        let owner_token = owner_token.to_string();
+
+        tokio::task::spawn_blocking(move || -> Result<bool, SqliteStoreError> {
+            let conn = open_connection(path)?;
+            init_schema(&conn)?;
+            let deleted = conn.execute(
+                "DELETE FROM proxy_request_idempotency
+                 WHERE request_id = ?1 AND state = ?2 AND owner_token = ?3",
+                rusqlite::params![
+                    request_id,
+                    proxy_request_idempotency_state_label(ProxyRequestIdempotencyState::InFlight),
+                    owner_token,
+                ],
+            )?;
+            Ok(deleted > 0)
+        })
+        .await?
+    }
 }
 
 fn init_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
@@ -1059,7 +1394,21 @@ fn init_schema(conn: &rusqlite::Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_audit_logs_ts_ms
             ON audit_logs(ts_ms);
         CREATE INDEX IF NOT EXISTS idx_audit_logs_kind_ts_ms
-            ON audit_logs(kind, ts_ms);",
+            ON audit_logs(kind, ts_ms);
+
+        CREATE TABLE IF NOT EXISTS proxy_request_idempotency (
+            request_id TEXT PRIMARY KEY NOT NULL,
+            state TEXT NOT NULL,
+            owner_token TEXT,
+            lease_until_ms INTEGER,
+            expires_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            record_json TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_proxy_request_idempotency_expires_at_ms
+            ON proxy_request_idempotency(expires_at_ms);
+        CREATE INDEX IF NOT EXISTS idx_proxy_request_idempotency_state_lease_until_ms
+            ON proxy_request_idempotency(state, lease_until_ms);",
     )?;
     Ok(())
 }
@@ -1148,6 +1497,36 @@ fn should_run_retention_reap(
             Ok(_) => return true,
             Err(actual) => observed = actual,
         }
+    }
+}
+
+fn proxy_request_idempotency_state_label(state: ProxyRequestIdempotencyState) -> &'static str {
+    match state {
+        ProxyRequestIdempotencyState::InFlight => "in_flight",
+        ProxyRequestIdempotencyState::Completed => "completed",
+    }
+}
+
+fn new_proxy_request_idempotency_record(
+    request_id: String,
+    fingerprint: ProxyRequestFingerprint,
+    fingerprint_key: String,
+    owner_token: String,
+    now_ms: u64,
+    lease_until_ms: u64,
+) -> ProxyRequestIdempotencyRecord {
+    ProxyRequestIdempotencyRecord {
+        request_id,
+        fingerprint,
+        fingerprint_key,
+        state: ProxyRequestIdempotencyState::InFlight,
+        owner_token: Some(owner_token),
+        started_at_ms: now_ms,
+        updated_at_ms: now_ms,
+        lease_until_ms: Some(lease_until_ms),
+        completed_at_ms: None,
+        expires_at_ms: lease_until_ms,
+        outcome: None,
     }
 }
 

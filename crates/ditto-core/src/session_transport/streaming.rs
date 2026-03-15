@@ -1,13 +1,13 @@
-#![cfg_attr(not(feature = "streaming"), allow(dead_code))]
+#![cfg_attr(not(feature = "cap-llm-streaming"), allow(dead_code))]
 
 use std::collections::VecDeque;
 
 use futures_util::stream::BoxStream;
 
 use crate::contracts::{StreamChunk, Warning};
-use crate::foundation::error::Result;
+use crate::error::Result;
 
-#[cfg_attr(not(feature = "streaming"), allow(dead_code))]
+#[cfg_attr(not(feature = "cap-llm-streaming"), allow(dead_code))]
 pub(crate) fn init_sse_stream(
     response: reqwest::Response,
     warnings: Vec<Warning>,

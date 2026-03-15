@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 use super::openai_like::OpenAiLikeClient;
 
 use crate::contracts::Warning;
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{Batch, BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Debug, Deserialize, Default)]

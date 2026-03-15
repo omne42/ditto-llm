@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: mirror `llms.txt` into `docs/src/llms.txt` so `mdbook build docs` publishes it at `/llms.txt`, and update `ditto-llms-txt` to refresh both outputs by default.
 - Gateway: add proxy cache size caps (`max_body_bytes` and `max_total_body_bytes`) and CLI flags (`--proxy-cache-max-body-bytes`, `--proxy-cache-max-total-body-bytes`).
 - Gateway: add optional YAML config support (rebuild with `--features gateway-config-yaml`) without making a YAML parser a default dependency.
+
+### Changed
+
+- Gateway/Security: fail-close proxy-compatible HTTP auth when no virtual keys are configured, restrict `include_tokens=true` and LiteLLM key secret export paths to secret-managing admin tokens, validate duplicate virtual-key tokens on control-plane mutations, and persist virtual keys as one-way `sha256:` hashes in state/store backends.
+- Gateway/Security: make MCP `/mcp*` and A2A `/a2a/*` endpoints fail-closed as well, add a dependency-aware `/ready` readiness probe (while keeping `/health` as liveness), and switch the optional Admin UI token cache from `localStorage` to `sessionStorage`.
 - Gateway: when built with `--features gateway-config-yaml`, allow `ditto-gateway` to read LiteLLM `proxy_config.yaml` / `proxy_server_config.yaml` and import them into a Ditto gateway config (via `model_list` + `general_settings.master_key`).
 - Gateway: when using Redis store, enforce global rpm/tpm limits via Redis atomic counters (multi-replica consistent).
 - Gateway: add optional project/user shared rate limits (`virtual_keys[].project_limits` / `virtual_keys[].user_limits`) for enterprise quotas (works with in-memory and Redis modes).
@@ -94,8 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Build: depend on `safe-fs-tools` via the external repo checkout (`../safe-fs-tools`) instead of a vendored copy.
 - Gateway: cap responses-shim streaming `tool_calls[].index` fan-out to a fixed slot limit (DoS hardening against oversized indexes) and remove per-event fallback-id cloning in SSE translation to reduce hot-path allocations.
 - Gateway: remove `router.default_backend` in favor of `router.default_backends` (weighted float `weight`).
-- Gateway: refactor `ditto-gateway` CLI parsing into `src/bin/ditto_gateway/cli.rs` (usage now documents the `--addr` alias; adds parser tests).
-- Gateway: refactor `ditto-gateway` binary composition to use real modules (`src/bin/ditto_gateway/mod.rs`) instead of `include!` (no behavior change; improves navigation/maintainability).
+- Gateway: refactor `ditto-gateway` CLI parsing into `crates/ditto-server/src/bin/ditto_gateway/cli.rs` (usage now documents the `--addr` alias; adds parser tests).
+- Gateway: refactor `ditto-gateway` binary composition to use real modules (`crates/ditto-server/src/bin/ditto_gateway/mod.rs`) instead of `include!` (no behavior change; improves navigation/maintainability).
 - Docs: align LiteLLM/AI SDK parity notes for observability (Prometheus already ships per-path/per-backend latency histograms) and document the Prometheus metrics contract.
 - Gateway: redact sensitive fields in JSON logs, audit payloads, and devtools JSONL by default via `observability.redaction`; proxy OTel span paths now drop query strings.
 - Docs: add “Superset Contract（兼容性口径）” page to define must/best-effort/non-goals and link it in the mdBook summary.
@@ -359,7 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `provider_options`: accept `openai_compatible` as an alias bucket for `openai-compatible`, and add `bedrock`/`vertex` buckets.
 - Format: rustfmt cleanup (no behavior changes).
 - Format: rustfmt cleanup (imports order).
-- Refactor gateway HTTP module: split `src/gateway/http.rs` into smaller include parts (core/proxy/admin/translation/proxy-backend) to reduce duplication and keep modules under the repo size limit.
+- Refactor gateway HTTP module: split `crates/ditto-server/src/gateway/http.rs` into smaller include parts (core/proxy/admin/translation/proxy-backend) to reduce duplication and keep modules under the repo size limit.
 - Refactor OpenAI-family providers: reuse shared `providers::openai_like` helpers across OpenAI and OpenAI-compatible adapters (embeddings/audio/images/moderations/batches).
 - Refactor OpenAI-family providers: centralize endpoint URL joining via `providers::openai_like::join_endpoint` to reduce adapter duplication.
 - Providers/Auth: centralize non-2xx HTTP status/body handling via `utils::http` helpers (`send_checked*`).

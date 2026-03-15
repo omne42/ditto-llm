@@ -47,7 +47,7 @@ async fn openai_models_list_merges_across_backends() {
             backend_config("a", upstream_a.base_url(), "Bearer sk-a"),
             backend_config("b", upstream_b.base_url(), "Bearer sk-b"),
         ],
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
             default_backends: vec![RouteBackend { backend: "a".to_string(), weight: 1.0 }],
             rules: Vec::new(),
@@ -55,6 +55,7 @@ async fn openai_models_list_merges_across_backends() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -64,6 +65,7 @@ async fn openai_models_list_merges_across_backends() {
     let request = Request::builder()
         .method("GET")
         .uri("/v1/models")
+        .header("authorization", "Bearer vk-1")
         .body(Body::empty())
         .unwrap();
 
@@ -129,7 +131,7 @@ async fn openai_models_list_skips_backends_with_oversized_responses() {
             backend_config("a", upstream_a.base_url(), "Bearer sk-a"),
             backend_config("b", upstream_b.base_url(), "Bearer sk-b"),
         ],
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
             default_backends: vec![RouteBackend { backend: "a".to_string(), weight: 1.0 }],
             rules: Vec::new(),
@@ -137,6 +139,7 @@ async fn openai_models_list_skips_backends_with_oversized_responses() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -146,6 +149,7 @@ async fn openai_models_list_skips_backends_with_oversized_responses() {
     let request = Request::builder()
         .method("GET")
         .uri("/v1/models")
+        .header("authorization", "Bearer vk-1")
         .body(Body::empty())
         .unwrap();
 

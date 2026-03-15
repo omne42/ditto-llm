@@ -1,4 +1,4 @@
-#![cfg(feature = "vertex")]
+#![cfg(feature = "provider-vertex")]
 
 use ditto_core::auth::OAuthClientCredentials;
 use ditto_core::contracts::{GenerateRequest, Message, Tool, ToolChoice};
@@ -13,7 +13,7 @@ fn approx_eq(actual: Option<f64>, expected: f64) -> bool {
 }
 
 #[tokio::test]
-async fn vertex_generate_maps_genai_request() -> ditto_core::foundation::error::Result<()> {
+async fn vertex_generate_maps_genai_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

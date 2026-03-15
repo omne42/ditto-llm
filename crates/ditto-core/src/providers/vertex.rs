@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use reqwest::Url;
 use serde::Deserialize;
@@ -13,11 +13,11 @@ use super::genai;
 use crate::auth::oauth::{OAuthClientCredentials, resolve_oauth_client_credentials};
 use crate::config::{Env, HttpAuth, ProviderConfig};
 use crate::contracts::StreamChunk;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::Usage;
 use crate::contracts::Warning;
 use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::provider_transport::{
     DEFAULT_HTTP_TIMEOUT, build_http_client, resolve_http_provider_config,
@@ -77,12 +77,12 @@ impl Vertex {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         let resolved = resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, config, None)?;
-        let base_url = resolved.required_base_url("provider base_url is missing")?;
-        let model = resolved.required_default_model("provider default_model is missing")?;
+        let base_url = resolved.required_base_url()?;
+        let model = resolved.required_default_model()?;
         let auth = config
             .auth
             .clone()
-            .ok_or_else(|| DittoError::InvalidResponse("vertex auth is missing".to_string()))?;
+            .ok_or_else(|| DittoError::provider_auth_missing("vertex"))?;
         let oauth = resolve_oauth_client_credentials(&auth, env)?;
 
         let mut out = Self::new(oauth, base_url, model)?;
@@ -98,8 +98,9 @@ impl Vertex {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "vertex model is not set".to_string(),
+        Err(DittoError::provider_model_missing(
+            "vertex",
+            "set request.model or Vertex::with_model",
         ))
     }
 
@@ -114,7 +115,7 @@ impl Vertex {
         format!("{base}/models/{model}:generateContent")
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn stream_url(&self, model: &str) -> String {
         if self.base_url.contains("{model}") {
             let replaced = self.base_url.replace("{model}", model);
@@ -139,9 +140,8 @@ impl Vertex {
     }
 
     fn build_url_with_query_and_alt(&self, base: &str, alt: Option<&str>) -> Result<String> {
-        let mut url = Url::parse(base).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid vertex base_url {base:?}: {err}"))
-        })?;
+        let mut url = Url::parse(base)
+            .map_err(|err| DittoError::provider_base_url_invalid("vertex", base, err))?;
         {
             let mut pairs = url.query_pairs_mut();
             if let Some(alt) = alt {
@@ -271,7 +271,7 @@ impl LanguageModel for Vertex {
         }
 
         if let Some(tools) = request.tools {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let decls = tools
                     .into_iter()
                     .map(|tool| genai::tool_to_google(tool, &mut warnings))
@@ -289,7 +289,7 @@ impl LanguageModel for Vertex {
         }
 
         if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 if let Some(tool_config) = genai::tool_config(Some(tool_choice)) {
                     body.insert("toolConfig".to_string(), tool_config);
                 }
@@ -347,15 +347,16 @@ impl LanguageModel for Vertex {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            Err(DittoError::builder_capability_feature_missing(
+                "vertex",
+                "streaming",
             ))
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?.to_string();
             let selected_provider_options =
@@ -444,7 +445,7 @@ impl LanguageModel for Vertex {
             }
 
             if let Some(tools) = request.tools {
-                if cfg!(feature = "tools") {
+                if cfg!(feature = "cap-llm-tools") {
                     let decls = tools
                         .into_iter()
                         .map(|tool| genai::tool_to_google(tool, &mut warnings))
@@ -457,7 +458,7 @@ impl LanguageModel for Vertex {
             }
 
             if let Some(tool_choice) = request.tool_choice.as_ref() {
-                if cfg!(feature = "tools") {
+                if cfg!(feature = "cap-llm-tools") {
                     if let Some(tool_config) = genai::tool_config(Some(tool_choice)) {
                         body.insert("toolConfig".to_string(), tool_config);
                     }

@@ -5,7 +5,7 @@ use crate::providers::openai_like;
 
 use crate::capabilities::ImageEditModel;
 use crate::config::{Env, ProviderConfig};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::types::{ImageEditRequest, ImageEditResponse};
 
 macro_rules! define_openai_like_image_edits {
@@ -14,7 +14,8 @@ macro_rules! define_openai_like_image_edits {
         provider = $provider:literal,
         default_keys = $default_keys:expr,
         from_config = $from_config:path,
-        missing_model_error = $missing_model_error:literal $(,)?
+        model_subject = $model_subject:literal,
+        model_hint = $model_hint:literal $(,)?
     ) => {
         #[derive(Clone)]
         pub struct $name {
@@ -57,8 +58,9 @@ macro_rules! define_openai_like_image_edits {
                 if !self.client.model.trim().is_empty() {
                     return Ok(self.client.model.as_str());
                 }
-                Err(DittoError::InvalidResponse(
-                    $missing_model_error.to_string(),
+                Err(DittoError::provider_model_missing(
+                    $model_subject,
+                    $model_hint,
                 ))
             }
         }
@@ -82,23 +84,24 @@ macro_rules! define_openai_like_image_edits {
     };
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 define_openai_like_image_edits!(
     OpenAIImageEdits,
     provider = "openai",
     default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
-    missing_model_error =
-        "openai image edit model is not set (set request.model or OpenAIImageEdits::with_model)",
+    model_subject = "openai image edit",
+    model_hint = "set request.model or OpenAIImageEdits::with_model",
 );
 
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 define_openai_like_image_edits!(
     OpenAICompatibleImageEdits,
     provider = "openai-compatible",
     default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
-    missing_model_error = "openai-compatible image edit model is not set (set request.model or OpenAICompatibleImageEdits::with_model)",
+    model_subject = "openai-compatible image edit",
+    model_hint = "set request.model or OpenAICompatibleImageEdits::with_model",
 );
 
 #[cfg(test)]
@@ -108,7 +111,7 @@ mod tests {
     use crate::types::{ImageEditUpload, ImageResponseFormat};
     use httpmock::{Method::POST, MockServer};
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     #[tokio::test]
     async fn edit_images_posts_multipart_and_parses_base64() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

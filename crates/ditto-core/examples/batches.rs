@@ -1,7 +1,7 @@
 #[cfg(feature = "batches")]
 use ditto_core::capabilities::BatchClient;
 #[cfg(feature = "batches")]
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 #[cfg(feature = "batches")]
 use ditto_core::providers::{OpenAICompatible, OpenAICompatibleBatches};
 #[cfg(feature = "batches")]
@@ -12,14 +12,14 @@ use ditto_core::types::BatchCreateRequest;
 async fn main() -> Result<()> {
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY")
         .or_else(|_| std::env::var("OPENAI_API_KEY"))
-        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_API_KEY".to_string()))?;
+        .map_err(|_| DittoError::invalid_response_text("missing OPENAI_API_KEY".to_string()))?;
 
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))
         .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
 
     let input_path = std::env::args().nth(1).ok_or_else(|| {
-        DittoError::InvalidResponse("usage: batches <requests.jsonl>".to_string())
+        DittoError::invalid_response_text("usage: batches <requests.jsonl>".to_string())
     })?;
 
     let bytes = std::fs::read(&input_path)?;

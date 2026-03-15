@@ -5,7 +5,7 @@ use super::openai_like;
 
 use crate::capabilities::BatchClient;
 use crate::config::{Env, ProviderConfig};
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{BatchCreateRequest, BatchListResponse, BatchResponse};
 
 #[derive(Clone)]

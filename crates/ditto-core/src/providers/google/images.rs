@@ -1,4 +1,4 @@
-#[cfg(feature = "images")]
+#[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
 mod google_images_impl {
     use async_trait::async_trait;
     use serde::Deserialize;
@@ -12,7 +12,7 @@ mod google_images_impl {
     use crate::types::{
         ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat,
     };
-    use crate::foundation::error::{DittoError, Result};
+    use crate::error::{DittoError, Result};
 
     #[derive(Clone)]
     pub struct GoogleImages {
@@ -98,9 +98,9 @@ mod google_images_impl {
             if !self.client.default_model.trim().is_empty() {
                 return Ok(self.client.default_model.as_str());
             }
-            Err(DittoError::InvalidResponse(
-                "google image model is not set (set request.model or GoogleImages::with_model)"
-                    .to_string(),
+            Err(DittoError::provider_model_missing(
+                "google image",
+                "set request.model or GoogleImages::with_model",
             ))
         }
 
@@ -119,7 +119,7 @@ mod google_images_impl {
             return Ok(GoogleImageProviderOptions::default());
         };
         let Some(mut obj) = value.as_object().cloned() else {
-            return Err(DittoError::InvalidResponse(
+            return Err(DittoError::invalid_response_text(
                 "google image provider_options must be a JSON object".to_string(),
             ));
         };
@@ -141,7 +141,7 @@ mod google_images_impl {
         }
 
         serde_json::from_value(Value::Object(obj)).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid google image provider_options: {err}"))
+            DittoError::invalid_response_text(format!("invalid google image provider_options: {err}"))
         })
     }
 
@@ -178,7 +178,7 @@ mod google_images_impl {
 
     fn number_from_f32(value: f32, field: &str) -> Result<Number> {
         Number::from_f64(value as f64).ok_or_else(|| {
-            DittoError::InvalidResponse(format!(
+            DittoError::invalid_response_text(format!(
                 "invalid google image provider_options.{field}: not a finite number"
             ))
         })
@@ -265,7 +265,7 @@ mod google_images_impl {
                     .entry("outputOptions".to_string())
                     .or_insert_with(|| Value::Object(Map::new()));
                 let Value::Object(output_options) = output_options else {
-                    return Err(DittoError::InvalidResponse(
+                    return Err(DittoError::invalid_response_text(
                         "google image outputOptions must be an object".to_string(),
                     ));
                 };
@@ -429,5 +429,5 @@ mod google_images_impl {
     }
 }
 
-#[cfg(feature = "images")]
+#[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
 pub use google_images_impl::GoogleImages;

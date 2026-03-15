@@ -6,7 +6,7 @@ use crate::contracts::{
     ContentPart, FileSource, FinishReason, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 const GOOGLE_TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
 

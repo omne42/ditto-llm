@@ -7,7 +7,7 @@ impl crate::capabilities::file::FileClient for OpenAICompatible {
     async fn upload_file_with_purpose(
         &self,
         request: crate::capabilities::file::FileUploadRequest,
-    ) -> crate::foundation::error::Result<String> {
+    ) -> crate::error::Result<String> {
         self.upload_file_with_purpose(
             request.filename,
             request.bytes,
@@ -17,28 +17,28 @@ impl crate::capabilities::file::FileClient for OpenAICompatible {
         .await
     }
 
-    async fn list_files(&self) -> crate::foundation::error::Result<Vec<crate::capabilities::file::FileObject>> {
+    async fn list_files(&self) -> crate::error::Result<Vec<crate::capabilities::file::FileObject>> {
         self.list_files().await
     }
 
     async fn retrieve_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileObject> {
+    ) -> crate::error::Result<crate::capabilities::file::FileObject> {
         self.retrieve_file(file_id).await
     }
 
     async fn delete_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileDeleteResponse> {
+    ) -> crate::error::Result<crate::capabilities::file::FileDeleteResponse> {
         self.delete_file(file_id).await
     }
 
     async fn download_file_content(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileContent> {
+    ) -> crate::error::Result<crate::capabilities::file::FileContent> {
         self.download_file_content(file_id).await
     }
 }

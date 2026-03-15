@@ -31,6 +31,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
+  /ready:
+    get:
+      operationId: ready
+      summary: Gateway readiness probe
+      security: []
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
   /v1/chat/completions:
     post:
       operationId: proxyChatCompletions
@@ -295,6 +314,30 @@ components:
         status:
           type: string
           enum: [ok]
+
+    ReadinessCheck:
+      type: object
+      required: [name, status]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [ok, error]
+        detail:
+          type: string
+
+    ReadinessResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadinessCheck'
 
     ErrorDetail:
       type: object

@@ -166,7 +166,19 @@ Backends are configured in `gateway.json` (OpenAI-compatible upstreams + injecte
       "query_params": {}
     }
   ],
-  "virtual_keys": [],
+  "virtual_keys": [
+    {
+      "id": "local-dev",
+      "token": "${DITTO_VIRTUAL_KEY}",
+      "enabled": true,
+      "limits": {},
+      "budget": {},
+      "cache": {},
+      "guardrails": {},
+      "passthrough": {},
+      "route": null
+    }
+  ],
   "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
@@ -190,7 +202,19 @@ Translation backends (feature `gateway-translation`) can be configured with `pro
       }
     }
   ],
-  "virtual_keys": [],
+  "virtual_keys": [
+    {
+      "id": "local-dev",
+      "token": "${DITTO_VIRTUAL_KEY}",
+      "enabled": true,
+      "limits": {},
+      "budget": {},
+      "cache": {},
+      "guardrails": {},
+      "passthrough": {},
+      "route": null
+    }
+  ],
   "router": { "default_backends": [{ "backend": "anthropic", "weight": 1.0 }], "rules": [] }
 }
 ```
@@ -205,29 +229,34 @@ Routing (optional):
 - `router.rules[].backends`: per-model-prefix weighted backends (falls back to `router.default_backends` when empty)
 - If multiple backends are selected, the OpenAI-compatible proxy will fall back to the next backend on network errors.
 - With `--features gateway-routing-advanced`, proxying can also use typed retry/fallback policies for status/network/timeout failures, circuit breaker controls, and active health checks (`--proxy-retry*` / `--proxy-fallback-status-codes` / `--proxy-network-error-action` / `--proxy-timeout-error-action` / `--proxy-circuit-breaker*` / `--proxy-cb-failure-status-codes` / `--proxy-health-check*`).
+- For non-safe HTTP methods, Ditto only continues to the next backend when the client explicitly supplies `x-request-id`; otherwise a safety guard stops cross-backend retry/fallback to reduce duplicate side effects.
+- That guard is not a distributed dedup store. If you need true end-to-end idempotency, enforce it in the upstream application or add request-result dedup persistence at the gateway boundary.
 
 Endpoints:
 
 - OpenAI-compatible proxy (passthrough): `ANY /v1/*` (e.g. `POST /v1/responses`, `POST /v1/chat/completions`, `GET /v1/models`).
   - LiteLLM-style aliases without a `/v1` prefix are accepted (e.g. `/chat/completions`, `/embeddings`, `/moderations`, `/files/*`, `/batches/*`, `/models/*`, `/responses/*`).
-  - If `virtual_keys` is non-empty, requests must include `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key` / `x-api-key`).
-  - If `virtual_keys` is non-empty, the client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
+  - OpenAI-compatible `/v1/*`, MCP `/mcp*`, and A2A `/a2a/*` surfaces are fail-closed: requests must include a configured virtual key via `Authorization: Bearer <virtual_key>` (or `x-ditto-virtual-key` / `x-api-key`).
+  - The client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
+  - An empty `virtual_keys` set means there are no valid client credentials yet, so those surfaces will return `401` until keys are provisioned.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
 - OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*` (create/list/retrieve/delete/content/remix), `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
+- `GET /ready`
 - `GET /metrics`
-- `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Redacts tokens unless `?include_tokens=true`.
-- `GET /admin/config/version`, `GET /admin/config/versions`, and `GET /admin/config/versions/:version_id` (current/history/detail for control-plane virtual-key config versions; detail supports `?include_tokens=true`).
-- `GET /admin/config/diff` (read-only or write admin token; compares two config versions via `from_version_id` + `to_version_id`; supports `include_tokens`).
-- `GET /admin/config/export` (read-only or write admin token; exports current config by default, or a specific version via `version_id`; supports `include_tokens`).
+- `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Defaults to redacted tokens; `?include_tokens=true` requires a write or tenant-write admin token.
+- `GET /admin/config/version`, `GET /admin/config/versions`, and `GET /admin/config/versions/:version_id` (current/history/detail for control-plane virtual-key config versions; detail supports `?include_tokens=true` for secret-managing admins only).
+- `GET /admin/config/diff` (read-only or write admin token; compares two config versions via `from_version_id` + `to_version_id`; `include_tokens` requires secret-managing admin access).
+- `GET /admin/config/export` (read-only or write admin token; exports current config by default, or a specific version via `version_id`; `include_tokens` requires secret-managing admin access).
 - `POST /admin/config/validate` (read-only or write admin token; validates `virtual_keys` plus optional `router` payloads with optional expected hashes, without mutating runtime state).
 - `PUT /admin/config/router` (write admin token required; updates router config with backend-reference validation and creates a new config version; supports `dry_run`).
-- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]`.
-- A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured).
+- MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]` (requires a valid virtual key).
+- A2A agent gateway: `GET /a2a/:agent_id/.well-known/agent-card.json` and `POST /a2a/*` JSON-RPC proxying (requires `a2a_agents` configured and a valid virtual key).
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
 - `POST /admin/config/rollback` (requires the write admin token; restores virtual keys and router to a previous config version; supports `dry_run`).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
+  - `/key/list` returns key aliases by default; `include_tokens=true` requires a write or tenant-write admin token.
   - `/key/info` accepts `?key=...` (admin query) or defaults to the `Authorization: Bearer <virtual_key>` token when `?key` is omitted (self lookup).
 - `POST /admin/proxy_cache/purge` (requires the write admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
 - `GET /admin/backends` and `POST /admin/backends/:name/reset` (reset requires the write admin token and `--features gateway-routing-advanced`).
@@ -242,11 +271,11 @@ CLI options:
 - `--admin-read-token-env ENV` loads the read-only admin token from env (works with `--dotenv`).
 - `--backend name=url` adds/overrides a backend for `POST /v1/gateway` (the backend is a URL that accepts `GatewayRequest` JSON and returns `GatewayResponse` JSON).
 - `--upstream name=base_url` adds/overrides an OpenAI-compatible upstream backend (in addition to `gateway.json`).
-- `--state PATH` enables persistence for admin config mutations (`virtual_keys` + `router` in `GatewayStateFile`; loaded on startup; created from `gateway.json` when missing).
-- `--sqlite PATH` enables sqlite persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-sqlite`; loaded on startup).
-- `--pg URL` / `--pg-env ENV` enables postgres persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-postgres`; loaded on startup).
-- `--mysql URL` / `--mysql-env ENV` enables mysql persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-mysql`; loaded on startup).
-- `--redis URL` enables redis persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-redis`).
+- `--state PATH` enables persistence for admin config mutations (`virtual_keys` + `router` in `GatewayStateFile`; loaded on startup; created from `gateway.json` when missing). Virtual-key tokens are written as one-way `sha256:` hashes.
+- `--sqlite PATH` enables sqlite persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-sqlite`; loaded on startup). Virtual-key tokens are written as one-way `sha256:` hashes.
+- `--pg URL` / `--pg-env ENV` enables postgres persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-postgres`; loaded on startup). Virtual-key tokens are written as one-way `sha256:` hashes.
+- `--mysql URL` / `--mysql-env ENV` enables mysql persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-mysql`; loaded on startup). Virtual-key tokens are written as one-way `sha256:` hashes.
+- `--redis URL` enables redis persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-redis`). Virtual-key tokens are written as one-way `sha256:` hashes.
 - `--redis-env ENV` loads the redis URL from env (works with `--dotenv`; requires `--features gateway-store-redis`).
 - `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis` and `--redis`/`--redis-env`).
 - `--audit-retention-secs SECS` sets audit retention for sqlite/pg/mysql/redis stores (`0` disables retention; default is 30 days when any persistent store is configured).
@@ -263,6 +292,7 @@ CLI options:
 - `--proxy-fallback-status-codes CODES` falls back to the next backend when a response status matches (comma-separated; works even when retry is disabled).
 - `--proxy-network-error-action ACTION` controls what to do on transport failures (`none`, `fallback`, `retry`; default: `fallback`).
 - `--proxy-timeout-error-action ACTION` controls what to do on backend timeouts (`none`, `fallback`, `retry`; default: `fallback`).
+- For non-safe methods (`POST`/`PUT`/`PATCH`/`DELETE` and similar), cross-backend retry/fallback is guarded unless the client provided `x-request-id`; when blocked, Ditto emits `proxy.request_safety_guard` in JSON/devtools logs.
 - `--proxy-retry-max-attempts N` sets max retry attempts (implies `--proxy-retry`).
 - `--proxy-circuit-breaker` enables a simple circuit breaker (requires `--features gateway-routing-advanced`).
 - `--proxy-cb-failure-threshold N` sets circuit breaker failure threshold (implies `--proxy-circuit-breaker`).

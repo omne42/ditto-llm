@@ -1,6 +1,6 @@
 use ditto_core::config::ProviderConfig;
 use ditto_core::contracts::{CapabilityKind, OperationKind, RuntimeRouteRequest};
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::DittoError;
 use ditto_core::runtime::resolve_builtin_runtime_route;
 
 #[test]
@@ -22,7 +22,7 @@ fn runtime_route_rejects_non_llm_capability_when_embeddings_are_disabled() {
         .with_required_capability(CapabilityKind::EMBEDDING),
     );
 
-    if cfg!(feature = "embeddings") {
+    if cfg!(feature = "cap-embedding") {
         assert!(
             result.is_ok(),
             "embedding-enabled builds should expose embedding routes"
@@ -32,7 +32,7 @@ fn runtime_route_rejects_non_llm_capability_when_embeddings_are_disabled() {
         assert!(matches!(
             err,
             DittoError::ProviderResolution(
-                ditto_core::foundation::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported { .. }
+                ditto_core::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported { .. }
             )
         ));
     }

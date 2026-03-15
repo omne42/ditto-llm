@@ -49,6 +49,7 @@ Ditto Gateway 提供一个 **LiteLLM-like** 的 MCP HTTP JSON-RPC proxy，并把
 
 ```bash
 curl -sS http://127.0.0.1:8080/mcp/tools/list \
+  -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" \
   -H 'content-type: application/json' \
   -d '{"servers":["local"]}'
 ```
@@ -57,6 +58,7 @@ curl -sS http://127.0.0.1:8080/mcp/tools/list \
 
 ```bash
 curl -sS http://127.0.0.1:8080/mcp \
+  -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" \
   -H 'content-type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
@@ -69,6 +71,7 @@ curl -sS http://127.0.0.1:8080/mcp \
 
 ```bash
 curl -sS http://127.0.0.1:8080/mcp/tools/call \
+  -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" \
   -H 'content-type: application/json' \
   -d '{"server_id":"local","name":"hello","arguments":{"who":"world"}}'
 ```
@@ -160,9 +163,9 @@ Ditto 会做一个最小 tool loop（对齐 LiteLLM 的默认行为）：
 
 ## 5) 鉴权（Virtual Keys）
 
-如果你的 `gateway.json` 里配置了 `virtual_keys`（即非空），那么：
+`/mcp*` 端点始终需要有效 virtual key：
 
-- `/mcp*` 端点同样需要 virtual key
+- 如果 `virtual_keys` 为空，Ditto 不会退化成匿名 MCP relay；而是直接返回 `401`。
 - 兼容以下 header（优先级从高到低）：
   1) `x-litellm-api-key`（支持 `Bearer ...` 前缀）
   2) `Authorization: Bearer ...`

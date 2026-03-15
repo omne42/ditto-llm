@@ -7,6 +7,7 @@ pub mod budget;
 #[doc(hidden)]
 pub mod cache;
 pub mod config;
+pub mod contracts;
 #[cfg(feature = "gateway-costing")]
 pub mod costing;
 pub mod domain;
@@ -70,6 +71,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use self::config::normalize_virtual_key_token_key;
 use domain::RateLimiter;
 use domain::{BudgetTracker, ResponseCache, Router};
 use observability::{Observability, ObservabilitySnapshot};
@@ -111,7 +113,10 @@ pub use config::{
 pub use costing::{PricingTable, PricingTableError};
 pub use domain::{
     AuditLogRecord, BudgetConfig, BudgetLedgerRecord, CacheConfig, CostLedgerRecord,
-    GuardrailsConfig, LimitsConfig, RouteBackend, RouteRule, RouterConfig,
+    GuardrailsConfig, LimitsConfig, ProxyRequestFingerprint, ProxyRequestIdempotencyBeginOutcome,
+    ProxyRequestIdempotencyRecord, ProxyRequestIdempotencyState, ProxyRequestIdempotencyStore,
+    ProxyRequestIdempotencyStoreError, ProxyRequestReplayError, ProxyRequestReplayOutcome,
+    ProxyRequestReplayResponse, RouteBackend, RouteRule, RouterConfig, StoredHttpHeader,
 };
 pub use passthrough::PassthroughConfig;
 #[cfg(feature = "gateway-routing-advanced")]
@@ -329,6 +334,7 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
+            i18n: Default::default(),
         };
         let gateway = Gateway::new(config);
         assert!(gateway.virtual_key_by_token("vk-old").is_some());
@@ -359,6 +365,7 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
+            i18n: Default::default(),
         };
         let mut gateway = Gateway::new(config);
         gateway.register_backend("primary", TestBackend);
@@ -408,6 +415,7 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
+            i18n: Default::default(),
         };
         let mut gateway = Gateway::new(config);
         gateway.register_backend("primary", TestBackend);
@@ -570,16 +578,17 @@ impl GatewayControlPlane {
     }
 
     fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        if let Some(index) = self.virtual_key_token_index.get(token).copied()
+        if let Some(token_key) = normalize_virtual_key_token_key(token)
+            && let Some(index) = self.virtual_key_token_index.get(&token_key).copied()
             && let Some(key) = self.config.virtual_keys.get(index)
-            && key.token == token
+            && key.matches_token(token)
         {
             return Some(key);
         }
         self.config
             .virtual_keys
             .iter()
-            .find(|key| key.token == token)
+            .find(|key| key.matches_token(token))
     }
 
     fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
@@ -613,9 +622,9 @@ impl GatewayControlPlane {
     fn rebuild_virtual_key_token_index(&mut self) {
         self.virtual_key_token_index.clear();
         for (idx, key) in self.config.virtual_keys.iter().enumerate() {
-            self.virtual_key_token_index
-                .entry(key.token.clone())
-                .or_insert(idx);
+            if let Some(token_key) = key.token_lookup_key() {
+                self.virtual_key_token_index.entry(token_key).or_insert(idx);
+            }
         }
     }
 }
@@ -1128,6 +1137,8 @@ impl Gateway {
 
 impl GatewayConfig {
     pub fn virtual_key(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        self.virtual_keys.iter().find(|key| key.token == token)
+        self.virtual_keys
+            .iter()
+            .find(|key| key.matches_token(token))
     }
 }

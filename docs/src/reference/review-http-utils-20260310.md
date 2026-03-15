@@ -1,8 +1,8 @@
-# 代码审查：`src/utils/http.rs`（2026-03-10）
+# 代码审查：`crates/ditto-core/src/provider_transport/http.rs`（2026-03-10）
 
 ## 范围
 
-- 目标文件：`src/utils/http.rs`
+- 目标文件：`crates/ditto-core/src/provider_transport/http.rs`
 - 审查重点：correctness、资源使用、helper API 设计
 
 ## 主要问题
@@ -13,9 +13,9 @@
 
 结果是多个调用点被迫先 `response.headers().clone()`，再把 `response` move 进去：
 
-- `src/providers/openai_audio_common.rs`
-- `src/providers/openai_like.rs`
-- `src/providers/openai_videos_common.rs`
+- `crates/ditto-core/src/providers/openai_audio_common.rs`
+- `crates/ditto-core/src/providers/openai_like.rs`
+- `crates/ditto-core/src/providers/openai_videos_common.rs`
 
 这不是调用方的问题，是 helper 签名把调用方逼成了低质量代码。
 
@@ -37,7 +37,7 @@
 
 - `response_bytes_truncated`
 - `read_reqwest_body_bytes_bounded_with_content_length`
-- `gateway/transport/http/proxy_bounded_body.rs`
+- `crates/ditto-server/src/gateway/transport/http/proxy_bounded_body.rs`
 
 继续保留这三套逻辑，只会让不同调用方拥有不同的超限语义。
 

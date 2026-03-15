@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::Path;
 
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -40,24 +43,64 @@ impl GatewayStateFile {
             }
         }
 
-        let payload = serde_json::to_vec_pretty(self).map_err(GatewayStateFileError::Parse)?;
+        let payload = serde_json::to_vec_pretty(&GatewayStateFile {
+            virtual_keys: self
+                .virtual_keys
+                .iter()
+                .map(VirtualKeyConfig::sanitized_for_persistence)
+                .collect(),
+            router: self.router.clone(),
+        })
+        .map_err(GatewayStateFileError::Parse)?;
         let tmp_path = path.with_extension("tmp");
 
-        if fs::write(&tmp_path, payload).is_err() {
-            let payload = serde_json::to_vec_pretty(self).map_err(GatewayStateFileError::Parse)?;
-            fs::write(path, payload).map_err(GatewayStateFileError::Write)?;
+        if write_restricted_file(&tmp_path, &payload).is_err() {
+            write_restricted_file(path, &payload).map_err(GatewayStateFileError::Write)?;
             return Ok(());
         }
 
         match fs::rename(&tmp_path, path) {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                set_restricted_permissions(path).map_err(GatewayStateFileError::Write)?;
+                Ok(())
+            }
             Err(_) => {
-                let payload =
-                    serde_json::to_vec_pretty(self).map_err(GatewayStateFileError::Parse)?;
-                fs::write(path, payload).map_err(GatewayStateFileError::Write)?;
+                write_restricted_file(path, &payload).map_err(GatewayStateFileError::Write)?;
                 let _ = fs::remove_file(&tmp_path);
                 Ok(())
             }
         }
     }
+}
+
+fn write_restricted_file(path: &Path, payload: &[u8]) -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        use std::io::Write as _;
+
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .mode(0o600)
+            .open(path)?;
+        file.write_all(payload)?;
+        file.sync_all()?;
+        return Ok(());
+    }
+
+    #[cfg(not(unix))]
+    {
+        fs::write(path, payload)
+    }
+}
+
+fn set_restricted_permissions(path: &Path) -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o600);
+        fs::set_permissions(path, permissions)?;
+    }
+
+    Ok(())
 }

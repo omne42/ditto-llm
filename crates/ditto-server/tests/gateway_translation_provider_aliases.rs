@@ -11,8 +11,8 @@ use ditto_core::runtime::{
 };
 
 #[tokio::test]
-async fn generic_openai_compatible_provider_aliases_build_models()
--> ditto_core::foundation::error::Result<()> {
+async fn generic_openai_compatible_provider_aliases_build_models() -> ditto_core::error::Result<()>
+{
     let env = Env::default();
     let config = ProviderConfig::default();
 

@@ -12,13 +12,13 @@ use ditto_core::agent::{
 use ditto_core::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool,
 };
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 
 fn lock_or_err<'a, T>(mutex: &'a Mutex<T>, context: &str) -> Result<MutexGuard<'a, T>> {
     mutex
         .lock()
-        .map_err(|_| DittoError::InvalidResponse(format!("{context} lock poisoned")))
+        .map_err(|_| DittoError::invalid_response_text(format!("{context} lock poisoned")))
 }
 
 #[derive(Clone)]
@@ -54,12 +54,12 @@ impl LanguageModel for StubModel {
         lock_or_err(&self.requests, "stub model requests")?.push(request);
         let mut responses = lock_or_err(&self.responses, "stub model responses")?;
         responses.pop_front().ok_or_else(|| {
-            DittoError::InvalidResponse("stub model has no responses left".to_string())
+            DittoError::invalid_response_text("stub model has no responses left".to_string())
         })
     }
 
     async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
-        Err(DittoError::InvalidResponse(
+        Err(DittoError::invalid_response_text(
             "stub model does not support stream".to_string(),
         ))
     }
@@ -188,7 +188,7 @@ async fn tool_loop_executes_tools() -> Result<()> {
             assert_eq!(*is_error, None);
         }
         _ => {
-            return Err(DittoError::InvalidResponse(
+            return Err(DittoError::invalid_response_text(
                 "expected tool result content".to_string(),
             ));
         }
@@ -219,7 +219,7 @@ async fn approval_denied_skips_executor() -> Result<()> {
 
     let denied = outcome.messages.iter().find(|m| m.role == Role::Tool);
     let Some(denied) = denied else {
-        return Err(DittoError::InvalidResponse(
+        return Err(DittoError::invalid_response_text(
             "missing denied tool result message".to_string(),
         ));
     };
@@ -234,7 +234,7 @@ async fn approval_denied_skips_executor() -> Result<()> {
             assert_eq!(*is_error, Some(true));
         }
         _ => {
-            return Err(DittoError::InvalidResponse(
+            return Err(DittoError::invalid_response_text(
                 "expected tool result content".to_string(),
             ));
         }

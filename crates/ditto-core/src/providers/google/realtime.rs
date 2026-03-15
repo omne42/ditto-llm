@@ -1,4 +1,4 @@
-#[cfg(feature = "realtime")]
+#[cfg(feature = "cap-realtime")]
 mod google_realtime_impl {
     use std::collections::BTreeMap;
 
@@ -10,7 +10,7 @@ mod google_realtime_impl {
         RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
     };
     use crate::config::{Env, ProviderConfig, RequestAuth};
-    use crate::foundation::error::{DittoError, Result};
+    use crate::error::{DittoError, Result};
 
     #[derive(Clone)]
     pub struct GoogleRealtime {
@@ -56,19 +56,20 @@ mod google_realtime_impl {
             if !self.client.default_model.trim().is_empty() {
                 return Ok(self.client.default_model.as_str());
             }
-            Err(DittoError::InvalidResponse(
-                "google realtime model is not set (set request.model or GoogleRealtime::with_model)"
-                    .to_string(),
+            Err(DittoError::provider_model_missing(
+                "google realtime",
+                "set request.model or GoogleRealtime::with_model",
             ))
         }
 
         fn websocket_root_and_version(&self) -> Result<(String, String)> {
             let websocket_base = crate::session_transport::to_websocket_base_url(&self.client.base_url);
             let mut url = Url::parse(&websocket_base).map_err(|err| {
-                DittoError::InvalidResponse(format!(
-                    "invalid google realtime base_url {:?}: {err}",
-                    self.client.base_url
-                ))
+                DittoError::provider_base_url_invalid(
+                    "google realtime",
+                    self.client.base_url.as_str(),
+                    err,
+                )
             })?;
             let mut segments = url
                 .path_segments()
@@ -125,7 +126,7 @@ mod google_realtime_impl {
                 match auth {
                     RequestAuth::Http(http) => {
                         let value = http.value.to_str().map_err(|err| {
-                            DittoError::InvalidResponse(format!(
+                            DittoError::invalid_response_text(format!(
                                 "invalid google realtime auth header value for {}: {err}",
                                 http.header.as_str()
                             ))
@@ -142,7 +143,7 @@ mod google_realtime_impl {
                 "{root}/ws/google.ai.generativelanguage.{version}.GenerativeService.BidiGenerateContent"
             ))
             .map_err(|err| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "invalid google realtime websocket url root={root:?} version={version:?}: {err}"
                 ))
             })?;
@@ -207,5 +208,5 @@ mod google_realtime_impl {
     }
 }
 
-#[cfg(feature = "realtime")]
+#[cfg(feature = "cap-realtime")]
 pub use google_realtime_impl::GoogleRealtime;

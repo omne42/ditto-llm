@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::foundation::secrets::SecretEnvironment;
+use ::secret::SecretEnvironment;
 
 #[derive(Clone, Default)]
 pub struct Env {

@@ -134,7 +134,7 @@ fn google_catalog_runtime_spec_matches_enabled_capabilities() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_llm() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_google_llm() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_language_model(
         "google",
         &google_config("gemini-3.1-pro"),
@@ -153,8 +153,7 @@ async fn gateway_builder_constructs_google_llm() -> ditto_core::foundation::erro
     feature = "cap-embedding"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_embeddings() -> ditto_core::foundation::error::Result<()>
-{
+async fn gateway_builder_constructs_google_embeddings() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_embedding_model(
         "google",
         &google_config("gemini-embedding"),
@@ -174,8 +173,7 @@ async fn gateway_builder_constructs_google_embeddings() -> ditto_core::foundatio
     feature = "cap-image-generation"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_image_generation()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_google_image_generation() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_image_generation_model(
         "google",
         &google_config("imagen-4"),
@@ -195,8 +193,7 @@ async fn gateway_builder_constructs_google_image_generation()
     feature = "videos"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_video_generation()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_google_video_generation() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_video_generation_model(
         "google",
         &google_config("veo-2.0-generate-001"),
@@ -216,7 +213,7 @@ async fn gateway_builder_constructs_google_video_generation()
     feature = "cap-realtime"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_google_realtime() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_google_realtime() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_realtime_session_model(
         "google",
         &google_config("gemini-2.5-flash-live"),

@@ -1,116 +1,143 @@
-#[cfg(feature = "anthropic")]
+#[cfg(feature = "provider-anthropic")]
 pub mod anthropic;
-#[cfg(feature = "bedrock")]
+#[cfg(feature = "provider-bedrock")]
 pub mod bedrock;
-#[cfg(feature = "cohere")]
+#[cfg(feature = "provider-cohere")]
 pub mod cohere;
-#[cfg(any(feature = "google", feature = "vertex"))]
+#[cfg(any(feature = "provider-google", feature = "provider-vertex"))]
 mod genai;
-#[cfg(feature = "google")]
+#[cfg(feature = "provider-google")]
 pub mod google;
-#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 pub mod openai;
 mod openai_compat_profile;
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 pub mod openai_compatible;
-#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai-compatible"
+))]
 pub mod openai_compatible_audio;
-#[cfg(all(feature = "batches", feature = "openai-compatible"))]
+#[cfg(all(feature = "cap-batch", feature = "provider-openai-compatible"))]
 pub mod openai_compatible_batches;
-#[cfg(all(feature = "images", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai-compatible"
+))]
 pub mod openai_compatible_images;
-#[cfg(all(feature = "moderations", feature = "openai-compatible"))]
+#[cfg(all(feature = "cap-moderation", feature = "provider-openai-compatible"))]
 pub mod openai_compatible_moderations;
-#[cfg(feature = "vertex")]
+#[cfg(feature = "provider-vertex")]
 pub mod vertex;
 
 #[cfg(all(
-    feature = "audio",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod openai_audio_common;
 #[cfg(all(
-    feature = "batches",
-    any(feature = "openai", feature = "openai-compatible")
+    feature = "cap-batch",
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod openai_batches_common;
-#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 mod openai_chat_completions_core;
 #[cfg(all(
-    feature = "embeddings",
-    any(feature = "openai", feature = "openai-compatible")
+    feature = "cap-embedding",
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod openai_embeddings_common;
 #[cfg(all(
-    feature = "images",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod openai_images_common;
-#[cfg(any(feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 mod openai_like;
 #[cfg(all(
-    feature = "moderations",
-    any(feature = "openai", feature = "openai-compatible")
+    feature = "cap-moderation",
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod openai_moderations_common;
-#[cfg(all(feature = "videos", feature = "openai"))]
+#[cfg(all(feature = "cap-video-generation", feature = "provider-openai"))]
 mod openai_videos_common;
 
-#[cfg(feature = "anthropic")]
+#[cfg(feature = "provider-anthropic")]
 pub use anthropic::Anthropic;
-#[cfg(feature = "bedrock")]
+#[cfg(feature = "provider-bedrock")]
 pub use bedrock::Bedrock;
-#[cfg(feature = "cohere")]
+#[cfg(feature = "provider-cohere")]
 pub use cohere::Cohere;
-#[cfg(all(feature = "cohere", feature = "embeddings"))]
+#[cfg(all(feature = "provider-cohere", feature = "cap-embedding"))]
 pub use cohere::CohereEmbeddings;
-#[cfg(all(feature = "cohere", feature = "rerank"))]
+#[cfg(all(feature = "provider-cohere", feature = "cap-rerank"))]
 pub use cohere::CohereRerank;
-#[cfg(feature = "google")]
+#[cfg(feature = "provider-google")]
 pub use google::Google;
-#[cfg(all(feature = "google", feature = "embeddings"))]
+#[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
 pub use google::GoogleEmbeddings;
-#[cfg(all(feature = "google", feature = "images"))]
+#[cfg(all(
+    feature = "provider-google",
+    any(feature = "cap-image-generation", feature = "cap-image-edit")
+))]
 pub use google::GoogleImages;
-#[cfg(all(feature = "google", feature = "realtime"))]
+#[cfg(all(feature = "provider-google", feature = "cap-realtime"))]
 pub use google::GoogleRealtime;
-#[cfg(all(feature = "google", feature = "videos"))]
+#[cfg(all(feature = "provider-google", feature = "cap-video-generation"))]
 pub use google::GoogleVideos;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub use openai::OpenAI;
-#[cfg(all(feature = "batches", feature = "openai"))]
+#[cfg(all(feature = "cap-batch", feature = "provider-openai"))]
 pub use openai::OpenAIBatches;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub use openai::OpenAIChatCompletions;
-#[cfg(all(feature = "images", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai-compatible"
+))]
 pub use openai::OpenAICompatibleImageEdits;
-#[cfg(all(feature = "openai", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-embedding"))]
 pub use openai::OpenAIEmbeddings;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai"
+))]
 pub use openai::OpenAIImageEdits;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai"
+))]
 pub use openai::OpenAIImages;
-#[cfg(all(feature = "moderations", feature = "openai"))]
+#[cfg(all(feature = "cap-moderation", feature = "provider-openai"))]
 pub use openai::OpenAIModerations;
-#[cfg(all(feature = "realtime", feature = "openai"))]
+#[cfg(all(feature = "cap-realtime", feature = "provider-openai"))]
 pub use openai::OpenAIRealtime;
-#[cfg(all(feature = "videos", feature = "openai"))]
+#[cfg(feature = "provider-openai")]
+pub use openai::OpenAITextModel;
+#[cfg(all(feature = "cap-video-generation", feature = "provider-openai"))]
 pub use openai::OpenAIVideos;
-#[cfg(all(feature = "audio", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai"
+))]
 pub use openai::{OpenAIAudioTranscription, OpenAISpeech};
-#[cfg(feature = "openai")]
-pub use openai::{OpenAICompletionsLegacy, OpenAITextModel};
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 pub use openai_compatible::OpenAICompatible;
-#[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai-compatible", feature = "cap-embedding"))]
 pub use openai_compatible::OpenAICompatibleEmbeddings;
-#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai-compatible"
+))]
 pub use openai_compatible_audio::{OpenAICompatibleAudioTranscription, OpenAICompatibleSpeech};
-#[cfg(all(feature = "batches", feature = "openai-compatible"))]
+#[cfg(all(feature = "cap-batch", feature = "provider-openai-compatible"))]
 pub use openai_compatible_batches::OpenAICompatibleBatches;
-#[cfg(all(feature = "images", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai-compatible"
+))]
 pub use openai_compatible_images::OpenAICompatibleImages;
-#[cfg(all(feature = "moderations", feature = "openai-compatible"))]
+#[cfg(all(feature = "cap-moderation", feature = "provider-openai-compatible"))]
 pub use openai_compatible_moderations::OpenAICompatibleModerations;
-#[cfg(feature = "vertex")]
+#[cfg(feature = "provider-vertex")]
 pub use vertex::Vertex;

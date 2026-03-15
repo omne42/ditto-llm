@@ -1,12 +1,12 @@
 #![cfg_attr(
     not(any(
-        feature = "anthropic",
-        feature = "cohere",
-        feature = "google",
-        feature = "openai",
-        feature = "openai-compatible",
-        feature = "bedrock",
-        feature = "vertex"
+        feature = "provider-anthropic",
+        feature = "provider-cohere",
+        feature = "provider-google",
+        feature = "provider-openai",
+        feature = "provider-openai-compatible",
+        feature = "provider-bedrock",
+        feature = "provider-vertex"
     )),
     allow(dead_code)
 )]
@@ -43,13 +43,13 @@ impl HttpClientPolicy {
 
     #[cfg_attr(
         not(any(
-            feature = "anthropic",
-            feature = "bedrock",
-            feature = "cohere",
-            feature = "google",
-            feature = "openai",
-            feature = "openai-compatible",
-            feature = "vertex"
+            feature = "provider-anthropic",
+            feature = "provider-bedrock",
+            feature = "provider-cohere",
+            feature = "provider-google",
+            feature = "provider-openai",
+            feature = "provider-openai-compatible",
+            feature = "provider-vertex"
         )),
         allow(dead_code)
     )]

@@ -2,11 +2,11 @@
 
 ## 架构重构状态（2026-03-09）
 
-- [x] `foundation` / `contracts` / `llm_core` 已落地，旧 `core` 仅保留兼容 shim。
+- [x] `foundation` / `contracts` / `llm_core` 已稳定落位到 `crates/ditto-core`；拆分前顶层 `src/` facade 已删除。
 - [x] `capabilities/` 已从单文件 facade 改成真实目录模块。
-- [x] `config/editor.rs` 已迁出到 `apps/config_editor.rs`，`config` 仅保留 schema / parsing / auth 解析边界。
-- [x] `profile` 已降级为 `src/profile.rs` 兼容 shim，真实实现位于 `src/compat/profile/`，旧 `src/profile/` 目录已删除。
-- [x] `catalog` 的共享契约已下沉到 `src/contracts/`，`catalog <-> config` 的直接环依赖已被打断。
+- [x] config editing 已迁入 `crates/ditto-server/src/config_editing.rs`，`crates/ditto-core/src/config/` 仅保留 schema / parsing / auth / routing 语义边界。
+- [x] 旧 `profile` / `compat/profile` 兼容层已退休；当前 provider truth 以 `crates/ditto-core/src/catalog/`、`crates/ditto-core/src/runtime_registry/` 与 `crates/ditto-core/src/providers/openai_compat_profile.rs` 为准。
+- [x] `catalog` 的共享契约已下沉到 `crates/ditto-core/src/contracts/`，`catalog <-> config` 的直接环依赖已被打断。
 - [x] `gateway` 已物理落位到 `domain/`、`application/`、`adapters/`、`transport/http/`；根目录旧模块仅保留兼容 shim。
 - [x] `gateway` 已不再依赖 `include!` 做模块拼装。
 - [x] `gateway` 根导出已改为优先指向新层级路径，旧平铺模块以 `#[doc(hidden)]` 兼容形式保留。
@@ -54,7 +54,7 @@
 - [x] 10.1 新增模块边界文档，明确 `core/capabilities/config/catalog/providers/runtime/gateway` 的目录收敛目标与单向依赖规则。
 - [x] 10.2 引入 `crate::config` 与 `crate::runtime` facade，作为从 `profile` / `gateway` 迁移出来的稳定入口。
 - [x] 10.3 将 `OpenAiProviderFamily` / `infer_openai_provider_quirks` 从 legacy `profile` 命名空间下沉到 `providers` 共享层，`profile` 仅保留兼容 re-export。
-- [x] 10.4 把 `FileClient` 的 provider 具体实现从 `src/file.rs` 下沉回 provider 层，消除 capability facade 对 `OpenAI` / `OpenAICompatible` 的直接依赖。
+- [x] 10.4 把 `FileClient` 的 provider 具体实现从 `crates/ditto-core/src/capabilities/file.rs` 下沉回 provider 层，消除 capability facade 对 `OpenAI` / `OpenAICompatible` 的直接依赖。
 - [x] 10.5 修复 `cargo check --features agent` 的真实失效路径，并补齐 OpenAI-family 共享 gate，恢复 advertised feature 的可编译性。
 
 ### Phase 1：重做 feature 体系
@@ -93,8 +93,8 @@
 - [x] 36. 为所有 model entry 增加稳定的 capability 分类字段，而不只依赖 `api_surfaces`。
 - [x] 37. 为所有 provider entry 增加完整能力集合字段，保证 provider 级声明不是散落在别处。
 - [x] 38. 为所有能力增加实现状态字段，区分 `implemented`、`planned`、`blocked`，但运行时只接受 `implemented`。
-- [x] 39. 建立离线生成流程：从 `catalog/provider_models/*` 生成 `src/catalog/generated/*` 的 Rust 静态定义。
-  - [x] 生成结果按 provider 拆分到 `src/catalog/generated/providers/*.rs` 与 `src/catalog/generated/providers/mod.rs`，不再把所有 provider 压进单一 `providers.rs`。
+- [x] 39. 建立离线生成流程：从 `catalog/provider_models/*` 生成 `crates/ditto-core/src/catalog/generated/*` 的 Rust 静态定义。
+  - [x] 生成结果按 provider 拆分到 `crates/ditto-core/src/catalog/generated/providers/*.rs` 与 `crates/ditto-core/src/catalog/generated/providers/mod.rs`，不再把所有 provider 压进单一 `providers.rs`。
 - [x] 40. 禁止运行时直接依赖 JSON/TOML 做能力判断，只允许读取 Rust 生成结果。
 
 ### Phase 4：重做 catalog registry 与 resolver

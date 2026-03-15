@@ -2,6 +2,11 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "gateway")]
+use ditto_core::MESSAGE_CATALOG;
+#[cfg(feature = "gateway")]
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+
+#[cfg(feature = "gateway")]
 #[derive(Debug)]
 pub(crate) struct GatewayCliArgs {
     pub path: String,
@@ -69,11 +74,24 @@ pub(crate) struct GatewayCliArgs {
 }
 
 #[cfg(feature = "gateway")]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn parse_gateway_cli_args(
-    mut args: impl Iterator<Item = String>,
+    args: impl Iterator<Item = String>,
 ) -> Result<GatewayCliArgs, Box<dyn std::error::Error>> {
-    let usage = usage();
-    let path = args.next().ok_or(usage)?;
+    parse_gateway_cli_args_with_locale(args, MESSAGE_CATALOG.default_locale())
+}
+
+#[cfg(feature = "gateway")]
+pub(crate) fn parse_gateway_cli_args_with_locale(
+    mut args: impl Iterator<Item = String>,
+    locale: Locale,
+) -> Result<GatewayCliArgs, Box<dyn std::error::Error>> {
+    let usage = gateway_cli_usage(locale);
+    let path = match args.next() {
+        Some(flag) if flag == "--help" || flag == "-h" => return Err(usage.into()),
+        Some(path) => path,
+        None => return Err(usage.into()),
+    };
 
     let mut listen = "127.0.0.1:8080".to_string();
     let mut admin_token: Option<String> = None;
@@ -153,91 +171,78 @@ pub(crate) fn parse_gateway_cli_args(
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--dotenv" => {
-                dotenv_path = Some(args.next().ok_or("missing value for --dotenv")?.into());
+                dotenv_path = Some(next_value(&mut args, locale, "--dotenv")?.into());
             }
             "--listen" | "--addr" => {
-                listen = args.next().ok_or("missing value for --listen/--addr")?;
+                listen = next_value(&mut args, locale, "--listen/--addr")?;
             }
             "--admin-token" => {
-                admin_token = Some(args.next().ok_or("missing value for --admin-token")?);
+                admin_token = Some(next_value(&mut args, locale, "--admin-token")?);
             }
             "--admin-token-env" => {
-                admin_token_env = Some(args.next().ok_or("missing value for --admin-token-env")?);
+                admin_token_env = Some(next_value(&mut args, locale, "--admin-token-env")?);
             }
             "--admin-read-token" => {
-                admin_read_token = Some(args.next().ok_or("missing value for --admin-read-token")?);
+                admin_read_token = Some(next_value(&mut args, locale, "--admin-read-token")?);
             }
             "--admin-read-token-env" => {
-                admin_read_token_env = Some(
-                    args.next()
-                        .ok_or("missing value for --admin-read-token-env")?,
-                );
+                admin_read_token_env =
+                    Some(next_value(&mut args, locale, "--admin-read-token-env")?);
             }
             "--admin-tenant-token" => {
-                let spec = args
-                    .next()
-                    .ok_or("missing value for --admin-tenant-token")?;
-                let (tenant_id, token) = spec
-                    .split_once('=')
-                    .ok_or("--admin-tenant-token must be TENANT_ID=TOKEN")?;
+                let spec = next_value(&mut args, locale, "--admin-tenant-token")?;
+                let (tenant_id, token) = spec.split_once('=').ok_or_else(|| {
+                    invalid_spec(locale, "--admin-tenant-token", "TENANT_ID=TOKEN")
+                })?;
                 admin_tenant_tokens.push((tenant_id.to_string(), token.to_string()));
             }
             "--admin-tenant-token-env" => {
-                let spec = args
-                    .next()
-                    .ok_or("missing value for --admin-tenant-token-env")?;
-                let (tenant_id, env_key) = spec
-                    .split_once('=')
-                    .ok_or("--admin-tenant-token-env must be TENANT_ID=ENV")?;
+                let spec = next_value(&mut args, locale, "--admin-tenant-token-env")?;
+                let (tenant_id, env_key) = spec.split_once('=').ok_or_else(|| {
+                    invalid_spec(locale, "--admin-tenant-token-env", "TENANT_ID=ENV")
+                })?;
                 admin_tenant_token_env.push((tenant_id.to_string(), env_key.to_string()));
             }
             "--admin-tenant-read-token" => {
-                let spec = args
-                    .next()
-                    .ok_or("missing value for --admin-tenant-read-token")?;
-                let (tenant_id, token) = spec
-                    .split_once('=')
-                    .ok_or("--admin-tenant-read-token must be TENANT_ID=TOKEN")?;
+                let spec = next_value(&mut args, locale, "--admin-tenant-read-token")?;
+                let (tenant_id, token) = spec.split_once('=').ok_or_else(|| {
+                    invalid_spec(locale, "--admin-tenant-read-token", "TENANT_ID=TOKEN")
+                })?;
                 admin_tenant_read_tokens.push((tenant_id.to_string(), token.to_string()));
             }
             "--admin-tenant-read-token-env" => {
-                let spec = args
-                    .next()
-                    .ok_or("missing value for --admin-tenant-read-token-env")?;
-                let (tenant_id, env_key) = spec
-                    .split_once('=')
-                    .ok_or("--admin-tenant-read-token-env must be TENANT_ID=ENV")?;
+                let spec = next_value(&mut args, locale, "--admin-tenant-read-token-env")?;
+                let (tenant_id, env_key) = spec.split_once('=').ok_or_else(|| {
+                    invalid_spec(locale, "--admin-tenant-read-token-env", "TENANT_ID=ENV")
+                })?;
                 admin_tenant_read_token_env.push((tenant_id.to_string(), env_key.to_string()));
             }
             "--state" => {
-                state_path = Some(args.next().ok_or("missing value for --state")?.into());
+                state_path = Some(next_value(&mut args, locale, "--state")?.into());
             }
             "--sqlite" => {
-                sqlite_path = Some(args.next().ok_or("missing value for --sqlite")?.into());
+                sqlite_path = Some(next_value(&mut args, locale, "--sqlite")?.into());
             }
             "--pg" | "--postgres" => {
-                postgres_url = Some(args.next().ok_or("missing value for --pg/--postgres")?);
+                postgres_url = Some(next_value(&mut args, locale, "--pg/--postgres")?);
             }
             "--pg-env" | "--postgres-env" => {
-                postgres_url_env = Some(
-                    args.next()
-                        .ok_or("missing value for --pg-env/--postgres-env")?,
-                );
+                postgres_url_env = Some(next_value(&mut args, locale, "--pg-env/--postgres-env")?);
             }
             "--mysql" => {
-                mysql_url = Some(args.next().ok_or("missing value for --mysql")?);
+                mysql_url = Some(next_value(&mut args, locale, "--mysql")?);
             }
             "--mysql-env" => {
-                mysql_url_env = Some(args.next().ok_or("missing value for --mysql-env")?);
+                mysql_url_env = Some(next_value(&mut args, locale, "--mysql-env")?);
             }
             "--redis" => {
-                redis_url = Some(args.next().ok_or("missing value for --redis")?);
+                redis_url = Some(next_value(&mut args, locale, "--redis")?);
             }
             "--redis-env" => {
-                redis_url_env = Some(args.next().ok_or("missing value for --redis-env")?);
+                redis_url_env = Some(next_value(&mut args, locale, "--redis-env")?);
             }
             "--redis-prefix" => {
-                redis_prefix = Some(args.next().ok_or("missing value for --redis-prefix")?);
+                redis_prefix = Some(next_value(&mut args, locale, "--redis-prefix")?);
             }
             "--audit-retention-secs" => {
                 #[cfg(any(
@@ -247,12 +252,7 @@ pub(crate) fn parse_gateway_cli_args(
                     feature = "gateway-store-redis"
                 ))]
                 {
-                    let raw = args
-                        .next()
-                        .ok_or("missing value for --audit-retention-secs")?;
-                    let secs = raw
-                        .parse::<u64>()
-                        .map_err(|_| "invalid --audit-retention-secs")?;
+                    let secs = parse_next::<u64>(&mut args, locale, "--audit-retention-secs")?;
                     audit_retention_secs = Some(secs);
                 }
 
@@ -263,20 +263,28 @@ pub(crate) fn parse_gateway_cli_args(
                     feature = "gateway-store-redis"
                 )))]
                 {
-                    return Err(
-                        "--audit-retention-secs requires a persistent store feature (`gateway-store-sqlite` / `gateway-store-postgres` / `gateway-store-mysql` / `gateway-store-redis`)"
-                            .into(),
-                    );
+                    return Err(MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.requires_feature",
+                        &[
+                            MessageArg::new("flag", "--audit-retention-secs"),
+                            MessageArg::new(
+                                "feature",
+                                "gateway-store-sqlite | gateway-store-postgres | gateway-store-mysql | gateway-store-redis",
+                            ),
+                        ],
+                    )
+                    .into());
                 }
             }
             "--db-doctor" => {
                 db_doctor = true;
             }
             "--backend" => {
-                backend_specs.push(args.next().ok_or("missing value for --backend")?);
+                backend_specs.push(next_value(&mut args, locale, "--backend")?);
             }
             "--upstream" => {
-                upstream_specs.push(args.next().ok_or("missing value for --upstream")?);
+                upstream_specs.push(next_value(&mut args, locale, "--upstream")?);
             }
             "--json-logs" => {
                 json_logs = true;
@@ -286,41 +294,32 @@ pub(crate) fn parse_gateway_cli_args(
             }
             "--proxy-cache-ttl" => {
                 proxy_cache_enabled = true;
-                let raw = args.next().ok_or("missing value for --proxy-cache-ttl")?;
-                proxy_cache_ttl_seconds = Some(
-                    raw.parse::<u64>()
-                        .map_err(|_| "invalid --proxy-cache-ttl")?,
-                );
+                proxy_cache_ttl_seconds =
+                    Some(parse_next::<u64>(&mut args, locale, "--proxy-cache-ttl")?);
             }
             "--proxy-cache-max-entries" => {
                 proxy_cache_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cache-max-entries")?;
-                proxy_cache_max_entries = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-cache-max-entries")?,
-                );
+                proxy_cache_max_entries = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-cache-max-entries",
+                )?);
             }
             "--proxy-cache-max-body-bytes" => {
                 proxy_cache_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cache-max-body-bytes")?;
-                proxy_cache_max_body_bytes = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-cache-max-body-bytes")?,
-                );
+                proxy_cache_max_body_bytes = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-cache-max-body-bytes",
+                )?);
             }
             "--proxy-cache-max-total-body-bytes" => {
                 proxy_cache_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cache-max-total-body-bytes")?;
-                proxy_cache_max_total_body_bytes = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-cache-max-total-body-bytes")?,
-                );
+                proxy_cache_max_total_body_bytes = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-cache-max-total-body-bytes",
+                )?);
             }
             "--proxy-cache-streaming" => {
                 proxy_cache_enabled = true;
@@ -328,87 +327,70 @@ pub(crate) fn parse_gateway_cli_args(
             }
             "--proxy-cache-max-stream-body-bytes" => {
                 proxy_cache_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cache-max-stream-body-bytes")?;
-                proxy_cache_max_stream_body_bytes = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-cache-max-stream-body-bytes")?,
-                );
+                proxy_cache_max_stream_body_bytes = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-cache-max-stream-body-bytes",
+                )?);
             }
             "--proxy-max-in-flight" => {
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-max-in-flight")?;
-                proxy_max_in_flight = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-max-in-flight")?,
-                );
+                proxy_max_in_flight = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-max-in-flight",
+                )?);
             }
             "--proxy-max-body-bytes" => {
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-max-body-bytes")?;
-                proxy_max_body_bytes = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-max-body-bytes")?,
-                );
+                proxy_max_body_bytes = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-max-body-bytes",
+                )?);
             }
             "--proxy-usage-max-body-bytes" => {
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-usage-max-body-bytes")?;
-                proxy_usage_max_body_bytes = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-usage-max-body-bytes")?,
-                );
+                proxy_usage_max_body_bytes = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-usage-max-body-bytes",
+                )?);
             }
             "--pricing-litellm" => {
-                pricing_litellm_path =
-                    Some(args.next().ok_or("missing value for --pricing-litellm")?);
+                pricing_litellm_path = Some(next_value(&mut args, locale, "--pricing-litellm")?);
             }
             "--prometheus-metrics" => {
                 prometheus_metrics_enabled = true;
             }
             "--prometheus-max-key-series" => {
                 prometheus_metrics_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --prometheus-max-key-series")?;
-                prometheus_max_key_series = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --prometheus-max-key-series")?,
-                );
+                prometheus_max_key_series = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--prometheus-max-key-series",
+                )?);
             }
             "--prometheus-max-model-series" => {
                 prometheus_metrics_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --prometheus-max-model-series")?;
-                prometheus_max_model_series = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --prometheus-max-model-series")?,
-                );
+                prometheus_max_model_series = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--prometheus-max-model-series",
+                )?);
             }
             "--prometheus-max-backend-series" => {
                 prometheus_metrics_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --prometheus-max-backend-series")?;
-                prometheus_max_backend_series = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --prometheus-max-backend-series")?,
-                );
+                prometheus_max_backend_series = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--prometheus-max-backend-series",
+                )?);
             }
             "--prometheus-max-path-series" => {
                 prometheus_metrics_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --prometheus-max-path-series")?;
-                prometheus_max_path_series = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --prometheus-max-path-series")?,
-                );
+                prometheus_max_path_series = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--prometheus-max-path-series",
+                )?);
             }
             "--proxy-retry" => {
                 proxy_retry_enabled = true;
@@ -416,71 +398,61 @@ pub(crate) fn parse_gateway_cli_args(
             "--proxy-retry-status-codes" => {
                 proxy_retry_enabled = true;
                 proxy_retry_status_codes = Some(parse_status_codes(
-                    &args
-                        .next()
-                        .ok_or("missing value for --proxy-retry-status-codes")?,
+                    &next_value(&mut args, locale, "--proxy-retry-status-codes")?,
+                    locale,
                 )?);
             }
             "--proxy-fallback-status-codes" => {
                 proxy_fallback_status_codes = Some(parse_status_codes(
-                    &args
-                        .next()
-                        .ok_or("missing value for --proxy-fallback-status-codes")?,
+                    &next_value(&mut args, locale, "--proxy-fallback-status-codes")?,
+                    locale,
                 )?);
             }
             "--proxy-network-error-action" => {
                 proxy_network_error_action = Some(parse_proxy_failure_action(
-                    &args
-                        .next()
-                        .ok_or("missing value for --proxy-network-error-action")?,
+                    &next_value(&mut args, locale, "--proxy-network-error-action")?,
+                    locale,
                 )?);
             }
             "--proxy-timeout-error-action" => {
                 proxy_timeout_error_action = Some(parse_proxy_failure_action(
-                    &args
-                        .next()
-                        .ok_or("missing value for --proxy-timeout-error-action")?,
+                    &next_value(&mut args, locale, "--proxy-timeout-error-action")?,
+                    locale,
                 )?);
             }
             "--proxy-retry-max-attempts" => {
                 proxy_retry_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-retry-max-attempts")?;
-                proxy_retry_max_attempts = Some(
-                    raw.parse::<usize>()
-                        .map_err(|_| "invalid --proxy-retry-max-attempts")?,
-                );
+                proxy_retry_max_attempts = Some(parse_next::<usize>(
+                    &mut args,
+                    locale,
+                    "--proxy-retry-max-attempts",
+                )?);
             }
             "--proxy-circuit-breaker" => {
                 proxy_circuit_breaker_enabled = true;
             }
             "--proxy-cb-failure-threshold" => {
                 proxy_circuit_breaker_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cb-failure-threshold")?;
-                proxy_cb_failure_threshold = Some(
-                    raw.parse::<u32>()
-                        .map_err(|_| "invalid --proxy-cb-failure-threshold")?,
-                );
+                proxy_cb_failure_threshold = Some(parse_next::<u32>(
+                    &mut args,
+                    locale,
+                    "--proxy-cb-failure-threshold",
+                )?);
             }
             "--proxy-cb-cooldown-secs" => {
                 proxy_circuit_breaker_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-cb-cooldown-secs")?;
-                proxy_cb_cooldown_secs = Some(
-                    raw.parse::<u64>()
-                        .map_err(|_| "invalid --proxy-cb-cooldown-secs")?,
-                );
+                proxy_cb_cooldown_secs = Some(parse_next::<u64>(
+                    &mut args,
+                    locale,
+                    "--proxy-cb-cooldown-secs",
+                )?);
             }
             "--proxy-cb-failure-status-codes" => {
                 proxy_circuit_breaker_enabled = true;
-                proxy_cb_failure_status_codes =
-                    Some(parse_status_codes(&args.next().ok_or(
-                        "missing value for --proxy-cb-failure-status-codes",
-                    )?)?);
+                proxy_cb_failure_status_codes = Some(parse_status_codes(
+                    &next_value(&mut args, locale, "--proxy-cb-failure-status-codes")?,
+                    locale,
+                )?);
             }
             "--proxy-cb-no-network-errors" => {
                 proxy_circuit_breaker_enabled = true;
@@ -499,46 +471,40 @@ pub(crate) fn parse_gateway_cli_args(
             }
             "--proxy-health-check-path" => {
                 proxy_health_checks_enabled = true;
-                proxy_health_check_path = Some(
-                    args.next()
-                        .ok_or("missing value for --proxy-health-check-path")?,
-                );
+                proxy_health_check_path =
+                    Some(next_value(&mut args, locale, "--proxy-health-check-path")?);
             }
             "--proxy-health-check-interval-secs" => {
                 proxy_health_checks_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-health-check-interval-secs")?;
-                proxy_health_check_interval_secs = Some(
-                    raw.parse::<u64>()
-                        .map_err(|_| "invalid --proxy-health-check-interval-secs")?,
-                );
+                proxy_health_check_interval_secs = Some(parse_next::<u64>(
+                    &mut args,
+                    locale,
+                    "--proxy-health-check-interval-secs",
+                )?);
             }
             "--proxy-health-check-timeout-secs" => {
                 proxy_health_checks_enabled = true;
-                let raw = args
-                    .next()
-                    .ok_or("missing value for --proxy-health-check-timeout-secs")?;
-                proxy_health_check_timeout_secs = Some(
-                    raw.parse::<u64>()
-                        .map_err(|_| "invalid --proxy-health-check-timeout-secs")?,
-                );
+                proxy_health_check_timeout_secs = Some(parse_next::<u64>(
+                    &mut args,
+                    locale,
+                    "--proxy-health-check-timeout-secs",
+                )?);
             }
             "--devtools" => {
-                devtools_path = Some(args.next().ok_or("missing value for --devtools")?);
+                devtools_path = Some(next_value(&mut args, locale, "--devtools")?);
             }
             "--otel" => {
                 otel_enabled = true;
             }
             "--otel-endpoint" => {
                 otel_enabled = true;
-                otel_endpoint = Some(args.next().ok_or("missing value for --otel-endpoint")?);
+                otel_endpoint = Some(next_value(&mut args, locale, "--otel-endpoint")?);
             }
             "--otel-json" => {
                 otel_enabled = true;
                 otel_json = true;
             }
-            other => return Err(format!("unknown arg: {other}").into()),
+            other => return Err(unknown_arg(locale, other, &usage)),
         }
     }
 
@@ -609,19 +575,25 @@ pub(crate) fn parse_gateway_cli_args(
 }
 
 #[cfg(feature = "gateway")]
-fn parse_proxy_failure_action(raw: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn parse_proxy_failure_action(
+    raw: &str,
+    locale: Locale,
+) -> Result<String, Box<dyn std::error::Error>> {
     let normalized = raw.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "none" | "fallback" | "retry" => Ok(normalized),
-        _ => Err("invalid proxy failure action".into()),
+        _ => Err(invalid_value(
+            locale,
+            "--proxy-network-error-action/--proxy-timeout-error-action",
+        )),
     }
 }
 
 #[cfg(feature = "gateway")]
-fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
+fn parse_status_codes(raw: &str, locale: Locale) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
     let raw = raw.trim();
     if raw.is_empty() {
-        return Err("empty status code list".into());
+        return Err(empty_status_code_list(locale));
     }
 
     let mut out = Vec::new();
@@ -630,10 +602,13 @@ fn parse_status_codes(raw: &str) -> Result<Vec<u16>, Box<dyn std::error::Error>>
         if part.is_empty() {
             continue;
         }
-        out.push(part.parse::<u16>().map_err(|_| "invalid status code")?);
+        out.push(
+            part.parse::<u16>()
+                .map_err(|_| invalid_status_code(locale))?,
+        );
     }
     if out.is_empty() {
-        return Err("empty status code list".into());
+        return Err(empty_status_code_list(locale));
     }
     out.sort_unstable();
     out.dedup();
@@ -645,31 +620,131 @@ pub(crate) async fn resolve_cli_secret(
     raw: String,
     env: &ditto_core::config::Env,
     label: &str,
+    locale: Locale,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let raw = raw.trim().to_string();
     if !raw.starts_with("secret://") {
         return Ok(raw);
     }
 
-    let resolved = ditto_core::foundation::secrets::resolve_secret_string(raw.as_str(), env)
+    let resolved = secret::resolve_secret_string(raw.as_str(), env)
         .await
-        .map_err(|err| format!("failed to resolve {label}: {err}"))?;
+        .map_err(|err| {
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.failed_to_resolve",
+                &[
+                    MessageArg::new("label", label),
+                    MessageArg::new("error", err.to_string()),
+                ],
+            )
+        })?;
     if resolved.trim().is_empty() {
-        return Err(format!("{label} resolved to an empty value").into());
+        return Err(MESSAGE_CATALOG
+            .render(
+                locale,
+                "cli.resolved_empty",
+                &[MessageArg::new("label", label)],
+            )
+            .into());
     }
     Ok(resolved)
 }
 
 #[cfg(feature = "gateway")]
-fn usage() -> &'static str {
+pub(crate) fn gateway_cli_usage(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.usage",
+        &[MessageArg::new("command_and_syntax", usage_syntax())],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn usage_syntax() -> &'static str {
     #[cfg(feature = "gateway-config-yaml")]
     {
-        "usage: ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
     #[cfg(not(feature = "gateway-config-yaml"))]
     {
-        "usage: ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
+}
+
+#[cfg(feature = "gateway")]
+fn next_value(
+    args: &mut impl Iterator<Item = String>,
+    locale: Locale,
+    flag: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    args.next().ok_or_else(|| {
+        MESSAGE_CATALOG
+            .render(
+                locale,
+                "cli.missing_value",
+                &[MessageArg::new("flag", flag)],
+            )
+            .into()
+    })
+}
+
+#[cfg(feature = "gateway")]
+fn parse_next<T>(
+    args: &mut impl Iterator<Item = String>,
+    locale: Locale,
+    flag: &str,
+) -> Result<T, Box<dyn std::error::Error>>
+where
+    T: std::str::FromStr,
+{
+    let raw = next_value(args, locale, flag)?;
+    raw.parse::<T>().map_err(|_| invalid_value(locale, flag))
+}
+
+#[cfg(feature = "gateway")]
+fn invalid_value(locale: Locale, flag: &str) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.invalid_value",
+            &[MessageArg::new("label", flag)],
+        )
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+fn invalid_spec(locale: Locale, flag: &str, expected: &str) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.invalid_spec",
+            &[
+                MessageArg::new("label", flag),
+                MessageArg::new("expected", expected),
+            ],
+        )
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+fn empty_status_code_list(locale: Locale) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(locale, "cli.empty_status_code_list", &[])
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+fn invalid_status_code(locale: Locale) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(locale, "cli.invalid_status_code", &[])
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+fn unknown_arg(locale: Locale, arg: &str, usage: &str) -> Box<dyn std::error::Error> {
+    let message = MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[MessageArg::new("arg", arg)]);
+    format!("{message}\n{usage}").into()
 }
 
 #[cfg(all(test, feature = "gateway"))]

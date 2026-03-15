@@ -47,9 +47,9 @@ async fn resolve_openai_compat_proxy_gateway_preamble(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
 ) -> Result<OpenAiCompatProxyGatewayPreamble, (StatusCode, Json<OpenAiErrorResponse>)> {
-    state.record_request();
-
-    let strip_authorization = state.uses_virtual_keys();
+    // OpenAI-compatible proxy surfaces are always fail-closed. An empty virtual-key
+    // set means "no request is authorized", not "anonymous relay mode".
+    let strip_authorization = true;
     let key = if strip_authorization {
         let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
             openai_error(

@@ -140,36 +140,32 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
     } = {
         state.record_request();
 
-        let strip_authorization = state.uses_virtual_keys();
-        let key = if !strip_authorization {
-            None
-        } else {
-            let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
-                openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "missing virtual key",
-                )
-            })?;
-            let key = state.virtual_key_by_token(&token).ok_or_else(|| {
-                openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "unauthorized virtual key",
-                )
-            })?;
-            if !key.enabled {
-                return Err(openai_error(
-                    StatusCode::UNAUTHORIZED,
-                    "authentication_error",
-                    Some("invalid_api_key"),
-                    "virtual key disabled",
-                ));
-            }
-            Some(key)
-        };
+        let strip_authorization = true;
+        let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
+            openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "missing virtual key",
+            )
+        })?;
+        let key = state.virtual_key_by_token(&token).ok_or_else(|| {
+            openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "unauthorized virtual key",
+            )
+        })?;
+        if !key.enabled {
+            return Err(openai_error(
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                Some("invalid_api_key"),
+                "virtual key disabled",
+            ));
+        }
+        let key = Some(key);
 
         let virtual_key_id = key.as_ref().map(|key| key.id.clone());
         let limits = key.as_ref().map(|key| key.limits.clone());

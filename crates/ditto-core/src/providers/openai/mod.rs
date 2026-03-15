@@ -1,91 +1,111 @@
 #[cfg(all(
-    feature = "audio",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod audio_speech;
 #[cfg(all(
-    feature = "audio",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod audio_transcriptions;
 #[cfg(all(
-    feature = "audio",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod audio_translations;
-#[cfg(all(feature = "batches", feature = "openai"))]
+#[cfg(all(feature = "cap-batch", feature = "provider-openai"))]
 mod batches;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 mod chat_completions;
 mod client;
-#[cfg(feature = "openai")]
-mod completions_legacy;
-#[cfg(all(feature = "openai", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-embedding"))]
 mod embeddings;
 mod files;
 #[cfg(all(
-    feature = "images",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod images_edits;
 #[cfg(all(
-    feature = "images",
-    any(feature = "openai", feature = "openai-compatible")
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod images_generations;
 mod models;
 #[cfg(all(
-    feature = "moderations",
-    any(feature = "openai", feature = "openai-compatible")
+    feature = "cap-moderation",
+    any(feature = "provider-openai", feature = "provider-openai-compatible")
 ))]
 mod moderations;
 mod raw_responses;
-#[cfg(all(feature = "realtime", feature = "openai"))]
+#[cfg(all(feature = "cap-realtime", feature = "provider-openai"))]
 mod realtime;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 mod responses;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 mod text;
-#[cfg(all(feature = "videos", feature = "openai"))]
+#[cfg(all(feature = "cap-video-generation", feature = "provider-openai"))]
 mod videos;
 
-#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai-compatible"
+))]
 pub use audio_speech::OpenAICompatibleSpeech;
-#[cfg(all(feature = "audio", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai"
+))]
 pub use audio_speech::OpenAISpeech;
-#[cfg(all(feature = "audio", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai"
+))]
 pub use audio_transcriptions::OpenAIAudioTranscription;
-#[cfg(all(feature = "audio", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-audio-transcription", feature = "cap-audio-speech"),
+    feature = "provider-openai-compatible"
+))]
 pub use audio_transcriptions::OpenAICompatibleAudioTranscription;
-#[cfg(all(feature = "batches", feature = "openai"))]
+#[cfg(all(feature = "cap-batch", feature = "provider-openai"))]
 pub use batches::OpenAIBatches;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub use chat_completions::OpenAIChatCompletions;
 pub use client::OpenAI;
-#[cfg(feature = "openai")]
-pub use completions_legacy::OpenAICompletionsLegacy;
-#[cfg(all(feature = "openai", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-embedding"))]
 pub use embeddings::OpenAIEmbeddings;
-#[cfg(all(feature = "images", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai-compatible"
+))]
 pub use images_edits::OpenAICompatibleImageEdits;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai"
+))]
 pub use images_edits::OpenAIImageEdits;
-#[cfg(all(feature = "images", feature = "openai-compatible"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai-compatible"
+))]
 pub use images_generations::OpenAICompatibleImages;
-#[cfg(all(feature = "images", feature = "openai"))]
+#[cfg(all(
+    any(feature = "cap-image-generation", feature = "cap-image-edit"),
+    feature = "provider-openai"
+))]
 pub use images_generations::OpenAIImages;
 pub use models::{OpenAIModelObject, OpenAIModelPermission};
-#[cfg(all(feature = "moderations", feature = "openai-compatible"))]
+#[cfg(all(feature = "cap-moderation", feature = "provider-openai-compatible"))]
 pub use moderations::OpenAICompatibleModerations;
-#[cfg(all(feature = "moderations", feature = "openai"))]
+#[cfg(all(feature = "cap-moderation", feature = "provider-openai"))]
 pub use moderations::OpenAIModerations;
 pub use raw_responses::{
     OpenAIResponsesCompactionRequest, OpenAIResponsesRawEvent, OpenAIResponsesRawEventStream,
     OpenAIResponsesRawRequest,
 };
-#[cfg(all(feature = "realtime", feature = "openai"))]
+#[cfg(all(feature = "cap-realtime", feature = "provider-openai"))]
 pub use realtime::OpenAIRealtime;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub use text::OpenAITextModel;
-#[cfg(all(feature = "videos", feature = "openai"))]
+#[cfg(all(feature = "cap-video-generation", feature = "provider-openai"))]
 pub use videos::OpenAIVideos;

@@ -8,14 +8,45 @@ use ditto_gateway::attach::{
     attach_proxy_max_body_bytes, attach_proxy_routing, attach_proxy_usage_max_body_bytes,
 };
 
+use ditto_core::MESSAGE_CATALOG;
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
 #[cfg(feature = "gateway")]
-use ditto_gateway::cli::{GatewayCliArgs, parse_gateway_cli_args, resolve_cli_secret};
+use ditto_gateway::cli::{
+    GatewayCliArgs, gateway_cli_usage, parse_gateway_cli_args_with_locale, resolve_cli_secret,
+};
 #[cfg(feature = "gateway")]
 use ditto_gateway::config_cli::maybe_run_config_cli;
 
 #[cfg(feature = "gateway")]
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, raw_args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    if let Err(err) = run_gateway(locale, raw_args).await {
+        if let Some(localized) = err
+            .as_ref()
+            .downcast_ref::<ditto_gateway::clap_i18n::LocalizedCliError>()
+        {
+            eprintln!("{localized}");
+        } else {
+            eprintln!("{}", render_error(err.as_ref(), locale));
+        }
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "gateway")]
+async fn run_gateway(
+    locale: Locale,
+    raw_args: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(any(
         feature = "gateway-store-sqlite",
         feature = "gateway-store-postgres",
@@ -24,11 +55,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ))]
     const DEFAULT_AUDIT_RETENTION_SECS: u64 = 30 * 24 * 60 * 60;
 
-    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
-    if maybe_run_config_cli(raw_args.clone()).await? {
+    if raw_args.is_empty()
+        || (!matches!(
+            raw_args.first().map(String::as_str),
+            Some("provider" | "model")
+        ) && raw_args.iter().any(|arg| arg == "--help" || arg == "-h"))
+    {
+        println!("{}", gateway_cli_usage(locale));
         return Ok(());
     }
-    let cli = parse_gateway_cli_args(raw_args.into_iter())?;
+
+    if maybe_run_config_cli(raw_args.clone(), locale).await? {
+        return Ok(());
+    }
+    let cli = parse_gateway_cli_args_with_locale(raw_args.into_iter(), locale)?;
     let GatewayCliArgs {
         path,
         listen,
@@ -111,27 +151,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if admin_token.is_some() && admin_token_env.is_some() {
-        return Err("--admin-token cannot be combined with --admin-token-env".into());
+        return Err(cli_cannot_combine(locale, "--admin-token", "--admin-token-env").into());
     }
     if admin_read_token.is_some() && admin_read_token_env.is_some() {
-        return Err("--admin-read-token cannot be combined with --admin-read-token-env".into());
+        return Err(
+            cli_cannot_combine(locale, "--admin-read-token", "--admin-read-token-env").into(),
+        );
     }
     if redis_url.is_some() && redis_url_env.is_some() {
-        return Err("--redis cannot be combined with --redis-env".into());
+        return Err(cli_cannot_combine(locale, "--redis", "--redis-env").into());
     }
     if postgres_url.is_some() && postgres_url_env.is_some() {
-        return Err("--pg/--postgres cannot be combined with --pg-env/--postgres-env".into());
+        return Err(
+            cli_cannot_combine(locale, "--pg/--postgres", "--pg-env/--postgres-env").into(),
+        );
     }
     if mysql_url.is_some() && mysql_url_env.is_some() {
-        return Err("--mysql cannot be combined with --mysql-env".into());
+        return Err(cli_cannot_combine(locale, "--mysql", "--mysql-env").into());
     }
 
     if let Some(key) = admin_token_env.as_deref() {
         let token = env
             .get(key)
-            .ok_or_else(|| format!("missing env var for --admin-token-env: {key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--admin-token-env", key))?;
         if token.trim().is_empty() {
-            return Err(format!("admin token env var is empty: {key}").into());
+            return Err(cli_env_empty(locale, "admin token env var", key).into());
         }
         admin_token = Some(token);
     }
@@ -139,9 +183,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(key) = admin_read_token_env.as_deref() {
         let token = env
             .get(key)
-            .ok_or_else(|| format!("missing env var for --admin-read-token-env: {key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--admin-read-token-env", key))?;
         if token.trim().is_empty() {
-            return Err(format!("admin read token env var is empty: {key}").into());
+            return Err(cli_env_empty(locale, "admin read token env var", key).into());
         }
         admin_read_token = Some(token);
     }
@@ -150,18 +194,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (tenant_id, env_key) in &admin_tenant_token_env {
         let tenant_id = tenant_id.trim();
         if tenant_id.is_empty() {
-            return Err("admin tenant token env spec has empty tenant id".into());
+            return Err(cli_empty_value(locale, "admin tenant token env spec tenant id").into());
         }
         if !seen_tenants.insert(tenant_id.to_string()) {
-            return Err(
-                format!("duplicate --admin-tenant-token-env tenant id: {tenant_id}").into(),
-            );
+            return Err(cli_duplicate_value(
+                locale,
+                "--admin-tenant-token-env tenant id",
+                tenant_id,
+            )
+            .into());
         }
         let token = env
             .get(env_key)
-            .ok_or_else(|| format!("missing env var for --admin-tenant-token-env: {env_key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--admin-tenant-token-env", env_key))?;
         if token.trim().is_empty() {
-            return Err(format!("admin tenant token env var is empty: {env_key}").into());
+            return Err(cli_env_empty(locale, "admin tenant token env var", env_key).into());
         }
         admin_tenant_tokens.push((tenant_id.to_string(), token));
     }
@@ -170,18 +217,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (tenant_id, env_key) in &admin_tenant_read_token_env {
         let tenant_id = tenant_id.trim();
         if tenant_id.is_empty() {
-            return Err("admin tenant read token env spec has empty tenant id".into());
-        }
-        if !seen_tenants.insert(tenant_id.to_string()) {
             return Err(
-                format!("duplicate --admin-tenant-read-token-env tenant id: {tenant_id}").into(),
+                cli_empty_value(locale, "admin tenant read token env spec tenant id").into(),
             );
         }
-        let token = env.get(env_key).ok_or_else(|| {
-            format!("missing env var for --admin-tenant-read-token-env: {env_key}")
-        })?;
+        if !seen_tenants.insert(tenant_id.to_string()) {
+            return Err(cli_duplicate_value(
+                locale,
+                "--admin-tenant-read-token-env tenant id",
+                tenant_id,
+            )
+            .into());
+        }
+        let token = env
+            .get(env_key)
+            .ok_or_else(|| cli_missing_env(locale, "--admin-tenant-read-token-env", env_key))?;
         if token.trim().is_empty() {
-            return Err(format!("admin tenant read token env var is empty: {env_key}").into());
+            return Err(cli_env_empty(locale, "admin tenant read token env var", env_key).into());
         }
         admin_tenant_read_tokens.push((tenant_id.to_string(), token));
     }
@@ -190,10 +242,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (tenant_id, _token) in &admin_tenant_tokens {
         let tenant_id = tenant_id.trim();
         if tenant_id.is_empty() {
-            return Err("admin tenant token has empty tenant id".into());
+            return Err(cli_empty_value(locale, "admin tenant token tenant id").into());
         }
         if !seen_tenants.insert(tenant_id.to_string()) {
-            return Err(format!("duplicate --admin-tenant-token tenant id: {tenant_id}").into());
+            return Err(
+                cli_duplicate_value(locale, "--admin-tenant-token tenant id", tenant_id).into(),
+            );
         }
     }
 
@@ -201,68 +255,71 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (tenant_id, _token) in &admin_tenant_read_tokens {
         let tenant_id = tenant_id.trim();
         if tenant_id.is_empty() {
-            return Err("admin tenant read token has empty tenant id".into());
+            return Err(cli_empty_value(locale, "admin tenant read token tenant id").into());
         }
         if !seen_tenants.insert(tenant_id.to_string()) {
-            return Err(
-                format!("duplicate --admin-tenant-read-token tenant id: {tenant_id}").into(),
-            );
+            return Err(cli_duplicate_value(
+                locale,
+                "--admin-tenant-read-token tenant id",
+                tenant_id,
+            )
+            .into());
         }
     }
 
     if let Some(key) = redis_url_env.as_deref() {
         let url = env
             .get(key)
-            .ok_or_else(|| format!("missing env var for --redis-env: {key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--redis-env", key))?;
         if url.trim().is_empty() {
-            return Err(format!("redis url env var is empty: {key}").into());
+            return Err(cli_env_empty(locale, "redis url env var", key).into());
         }
         redis_url = Some(url);
     }
     if let Some(key) = postgres_url_env.as_deref() {
         let url = env
             .get(key)
-            .ok_or_else(|| format!("missing env var for --pg-env: {key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--pg-env", key))?;
         if url.trim().is_empty() {
-            return Err(format!("postgres url env var is empty: {key}").into());
+            return Err(cli_env_empty(locale, "postgres url env var", key).into());
         }
         postgres_url = Some(url);
     }
     if let Some(key) = mysql_url_env.as_deref() {
         let url = env
             .get(key)
-            .ok_or_else(|| format!("missing env var for --mysql-env: {key}"))?;
+            .ok_or_else(|| cli_missing_env(locale, "--mysql-env", key))?;
         if url.trim().is_empty() {
-            return Err(format!("mysql url env var is empty: {key}").into());
+            return Err(cli_env_empty(locale, "mysql url env var", key).into());
         }
         mysql_url = Some(url);
     }
 
     if let Some(token) = admin_token.take() {
-        admin_token = Some(resolve_cli_secret(token, &env, "admin token").await?);
+        admin_token = Some(resolve_cli_secret(token, &env, "admin token", locale).await?);
     }
     if let Some(token) = admin_read_token.take() {
-        admin_read_token = Some(resolve_cli_secret(token, &env, "admin read token").await?);
+        admin_read_token = Some(resolve_cli_secret(token, &env, "admin read token", locale).await?);
     }
     for (_tenant_id, token) in &mut admin_tenant_tokens {
         let raw = std::mem::take(token);
-        *token = resolve_cli_secret(raw, &env, "admin tenant token").await?;
+        *token = resolve_cli_secret(raw, &env, "admin tenant token", locale).await?;
     }
     for (_tenant_id, token) in &mut admin_tenant_read_tokens {
         let raw = std::mem::take(token);
-        *token = resolve_cli_secret(raw, &env, "admin tenant read token").await?;
+        *token = resolve_cli_secret(raw, &env, "admin tenant read token", locale).await?;
     }
     if let Some(url) = redis_url.take() {
-        redis_url = Some(resolve_cli_secret(url, &env, "redis url").await?);
+        redis_url = Some(resolve_cli_secret(url, &env, "redis url", locale).await?);
     }
     if let Some(url) = postgres_url.take() {
-        postgres_url = Some(resolve_cli_secret(url, &env, "postgres url").await?);
+        postgres_url = Some(resolve_cli_secret(url, &env, "postgres url", locale).await?);
     }
     if let Some(url) = mysql_url.take() {
-        mysql_url = Some(resolve_cli_secret(url, &env, "mysql url").await?);
+        mysql_url = Some(resolve_cli_secret(url, &env, "mysql url", locale).await?);
     }
     if redis_prefix.is_some() && redis_url.is_none() {
-        return Err("--redis-prefix requires --redis or --redis-env".into());
+        return Err(cli_requires(locale, "--redis-prefix", "--redis or --redis-env").into());
     }
 
     let config_path = std::path::Path::new(&path);
@@ -282,19 +339,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ditto_server::gateway::litellm_config::LitellmProxyConfig,
                         >(&raw)
                         .map_err(|litellm_err| {
-                            format!(
-                                "failed to parse config as ditto gateway yaml ({gateway_yaml_err}) or litellm proxy yaml ({litellm_err})"
+                            cli_parse_config_failed(
+                                locale,
+                                &format!("ditto gateway yaml ({gateway_yaml_err})"),
+                                &format!("litellm proxy yaml ({litellm_err})"),
                             )
                         })?;
-                        litellm_config.try_into_gateway_config().map_err(|err| {
-                            format!("failed to import litellm proxy config: {err}")
-                        })?
+                        litellm_config
+                            .try_into_gateway_config()
+                            .map_err(|err| cli_import_litellm_failed(locale, &err.to_string()))?
                     }
                 }
             }
             #[cfg(not(feature = "gateway-config-yaml"))]
             {
-                return Err("yaml config requires `--features gateway-config-yaml`".into());
+                return Err(cli_feature_disabled(
+                    locale,
+                    "yaml config",
+                    "--features gateway-config-yaml",
+                )
+                .into());
             }
         }
         _ => match serde_json::from_str(&raw) {
@@ -309,22 +373,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 ditto_server::gateway::litellm_config::LitellmProxyConfig,
                             >(&raw)
                             .map_err(|litellm_err| {
-                                format!(
-                                    "failed to parse config as json ({json_err}), ditto gateway yaml ({gateway_yaml_err}), or litellm proxy yaml ({litellm_err})"
+                                cli_parse_config_failed(
+                                    locale,
+                                    &format!("json ({json_err})"),
+                                    &format!(
+                                        "ditto gateway yaml ({gateway_yaml_err}), or litellm proxy yaml ({litellm_err})"
+                                    ),
                                 )
                             })?;
                             litellm_config.try_into_gateway_config().map_err(|err| {
-                                format!("failed to import litellm proxy config: {err}")
+                                cli_import_litellm_failed(locale, &err.to_string())
                             })?
                         }
                     }
                 }
                 #[cfg(not(feature = "gateway-config-yaml"))]
                 {
-                    return Err(format!(
-                        "failed to parse config as json ({json_err}); yaml requires `--features gateway-config-yaml`"
-                    )
-                    .into());
+                    return Err(
+                        cli_json_parse_then_yaml_disabled(locale, &json_err.to_string()).into(),
+                    );
                 }
             }
         },
@@ -351,7 +418,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-sqlite"))]
         {
-            return Err("sqlite store requires `--features gateway-store-sqlite`".into());
+            return Err(cli_feature_disabled(
+                locale,
+                "sqlite store",
+                "--features gateway-store-sqlite",
+            )
+            .into());
         }
     }
 
@@ -379,7 +451,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-postgres"))]
         {
-            return Err("postgres store requires `--features gateway-store-postgres`".into());
+            return Err(cli_feature_disabled(
+                locale,
+                "postgres store",
+                "--features gateway-store-postgres",
+            )
+            .into());
         }
     }
 
@@ -407,7 +484,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-mysql"))]
         {
-            return Err("mysql store requires `--features gateway-store-mysql`".into());
+            return Err(cli_feature_disabled(
+                locale,
+                "mysql store",
+                "--features gateway-store-mysql",
+            )
+            .into());
         }
     }
 
@@ -435,7 +517,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-redis"))]
         {
-            return Err("redis store requires `--features gateway-store-redis`".into());
+            return Err(cli_feature_disabled(
+                locale,
+                "redis store",
+                "--features gateway-store-redis",
+            )
+            .into());
         }
     }
 
@@ -445,12 +532,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             && mysql_url.is_none()
             && redis_url.is_none()
         {
-            return Err(
-                "--db-doctor requires at least one store flag (--sqlite/--pg/--mysql/--redis)"
-                    .into(),
-            );
+            return Err(cli_requires(
+                locale,
+                "--db-doctor",
+                "at least one store flag (--sqlite/--pg/--mysql/--redis)",
+            )
+            .into());
         }
-        println!("db doctor: schema checks passed");
+        println!("{}", cli_schema_checks_passed(locale));
         return Ok(());
     }
 
@@ -475,16 +564,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for key in &config.virtual_keys {
         if let Err(err) = key.guardrails.validate() {
-            return Err(format!("invalid guardrails config for key {}: {err}", key.id).into());
+            return Err(cli_invalid_guardrails(locale, "key", &key.id, &err.to_string()).into());
         }
     }
 
     for rule in &config.router.rules {
         if let Some(guardrails) = rule.guardrails.as_ref() {
             if let Err(err) = guardrails.validate() {
-                return Err(format!(
-                    "invalid guardrails config for route {}: {err}",
-                    rule.model_prefix
+                return Err(cli_invalid_guardrails(
+                    locale,
+                    "route",
+                    &rule.model_prefix,
+                    &err.to_string(),
                 )
                 .into());
             }
@@ -504,9 +595,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .is_some_and(|p| !p.trim().is_empty())
         {
             if !backend.base_url.trim().is_empty() {
-                return Err(format!(
-                    "backend {} cannot set both base_url and provider",
-                    backend.name
+                return Err(cli_cannot_set_both(
+                    locale,
+                    "backend",
+                    &backend.name,
+                    "base_url",
+                    "provider",
                 )
                 .into());
             }
@@ -526,18 +620,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .insert(backend.name.clone(), backend_model)
                     .is_some()
                 {
-                    return Err(format!("duplicate backend name: {}", backend.name).into());
+                    return Err(cli_duplicate_value(locale, "backend name", &backend.name).into());
                 }
                 continue;
             }
             #[cfg(not(feature = "gateway-translation"))]
             {
-                return Err("provider backend requires `--features gateway-translation`".into());
+                return Err(cli_feature_disabled(
+                    locale,
+                    "provider backend",
+                    "--features gateway-translation",
+                )
+                .into());
             }
         }
 
         if backend.base_url.trim().is_empty() {
-            return Err(format!("backend {} missing base_url", backend.name).into());
+            return Err(cli_missing_field(locale, "backend", &backend.name, "base_url").into());
         }
 
         let mut client = ditto_server::gateway::ProxyBackend::new(&backend.base_url)?;
@@ -548,14 +647,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .insert(backend.name.clone(), client)
             .is_some()
         {
-            return Err(format!("duplicate backend name: {}", backend.name).into());
+            return Err(cli_duplicate_value(locale, "backend name", &backend.name).into());
         }
     }
 
     for spec in upstream_specs {
         let (name, url) = spec
             .split_once('=')
-            .ok_or("upstream spec must be name=base_url")?;
+            .ok_or_else(|| cli_invalid_spec(locale, "upstream spec", "name=base_url"))?;
         let client = ditto_server::gateway::ProxyBackend::new(url)?;
         proxy_backends.insert(name.to_string(), client);
     }
@@ -564,7 +663,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for agent in &config.a2a_agents {
         let agent_id = agent.agent_id.trim();
         if agent_id.is_empty() {
-            return Err("a2a agent_id is empty".into());
+            return Err(cli_empty_value(locale, "a2a agent_id").into());
         }
 
         let url = agent
@@ -575,7 +674,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .trim()
             .to_string();
         if url.is_empty() {
-            return Err(format!("a2a agent {agent_id} missing agent_card_params.url").into());
+            return Err(
+                cli_missing_field(locale, "a2a agent", agent_id, "agent_card_params.url").into(),
+            );
         }
 
         let mut client = ditto_server::gateway::ProxyBackend::new(&url)?;
@@ -592,7 +693,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .insert(agent_id.to_string(), agent_state)
             .is_some()
         {
-            return Err(format!("duplicate a2a agent_id: {agent_id}").into());
+            return Err(cli_duplicate_value(locale, "a2a agent_id", agent_id).into());
         }
     }
 
@@ -600,12 +701,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for server in &config.mcp_servers {
         let server_id = server.server_id.trim();
         if server_id.is_empty() {
-            return Err("mcp server_id is empty".into());
+            return Err(cli_empty_value(locale, "mcp server_id").into());
         }
 
         let url = server.url.trim();
         if url.is_empty() {
-            return Err(format!("mcp server {server_id} missing url").into());
+            return Err(cli_missing_field(locale, "mcp server", server_id, "url").into());
         }
 
         let mut client = ditto_server::gateway::http::McpServerState::new(
@@ -617,7 +718,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client = client.with_request_timeout_seconds(server.timeout_seconds);
 
         if mcp_servers.insert(server_id.to_string(), client).is_some() {
-            return Err(format!("duplicate mcp server_id: {server_id}").into());
+            return Err(cli_duplicate_value(locale, "mcp server_id", server_id).into());
         }
     }
 
@@ -626,7 +727,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for spec in backend_specs {
         let (name, url) = spec
             .split_once('=')
-            .ok_or("backend spec must be name=url")?;
+            .ok_or_else(|| cli_invalid_spec(locale, "backend spec", "name=url"))?;
         let backend = ditto_server::gateway::HttpBackend::new(url)?;
         gateway.register_backend(name.to_string(), backend);
     }
@@ -665,11 +766,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             streaming_enabled: proxy_cache_streaming_enabled,
             max_stream_body_bytes: proxy_cache_max_stream_body_bytes,
         },
+        locale,
     )?;
-    state = attach_proxy_max_body_bytes(state, proxy_max_body_bytes)?;
+    state = attach_proxy_max_body_bytes(state, proxy_max_body_bytes, locale)?;
     state = attach_proxy_usage_max_body_bytes(state, proxy_usage_max_body_bytes)?;
-    state = attach_proxy_backpressure(state, proxy_max_in_flight)?;
-    state = attach_pricing_table(state, pricing_litellm_path)?;
+    state = attach_proxy_backpressure(state, proxy_max_in_flight, locale)?;
+    state = attach_pricing_table(state, pricing_litellm_path, locale)?;
     state = attach_prometheus_metrics(
         state,
         prometheus_metrics_enabled,
@@ -677,6 +779,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         prometheus_max_model_series,
         prometheus_max_backend_series,
         prometheus_max_path_series,
+        locale,
     )?;
     state = attach_proxy_routing(
         state,
@@ -699,6 +802,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             health_check_interval_secs: proxy_health_check_interval_secs,
             health_check_timeout_secs: proxy_health_check_timeout_secs,
         },
+        locale,
     )?;
     #[cfg(any(
         feature = "gateway-store-sqlite",
@@ -753,18 +857,215 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         store = store.with_audit_retention_secs(effective_audit_retention_secs);
         state = state.with_redis_store(store);
     }
-    state = attach_devtools(state, devtools_path)?;
+    state = attach_devtools(state, devtools_path, locale)?;
 
-    let _otel_guard = attach_otel(otel_enabled, otel_endpoint.as_deref(), otel_json)?;
+    let _otel_guard = attach_otel(otel_enabled, otel_endpoint.as_deref(), otel_json, locale)?;
 
     let app = ditto_server::gateway::http::router(state);
     let listener = tokio::net::TcpListener::bind(&listen).await?;
-    println!("ditto-gateway listening on {listen}");
+    println!("{}", cli_listening_on(locale, &listen));
     axum::serve(listener, app).await?;
     Ok(())
 }
 
+#[cfg(feature = "gateway")]
+fn cli_cannot_combine(locale: Locale, left: &str, right: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.cannot_combine",
+        &[
+            MessageArg::new("left", left),
+            MessageArg::new("right", right),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_requires(locale: Locale, flag: &str, requirement: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.requires",
+        &[
+            MessageArg::new("flag", flag),
+            MessageArg::new("requirement", requirement),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_missing_env(locale: Locale, flag: &str, key: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.missing_env",
+        &[MessageArg::new("flag", flag), MessageArg::new("key", key)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_env_empty(locale: Locale, label: &str, key: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.env_empty",
+        &[MessageArg::new("label", label), MessageArg::new("key", key)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_empty_value(locale: Locale, label: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.empty_value",
+        &[MessageArg::new("label", label)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_duplicate_value(locale: Locale, label: &str, value: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.duplicate_value",
+        &[
+            MessageArg::new("label", label),
+            MessageArg::new("value", value),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+#[allow(dead_code)]
+fn cli_json_parse_then_yaml_disabled(locale: Locale, json_error: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.json_parse_then_yaml_disabled",
+        &[MessageArg::new("json_error", json_error)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+#[cfg_attr(not(feature = "gateway-config-yaml"), allow(dead_code))]
+fn cli_parse_config_failed(locale: Locale, primary: &str, secondary: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.parse_config_failed",
+        &[
+            MessageArg::new("primary", primary),
+            MessageArg::new("secondary", secondary),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+#[cfg_attr(not(feature = "gateway-config-yaml"), allow(dead_code))]
+fn cli_import_litellm_failed(locale: Locale, error: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.import_litellm_failed",
+        &[MessageArg::new("error", error)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_invalid_guardrails(locale: Locale, scope: &str, name: &str, error: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.invalid_guardrails",
+        &[
+            MessageArg::new("scope", scope),
+            MessageArg::new("name", name),
+            MessageArg::new("error", error),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_missing_field(locale: Locale, scope: &str, name: &str, field: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.missing_field",
+        &[
+            MessageArg::new("scope", scope),
+            MessageArg::new("name", name),
+            MessageArg::new("field", field),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_cannot_set_both(locale: Locale, scope: &str, name: &str, left: &str, right: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.cannot_set_both",
+        &[
+            MessageArg::new("scope", scope),
+            MessageArg::new("name", name),
+            MessageArg::new("left", left),
+            MessageArg::new("right", right),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_invalid_spec(locale: Locale, label: &str, expected: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.invalid_spec",
+        &[
+            MessageArg::new("label", label),
+            MessageArg::new("expected", expected),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+#[allow(dead_code)]
+fn cli_feature_disabled(locale: Locale, feature: &str, rebuild_hint: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.feature_disabled",
+        &[
+            MessageArg::new("feature", feature),
+            MessageArg::new("rebuild_hint", rebuild_hint),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn cli_schema_checks_passed(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "cli.schema_checks_passed", &[])
+}
+
+#[cfg(feature = "gateway")]
+fn cli_listening_on(locale: Locale, listen: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.listening_on",
+        &[MessageArg::new("listen", listen)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> String {
+    if let Some(error) = error.downcast_ref::<ditto_core::error::DittoError>() {
+        return error.render(locale);
+    }
+    if let Some(error) = error.downcast_ref::<ditto_core::error::ProviderResolutionError>() {
+        return error.render(locale);
+    }
+    MESSAGE_CATALOG.render(
+        locale,
+        "error.generic",
+        &[MessageArg::new("error", error.to_string())],
+    )
+}
+
 #[cfg(not(feature = "gateway"))]
 fn main() {
-    eprintln!("gateway feature disabled; rebuild with --features gateway");
+    eprintln!(
+        "{}",
+        cli_feature_disabled(
+            MESSAGE_CATALOG.default_locale(),
+            "gateway",
+            "--features gateway",
+        )
+    );
 }

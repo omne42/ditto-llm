@@ -6,7 +6,7 @@ use crate::providers::openai_videos_common;
 use crate::capabilities::file::FileContent;
 use crate::capabilities::video::VideoGenerationModel;
 use crate::config::{Env, ProviderConfig};
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
     VideoListRequest, VideoListResponse, VideoRemixRequest,

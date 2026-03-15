@@ -15,11 +15,52 @@ use crate::capabilities::{
     RerankModel,
 };
 use crate::config::Env;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::LanguageModel;
 
 // RUNTIME-BUILDER-BACKEND-OWNER: provider-specific adapter instantiation lives
 // here after runtime has already resolved the effective backend/config plan.
+
+#[allow(dead_code)]
+fn provider_feature_missing(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.provider_feature_missing",
+        "provider" => provider
+    )
+}
+
+#[allow(dead_code)]
+fn capability_feature_missing(provider: &str, capability: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.capability_feature_missing",
+        "provider" => provider,
+        "capability" => capability
+    )
+}
+
+#[allow(dead_code)]
+fn unsupported_provider_backend(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.unsupported_provider_backend",
+        "provider" => provider
+    )
+}
+
+#[allow(dead_code)]
+fn context_cache_model_missing(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.context_cache_model_missing",
+        "provider" => provider
+    )
+}
+
+#[allow(dead_code)]
+fn context_cache_profile_missing(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.context_cache_profile_missing",
+        "provider" => provider
+    )
+}
 
 pub(super) async fn build_language_model(
     plan: &BuilderAssemblyPlan,
@@ -29,21 +70,19 @@ pub(super) async fn build_language_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(feature = "openai")]
+            #[cfg(feature = "provider-openai")]
             {
                 Ok(Arc::new(
                     crate::providers::openai::OpenAITextModel::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "openai"))]
+            #[cfg(not(feature = "provider-openai"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without openai feature".to_string(),
-                ))
+                Err(provider_feature_missing("openai"))
             }
         }
         "openai-compatible" => {
-            #[cfg(feature = "openai-compatible")]
+            #[cfg(feature = "provider-openai-compatible")]
             {
                 Ok(Arc::new(
                     crate::providers::openai_compatible::OpenAICompatible::from_config(
@@ -52,86 +91,72 @@ pub(super) async fn build_language_model(
                     .await?,
                 ))
             }
-            #[cfg(not(feature = "openai-compatible"))]
+            #[cfg(not(feature = "provider-openai-compatible"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without openai-compatible feature".to_string(),
-                ))
+                Err(provider_feature_missing("openai-compatible"))
             }
         }
         "anthropic" => {
-            #[cfg(feature = "anthropic")]
+            #[cfg(feature = "provider-anthropic")]
             {
                 Ok(Arc::new(
                     crate::providers::anthropic::Anthropic::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "anthropic"))]
+            #[cfg(not(feature = "provider-anthropic"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without anthropic feature".to_string(),
-                ))
+                Err(provider_feature_missing("anthropic"))
             }
         }
         "google" => {
-            #[cfg(feature = "google")]
+            #[cfg(feature = "provider-google")]
             {
                 Ok(Arc::new(
                     crate::providers::google::Google::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "google"))]
+            #[cfg(not(feature = "provider-google"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without google feature".to_string(),
-                ))
+                Err(provider_feature_missing("google"))
             }
         }
         "cohere" => {
-            #[cfg(feature = "cohere")]
+            #[cfg(feature = "provider-cohere")]
             {
                 Ok(Arc::new(
                     crate::providers::cohere::Cohere::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "cohere"))]
+            #[cfg(not(feature = "provider-cohere"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without cohere feature".to_string(),
-                ))
+                Err(provider_feature_missing("cohere"))
             }
         }
         "bedrock" => {
-            #[cfg(feature = "bedrock")]
+            #[cfg(feature = "provider-bedrock")]
             {
                 Ok(Arc::new(
                     crate::providers::bedrock::Bedrock::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "bedrock"))]
+            #[cfg(not(feature = "provider-bedrock"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without bedrock feature".to_string(),
-                ))
+                Err(provider_feature_missing("bedrock"))
             }
         }
         "vertex" => {
-            #[cfg(feature = "vertex")]
+            #[cfg(feature = "provider-vertex")]
             {
                 Ok(Arc::new(
                     crate::providers::vertex::Vertex::from_config(_config, _env).await?,
                 ))
             }
-            #[cfg(not(feature = "vertex"))]
+            #[cfg(not(feature = "provider-vertex"))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without vertex feature".to_string(),
-                ))
+                Err(provider_feature_missing("vertex"))
             }
         }
-        other => Err(DittoError::InvalidResponse(format!(
-            "unsupported provider backend: {other}"
-        ))),
+        other => Err(unsupported_provider_backend(other)),
     }
 }
 
@@ -143,21 +168,19 @@ pub(super) async fn build_embedding_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "embeddings"))]
+            #[cfg(all(feature = "provider-openai", feature = "cap-embedding"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIEmbeddings::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "embeddings")))]
+            #[cfg(not(all(feature = "provider-openai", feature = "cap-embedding")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without embeddings support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "embedding"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+            #[cfg(all(feature = "provider-openai-compatible", feature = "cap-embedding"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible::OpenAICompatibleEmbeddings::from_config(
@@ -166,40 +189,33 @@ pub(super) async fn build_embedding_model(
                     .await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "embeddings")))]
+            #[cfg(not(all(feature = "provider-openai-compatible", feature = "cap-embedding")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without embeddings support for openai-compatible providers"
-                        .to_string(),
-                ))
+                Err(capability_feature_missing("openai-compatible", "embedding"))
             }
         }
         "google" => {
-            #[cfg(all(feature = "google", feature = "embeddings"))]
+            #[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::google::GoogleEmbeddings::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "google", feature = "embeddings")))]
+            #[cfg(not(all(feature = "provider-google", feature = "cap-embedding")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without embeddings support for google provider".to_string(),
-                ))
+                Err(capability_feature_missing("google", "embedding"))
             }
         }
         "cohere" => {
-            #[cfg(all(feature = "cohere", feature = "embeddings"))]
+            #[cfg(all(feature = "provider-cohere", feature = "cap-embedding"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::cohere::CohereEmbeddings::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "cohere", feature = "embeddings")))]
+            #[cfg(not(all(feature = "provider-cohere", feature = "cap-embedding")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without embeddings support for cohere provider".to_string(),
-                ))
+                Err(capability_feature_missing("cohere", "embedding"))
             }
         }
         _ => Ok(None),
@@ -214,31 +230,29 @@ pub(super) async fn build_moderation_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "moderations"))]
+            #[cfg(all(feature = "provider-openai", feature = "cap-moderation"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIModerations::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "moderations")))]
+            #[cfg(not(all(feature = "provider-openai", feature = "cap-moderation")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without moderations support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "moderation"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "moderations"))]
+            #[cfg(all(feature = "provider-openai-compatible", feature = "cap-moderation"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible_moderations::OpenAICompatibleModerations::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "moderations")))]
+            #[cfg(not(all(feature = "provider-openai-compatible", feature = "cap-moderation")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without moderations support for openai-compatible providers"
-                        .to_string(),
+                Err(capability_feature_missing(
+                    "openai-compatible",
+                    "moderation",
                 ))
             }
         }
@@ -254,46 +268,57 @@ pub(super) async fn build_image_generation_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "images"))]
+            #[cfg(all(
+                feature = "provider-openai",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIImages::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "images")))]
+            #[cfg(not(all(
+                feature = "provider-openai",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without images support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "image"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "images"))]
+            #[cfg(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible_images::OpenAICompatibleImages::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "images")))]
+            #[cfg(not(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without images support for openai-compatible providers"
-                        .to_string(),
-                ))
+                Err(capability_feature_missing("openai-compatible", "image"))
             }
         }
         "google" => {
-            #[cfg(all(feature = "google", feature = "images"))]
+            #[cfg(all(
+                feature = "provider-google",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::google::GoogleImages::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "google", feature = "images")))]
+            #[cfg(not(all(
+                feature = "provider-google",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without images support for google provider".to_string(),
-                ))
+                Err(capability_feature_missing("google", "image"))
             }
         }
         _ => Ok(None),
@@ -308,21 +333,28 @@ pub(super) async fn build_image_edit_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "images"))]
+            #[cfg(all(
+                feature = "provider-openai",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIImageEdits::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "images")))]
+            #[cfg(not(all(
+                feature = "provider-openai",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without image edit support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "image_edit"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "images"))]
+            #[cfg(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAICompatibleImageEdits::from_config(
@@ -331,11 +363,14 @@ pub(super) async fn build_image_edit_model(
                     .await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "images")))]
+            #[cfg(not(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-image-generation", feature = "cap-image-edit")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without image edit support for openai-compatible providers"
-                        .to_string(),
+                Err(capability_feature_missing(
+                    "openai-compatible",
+                    "image_edit",
                 ))
             }
         }
@@ -351,31 +386,27 @@ pub(super) async fn build_video_generation_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "videos"))]
+            #[cfg(all(feature = "provider-openai", feature = "cap-video-generation"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIVideos::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "videos")))]
+            #[cfg(not(all(feature = "provider-openai", feature = "cap-video-generation")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without videos support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "video_generation"))
             }
         }
         "google" => {
-            #[cfg(all(feature = "google", feature = "videos"))]
+            #[cfg(all(feature = "provider-google", feature = "cap-video-generation"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::google::GoogleVideos::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "google", feature = "videos")))]
+            #[cfg(not(all(feature = "provider-google", feature = "cap-video-generation")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without videos support for google provider".to_string(),
-                ))
+                Err(capability_feature_missing("google", "video_generation"))
             }
         }
         _ => Ok(None),
@@ -390,31 +421,27 @@ pub(super) async fn build_realtime_session_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "realtime"))]
+            #[cfg(all(feature = "provider-openai", feature = "cap-realtime"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIRealtime::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "realtime")))]
+            #[cfg(not(all(feature = "provider-openai", feature = "cap-realtime")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without realtime support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "realtime"))
             }
         }
         "google" => {
-            #[cfg(all(feature = "google", feature = "realtime"))]
+            #[cfg(all(feature = "provider-google", feature = "cap-realtime"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::google::GoogleRealtime::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "google", feature = "realtime")))]
+            #[cfg(not(all(feature = "provider-google", feature = "cap-realtime")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without realtime support for google provider".to_string(),
-                ))
+                Err(capability_feature_missing("google", "realtime"))
             }
         }
         _ => Ok(None),
@@ -429,22 +456,29 @@ pub(super) async fn build_audio_transcription_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "audio"))]
+            #[cfg(all(
+                feature = "provider-openai",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIAudioTranscription::from_config(_config, _env)
                         .await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "audio")))]
+            #[cfg(not(all(
+                feature = "provider-openai",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without audio support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "audio"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
+            #[cfg(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible_audio::OpenAICompatibleAudioTranscription::from_config(
@@ -453,12 +487,12 @@ pub(super) async fn build_audio_transcription_model(
                     .await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
+            #[cfg(not(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without audio support for openai-compatible providers"
-                        .to_string(),
-                ))
+                Err(capability_feature_missing("openai-compatible", "audio"))
             }
         }
         _ => Ok(None),
@@ -473,21 +507,28 @@ pub(super) async fn build_speech_model(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "audio"))]
+            #[cfg(all(
+                feature = "provider-openai",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAISpeech::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "audio")))]
+            #[cfg(not(all(
+                feature = "provider-openai",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without audio support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "audio"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "audio"))]
+            #[cfg(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            ))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible_audio::OpenAICompatibleSpeech::from_config(
@@ -496,12 +537,12 @@ pub(super) async fn build_speech_model(
                     .await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "audio")))]
+            #[cfg(not(all(
+                feature = "provider-openai-compatible",
+                any(feature = "cap-audio-transcription", feature = "cap-audio-speech")
+            )))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without audio support for openai-compatible providers"
-                        .to_string(),
-                ))
+                Err(capability_feature_missing("openai-compatible", "audio"))
             }
         }
         _ => Ok(None),
@@ -516,32 +557,27 @@ pub(super) async fn build_batch_client(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(all(feature = "openai", feature = "batches"))]
+            #[cfg(all(feature = "provider-openai", feature = "cap-batch"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAIBatches::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai", feature = "batches")))]
+            #[cfg(not(all(feature = "provider-openai", feature = "cap-batch")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without batches support for openai provider".to_string(),
-                ))
+                Err(capability_feature_missing("openai", "batch"))
             }
         }
         "openai-compatible" => {
-            #[cfg(all(feature = "openai-compatible", feature = "batches"))]
+            #[cfg(all(feature = "provider-openai-compatible", feature = "cap-batch"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible_batches::OpenAICompatibleBatches::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "openai-compatible", feature = "batches")))]
+            #[cfg(not(all(feature = "provider-openai-compatible", feature = "cap-batch")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without batches support for openai-compatible providers"
-                        .to_string(),
-                ))
+                Err(capability_feature_missing("openai-compatible", "batch"))
             }
         }
         _ => Ok(None),
@@ -556,17 +592,15 @@ pub(super) async fn build_rerank_model(
     let _config = &plan.config;
     match provider {
         "cohere" => {
-            #[cfg(all(feature = "cohere", feature = "rerank"))]
+            #[cfg(all(feature = "provider-cohere", feature = "cap-rerank"))]
             {
                 Ok(Some(Arc::new(
                     crate::providers::cohere::CohereRerank::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(all(feature = "cohere", feature = "rerank")))]
+            #[cfg(not(all(feature = "provider-cohere", feature = "cap-rerank")))]
             {
-                Err(DittoError::InvalidResponse(
-                    "ditto-core built without rerank support for cohere provider".to_string(),
-                ))
+                Err(capability_feature_missing("cohere", "rerank"))
             }
         }
         _ => Ok(None),
@@ -581,19 +615,19 @@ pub(super) async fn build_file_client(
     let _config = &plan.config;
     match provider {
         "openai" => {
-            #[cfg(feature = "openai")]
+            #[cfg(feature = "provider-openai")]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai::OpenAI::from_config(_config, _env).await?,
                 )))
             }
-            #[cfg(not(feature = "openai"))]
+            #[cfg(not(feature = "provider-openai"))]
             {
                 Ok(None)
             }
         }
         "openai-compatible" => {
-            #[cfg(feature = "openai-compatible")]
+            #[cfg(feature = "provider-openai-compatible")]
             {
                 Ok(Some(Arc::new(
                     crate::providers::openai_compatible::OpenAICompatible::from_config(
@@ -602,7 +636,7 @@ pub(super) async fn build_file_client(
                     .await?,
                 )))
             }
-            #[cfg(not(feature = "openai-compatible"))]
+            #[cfg(not(feature = "provider-openai-compatible"))]
             {
                 Ok(None)
             }
@@ -645,21 +679,11 @@ pub(super) async fn build_context_cache_model(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            DittoError::InvalidResponse(format!(
-                "context cache model is not set for provider {}",
-                plan.behavior_provider
-            ))
-        })?;
+        .ok_or_else(|| context_cache_model_missing(plan.behavior_provider))?;
     let profile = builtin_runtime_assembly()
         .registry()
         .resolve_context_cache_profile(plan.behavior_provider, &plan.config, model_id)
-        .ok_or_else(|| {
-            DittoError::InvalidResponse(format!(
-                "provider {} resolved context.cache but runtime_registry produced an empty context cache profile",
-                plan.behavior_provider
-            ))
-        })?;
+        .ok_or_else(|| context_cache_profile_missing(plan.behavior_provider))?;
 
     Ok(Some(Arc::new(CatalogContextCacheAdapter {
         provider: plan.behavior_provider.to_string(),

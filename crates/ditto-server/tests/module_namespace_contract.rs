@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 #[test]
 fn direct_l0_namespaces_expose_low_level_owners() {
-    let _ = TypeId::of::<ditto_core::foundation::error::DittoError>();
+    let _ = TypeId::of::<ditto_core::error::DittoError>();
     let _ = TypeId::of::<ditto_core::llm_core::stream::CollectedStream>();
     let _ = TypeId::of::<dyn ditto_core::llm_core::model::LanguageModel>();
     let _ = TypeId::of::<ditto_core::contracts::RuntimeRoute>();

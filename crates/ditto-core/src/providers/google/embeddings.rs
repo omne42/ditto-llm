@@ -1,4 +1,4 @@
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Clone)]
 pub struct GoogleEmbeddings {
     http: reqwest::Client,
@@ -8,7 +8,7 @@ pub struct GoogleEmbeddings {
     http_query_params: BTreeMap<String, String>,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 impl GoogleEmbeddings {
     pub fn new(api_key: impl Into<String>) -> Self {
         let http = default_http_client(DEFAULT_HTTP_TIMEOUT);
@@ -83,8 +83,9 @@ impl GoogleEmbeddings {
         if !self.model.trim().is_empty() {
             return Ok(self.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "google embedding model is not set (set GoogleEmbeddings::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "google embedding",
+            "set GoogleEmbeddings::with_model",
         ))
     }
 
@@ -95,26 +96,26 @@ impl GoogleEmbeddings {
     }
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Debug, Deserialize)]
 struct BatchEmbedResponse {
     #[serde(default)]
     embeddings: Vec<EmbeddingItem>,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Debug, Deserialize)]
 struct SingleEmbedResponse {
     embedding: EmbeddingItem,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Debug, Deserialize)]
 struct EmbeddingItem {
     values: Vec<f32>,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[async_trait]
 impl EmbeddingModel for GoogleEmbeddings {
     fn provider(&self) -> &str {

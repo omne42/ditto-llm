@@ -13,8 +13,8 @@ fn mixed_env() -> Env {
 
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_requires_explicit_openai_compatible_owner()
--> ditto_core::foundation::error::Result<()> {
+async fn custom_provider_requires_explicit_openai_compatible_owner() -> ditto_core::error::Result<()>
+{
     let err = build_language_model(
         "yunwu-openai",
         &ProviderConfig {
@@ -38,7 +38,7 @@ async fn custom_provider_requires_explicit_openai_compatible_owner()
 #[cfg(all(feature = "provider-openai-compatible", feature = "cap-llm"))]
 #[tokio::test]
 async fn custom_provider_resolves_through_explicit_openai_compatible_owner()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = build_language_model(
         "yunwu-openai-chat",
         &ProviderConfig {
@@ -59,8 +59,8 @@ async fn custom_provider_resolves_through_explicit_openai_compatible_owner()
 
 #[cfg(all(feature = "provider-anthropic", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_resolves_through_explicit_anthropic_owner()
--> ditto_core::foundation::error::Result<()> {
+async fn custom_provider_resolves_through_explicit_anthropic_owner() -> ditto_core::error::Result<()>
+{
     let model = build_language_model(
         "yunwu-claude-native",
         &ProviderConfig {
@@ -81,8 +81,7 @@ async fn custom_provider_resolves_through_explicit_anthropic_owner()
 
 #[cfg(all(feature = "provider-google", feature = "cap-llm"))]
 #[tokio::test]
-async fn custom_provider_resolves_through_explicit_google_owner()
--> ditto_core::foundation::error::Result<()> {
+async fn custom_provider_resolves_through_explicit_google_owner() -> ditto_core::error::Result<()> {
     let model = build_language_model(
         "yunwu-gemini-native",
         &ProviderConfig {
@@ -104,7 +103,7 @@ async fn custom_provider_resolves_through_explicit_google_owner()
 #[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
 #[tokio::test]
 async fn custom_provider_resolves_embeddings_through_explicit_google_owner()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = build_embedding_model(
         "yunwu-gemini-embed",
         &ProviderConfig {

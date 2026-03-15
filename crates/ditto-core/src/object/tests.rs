@@ -19,7 +19,7 @@ use super::{
 use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Warning,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::provider_options::JsonSchemaFormat;
 
@@ -61,7 +61,9 @@ impl LanguageModel for FakeModel {
     }
 
     async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
-        Err(DittoError::InvalidResponse("not implemented".to_string()))
+        Err(DittoError::invalid_response_text(
+            "not implemented".to_string(),
+        ))
     }
 }
 
@@ -90,7 +92,7 @@ async fn generate_object_parses_json_response() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "tools")]
+#[cfg(feature = "cap-llm-tools")]
 #[tokio::test]
 async fn generate_object_prefers_tool_call() -> Result<()> {
     let model = FakeModel {
@@ -126,7 +128,7 @@ async fn generate_object_prefers_tool_call() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "tools")]
+#[cfg(feature = "cap-llm-tools")]
 #[tokio::test]
 async fn stream_object_tool_call_emits_array_elements() -> Result<()> {
     let chunks = vec![

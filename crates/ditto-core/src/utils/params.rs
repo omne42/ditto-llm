@@ -1,13 +1,13 @@
 use serde_json::Number;
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex"
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex"
 ))]
 use std::collections::HashSet;
 
@@ -49,13 +49,13 @@ pub(crate) fn clamped_number_from_f32(
 }
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex"
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex"
 ))]
 pub(crate) fn sanitize_stop_sequences(
     sequences: &[String],
@@ -119,12 +119,12 @@ mod tests {
     }
 
     #[cfg(any(
-        feature = "anthropic",
-        feature = "bedrock",
-        feature = "cohere",
-        feature = "google",
-        feature = "openai-compatible",
-        feature = "vertex"
+        feature = "provider-anthropic",
+        feature = "provider-bedrock",
+        feature = "provider-cohere",
+        feature = "provider-google",
+        feature = "provider-openai-compatible",
+        feature = "provider-vertex"
     ))]
     mod stop_sequences {
         use super::*;

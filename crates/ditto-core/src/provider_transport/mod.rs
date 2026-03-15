@@ -12,22 +12,22 @@ mod policy;
 pub use policy::{HttpClientPolicy, HttpResponseBodyPolicy, HttpTransportPolicy};
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "bedrock",
-    feature = "vertex"
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-bedrock",
+    feature = "provider-vertex"
 ))]
 #[allow(unused_imports)]
 pub(crate) use config::DEFAULT_HTTP_TIMEOUT;
-#[cfg(any(feature = "bedrock", feature = "vertex"))]
+#[cfg(any(feature = "provider-bedrock", feature = "provider-vertex"))]
 #[allow(unused_imports)]
 pub(crate) use config::build_http_client;
 #[cfg(any(
-    feature = "google",
-    feature = "cohere",
-    feature = "openai",
-    feature = "openai-compatible",
+    feature = "provider-google",
+    feature = "provider-cohere",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
 ))]
 #[allow(unused_imports)]
 pub(crate) use config::default_http_client;
@@ -36,7 +36,11 @@ pub(crate) use config::{
     ResolvedHttpProviderConfig, apply_http_query_params, build_http_client_with_policy,
     header_map_from_pairs, resolve_http_provider_config, resolve_http_provider_config_with_policy,
 };
-#[cfg(any(feature = "gateway", feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(
+    feature = "gateway",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible"
+))]
 #[allow(unused_imports)]
 pub(crate) use http::read_reqwest_body_bytes_bounded_with_content_length;
 pub use http::response_text_truncated;

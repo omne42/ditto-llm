@@ -8,7 +8,7 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use ditto_core::contracts::{FinishReason, Usage};
 use ditto_core::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::DittoError;
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
@@ -33,16 +33,13 @@ impl LanguageModel for FakeModel {
     async fn generate(
         &self,
         _request: GenerateRequest,
-    ) -> ditto_core::foundation::error::Result<GenerateResponse> {
-        Err(DittoError::InvalidResponse(
+    ) -> ditto_core::error::Result<GenerateResponse> {
+        Err(DittoError::invalid_response_text(
             "FakeModel.generate should not be called".to_string(),
         ))
     }
 
-    async fn stream(
-        &self,
-        _request: GenerateRequest,
-    ) -> ditto_core::foundation::error::Result<StreamResult> {
+    async fn stream(&self, _request: GenerateRequest) -> ditto_core::error::Result<StreamResult> {
         let chunks = vec![
             Ok(StreamChunk::ResponseId {
                 id: "chatcmpl_fake".to_string(),
@@ -77,12 +74,13 @@ fn base_gateway() -> Gateway {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     })
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_stream_include_usage()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_chat_completions_stream_include_usage() -> ditto_core::error::Result<()>
+{
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -123,7 +121,7 @@ async fn gateway_translation_chat_completions_stream_include_usage()
 
 #[tokio::test]
 async fn gateway_translation_chat_completions_stream_defaults_without_usage()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(

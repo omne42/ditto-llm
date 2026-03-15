@@ -18,7 +18,7 @@ use crate::capabilities::{BatchClient, ContextCacheModel};
 use crate::capabilities::{ImageGenerationModel, ModerationModel, RerankModel};
 use crate::config::{Env, ProviderConfig};
 use crate::contracts::CapabilityKind;
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::llm_core::model::LanguageModel;
 
 // RUNTIME-BUILDER-SUPPORT-FRONTDOOR: gateway/application callers ask runtime

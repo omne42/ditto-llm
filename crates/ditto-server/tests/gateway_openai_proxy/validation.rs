@@ -1,5 +1,5 @@
 #[tokio::test]
-async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_core::foundation::error::Result<()> {
+async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -30,6 +30,7 @@ async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_core::foundati
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -62,7 +63,7 @@ async fn openai_compat_proxy_rejects_invalid_json_body() -> ditto_core::foundati
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -93,6 +94,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_reque
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -128,7 +130,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_reque
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -159,6 +161,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_reque
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -195,7 +198,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_reque
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -226,6 +229,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -261,7 +265,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_rerank_request()
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -292,6 +296,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -328,7 +333,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_batches_request()
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_transcriptions_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -359,6 +364,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_audio_transcripti
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -401,7 +407,7 @@ abc\r\n\
 
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_files_upload_request()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -432,6 +438,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_files_upload_requ
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -510,6 +517,7 @@ async fn openai_compat_proxy_applies_route_guardrails_override() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -574,6 +582,7 @@ async fn openai_compat_proxy_rejects_not_allowed_model() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -605,7 +614,7 @@ async fn openai_compat_proxy_rejects_not_allowed_model() {
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_allows_requests_without_virtual_keys() {
+async fn openai_compat_proxy_rejects_requests_without_configured_virtual_keys() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
     }
@@ -633,6 +642,7 @@ async fn openai_compat_proxy_allows_requests_without_virtual_keys() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -648,14 +658,12 @@ async fn openai_compat_proxy_allows_requests_without_virtual_keys() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    assert_eq!(bytes, r#"{"id":"ok"}"#);
-    mock.assert();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    mock.assert_calls(0);
 }
 
 #[tokio::test]
-async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
+async fn openai_compat_proxy_rejects_forwarded_authorization_when_virtual_keys_empty() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
     }
@@ -689,6 +697,7 @@ async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -705,8 +714,6 @@ async fn openai_compat_proxy_forwards_authorization_when_virtual_keys_empty() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    assert_eq!(bytes, r#"{"id":"ok"}"#);
-    mock.assert();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    mock.assert_calls(0);
 }

@@ -1,14 +1,16 @@
 use ditto_core::contracts::Message;
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 use ditto_core::llm_core::model::LanguageModel;
 use ditto_core::providers::OpenAICompatible;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
-        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
-    let model = std::env::var("OPENAI_COMPAT_MODEL")
-        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_MODEL".to_string()))?;
+    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL").map_err(|_| {
+        DittoError::invalid_response_text("missing OPENAI_COMPAT_BASE_URL".to_string())
+    })?;
+    let model = std::env::var("OPENAI_COMPAT_MODEL").map_err(|_| {
+        DittoError::invalid_response_text("missing OPENAI_COMPAT_MODEL".to_string())
+    })?;
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 
     let llm = OpenAICompatible::new(api_key)

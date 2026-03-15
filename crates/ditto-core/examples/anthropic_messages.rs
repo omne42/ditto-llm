@@ -1,12 +1,12 @@
 use ditto_core::contracts::Message;
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 use ditto_core::llm_core::model::LanguageModel;
 use ditto_core::providers::Anthropic;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| DittoError::InvalidResponse("missing ANTHROPIC_API_KEY".to_string()))?;
+        .map_err(|_| DittoError::invalid_response_text("missing ANTHROPIC_API_KEY".to_string()))?;
     let model = std::env::var("ANTHROPIC_MODEL")
         .unwrap_or_else(|_| "claude-3-5-sonnet-20241022".to_string());
 

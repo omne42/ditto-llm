@@ -52,6 +52,8 @@ pub(super) async fn attempt_proxy_backend(
     let max_attempts = params.max_attempts;
     #[cfg(feature = "gateway-routing-advanced")]
     let retry_config = params.retry_config;
+    #[cfg(feature = "gateway-routing-advanced")]
+    let client_supplied_request_id = params.client_supplied_request_id;
 
     #[cfg(feature = "gateway-proxy-cache")]
     let proxy_cache_key = params.proxy_cache_key;
@@ -196,7 +198,21 @@ pub(super) async fn attempt_proxy_backend(
             let mapped = map_openai_gateway_error(err);
             #[cfg(feature = "gateway-routing-advanced")]
             {
-                let decision = retry_config.decision_for_failure(failure_kind);
+                let base_decision = retry_config.decision_for_failure(failure_kind);
+                let decision_ctx = ProxyDecisionLogContext {
+                    request_id: &request_id,
+                    backend_name: &backend_name,
+                    path_and_query,
+                    attempted_backends,
+                    idx,
+                    max_attempts,
+                    status_code: None,
+                };
+                let (decision, safety_guard) = apply_proxy_request_safety_guard(
+                    base_decision,
+                    &parts.method,
+                    client_supplied_request_id,
+                );
                 record_proxy_backend_failure(
                     state,
                     &backend_name,
@@ -205,20 +221,18 @@ pub(super) async fn attempt_proxy_backend(
                     failure_message,
                 )
                 .await;
-                emit_proxy_backend_decision_logs(
-                    state,
-                    decision,
-                    ProxyDecisionLogContext {
-                        request_id: &request_id,
-                        backend_name: &backend_name,
-                        path_and_query,
-                        attempted_backends,
-                        idx,
-                        max_attempts,
-                        status_code: None,
-                    },
-                )
-                .await;
+                if let Some(safety_guard) = safety_guard {
+                    emit_proxy_request_safety_guard_log(
+                        state,
+                        decision_ctx,
+                        &parts.method,
+                        base_decision.action,
+                        safety_guard,
+                        client_supplied_request_id,
+                    )
+                    .await;
+                }
+                emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
                 return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
                     BackendAttemptOutcome::Continue(Some(mapped))
                 } else {
@@ -358,7 +372,21 @@ pub(super) async fn attempt_proxy_backend(
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-routing-advanced")]
                     {
-                        let decision = retry_config.decision_for_failure(failure_kind);
+                        let base_decision = retry_config.decision_for_failure(failure_kind);
+                        let decision_ctx = ProxyDecisionLogContext {
+                            request_id: &request_id,
+                            backend_name: &backend_name,
+                            path_and_query,
+                            attempted_backends,
+                            idx,
+                            max_attempts,
+                            status_code: None,
+                        };
+                        let (decision, safety_guard) = apply_proxy_request_safety_guard(
+                            base_decision,
+                            &parts.method,
+                            client_supplied_request_id,
+                        );
                         record_proxy_backend_failure(
                             state,
                             &backend_name,
@@ -367,20 +395,18 @@ pub(super) async fn attempt_proxy_backend(
                             failure_message,
                         )
                         .await;
-                        emit_proxy_backend_decision_logs(
-                            state,
-                            decision,
-                            ProxyDecisionLogContext {
-                                request_id: &request_id,
-                                backend_name: &backend_name,
-                                path_and_query,
-                                attempted_backends,
-                                idx,
-                                max_attempts,
-                                status_code: None,
-                            },
-                        )
-                        .await;
+                        if let Some(safety_guard) = safety_guard {
+                            emit_proxy_request_safety_guard_log(
+                                state,
+                                decision_ctx,
+                                &parts.method,
+                                base_decision.action,
+                                safety_guard,
+                                client_supplied_request_id,
+                            )
+                            .await;
+                        }
+                        emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
                         return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
                             BackendAttemptOutcome::Continue(Some(mapped))
                         } else {
@@ -409,7 +435,23 @@ pub(super) async fn attempt_proxy_backend(
             #[cfg(feature = "gateway-routing-advanced")]
             let failure_kind = FailureKind::Status(status_code);
             #[cfg(feature = "gateway-routing-advanced")]
-            let decision = retry_config.decision_for_failure(failure_kind);
+            let base_decision = retry_config.decision_for_failure(failure_kind);
+            #[cfg(feature = "gateway-routing-advanced")]
+            let decision_ctx = ProxyDecisionLogContext {
+                request_id: &request_id,
+                backend_name: &backend_name,
+                path_and_query,
+                attempted_backends,
+                idx,
+                max_attempts,
+                status_code: Some(status_code),
+            };
+            #[cfg(feature = "gateway-routing-advanced")]
+            let (decision, safety_guard) = apply_proxy_request_safety_guard(
+                base_decision,
+                &parts.method,
+                client_supplied_request_id,
+            );
             #[cfg(feature = "gateway-routing-advanced")]
             let should_record_status_failure =
                 should_record_proxy_status_failure(state, retry_config, failure_kind, status);
@@ -424,20 +466,18 @@ pub(super) async fn attempt_proxy_backend(
                     format!("status {}", status_code),
                 )
                 .await;
-                emit_proxy_backend_decision_logs(
-                    state,
-                    decision,
-                    ProxyDecisionLogContext {
-                        request_id: &request_id,
-                        backend_name: &backend_name,
-                        path_and_query,
-                        attempted_backends,
-                        idx,
-                        max_attempts,
-                        status_code: Some(status_code),
-                    },
-                )
-                .await;
+                if let Some(safety_guard) = safety_guard {
+                    emit_proxy_request_safety_guard_log(
+                        state,
+                        decision_ctx,
+                        &parts.method,
+                        base_decision.action,
+                        safety_guard,
+                        client_supplied_request_id,
+                    )
+                    .await;
+                }
+                emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
             } else {
                 record_proxy_backend_success(state, &backend_name).await;
             }
@@ -750,7 +790,20 @@ pub(super) async fn attempt_proxy_backend(
     #[cfg(feature = "gateway-routing-advanced")]
     let failure_kind = FailureKind::Status(status_code);
     #[cfg(feature = "gateway-routing-advanced")]
-    let decision = retry_config.decision_for_failure(failure_kind);
+    let base_decision = retry_config.decision_for_failure(failure_kind);
+    #[cfg(feature = "gateway-routing-advanced")]
+    let decision_ctx = ProxyDecisionLogContext {
+        request_id: &request_id,
+        backend_name: &backend_name,
+        path_and_query,
+        attempted_backends,
+        idx,
+        max_attempts,
+        status_code: Some(status_code),
+    };
+    #[cfg(feature = "gateway-routing-advanced")]
+    let (decision, safety_guard) =
+        apply_proxy_request_safety_guard(base_decision, &parts.method, client_supplied_request_id);
     #[cfg(feature = "gateway-routing-advanced")]
     let should_record_status_failure =
         should_record_proxy_status_failure(state, retry_config, failure_kind, status);
@@ -765,20 +818,18 @@ pub(super) async fn attempt_proxy_backend(
             format!("status {}", status_code),
         )
         .await;
-        emit_proxy_backend_decision_logs(
-            state,
-            decision,
-            ProxyDecisionLogContext {
-                request_id: &request_id,
-                backend_name: &backend_name,
-                path_and_query,
-                attempted_backends,
-                idx,
-                max_attempts,
-                status_code: Some(status_code),
-            },
-        )
-        .await;
+        if let Some(safety_guard) = safety_guard {
+            emit_proxy_request_safety_guard_log(
+                state,
+                decision_ctx,
+                &parts.method,
+                base_decision.action,
+                safety_guard,
+                client_supplied_request_id,
+            )
+            .await;
+        }
+        emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
     } else {
         record_proxy_backend_success(state, &backend_name).await;
     }
@@ -2195,6 +2246,57 @@ pub(super) async fn attempt_proxy_backend(
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProxyRequestSafetyGuard {
+    MissingClientRequestId,
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+impl ProxyRequestSafetyGuard {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingClientRequestId => "missing_client_request_id",
+        }
+    }
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn is_safe_for_multi_backend_attempt(method: &axum::http::Method) -> bool {
+    matches!(
+        *method,
+        axum::http::Method::GET
+            | axum::http::Method::HEAD
+            | axum::http::Method::OPTIONS
+            | axum::http::Method::TRACE
+    )
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+fn apply_proxy_request_safety_guard(
+    decision: crate::gateway::proxy_routing::ProxyFailureDecision,
+    method: &axum::http::Method,
+    client_supplied_request_id: bool,
+) -> (
+    crate::gateway::proxy_routing::ProxyFailureDecision,
+    Option<ProxyRequestSafetyGuard>,
+) {
+    if !decision.action.continues()
+        || client_supplied_request_id
+        || is_safe_for_multi_backend_attempt(method)
+    {
+        return (decision, None);
+    }
+
+    (
+        crate::gateway::proxy_routing::ProxyFailureDecision {
+            action: crate::gateway::proxy_routing::ProxyFailureAction::None,
+            kind: decision.kind,
+        },
+        Some(ProxyRequestSafetyGuard::MissingClientRequestId),
+    )
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
 fn classify_proxy_backend_transport_failure(err: &GatewayError) -> FailureKind {
     match err {
         GatewayError::BackendTimeout { .. } => FailureKind::Timeout,
@@ -2221,6 +2323,7 @@ fn should_record_proxy_status_failure(
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
+#[derive(Clone, Copy)]
 struct ProxyDecisionLogContext<'a> {
     request_id: &'a str,
     backend_name: &'a str,
@@ -2229,6 +2332,45 @@ struct ProxyDecisionLogContext<'a> {
     idx: usize,
     max_attempts: usize,
     status_code: Option<u16>,
+}
+
+#[cfg(feature = "gateway-routing-advanced")]
+async fn emit_proxy_request_safety_guard_log(
+    state: &GatewayHttpState,
+    ctx: ProxyDecisionLogContext<'_>,
+    method: &axum::http::Method,
+    original_action: crate::gateway::proxy_routing::ProxyFailureAction,
+    guard: ProxyRequestSafetyGuard,
+    client_supplied_request_id: bool,
+) {
+    emit_json_log(
+        state,
+        "proxy.request_safety_guard",
+        serde_json::json!({
+            "request_id": ctx.request_id,
+            "backend": ctx.backend_name,
+            "method": method.as_str(),
+            "path": ctx.path_and_query,
+            "attempted_backends": ctx.attempted_backends,
+            "original_action": original_action.as_str(),
+            "guard": guard.as_str(),
+            "client_supplied_request_id": client_supplied_request_id,
+        }),
+    );
+
+    #[cfg(feature = "sdk")]
+    emit_devtools_log(
+        state,
+        "proxy.request_safety_guard",
+        serde_json::json!({
+            "request_id": ctx.request_id,
+            "backend": ctx.backend_name,
+            "method": method.as_str(),
+            "path": ctx.path_and_query,
+            "original_action": original_action.as_str(),
+            "guard": guard.as_str(),
+        }),
+    );
 }
 
 #[cfg(feature = "gateway-routing-advanced")]
@@ -2289,4 +2431,54 @@ fn openai_status_routing_error(
     };
 
     openai_error(status, "api_error", Some("backend_error"), message)
+}
+
+#[cfg(all(test, feature = "gateway-routing-advanced"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsafe_post_without_client_request_id_disables_multi_backend_attempts() {
+        let decision = crate::gateway::proxy_routing::ProxyFailureDecision {
+            action: crate::gateway::proxy_routing::ProxyFailureAction::Fallback,
+            kind: FailureKind::Timeout,
+        };
+
+        let (guarded, guard) =
+            apply_proxy_request_safety_guard(decision, &axum::http::Method::POST, false);
+
+        assert_eq!(
+            guarded.action,
+            crate::gateway::proxy_routing::ProxyFailureAction::None
+        );
+        assert_eq!(guard, Some(ProxyRequestSafetyGuard::MissingClientRequestId));
+    }
+
+    #[test]
+    fn unsafe_post_with_client_request_id_keeps_multi_backend_attempts() {
+        let decision = crate::gateway::proxy_routing::ProxyFailureDecision {
+            action: crate::gateway::proxy_routing::ProxyFailureAction::Retry,
+            kind: FailureKind::Network,
+        };
+
+        let (guarded, guard) =
+            apply_proxy_request_safety_guard(decision, &axum::http::Method::POST, true);
+
+        assert_eq!(guarded.action, decision.action);
+        assert_eq!(guard, None);
+    }
+
+    #[test]
+    fn safe_get_without_client_request_id_keeps_multi_backend_attempts() {
+        let decision = crate::gateway::proxy_routing::ProxyFailureDecision {
+            action: crate::gateway::proxy_routing::ProxyFailureAction::Fallback,
+            kind: FailureKind::Status(StatusCode::SERVICE_UNAVAILABLE.as_u16()),
+        };
+
+        let (guarded, guard) =
+            apply_proxy_request_safety_guard(decision, &axum::http::Method::GET, false);
+
+        assert_eq!(guarded.action, decision.action);
+        assert_eq!(guard, None);
+    }
 }

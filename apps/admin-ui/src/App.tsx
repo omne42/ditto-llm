@@ -13,19 +13,22 @@ function downloadBlob(filename: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
-function storageGet(key: string, fallback: string) {
-  const v = localStorage.getItem(key);
+function storageGet(storage: Storage, key: string, fallback: string) {
+  const v = storage.getItem(key);
   return v ?? fallback;
 }
 
 export function App() {
-  const [baseUrl, setBaseUrl] = useState(() => storageGet("ditto.baseUrl", "http://127.0.0.1:8080"));
-  const [token, setToken] = useState(() => storageGet("ditto.adminToken", ""));
+  const [baseUrl, setBaseUrl] = useState(() =>
+    storageGet(localStorage, "ditto.baseUrl", "http://127.0.0.1:8080"),
+  );
+  const [token, setToken] = useState(() => storageGet(sessionStorage, "ditto.adminToken", ""));
   const [headerMode, setHeaderMode] = useState<AdminHeaderMode>(() =>
-    (storageGet("ditto.headerMode", "authorization") as AdminHeaderMode) ?? "authorization",
+    (storageGet(localStorage, "ditto.headerMode", "authorization") as AdminHeaderMode) ??
+    "authorization",
   );
 
-  const [tenantId, setTenantId] = useState(() => storageGet("ditto.tenantId", ""));
+  const [tenantId, setTenantId] = useState(() => storageGet(localStorage, "ditto.tenantId", ""));
   const [includeTokens, setIncludeTokens] = useState(false);
 
   const [keys, setKeys] = useState<unknown[] | null>(null);
@@ -71,7 +74,7 @@ export function App() {
     localStorage.setItem("ditto.baseUrl", baseUrl);
   }, [baseUrl]);
   useEffect(() => {
-    localStorage.setItem("ditto.adminToken", token);
+    sessionStorage.setItem("ditto.adminToken", token);
   }, [token]);
   useEffect(() => {
     localStorage.setItem("ditto.headerMode", headerMode);

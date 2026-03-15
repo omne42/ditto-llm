@@ -29,17 +29,9 @@ pub enum ThinkingIntensity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderApi {
-    #[serde(alias = "chat_completions", alias = "/v1/chat/completions")]
     OpenaiChatCompletions,
-    #[serde(alias = "responses", alias = "/v1/responses")]
     OpenaiResponses,
-    #[serde(
-        alias = "google_generate_content",
-        alias = "gemini_generateContent",
-        alias = "generateContent"
-    )]
     GeminiGenerateContent,
-    #[serde(alias = "messages", alias = "/v1/messages")]
     AnthropicMessages,
 }
 
@@ -83,14 +75,14 @@ pub struct ModelConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderAuth {
-    #[serde(rename = "api_key_env", alias = "env", alias = "api_key")]
+    #[serde(rename = "api_key_env")]
     ApiKeyEnv {
         #[serde(default)]
         keys: Vec<String>,
     },
-    #[serde(alias = "auth_command")]
-    Command { command: Vec<String> },
-    #[serde(alias = "header_env")]
+    Command {
+        command: Vec<String>,
+    },
     HttpHeaderEnv {
         header: String,
         #[serde(default)]
@@ -98,14 +90,12 @@ pub enum ProviderAuth {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
     },
-    #[serde(alias = "header_command")]
     HttpHeaderCommand {
         header: String,
         command: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
     },
-    #[serde(alias = "query_env", alias = "query_param")]
     QueryParamEnv {
         param: String,
         #[serde(default)]
@@ -113,14 +103,13 @@ pub enum ProviderAuth {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
     },
-    #[serde(alias = "query_command")]
     QueryParamCommand {
         param: String,
         command: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prefix: Option<String>,
     },
-    #[serde(rename = "sigv4", alias = "sig_v4")]
+    #[serde(rename = "sigv4")]
     SigV4 {
         #[serde(default)]
         access_keys: Vec<String>,
@@ -131,7 +120,7 @@ pub enum ProviderAuth {
         region: String,
         service: String,
     },
-    #[serde(rename = "oauth_client_credentials", alias = "oauth")]
+    #[serde(rename = "oauth_client_credentials")]
     OAuthClientCredentials {
         token_url: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -569,6 +558,33 @@ normalize_endpoint = "/v1/chat/completions"
             parsed.normalize_endpoint.as_deref(),
             Some("/v1/chat/completions")
         );
+    }
+
+    #[test]
+    fn rejects_legacy_provider_api_aliases_from_toml() {
+        let err = toml::from_str::<ProviderConfig>(
+            r#"
+base_url = "https://example.com/v1"
+upstream_api = "generateContent"
+"#,
+        )
+        .expect_err("legacy provider api aliases should be rejected");
+        assert!(err.to_string().contains("unknown variant"));
+    }
+
+    #[test]
+    fn rejects_legacy_provider_auth_aliases_from_toml() {
+        let err = toml::from_str::<ProviderConfig>(
+            r#"
+base_url = "https://example.com/v1"
+
+[auth]
+type = "env"
+keys = ["TEST_API_KEY"]
+"#,
+        )
+        .expect_err("legacy provider auth aliases should be rejected");
+        assert!(err.to_string().contains("unknown variant"));
     }
 
     #[test]

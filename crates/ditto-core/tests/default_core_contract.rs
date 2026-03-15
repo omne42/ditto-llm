@@ -17,13 +17,19 @@ fn is_default_core_build() -> bool {
         || cfg!(feature = "provider-qianfan")
         || cfg!(feature = "provider-xai")
         || cfg!(feature = "provider-zhipu")
-        || cfg!(feature = "embeddings")
-        || cfg!(feature = "images")
-        || cfg!(feature = "audio")
-        || cfg!(feature = "moderations")
-        || cfg!(feature = "rerank")
-        || cfg!(feature = "batches")
-        || cfg!(feature = "realtime"))
+        || cfg!(feature = "cap-embedding")
+        || cfg!(any(
+            feature = "cap-image-generation",
+            feature = "cap-image-edit"
+        ))
+        || cfg!(any(
+            feature = "cap-audio-transcription",
+            feature = "cap-audio-speech"
+        ))
+        || cfg!(feature = "cap-moderation")
+        || cfg!(feature = "cap-rerank")
+        || cfg!(feature = "cap-batch")
+        || cfg!(feature = "cap-realtime"))
 }
 
 #[test]

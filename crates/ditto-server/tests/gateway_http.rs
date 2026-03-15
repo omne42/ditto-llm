@@ -1,5 +1,7 @@
 #![cfg(feature = "gateway")]
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
@@ -7,8 +9,10 @@ use ditto_server::gateway::observability::ObservabilitySnapshot;
 use ditto_server::gateway::{
     Backend, BudgetConfig, CacheConfig, Gateway, GatewayConfig, GatewayError, GatewayHttpState,
     GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig,
-    RouteBackend, RouterConfig, VirtualKeyConfig,
+    ProxyBackend, RouteBackend, RouterConfig, VirtualKeyConfig,
 };
+use httpmock::Method::POST;
+use httpmock::MockServer;
 use serde_json::json;
 use tower::util::ServiceExt;
 
@@ -63,11 +67,18 @@ fn base_config() -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     }
 }
 
+fn base_config_without_keys() -> GatewayConfig {
+    let mut config = base_config();
+    config.virtual_keys = Vec::new();
+    config
+}
+
 #[tokio::test]
-async fn gateway_http_routes_and_metrics() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_routes_and_metrics() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -111,8 +122,204 @@ async fn gateway_http_routes_and_metrics() -> ditto_core::foundation::error::Res
 }
 
 #[tokio::test]
-async fn gateway_http_admin_requires_token_and_supports_crud()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_health_and_readiness_endpoints() -> ditto_core::error::Result<()> {
+    let state = GatewayHttpState::new(Gateway::new(base_config()));
+    let app = ditto_server::gateway::http::router(state);
+
+    let health_request = Request::builder()
+        .method("GET")
+        .uri("/health")
+        .body(Body::empty())
+        .unwrap();
+    let health_response = app.clone().oneshot(health_request).await.unwrap();
+    assert_eq!(health_response.status(), StatusCode::OK);
+    let health_body = to_bytes(health_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let health: serde_json::Value = serde_json::from_slice(&health_body)?;
+    assert_eq!(
+        health.get("status").and_then(|value| value.as_str()),
+        Some("ok")
+    );
+
+    let ready_request = Request::builder()
+        .method("GET")
+        .uri("/ready")
+        .body(Body::empty())
+        .unwrap();
+    let ready_response = app.oneshot(ready_request).await.unwrap();
+    assert_eq!(ready_response.status(), StatusCode::OK);
+    let ready_body = to_bytes(ready_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let ready: serde_json::Value = serde_json::from_slice(&ready_body)?;
+    assert_eq!(
+        ready.get("status").and_then(|value| value.as_str()),
+        Some("ready")
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn gateway_http_ready_reports_sqlite_store_failures() -> ditto_core::error::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let broken_path = tmp.path().join("missing-parent").join("gateway.sqlite");
+    let state = GatewayHttpState::new(Gateway::new(base_config()))
+        .with_sqlite_store(ditto_server::gateway::SqliteStore::new(broken_path));
+    let app = ditto_server::gateway::http::router(state);
+
+    let ready_request = Request::builder()
+        .method("GET")
+        .uri("/ready")
+        .body(Body::empty())
+        .unwrap();
+    let ready_response = app.oneshot(ready_request).await.unwrap();
+    assert_eq!(ready_response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let ready_body = to_bytes(ready_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let ready: serde_json::Value = serde_json::from_slice(&ready_body)?;
+    assert_eq!(
+        ready.get("status").and_then(|value| value.as_str()),
+        Some("not_ready")
+    );
+    assert!(
+        ready
+            .get("checks")
+            .and_then(|value| value.as_array())
+            .is_some_and(|checks| checks.iter().any(|check| {
+                check.get("name").and_then(|value| value.as_str()) == Some("store.sqlite")
+                    && check.get("status").and_then(|value| value.as_str()) == Some("error")
+            }))
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_a2a_remains_fail_closed_without_provisioned_keys()
+-> ditto_core::error::Result<()> {
+    let upstream = MockServer::start();
+    let backend = ProxyBackend::new(&upstream.base_url()).expect("a2a backend");
+    let mut agents = HashMap::new();
+    agents.insert(
+        "helper".to_string(),
+        ditto_server::gateway::http::A2aAgentState::new(
+            "helper".to_string(),
+            json!({ "name": "Helper" }),
+            backend,
+        ),
+    );
+
+    let state =
+        GatewayHttpState::new(Gateway::new(base_config_without_keys())).with_a2a_agents(agents);
+    let app = ditto_server::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/a2a/helper/.well-known/agent-card.json")
+        .header("authorization", "Bearer vk-1")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_a2a_agent_card_and_invoke_require_valid_key() -> ditto_core::error::Result<()>
+{
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+
+    let upstream = MockServer::start();
+    let upstream_mock = upstream.mock(|when, then| {
+        when.method(POST).path("/message/send").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "message/send",
+            "params": { "message": { "role": "user", "parts": [{ "text": "hi" }] } }
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "result": { "message": { "role": "assistant", "parts": [{ "text": "hello" }] } }
+                })
+                .to_string(),
+            );
+    });
+
+    let backend = ProxyBackend::new(&upstream.base_url()).expect("a2a backend");
+    let mut agents = HashMap::new();
+    agents.insert(
+        "helper".to_string(),
+        ditto_server::gateway::http::A2aAgentState::new(
+            "helper".to_string(),
+            json!({ "name": "Helper" }),
+            backend,
+        ),
+    );
+
+    let state = GatewayHttpState::new(Gateway::new(base_config())).with_a2a_agents(agents);
+    let app = ditto_server::gateway::http::router(state);
+
+    let unauthorized_card = Request::builder()
+        .method("GET")
+        .uri("/a2a/helper/.well-known/agent-card.json")
+        .body(Body::empty())
+        .unwrap();
+    let unauthorized_response = app.clone().oneshot(unauthorized_card).await.unwrap();
+    assert_eq!(unauthorized_response.status(), StatusCode::UNAUTHORIZED);
+
+    let authorized_card = Request::builder()
+        .method("GET")
+        .uri("/a2a/helper/.well-known/agent-card.json")
+        .header("authorization", "Bearer vk-1")
+        .body(Body::empty())
+        .unwrap();
+    let authorized_card_response = app.clone().oneshot(authorized_card).await.unwrap();
+    assert_eq!(authorized_card_response.status(), StatusCode::OK);
+    let authorized_card_body = to_bytes(authorized_card_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let authorized_card_json: serde_json::Value = serde_json::from_slice(&authorized_card_body)?;
+    assert_eq!(
+        authorized_card_json
+            .get("url")
+            .and_then(|value| value.as_str()),
+        Some("/a2a/helper")
+    );
+
+    let invoke_request = Request::builder()
+        .method("POST")
+        .uri("/a2a/helper/message/send")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "message/send",
+                "params": { "message": { "role": "user", "parts": [{ "text": "hi" }] } }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let invoke_response = app.oneshot(invoke_request).await.unwrap();
+    assert_eq!(invoke_response.status(), StatusCode::OK);
+    upstream_mock.assert();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_admin_requires_token_and_supports_crud() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -183,8 +390,7 @@ async fn gateway_http_admin_requires_token_and_supports_crud()
 }
 
 #[tokio::test]
-async fn gateway_http_admin_config_versions_support_rollback()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_admin_config_versions_support_rollback() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -736,8 +942,7 @@ async fn gateway_http_admin_config_versions_support_rollback()
 }
 
 #[tokio::test]
-async fn gateway_http_admin_config_router_upsert_and_rollback()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
     let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
@@ -982,7 +1187,7 @@ async fn gateway_http_admin_config_router_upsert_and_rollback()
 
 #[tokio::test]
 async fn gateway_http_admin_routes_are_disabled_without_admin_token()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1002,7 +1207,7 @@ async fn gateway_http_admin_routes_are_disabled_without_admin_token()
 
 #[tokio::test]
 async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1021,8 +1226,8 @@ async fn gateway_http_litellm_key_routes_are_disabled_without_admin_token()
 }
 
 #[tokio::test]
-async fn gateway_http_litellm_key_generate_info_delete_round_trip()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_core::error::Result<()>
+{
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1081,12 +1286,12 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip()
     assert!(
         keys.iter()
             .filter_map(|value| value.as_str())
-            .any(|value| value == key)
+            .any(|value| value == key_alias)
     );
 
     let list_full = Request::builder()
         .method("GET")
-        .uri("/key/list?return_full_object=true")
+        .uri("/key/list?return_full_object=true&include_tokens=true")
         .header("x-admin-token", "admin-token")
         .body(Body::empty())
         .unwrap();
@@ -1278,8 +1483,7 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip()
 }
 
 #[tokio::test]
-async fn gateway_http_tenant_scoped_admin_tokens_are_isolated()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_tenant_scoped_admin_tokens_are_isolated() -> ditto_core::error::Result<()> {
     let mut config = base_config();
     config.virtual_keys = vec![
         {
@@ -1367,8 +1571,7 @@ async fn gateway_http_tenant_scoped_admin_tokens_are_isolated()
 }
 
 #[tokio::test]
-async fn gateway_http_tenant_read_token_is_read_only() -> ditto_core::foundation::error::Result<()>
-{
+async fn gateway_http_tenant_read_token_is_read_only() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);
 
@@ -1396,13 +1599,86 @@ async fn gateway_http_tenant_read_token_is_read_only() -> ditto_core::foundation
     let upsert_response = app.clone().oneshot(upsert).await.unwrap();
     assert_eq!(upsert_response.status(), StatusCode::METHOD_NOT_ALLOWED);
 
+    let list_with_tokens = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?include_tokens=true")
+        .header("x-admin-token", "tenant-read")
+        .body(Body::empty())
+        .unwrap();
+    let list_with_tokens_response = app.clone().oneshot(list_with_tokens).await.unwrap();
+    assert_eq!(list_with_tokens_response.status(), StatusCode::FORBIDDEN);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_read_only_admin_redacts_litellm_and_blocks_secret_exports()
+-> ditto_core::error::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway)
+        .with_admin_token("admin-write")
+        .with_admin_read_token("admin-read");
+    let app = ditto_server::gateway::http::router(state);
+
+    let export = Request::builder()
+        .method("GET")
+        .uri("/admin/config/export?include_tokens=true")
+        .header("x-admin-token", "admin-read")
+        .body(Body::empty())
+        .unwrap();
+    let export_response = app.clone().oneshot(export).await.unwrap();
+    assert_eq!(export_response.status(), StatusCode::FORBIDDEN);
+
+    let list = Request::builder()
+        .method("GET")
+        .uri("/key/list")
+        .header("x-admin-token", "admin-read")
+        .body(Body::empty())
+        .unwrap();
+    let list_response = app.clone().oneshot(list).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let list_body = to_bytes(list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_json: serde_json::Value = serde_json::from_slice(&list_body)?;
+    let keys = list_json
+        .get("keys")
+        .and_then(serde_json::Value::as_array)
+        .expect("keys");
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].as_str(), Some("key-1"));
+
+    let list_full = Request::builder()
+        .method("GET")
+        .uri("/key/list?return_full_object=true")
+        .header("x-admin-token", "admin-read")
+        .body(Body::empty())
+        .unwrap();
+    let list_full_response = app.oneshot(list_full).await.unwrap();
+    assert_eq!(list_full_response.status(), StatusCode::OK);
+    let list_full_body = to_bytes(list_full_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_full_json: serde_json::Value = serde_json::from_slice(&list_full_body)?;
+    let keys_full = list_full_json
+        .get("keys")
+        .and_then(serde_json::Value::as_array)
+        .expect("keys");
+    assert_eq!(
+        keys_full[0]
+            .get("token")
+            .and_then(serde_json::Value::as_str),
+        Some("redacted")
+    );
+
     Ok(())
 }
 
 #[cfg(feature = "gateway-store-sqlite")]
 #[tokio::test]
-async fn gateway_http_audit_export_jsonl_has_hash_chain()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_http_audit_export_jsonl_has_hash_chain() -> ditto_core::error::Result<()> {
     use ditto_server::gateway::SqliteStore;
 
     let dir = tempfile::tempdir().expect("tempdir");

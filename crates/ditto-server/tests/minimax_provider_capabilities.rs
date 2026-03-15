@@ -70,8 +70,8 @@ fn minimax_catalog_runtime_spec_includes_context_cache() {
     feature = "openai-compatible"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_minimax_context_cache_profile()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_minimax_context_cache_profile() -> ditto_core::error::Result<()>
+{
     let model = ditto_core::runtime::build_context_cache_model(
         "minimax",
         &minimax_config("MiniMax-M2"),

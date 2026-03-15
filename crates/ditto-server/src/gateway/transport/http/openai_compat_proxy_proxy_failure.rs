@@ -29,8 +29,8 @@ pub(super) async fn finalize_openai_compat_proxy_failure(
         let (status, err_kind, err_code, err_message) = match ctx.last_err.as_ref() {
             Some((status, body)) => (
                 Some(status.as_u16()),
-                Some(body.0.error.kind),
-                body.0.error.code,
+                Some(body.0.error.kind.clone()),
+                body.0.error.code.clone(),
                 Some(body.0.error.message.as_str()),
             ),
             None => (None, None, None, None),

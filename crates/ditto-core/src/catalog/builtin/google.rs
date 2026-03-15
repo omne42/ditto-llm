@@ -3,21 +3,21 @@ use crate::catalog::{CapabilityKind, CapabilityStatusDescriptor, ProviderPluginD
 
 const GOOGLE_RUNTIME_CAPABILITY_STATUSES: &[CapabilityStatusDescriptor] = &[
     CapabilityStatusDescriptor::implemented(CapabilityKind::LLM),
-    #[cfg(feature = "embeddings")]
+    #[cfg(feature = "cap-embedding")]
     CapabilityStatusDescriptor::implemented(CapabilityKind::EMBEDDING),
-    #[cfg(not(feature = "embeddings"))]
+    #[cfg(not(feature = "cap-embedding"))]
     CapabilityStatusDescriptor::planned(CapabilityKind::EMBEDDING),
-    #[cfg(feature = "images")]
+    #[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
     CapabilityStatusDescriptor::implemented(CapabilityKind::IMAGE_GENERATION),
-    #[cfg(not(feature = "images"))]
+    #[cfg(not(any(feature = "cap-image-generation", feature = "cap-image-edit")))]
     CapabilityStatusDescriptor::planned(CapabilityKind::IMAGE_GENERATION),
-    #[cfg(feature = "realtime")]
+    #[cfg(feature = "cap-realtime")]
     CapabilityStatusDescriptor::implemented(CapabilityKind::REALTIME),
-    #[cfg(not(feature = "realtime"))]
+    #[cfg(not(feature = "cap-realtime"))]
     CapabilityStatusDescriptor::planned(CapabilityKind::REALTIME),
-    #[cfg(feature = "videos")]
+    #[cfg(feature = "cap-video-generation")]
     CapabilityStatusDescriptor::implemented(CapabilityKind::VIDEO_GENERATION),
-    #[cfg(not(feature = "videos"))]
+    #[cfg(not(feature = "cap-video-generation"))]
     CapabilityStatusDescriptor::planned(CapabilityKind::VIDEO_GENERATION),
 ];
 

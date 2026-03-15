@@ -6,7 +6,7 @@
 
 - `configmap.yaml`：`gateway.json`（支持 `${ENV_VAR}` 插值）
 - `secret.example.yaml`：示例 Secret（请自行替换）
-- `deployment.yaml`：2 副本 Deployment（含 /health 探针）
+- `deployment.yaml`：2 副本 Deployment（`/ready` readiness + `/health` liveness）
 - `service.yaml`：ClusterIP Service
 
 如果你更偏好用 Helm 管理参数化部署，也可以直接使用：
@@ -53,6 +53,7 @@ kubectl apply -f deploy/k8s/service.yaml
 ```bash
 kubectl port-forward svc/ditto-gateway 8080:8080
 curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/ready
 ```
 
 ---

@@ -41,9 +41,9 @@ mod minimax;
 #[cfg(feature = "provider-minimax")]
 pub(crate) use minimax::*;
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 mod openai;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(crate) use openai::*;
 
 #[cfg(feature = "provider-openrouter")]

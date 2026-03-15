@@ -5,7 +5,7 @@
     feature = "gateway-store-redis"
 ))]
 use super::admin_persistence::append_admin_audit_log;
-use super::admin_persistence::persist_virtual_keys;
+use super::admin_persistence::apply_control_plane_change;
 use super::*;
 
 #[derive(Clone, Debug, Serialize)]
@@ -430,6 +430,9 @@ pub(super) async fn get_config_version_by_id(
             "tenant-scoped admin tokens cannot access global config versions",
         ));
     }
+    if query.include_tokens {
+        ensure_admin_secret_access(&admin)?;
+    }
 
     let version_id = version_id.trim();
     if version_id.is_empty() {
@@ -472,6 +475,9 @@ pub(super) async fn export_config(
             "forbidden",
             "tenant-scoped admin tokens cannot access global config versions",
         ));
+    }
+    if query.include_tokens {
+        ensure_admin_secret_access(&admin)?;
     }
 
     let snapshot = {
@@ -538,7 +544,8 @@ pub(super) async fn validate_config_payload(
     let computed_virtual_keys_sha256 = virtual_keys_sha256(&payload.virtual_keys);
     let mut issues = Vec::new();
     let mut seen_ids: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
-    let mut seen_tokens: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut seen_tokens: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     for (idx, key) in payload.virtual_keys.iter().enumerate() {
         let id = key.id.trim();
@@ -566,11 +573,24 @@ pub(super) async fn validate_config_payload(
                 "virtual key token cannot be empty",
                 Some(format!("/virtual_keys/{idx}/token")),
             );
-        } else if let Some(first_idx) = seen_tokens.insert(token, idx) {
+        } else if let Some(token_key) =
+            crate::gateway::config::normalize_virtual_key_token_key(token)
+        {
+            if let Some(first_idx) = seen_tokens.insert(token_key, idx) {
+                push_validation_issue(
+                    &mut issues,
+                    "duplicate_token",
+                    format!(
+                        "duplicate virtual key token at index {idx} (first at index {first_idx})"
+                    ),
+                    Some(format!("/virtual_keys/{idx}/token")),
+                );
+            }
+        } else {
             push_validation_issue(
                 &mut issues,
-                "duplicate_token",
-                format!("duplicate virtual key token at index {idx} (first at index {first_idx})"),
+                "invalid_token",
+                "virtual key token cannot be empty",
                 Some(format!("/virtual_keys/{idx}/token")),
             );
         }
@@ -674,7 +694,6 @@ pub(super) async fn upsert_config_router(
         .into_iter()
         .collect::<std::collections::HashSet<_>>();
     let current_router = state.router_config_snapshot();
-    let current_keys = state.list_virtual_keys_snapshot();
     validate_router_against_backends(&payload.router, &backend_names)?;
     let router_changed = !router_config_equal(&current_router, &payload.router);
     let target_router_sha256 = router_sha256(&payload.router);
@@ -690,11 +709,12 @@ pub(super) async fn upsert_config_router(
         }));
     }
 
-    state.gateway.replace_router_config(payload.router.clone());
-    state.sync_control_plane_from_gateway();
-
     let reason = "admin.config.router.upsert";
-    let next_version = persist_virtual_keys(&state, &current_keys, reason).await?;
+    let (_, next_version) = apply_control_plane_change(&state, reason, |gateway| {
+        gateway.replace_router_config(payload.router.clone());
+        Ok(())
+    })
+    .await?;
 
     #[cfg(any(
         feature = "gateway-store-sqlite",
@@ -736,6 +756,9 @@ pub(super) async fn diff_config_versions(
             "forbidden",
             "tenant-scoped admin tokens cannot access global config versions",
         ));
+    }
+    if query.include_tokens {
+        ensure_admin_secret_access(&admin)?;
     }
 
     let from_version_id = query.from_version_id.trim();
@@ -946,16 +969,13 @@ pub(super) async fn rollback_config_version(
         }));
     }
 
-    let restored_keys = target.virtual_keys.clone();
-    let restored_router = target.router.clone();
-    state.gateway.mutate_control_plane(|gateway| {
-        gateway.replace_virtual_keys(restored_keys.clone());
-        gateway.replace_router_config(restored_router);
-    });
-    state.sync_control_plane_from_gateway();
-
     let reason = format!("admin.config.rollback:{version_id}");
-    let current_version = persist_virtual_keys(&state, &restored_keys, reason.as_str()).await?;
+    let (_, current_version) = apply_control_plane_change(&state, reason.as_str(), |gateway| {
+        gateway.replace_virtual_keys(target.virtual_keys.clone());
+        gateway.replace_router_config(target.router.clone());
+        Ok(())
+    })
+    .await?;
 
     #[cfg(any(
         feature = "gateway-store-sqlite",

@@ -3,10 +3,29 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use ditto_core::i18n::{MessageArg, MessageCatalogExt as _};
+use ditto_core::MESSAGE_CATALOG;
+
 const BEGIN_MARKER: &str = "----- BEGIN AUTO-GENERATED DOCS (ditto-llms-txt) -----";
 const END_MARKER: &str = "----- END AUTO-GENERATED DOCS (ditto-llms-txt) -----";
 
-fn main() -> Result<(), String> {
+fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    if let Err(err) = run(locale, args) {
+        eprintln!("{err}");
+        std::process::exit(1);
+    }
+}
+
+fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), String> {
     let mut out_paths = vec![
         PathBuf::from("llms.txt"),
         PathBuf::from("docs/src/llms.txt"),
@@ -14,13 +33,27 @@ fn main() -> Result<(), String> {
     let mut has_custom_out = false;
     let mut check = false;
 
-    let mut args = std::env::args().skip(1);
+    let usage = MESSAGE_CATALOG.render(
+        locale,
+        "cli.usage",
+        &[MessageArg::new(
+            "command_and_syntax",
+            "ditto-llms-txt [--out PATH]... [--check]",
+        )],
+    );
+    let mut args = raw_args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--out" => {
                 let value = args
                     .next()
-                    .ok_or_else(|| "--out requires a value".to_string())?;
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--out")],
+                        )
+                    })?;
                 let path = PathBuf::from(value);
                 if !has_custom_out {
                     out_paths.clear();
@@ -29,7 +62,18 @@ fn main() -> Result<(), String> {
                 out_paths.push(path);
             }
             "--check" => check = true,
-            other => return Err(format!("unknown argument: {other}")),
+            "--help" | "-h" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            other => {
+                let message = MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.unknown_arg",
+                    &[MessageArg::new("arg", other)],
+                );
+                return Err(format!("{message}\n{usage}"));
+            }
         }
     }
 
@@ -45,10 +89,16 @@ fn main() -> Result<(), String> {
             paths.push(path);
         }
     }
-    paths.extend(collect_docs_paths_from_summary("docs/src/SUMMARY.md")?);
+    paths.extend(collect_docs_paths_from_summary_with_locale(
+        "docs/src/SUMMARY.md",
+        locale,
+    )?);
     paths = dedup_keep_order(paths);
 
-    let generated = format!("{BEGIN_MARKER}\n{}\n{END_MARKER}\n", render_files(&paths)?);
+    let generated = format!(
+        "{BEGIN_MARKER}\n{}\n{END_MARKER}\n",
+        render_files_with_locale(&paths, locale)?
+    );
 
     let regen_hint = regen_hint(&out_paths);
 
@@ -59,9 +109,13 @@ fn main() -> Result<(), String> {
 
         if check {
             if normalize_newlines(&existing) != normalize_newlines(&next) {
-                return Err(format!(
-                    "{} is out of date (run `{regen_hint}`)",
-                    out_path.display()
+                return Err(MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.out_of_date",
+                    &[
+                        MessageArg::new("path", out_path.display().to_string()),
+                        MessageArg::new("command", regen_hint.as_str()),
+                    ],
                 ));
             }
             continue;
@@ -71,8 +125,16 @@ fn main() -> Result<(), String> {
             continue;
         }
 
-        fs::write(&out_path, next)
-            .map_err(|err| format!("write {} failed: {err}", out_path.display()))?;
+        fs::write(&out_path, next).map_err(|err| {
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.write_failed",
+                &[
+                    MessageArg::new("path", out_path.display().to_string()),
+                    MessageArg::new("error", err.to_string()),
+                ],
+            )
+        })?;
     }
 
     Ok(())
@@ -94,13 +156,30 @@ fn split_prelude(existing: &str) -> String {
     }
 }
 
-fn collect_docs_paths_from_summary(summary_path: impl AsRef<Path>) -> Result<Vec<PathBuf>, String> {
+fn collect_docs_paths_from_summary_with_locale(
+    summary_path: impl AsRef<Path>,
+    locale: ditto_core::i18n::Locale,
+) -> Result<Vec<PathBuf>, String> {
     let summary_path = summary_path.as_ref();
-    let contents = fs::read_to_string(summary_path)
-        .map_err(|err| format!("read {} failed: {err}", summary_path.display()))?;
+    let contents = fs::read_to_string(summary_path).map_err(|err| {
+        MESSAGE_CATALOG.render(
+            locale,
+            "cli.read_failed",
+            &[
+                MessageArg::new("path", summary_path.display().to_string()),
+                MessageArg::new("error", err.to_string()),
+            ],
+        )
+    })?;
     let base_dir = summary_path
         .parent()
-        .ok_or_else(|| format!("invalid summary path: {}", summary_path.display()))?;
+        .ok_or_else(|| {
+            MESSAGE_CATALOG.render(
+                locale,
+                "llms_txt.invalid_summary_path",
+                &[MessageArg::new("path", summary_path.display().to_string())],
+            )
+        })?;
 
     let mut seen = BTreeSet::<PathBuf>::new();
     let mut out = Vec::<PathBuf>::new();
@@ -125,9 +204,10 @@ fn collect_docs_paths_from_summary(summary_path: impl AsRef<Path>) -> Result<Vec
         let path = base_dir.join(target);
         let path = normalize_relative_path(&path);
         if !path.exists() {
-            return Err(format!(
-                "SUMMARY link points to missing file: {}",
-                path.display()
+            return Err(MESSAGE_CATALOG.render(
+                locale,
+                "llms_txt.summary_missing_file",
+                &[MessageArg::new("path", path.display().to_string())],
             ));
         }
         if seen.insert(path.clone()) {
@@ -138,11 +218,22 @@ fn collect_docs_paths_from_summary(summary_path: impl AsRef<Path>) -> Result<Vec
     Ok(out)
 }
 
-fn render_files(paths: &[PathBuf]) -> Result<String, String> {
+fn render_files_with_locale(
+    paths: &[PathBuf],
+    locale: ditto_core::i18n::Locale,
+) -> Result<String, String> {
     let mut out = String::new();
     for path in paths {
-        let content = fs::read_to_string(path)
-            .map_err(|err| format!("read {} failed: {err}", path.display()))?;
+        let content = fs::read_to_string(path).map_err(|err| {
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.read_failed",
+                &[
+                    MessageArg::new("path", path.display().to_string()),
+                    MessageArg::new("error", err.to_string()),
+                ],
+            )
+        })?;
         out.push_str(
             "================================================================================\n",
         );

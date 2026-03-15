@@ -7,17 +7,17 @@ use serde_json::{Map, Value};
 use super::openai_like;
 
 use crate::capabilities::context_cache::ContextCacheProfile;
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 use crate::capabilities::embedding::EmbeddingModel;
 use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject};
 use crate::config::{Env, ProviderConfig};
 use crate::contracts::ContentPart;
 #[cfg(test)]
 use crate::contracts::{FileSource, Message, Role, Tool, ToolChoice};
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{FinishReason, GenerateRequest, GenerateResponse, Usage, Warning};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::providers::openai_chat_completions_core::{
     OPENAI_CHAT_COMPLETIONS_RESERVED_PROVIDER_OPTION_KEYS,
@@ -39,9 +39,9 @@ use crate::providers::openai_chat_completions_core::{
 };
 #[cfg(test)]
 use crate::providers::openai_compat_profile::OpenAiProviderFamily;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 
 #[derive(Clone)]
@@ -221,9 +221,9 @@ impl OpenAICompatible {
         if !self.client.model.trim().is_empty() {
             return Ok(self.client.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "openai-compatible model is not set (set request.model or OpenAICompatible::with_model)"
-                .to_string(),
+        Err(DittoError::provider_model_missing(
+            "openai-compatible",
+            "set request.model or OpenAICompatible::with_model",
         ))
     }
 
@@ -871,7 +871,7 @@ mod client_tests {
         assert!(msg.get("tool_calls").is_some());
     }
 
-    #[cfg(feature = "tools")]
+    #[cfg(feature = "cap-llm-tools")]
     #[test]
     fn build_body_rejects_deepseek_reasoner_required_tool_choice() {
         let tool = Tool {
@@ -907,8 +907,8 @@ mod client_tests {
         assert!(matches!(
             err,
             DittoError::InvalidResponse(ref message)
-                if message.contains("deepseek-reasoner")
-                    && message.contains("tool_choice=required")
+                if message.to_string().contains("deepseek-reasoner")
+                    && message.to_string().contains("tool_choice=required")
         ));
     }
 }

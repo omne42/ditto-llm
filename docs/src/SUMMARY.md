@@ -59,7 +59,7 @@
 - [参考](./reference/index.md)
   - [Providers 能力矩阵](./reference/providers.md)
   - [Yunwu Gemini Native（Bearer + Streaming）](./reference/yunwu-gemini-native.md)
-  - [代码审查：`src/utils/http.rs`（2026-03-10）](./reference/review-http-utils-20260310.md)
+  - [代码审查：`crates/ditto-core/src/provider_transport/http.rs`（2026-03-10）](./reference/review-http-utils-20260310.md)
   - [代码审查：L0 架构边界（2026-03-11）](./reference/review-l0-architecture-20260311.md)
   - [CLI 选项（ditto-gateway）](./reference/cli.md)
   - [常见问题（FAQ）](./reference/faq.md)

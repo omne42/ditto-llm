@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use super::openai_like::OpenAiLikeClient;
 
 use crate::contracts::{ImageSource, Usage, Warning};
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{
     ImageEditRequest, ImageEditResponse, ImageEditUpload, ImageGenerationRequest,
     ImageGenerationResponse, ImageResponseFormat,
@@ -185,7 +185,7 @@ fn image_part(upload: ImageEditUpload) -> Result<Part> {
     let mut part = Part::bytes(upload.data).file_name(upload.filename);
     if let Some(media_type) = upload.media_type.as_deref() {
         part = part.mime_str(media_type).map_err(|err| {
-            crate::foundation::error::DittoError::InvalidResponse(format!(
+            crate::error::DittoError::invalid_response_text(format!(
                 "invalid image edit media type {media_type:?}: {err}"
             ))
         })?;
@@ -262,7 +262,7 @@ pub(super) async fn edit_images(
     } = request;
 
     if images.is_empty() {
-        return Err(crate::foundation::error::DittoError::InvalidResponse(
+        return Err(crate::error::DittoError::invalid_response_text(
             "image edit requires at least one input image".to_string(),
         ));
     }

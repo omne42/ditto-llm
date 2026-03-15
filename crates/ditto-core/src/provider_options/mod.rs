@@ -16,13 +16,13 @@ pub use core::{
 
 pub use envelope::ProviderOptionsEnvelope;
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 pub(crate) use envelope::merge_provider_options_into_body;
 #[allow(unused_imports)]
@@ -33,10 +33,10 @@ pub use request::{
     request_with_provider_options, request_with_provider_response_format,
 };
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 #[allow(unused_imports)]
 pub(crate) use support::{ProviderOptionsSupport, warn_unsupported_provider_options};

@@ -1,8 +1,8 @@
 #[cfg(feature = "provider-google")]
 mod google;
-#[cfg(any(feature = "provider-openai", feature = "openai"))]
+#[cfg(feature = "provider-openai")]
 mod openai;
-#[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+#[cfg(feature = "provider-openai-compatible")]
 mod openai_compatible;
 
 use super::{CatalogRegistry, ProviderPluginDescriptor};
@@ -32,15 +32,15 @@ use crate::catalog::generated::providers::ZHIPU_PLUGIN;
 #[cfg(feature = "provider-google")]
 pub use google::BUILTIN_GOOGLE_PLUGIN;
 
-#[cfg(any(feature = "provider-openai", feature = "openai"))]
+#[cfg(feature = "provider-openai")]
 pub use openai::GENERIC_OPENAI_PLUGIN;
-#[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+#[cfg(feature = "provider-openai-compatible")]
 pub use openai_compatible::GENERIC_OPENAI_COMPATIBLE_PLUGIN;
 
 const BUILTIN_PROVIDER_PLUGINS: &[ProviderPluginDescriptor] = &[
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     GENERIC_OPENAI_COMPATIBLE_PLUGIN,
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     GENERIC_OPENAI_PLUGIN,
     #[cfg(feature = "provider-anthropic")]
     ANTHROPIC_PLUGIN,

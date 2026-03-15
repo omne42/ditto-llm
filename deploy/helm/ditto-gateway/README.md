@@ -25,4 +25,5 @@ Then:
 ```bash
 kubectl port-forward svc/ditto-gateway 8080:8080
 curl -sS http://127.0.0.1:8080/health
+curl -sS http://127.0.0.1:8080/ready
 ```

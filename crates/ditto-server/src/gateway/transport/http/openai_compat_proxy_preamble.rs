@@ -9,6 +9,8 @@ pub(super) struct ProxyAttemptParams<'a> {
     pub(super) model: &'a Option<String>,
     pub(super) service_tier: &'a Option<String>,
     pub(super) request_id: &'a str,
+    #[cfg(feature = "gateway-routing-advanced")]
+    pub(super) client_supplied_request_id: bool,
     pub(super) path_and_query: &'a str,
     pub(super) now_epoch_seconds: u64,
     pub(super) charge_tokens: u32,

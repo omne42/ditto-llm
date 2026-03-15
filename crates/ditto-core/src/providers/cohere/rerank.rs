@@ -1,4 +1,4 @@
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 #[derive(Clone)]
 pub struct CohereRerank {
     http: reqwest::Client,
@@ -8,7 +8,7 @@ pub struct CohereRerank {
     http_query_params: BTreeMap<String, String>,
 }
 
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 impl CohereRerank {
     pub fn new(api_key: impl Into<String>) -> Self {
         let http = default_http_client(DEFAULT_HTTP_TIMEOUT);
@@ -98,14 +98,14 @@ impl CohereRerank {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "cohere rerank model is not set (set request.model or CohereRerank::with_model)"
-                .to_string(),
+        Err(DittoError::provider_model_missing(
+            "cohere rerank",
+            "set request.model or CohereRerank::with_model",
         ))
     }
 }
 
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 #[derive(Debug, Deserialize, Default)]
 struct CohereRerankOptions {
     #[serde(default, alias = "maxTokensPerDoc", alias = "max_tokens_per_doc")]
@@ -114,18 +114,18 @@ struct CohereRerankOptions {
     priority: Option<u32>,
 }
 
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 impl CohereRerankOptions {
     fn from_value(value: &Value) -> Result<Self> {
         serde_json::from_value::<Self>(value.clone()).map_err(|err| {
-            DittoError::InvalidResponse(format!(
+            DittoError::invalid_response_text(format!(
                 "invalid provider_options for cohere rerank: {err}"
             ))
         })
     }
 }
 
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 #[async_trait]
 impl RerankModel for CohereRerank {
     fn provider(&self) -> &str {

@@ -643,9 +643,6 @@ async fn enforce_mcp_auth(
     state: &GatewayHttpState,
     headers: &HeaderMap,
 ) -> Result<(), axum::response::Response> {
-    if !state.uses_virtual_keys() {
-        return Ok(());
-    }
     let token =
         extract_virtual_key(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
     let key = state

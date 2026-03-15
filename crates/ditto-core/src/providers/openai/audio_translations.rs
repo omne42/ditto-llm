@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 
 use crate::capabilities::audio::AudioTranslationModel;
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{AudioTranscriptionRequest, AudioTranscriptionResponse};
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use super::audio_transcriptions::OpenAIAudioTranscription;
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 use super::audio_transcriptions::OpenAICompatibleAudioTranscription;
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 #[async_trait]
 impl AudioTranslationModel for OpenAIAudioTranscription {
     fn provider(&self) -> &str {
@@ -35,7 +35,7 @@ impl AudioTranslationModel for OpenAIAudioTranscription {
     }
 }
 
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 #[async_trait]
 impl AudioTranslationModel for OpenAICompatibleAudioTranscription {
     fn provider(&self) -> &str {

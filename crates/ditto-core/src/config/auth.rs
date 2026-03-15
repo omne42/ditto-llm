@@ -1,15 +1,160 @@
 #![allow(dead_code)]
 
+use std::fmt::Display;
 use std::time::Duration;
 
 use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
-use crate::foundation::error::{DittoError, Result};
-use crate::foundation::secrets::{DefaultSecretResolver, SecretResolver};
+use crate::error::{DittoError, Result};
+use ::secret::{DefaultSecretResolver, SecretResolver};
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};
+
+fn invalid_auth_header_name() -> DittoError {
+    crate::invalid_response!("error_detail.auth.header_name_empty")
+}
+
+fn invalid_auth_header_name_with_error(header: &str, error: impl Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.auth.header_name_invalid",
+        "header" => header,
+        "error" => error.to_string()
+    )
+}
+
+fn invalid_auth_header_value(header: &str, error: impl Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.auth.header_value_invalid",
+        "header" => header,
+        "error" => error.to_string()
+    )
+}
+
+fn invalid_auth_query_param_name() -> DittoError {
+    crate::invalid_response!("error_detail.auth.query_param_name_empty")
+}
+
+fn static_request_auth_unsupported(auth_kind: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.auth.static_request_auth_unsupported",
+        "auth_kind" => auth_kind
+    )
+}
+
+fn token_string_auth_unsupported(auth_kind: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.auth.token_string_unsupported",
+        "auth_kind" => auth_kind
+    )
+}
+
+fn missing_api_key_env(keys: &str) -> DittoError {
+    crate::auth_command_error!("error_detail.auth.missing_api_key_env", "keys" => keys)
+}
+
+fn command_empty() -> DittoError {
+    crate::auth_command_error!("error_detail.auth.command_empty")
+}
+
+fn command_spawn_failed(program: &str, error: impl Display) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_spawn_failed",
+        "program" => program,
+        "error" => error.to_string()
+    )
+}
+
+fn command_stdout_not_captured(program: &str) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_stdout_not_captured",
+        "program" => program
+    )
+}
+
+fn command_stderr_not_captured(program: &str) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_stderr_not_captured",
+        "program" => program
+    )
+}
+
+fn command_wait_failed(program: &str, error: impl Display) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_wait_failed",
+        "program" => program,
+        "error" => error.to_string()
+    )
+}
+
+fn command_timeout(program: &str, timeout_ms: u128) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_timeout",
+        "program" => program,
+        "timeout_ms" => timeout_ms.to_string()
+    )
+}
+
+fn command_reader_join_failed(stream: &str, error: impl Display) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_reader_join_failed",
+        "stream" => stream,
+        "error" => error.to_string()
+    )
+}
+
+fn command_stdout_too_large(program: &str, max_bytes: usize) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_stdout_too_large",
+        "program" => program,
+        "max_bytes" => max_bytes.to_string()
+    )
+}
+
+fn command_stderr_too_large(program: &str, max_bytes: usize) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_stderr_too_large",
+        "program" => program,
+        "max_bytes" => max_bytes.to_string()
+    )
+}
+
+fn command_failed_status(program: &str, status: &str) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_failed_status",
+        "program" => program,
+        "status" => status
+    )
+}
+
+fn command_failed_status_with_stderr(program: &str, status: &str, stderr: &str) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_failed_status_with_stderr",
+        "program" => program,
+        "status" => status,
+        "stderr" => stderr
+    )
+}
+
+fn command_empty_stdout(program: &str) -> DittoError {
+    crate::auth_command_error!(
+        "error_detail.auth.command_empty_stdout",
+        "program" => program
+    )
+}
+
+fn auth_json_missing_token_fields() -> DittoError {
+    crate::auth_command_error!("error_detail.auth.json_missing_token_fields")
+}
+
+fn auth_json_string_token_empty() -> DittoError {
+    crate::auth_command_error!("error_detail.auth.json_string_token_empty")
+}
+
+fn auth_output_shape_invalid() -> DittoError {
+    crate::auth_command_error!("error_detail.auth.output_shape_invalid")
+}
 
 #[derive(Clone)]
 pub(crate) struct HttpAuth {
@@ -34,23 +179,19 @@ impl HttpAuth {
     pub(crate) fn header_value(header: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
         let header = header.trim();
         if header.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "auth header name must be non-empty".to_string(),
-            ));
+            return Err(invalid_auth_header_name());
         }
 
-        let header = HeaderName::from_bytes(header.as_bytes()).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid auth header name {header:?}: {err}"))
-        })?;
+        let header = HeaderName::from_bytes(header.as_bytes())
+            .map_err(|err| invalid_auth_header_name_with_error(header, err))?;
 
         let mut out = String::new();
         if let Some(prefix) = prefix {
             out.push_str(prefix);
         }
         out.push_str(token);
-        let mut value = HeaderValue::from_str(&out).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid auth header value for {header:?}: {err}"))
-        })?;
+        let mut value = HeaderValue::from_str(&out)
+            .map_err(|err| invalid_auth_header_value(header.as_str(), err))?;
         value.set_sensitive(true);
 
         Ok(Self { header, value })
@@ -80,9 +221,7 @@ impl QueryParamAuth {
     pub(crate) fn new(param: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
         let param = param.trim();
         if param.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "auth query param name must be non-empty".to_string(),
-            ));
+            return Err(invalid_auth_query_param_name());
         }
 
         let mut value = String::new();
@@ -139,9 +278,7 @@ pub(crate) async fn resolve_request_auth_with_default_keys(
             HttpAuth::header_value(default_header, default_prefix, &token)?,
         )),
         ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
-            Err(DittoError::InvalidResponse(
-                "sigv4/oauth auth cannot be resolved to a static request header".to_string(),
-            ))
+            Err(static_request_auth_unsupported("sigv4/oauth"))
         }
     }
 }
@@ -151,11 +288,11 @@ fn default_api_key_env_auth() -> ProviderAuth {
 }
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible"
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible"
 ))]
 pub(crate) async fn resolve_provider_request_auth_required(
     config: &ProviderConfig,
@@ -229,20 +366,14 @@ pub async fn resolve_auth_token_with_default_keys_and_resolver(
                         return resolve_secret_if_needed_with_resolver(value, env, resolver).await;
                     }
                 }
-                return Err(DittoError::AuthCommand(format!(
-                    "missing api key env (tried: {})",
-                    default_keys.join(", ")
-                )));
+                return Err(missing_api_key_env(&default_keys.join(", ")));
             }
             for key in keys {
                 if let Some(value) = env.get(key.as_str()) {
                     return resolve_secret_if_needed_with_resolver(value, env, resolver).await;
                 }
             }
-            Err(DittoError::AuthCommand(format!(
-                "missing api key env (tried: {})",
-                keys.join(", "),
-            )))
+            Err(missing_api_key_env(&keys.join(", ")))
         }
         ProviderAuth::Command { command }
         | ProviderAuth::HttpHeaderCommand { command, .. }
@@ -252,9 +383,7 @@ pub async fn resolve_auth_token_with_default_keys_and_resolver(
             resolve_secret_if_needed_with_resolver(token, env, resolver).await
         }
         ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
-            Err(DittoError::InvalidResponse(
-                "sigv4/oauth auth cannot be resolved to a token string".to_string(),
-            ))
+            Err(token_string_auth_unsupported("sigv4/oauth"))
         }
     }
 }
@@ -280,7 +409,10 @@ async fn resolve_secret_if_needed_with_resolver(
 ) -> Result<String> {
     let raw = raw.trim().to_string();
     if raw.starts_with("secret://") {
-        return resolver.resolve_secret_string(raw.as_str(), env).await;
+        return resolver
+            .resolve_secret_string(raw.as_str(), env)
+            .await
+            .map_err(Into::into);
     }
     Ok(raw)
 }
@@ -310,9 +442,7 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
     use std::process::Stdio;
 
     let timeout = auth_command_timeout(env);
-    let (program, args) = command
-        .split_first()
-        .ok_or_else(|| DittoError::AuthCommand("command is empty".to_string()))?;
+    let (program, args) = command.split_first().ok_or_else(command_empty)?;
 
     let mut cmd = tokio::process::Command::new(program);
     cmd.args(args);
@@ -322,15 +452,15 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
 
     let mut child = cmd
         .spawn()
-        .map_err(|err| DittoError::AuthCommand(format!("spawn {program}: {err}")))?;
+        .map_err(|err| command_spawn_failed(program, err))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| DittoError::AuthCommand("command did not capture stdout".to_string()))?;
+        .ok_or_else(|| command_stdout_not_captured(program))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| DittoError::AuthCommand("command did not capture stderr".to_string()))?;
+        .ok_or_else(|| command_stderr_not_captured(program))?;
 
     const MAX_AUTH_COMMAND_OUTPUT_BYTES: usize = 64 * 1024;
     let stdout_task = tokio::spawn(read_capped(stdout, MAX_AUTH_COMMAND_OUTPUT_BYTES));
@@ -338,17 +468,13 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
 
     let timeout_error = match tokio::time::timeout(timeout, child.wait()).await {
         Ok(status) => {
-            let status =
-                status.map_err(|err| DittoError::AuthCommand(format!("wait {program}: {err}")))?;
+            let status = status.map_err(|err| command_wait_failed(program, err))?;
             Ok(status)
         }
         Err(_) => {
             let _ = child.kill().await;
             let _ = child.wait().await;
-            Err(DittoError::AuthCommand(format!(
-                "command {program} timed out after {}ms",
-                timeout.as_millis()
-            )))
+            Err(command_timeout(program, timeout.as_millis()))
         }
     };
 
@@ -365,29 +491,29 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
 
     let (stdout, stdout_truncated) = stdout_task
         .await
-        .map_err(|err| DittoError::AuthCommand(format!("join stdout reader: {err}")))??;
+        .map_err(|err| command_reader_join_failed("stdout", err))??;
     let (stderr, stderr_truncated) = stderr_task
         .await
-        .map_err(|err| DittoError::AuthCommand(format!("join stderr reader: {err}")))??;
+        .map_err(|err| command_reader_join_failed("stderr", err))??;
 
     if stdout_truncated {
-        return Err(DittoError::AuthCommand(format!(
-            "command {program} stdout exceeds {MAX_AUTH_COMMAND_OUTPUT_BYTES} bytes"
-        )));
+        return Err(command_stdout_too_large(
+            program,
+            MAX_AUTH_COMMAND_OUTPUT_BYTES,
+        ));
     }
     if stderr_truncated {
-        return Err(DittoError::AuthCommand(format!(
-            "command {program} stderr exceeds {MAX_AUTH_COMMAND_OUTPUT_BYTES} bytes"
-        )));
+        return Err(command_stderr_too_large(
+            program,
+            MAX_AUTH_COMMAND_OUTPUT_BYTES,
+        ));
     }
 
     if !status.success() {
         let stderr = String::from_utf8_lossy(&stderr);
         let stderr = stderr.trim();
         if stderr.is_empty() {
-            return Err(DittoError::AuthCommand(format!(
-                "command {program} failed with status {status}"
-            )));
+            return Err(command_failed_status(program, &status.to_string()));
         }
 
         let preview = stderr
@@ -396,17 +522,17 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
             .collect::<String>()
             .trim()
             .to_string();
-        return Err(DittoError::AuthCommand(format!(
-            "command {program} failed with status {status}: {preview}"
-        )));
+        return Err(command_failed_status_with_stderr(
+            program,
+            &status.to_string(),
+            &preview,
+        ));
     }
 
     let stdout = String::from_utf8_lossy(&stdout);
     let stdout = stdout.trim();
     if stdout.is_empty() {
-        return Err(DittoError::AuthCommand(format!(
-            "command {program} returned empty stdout"
-        )));
+        return Err(command_empty_stdout(program));
     }
     Ok(stdout.to_string())
 }
@@ -424,9 +550,7 @@ fn parse_auth_command_token(stdout: &str) -> Result<String> {
 
     let stdout = stdout.trim();
     if stdout.is_empty() {
-        return Err(DittoError::AuthCommand(
-            "command returned empty stdout".to_string(),
-        ));
+        return Err(command_empty_stdout("auth command"));
     }
 
     match serde_json::from_str::<serde_json::Value>(stdout) {
@@ -450,22 +574,16 @@ fn parse_auth_command_token(stdout: &str) -> Result<String> {
                 .or(parsed.token)
                 .or(parsed.access_token)
                 .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| {
-                    DittoError::AuthCommand("json missing api_key/token/access_token".to_string())
-                })
+                .ok_or_else(auth_json_missing_token_fields)
         }
         Ok(serde_json::Value::String(value)) => {
             let value = value.trim().to_string();
             if value.is_empty() {
-                return Err(DittoError::AuthCommand(
-                    "json string token is empty".to_string(),
-                ));
+                return Err(auth_json_string_token_empty());
             }
             Ok(value)
         }
-        Ok(_) => Err(DittoError::AuthCommand(
-            "auth command output must be a json object/string or plain text token".to_string(),
-        )),
+        Ok(_) => Err(auth_output_shape_invalid()),
         Err(_) => Ok(stdout.to_string()),
     }
 }

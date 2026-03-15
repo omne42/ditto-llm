@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::Value;
@@ -11,11 +11,11 @@ use super::client::{
     encode_tool_call_id_with_thought_signature, sanitize_openai_responses_provider_options,
 };
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
 use crate::contracts::{FinishReason, Warning};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 
 #[derive(Debug, Deserialize)]
@@ -31,7 +31,7 @@ struct ResponsesApiResponse {
     usage: Option<Value>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize)]
 struct ResponsesStreamEvent {
     #[serde(rename = "type")]
@@ -70,7 +70,7 @@ pub(super) fn map_responses_finish_reason(
     }
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 pub(super) fn finish_reason_for_final_event(
     event_kind: &str,
     response: Option<&Value>,
@@ -226,15 +226,16 @@ impl LanguageModel for OpenAI {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            return Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            return Err(DittoError::builder_capability_feature_missing(
+                "openai",
+                "streaming",
             ));
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
             let raw_selected_provider_options =
@@ -373,14 +374,16 @@ impl LanguageModel for OpenAI {
                                         }
                                         "response.failed" => {
                                             done = true;
-                                            buffer.push_back(Err(DittoError::InvalidResponse(
-                                                event
-                                                    .response
-                                                    .map(|v| v.to_string())
-                                                    .unwrap_or_else(|| {
-                                                        "openai response.failed".to_string()
-                                                    }),
-                                            )));
+                                            buffer.push_back(Err(
+                                                DittoError::invalid_response_text(
+                                                    event
+                                                        .response
+                                                        .map(|v| v.to_string())
+                                                        .unwrap_or_else(|| {
+                                                            "openai response.failed".to_string()
+                                                        }),
+                                                ),
+                                            ));
                                         }
                                         "response.completed"
                                         | "response.done"

@@ -117,7 +117,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[tokio::test]
     async fn stream_parses_text_and_tool_call_deltas() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
@@ -179,7 +179,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "rerank")]
+    #[cfg(feature = "cap-rerank")]
     #[tokio::test]
     async fn rerank_posts_and_parses_results() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
@@ -246,7 +246,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "rerank")]
+    #[cfg(feature = "cap-rerank")]
     #[tokio::test]
     async fn rerank_warns_on_object_documents() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

@@ -102,31 +102,23 @@ pub fn file_delete_response_to_openai(response: &FileDeleteResponse) -> Value {
 }
 
 impl TranslationBackend {
-    pub(super) async fn resolve_file_client(
-        &self,
-    ) -> crate::foundation::error::Result<Arc<dyn FileClient>> {
+    pub(super) async fn resolve_file_client(&self) -> crate::error::Result<Arc<dyn FileClient>> {
         self.runtime
             .resolve_file_client(self.provider_name(), self.bindings.file_client.as_ref())
             .await
     }
 
-    pub async fn list_files(&self) -> crate::foundation::error::Result<Vec<FileObject>> {
+    pub async fn list_files(&self) -> crate::error::Result<Vec<FileObject>> {
         let client = self.resolve_file_client().await?;
         client.list_files().await
     }
 
-    pub async fn retrieve_file(
-        &self,
-        file_id: &str,
-    ) -> crate::foundation::error::Result<FileObject> {
+    pub async fn retrieve_file(&self, file_id: &str) -> crate::error::Result<FileObject> {
         let client = self.resolve_file_client().await?;
         client.retrieve_file(file_id).await
     }
 
-    pub async fn delete_file(
-        &self,
-        file_id: &str,
-    ) -> crate::foundation::error::Result<FileDeleteResponse> {
+    pub async fn delete_file(&self, file_id: &str) -> crate::error::Result<FileDeleteResponse> {
         let client = self.resolve_file_client().await?;
         client.delete_file(file_id).await
     }
@@ -134,7 +126,7 @@ impl TranslationBackend {
     pub async fn download_file_content(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileContent> {
+    ) -> crate::error::Result<crate::capabilities::file::FileContent> {
         let client = self.resolve_file_client().await?;
         client.download_file_content(file_id).await
     }

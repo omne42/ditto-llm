@@ -4,7 +4,7 @@ use crate::contracts::{
     CapabilityKind, InvocationHints, OperationKind, ProviderId, RuntimeProviderApi,
     RuntimeProviderHints,
 };
-use crate::foundation::error::{ProviderResolutionError, Result};
+use crate::error::{ProviderResolutionError, Result};
 
 pub(super) fn resolve_runtime_plugin_and_source(
     registry: &CatalogRegistry,

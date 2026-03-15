@@ -1,5 +1,6 @@
 mod auth;
 mod endpoint;
+pub mod guard;
 mod ids;
 mod llm;
 mod outcome;

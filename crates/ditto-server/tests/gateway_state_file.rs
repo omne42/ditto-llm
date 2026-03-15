@@ -42,6 +42,7 @@ async fn admin_key_mutations_persist_virtual_keys_to_state_file() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let mut gateway = Gateway::new(config);
@@ -66,7 +67,7 @@ async fn admin_key_mutations_persist_virtual_keys_to_state_file() {
     let loaded = GatewayStateFile::load(&state_path).expect("state file load");
     assert_eq!(loaded.virtual_keys.len(), 1);
     assert_eq!(loaded.virtual_keys[0].id, "key-1");
-    assert_eq!(loaded.virtual_keys[0].token, "vk-1");
+    assert!(loaded.virtual_keys[0].token.starts_with("sha256:"));
     assert_eq!(
         loaded
             .router
@@ -74,6 +75,16 @@ async fn admin_key_mutations_persist_virtual_keys_to_state_file() {
             .map(|router| router.default_backends.len()),
         Some(1)
     );
+    let persisted_config = GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: loaded.virtual_keys.clone(),
+        router: loaded.router.clone().expect("router"),
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+        i18n: Default::default(),
+    };
+    assert!(persisted_config.virtual_key("vk-1").is_some());
 
     let request = Request::builder()
         .method("DELETE")
@@ -112,6 +123,7 @@ async fn admin_router_mutation_persists_router_to_state_file() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let mut gateway = Gateway::new(config);
@@ -156,6 +168,7 @@ async fn admin_router_mutation_persists_router_to_state_file() {
 
     let loaded = GatewayStateFile::load(&state_path).expect("state file load");
     assert_eq!(loaded.virtual_keys.len(), 1);
+    assert!(loaded.virtual_keys[0].token.starts_with("sha256:"));
     assert_eq!(
         loaded.router.as_ref().map(|router| router.rules.len()),
         Some(1)

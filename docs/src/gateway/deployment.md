@@ -29,6 +29,7 @@ cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.js
 健康检查：
 
 - `GET /health` → `{"status":"ok"}`
+- `GET /ready` → `200 {"status":"ready",...}` 或 `503 {"status":"not_ready",...}`
 
 ---
 

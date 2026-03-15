@@ -4,11 +4,26 @@ pub const GATEWAY_CONTRACT_VERSION: &str = "0.1.0";
 pub const GATEWAY_CONTRACT_ID: &str = "gateway-v0.1";
 
 pub const GATEWAY_OPENAPI_V0_1_YAML: &str =
-    include_str!("../../../contracts/gateway-contract-v0.1.openapi.yaml");
+    include_str!("../../../../../contracts/gateway-contract-v0.1.openapi.yaml");
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HealthResponse {
     pub status: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadinessCheck {
+    pub name: String,
+    pub status: String,
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadinessResponse {
+    pub status: String,
+    #[serde(default)]
+    pub checks: Vec<ReadinessCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -114,30 +129,20 @@ mod tests {
 
     #[test]
     fn contract_yaml_exposes_expected_version_and_paths() {
-        let doc: serde_yaml::Value =
-            serde_yaml::from_str(GATEWAY_OPENAPI_V0_1_YAML).expect("parse openapi yaml");
-
-        let version = doc
-            .get("info")
-            .and_then(|value| value.get("version"))
-            .and_then(serde_yaml::Value::as_str)
-            .expect("info.version present");
-        assert_eq!(version, GATEWAY_CONTRACT_VERSION);
-
-        let contract_id = doc
-            .get("info")
-            .and_then(|value| value.get("x-ditto-contract-id"))
-            .and_then(serde_yaml::Value::as_str)
-            .expect("contract id present");
-        assert_eq!(contract_id, GATEWAY_CONTRACT_ID);
-
-        let paths = doc.get("paths").expect("paths present");
-        assert!(paths.get("/health").is_some());
-        assert!(paths.get("/v1/chat/completions").is_some());
-        assert!(paths.get("/admin/audit").is_some());
-        assert!(paths.get("/admin/budgets").is_some());
-        assert!(paths.get("/admin/costs").is_some());
-        assert!(paths.get("/admin/reservations/reap").is_some());
+        assert!(
+            GATEWAY_OPENAPI_V0_1_YAML.contains(&format!("version: {}", GATEWAY_CONTRACT_VERSION))
+        );
+        assert!(
+            GATEWAY_OPENAPI_V0_1_YAML
+                .contains(&format!("x-ditto-contract-id: {}", GATEWAY_CONTRACT_ID))
+        );
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/health:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/ready:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/v1/chat/completions:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/admin/audit:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/admin/budgets:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/admin/costs:"));
+        assert!(GATEWAY_OPENAPI_V0_1_YAML.contains("/admin/reservations/reap:"));
     }
 
     #[test]

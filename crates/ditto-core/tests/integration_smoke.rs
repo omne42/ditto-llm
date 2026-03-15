@@ -1,16 +1,16 @@
 #![cfg(feature = "integration")]
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 use ditto_core::capabilities::EmbeddingModel;
 use ditto_core::contracts::{GenerateRequest, Message};
-use ditto_core::foundation::error::Result;
+use ditto_core::error::Result;
 use ditto_core::llm_core::model::LanguageModel;
 
 fn env_nonempty(key: &str) -> Option<String> {
     std::env::var(key).ok().filter(|v| !v.trim().is_empty())
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 #[tokio::test]
 async fn openai_generate_smoke() -> Result<()> {
     let api_key = env_nonempty("OPENAI_API_KEY");
@@ -33,7 +33,7 @@ async fn openai_generate_smoke() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 #[tokio::test]
 async fn openai_compatible_generate_smoke() -> Result<()> {
     let base_url = env_nonempty("OPENAI_COMPAT_BASE_URL");
@@ -60,7 +60,7 @@ async fn openai_compatible_generate_smoke() -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(feature = "openai", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-embedding"))]
 #[tokio::test]
 async fn openai_embeddings_smoke() -> Result<()> {
     let api_key = env_nonempty("OPENAI_API_KEY");
@@ -75,7 +75,7 @@ async fn openai_embeddings_smoke() -> Result<()> {
     Ok(())
 }
 
-#[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
+#[cfg(all(feature = "provider-openai-compatible", feature = "cap-embedding"))]
 #[tokio::test]
 async fn openai_compatible_embeddings_smoke() -> Result<()> {
     let base_url = env_nonempty("OPENAI_COMPAT_BASE_URL");

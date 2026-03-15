@@ -14,10 +14,45 @@ use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Tool, ToolChoice,
     Usage, Warning,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::provider_options::{JsonSchemaFormat, ResponseFormat};
 use crate::utils::task::AbortOnDrop;
+
+fn object_deserialize_failed(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.object.deserialize_failed",
+        "error" => error.to_string()
+    )
+}
+
+fn stream_object_state_lock_poisoned() -> DittoError {
+    crate::invalid_response!("error_detail.stream.object_state_lock_poisoned")
+}
+
+fn stream_object_failed(error: &str) -> DittoError {
+    crate::invalid_response!("error_detail.stream.object_failed", "error" => error)
+}
+
+fn tool_call_json_parse_failed() -> DittoError {
+    crate::invalid_response!("error_detail.object.tool_call_json_parse_failed")
+}
+
+fn object_output_type_mismatch(actual: &str, expected: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.object.output_type_mismatch",
+        "actual" => actual,
+        "expected" => expected
+    )
+}
+
+fn object_tools_feature_unavailable() -> DittoError {
+    crate::invalid_response!("error_detail.object.tools_feature_unavailable")
+}
+
+fn object_tool_name_empty() -> DittoError {
+    crate::invalid_response!("error_detail.object.tool_name_empty")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ObjectOutput {
@@ -221,9 +256,7 @@ pub trait LanguageModelObjectExt: LanguageModel {
         schema: JsonSchemaFormat,
     ) -> Result<GenerateObjectResponse<T>> {
         let out = self.generate_object_json(request, schema).await?;
-        let object = serde_json::from_value::<T>(out.object).map_err(|err| {
-            DittoError::InvalidResponse(format!("failed to deserialize object: {err}"))
-        })?;
+        let object = serde_json::from_value::<T>(out.object).map_err(object_deserialize_failed)?;
         Ok(GenerateObjectResponse {
             object,
             response: out.response,
@@ -239,9 +272,7 @@ pub trait LanguageModelObjectExt: LanguageModel {
         let out = self
             .generate_object_json_with(request, schema, options)
             .await?;
-        let object = serde_json::from_value::<T>(out.object).map_err(|err| {
-            DittoError::InvalidResponse(format!("failed to deserialize object: {err}"))
-        })?;
+        let object = serde_json::from_value::<T>(out.object).map_err(object_deserialize_failed)?;
         Ok(GenerateObjectResponse {
             object,
             response: out.response,
@@ -371,14 +402,12 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                             Ok(guard) => guard,
                             Err(_) => {
                                 if partial_enabled_task.load(Ordering::Relaxed) {
-                                    let _ = partial_tx.try_send(Err(DittoError::InvalidResponse(
-                                        "stream object state lock is poisoned".to_string(),
-                                    )));
+                                    let _ = partial_tx
+                                        .try_send(Err(stream_object_state_lock_poisoned()));
                                 }
                                 if element_enabled_task.load(Ordering::Relaxed) {
-                                    let _ = element_tx.try_send(Err(DittoError::InvalidResponse(
-                                        "stream object state lock is poisoned".to_string(),
-                                    )));
+                                    let _ = element_tx
+                                        .try_send(Err(stream_object_state_lock_poisoned()));
                                 }
                                 return;
                             }
@@ -539,7 +568,7 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                     }
                     if element_enabled_task.load(Ordering::Relaxed)
                         && element_tx
-                            .send(Err(DittoError::InvalidResponse(err_string)))
+                            .send(Err(stream_object_failed(&err_string)))
                             .await
                             .is_err()
                     {
@@ -555,14 +584,10 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                 Ok(guard) => guard,
                 Err(_) => {
                     if partial_enabled_task.load(Ordering::Relaxed) {
-                        let _ = partial_tx.try_send(Err(DittoError::InvalidResponse(
-                            "stream object state lock is poisoned".to_string(),
-                        )));
+                        let _ = partial_tx.try_send(Err(stream_object_state_lock_poisoned()));
                     }
                     if element_enabled_task.load(Ordering::Relaxed) {
-                        let _ = element_tx.try_send(Err(DittoError::InvalidResponse(
-                            "stream object state lock is poisoned".to_string(),
-                        )));
+                        let _ = element_tx.try_send(Err(stream_object_state_lock_poisoned()));
                     }
                     return;
                 }
@@ -631,7 +656,7 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                 }
                 if element_enabled_task.load(Ordering::Relaxed)
                     && element_tx
-                        .send(Err(DittoError::InvalidResponse(err_string)))
+                        .send(Err(stream_object_failed(&err_string)))
                         .await
                         .is_err()
                 {
@@ -698,11 +723,7 @@ fn parse_final_object(
         ObjectStrategy::ToolCall => {
             if !tool.trim().is_empty() {
                 let parsed = serde_json::from_str::<Value>(tool).or_else(|_| {
-                    parse_partial_json(tool).ok_or_else(|| {
-                        DittoError::InvalidResponse(
-                            "failed to parse tool_call arguments as JSON".to_string(),
-                        )
-                    })
+                    parse_partial_json(tool).ok_or_else(tool_call_json_parse_failed)
                 })?;
                 extract_tool_call_value(&parsed).unwrap_or(parsed)
             } else {
@@ -746,7 +767,7 @@ fn resolve_object_strategy(provider: &str, requested: ObjectStrategy) -> ObjectS
         ObjectStrategy::Auto => {
             if provider == "openai" {
                 ObjectStrategy::NativeSchema
-            } else if cfg!(feature = "tools") {
+            } else if cfg!(feature = "cap-llm-tools") {
                 ObjectStrategy::ToolCall
             } else {
                 ObjectStrategy::TextJson
@@ -777,9 +798,8 @@ fn ensure_output_matches(value: &Value, output: ObjectOutput) -> Result<()> {
     if ok {
         return Ok(());
     }
-    Err(DittoError::InvalidResponse(format!(
-        "model returned {actual}, but {expected} was requested",
-        actual = match value {
+    Err(object_output_type_mismatch(
+        match value {
             Value::Null => "null",
             Value::Bool(_) => "bool",
             Value::Number(_) => "number",
@@ -787,11 +807,11 @@ fn ensure_output_matches(value: &Value, output: ObjectOutput) -> Result<()> {
             Value::Array(_) => "array",
             Value::Object(_) => "object",
         },
-        expected = match output {
-            ObjectOutput::Object => "an object",
-            ObjectOutput::Array => "an array",
-        }
-    )))
+        match output {
+            ObjectOutput::Object => "object",
+            ObjectOutput::Array => "array",
+        },
+    ))
 }
 
 fn request_with_tool_call(
@@ -799,17 +819,12 @@ fn request_with_tool_call(
     tool_name: &str,
     schema: JsonSchemaFormat,
 ) -> Result<GenerateRequest> {
-    if !cfg!(feature = "tools") {
-        return Err(DittoError::InvalidResponse(
-            "ditto-core built without tools feature; ObjectStrategy::ToolCall is unavailable"
-                .to_string(),
-        ));
+    if !cfg!(feature = "cap-llm-tools") {
+        return Err(object_tools_feature_unavailable());
     }
     let name = tool_name.trim();
     if name.is_empty() {
-        return Err(DittoError::InvalidResponse(
-            "tool_name must not be empty".to_string(),
-        ));
+        return Err(object_tool_name_empty());
     }
 
     let tool = Tool {

@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 pub(crate) use ditto_core::{
-    capabilities, config, contracts, foundation, llm_core, object, provider_options,
-    provider_transport, runtime, runtime_registry, session_transport, types, utils,
+    capabilities, config, contracts, error, llm_core, object, provider_options, provider_transport,
+    runtime, runtime_registry, session_transport, types, utils,
 };
 
 #[cfg(feature = "sdk")]

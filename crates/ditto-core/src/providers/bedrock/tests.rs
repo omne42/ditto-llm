@@ -4,7 +4,7 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use serde_json::json;
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn build_event_stream_message(payload: &Value) -> Vec<u8> {
         let payload_bytes = serde_json::to_vec(payload).expect("payload json");
 
@@ -29,7 +29,7 @@ mod tests {
         out
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn bedrock_event(inner: Value) -> Value {
         let bytes = BASE64.encode(serde_json::to_vec(&inner).expect("inner json"));
         json!({
@@ -37,7 +37,7 @@ mod tests {
         })
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn eventstream_decoder_invalid_total_len_is_consumed() {
         let mut decoder = EventStreamDecoder::default();
@@ -57,7 +57,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn eventstream_decoder_parses_fragmented_back_to_back_frames() {
         let first = bedrock_event(json!({ "type": "content_block_delta" }));
@@ -127,7 +127,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[tokio::test]
     async fn bedrock_stream_parses_eventstream() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

@@ -18,8 +18,8 @@ use crate::contracts::{
     RuntimeProviderHints, RuntimeRoute, RuntimeRouteRequest,
 };
 #[cfg(test)]
-use crate::foundation::error::DittoError;
-use crate::foundation::error::{ProviderResolutionError, Result};
+use crate::error::DittoError;
+use crate::error::{ProviderResolutionError, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RuntimeResolvedProviderSource {
@@ -165,7 +165,7 @@ pub(crate) fn resolve_runtime_route_plan(
 
 #[cfg(test)]
 mod tests {
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     use std::collections::BTreeMap;
 
     use super::*;
@@ -180,7 +180,7 @@ mod tests {
         resolve_runtime_route(&crate::catalog::builtin_registry(), request)
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn runtime_route_uses_plugin_default_base_url() {
         let route = resolve_builtin_route(RuntimeRouteRequest::new(
@@ -195,7 +195,7 @@ mod tests {
         assert_eq!(route.transport(), TransportKind::Http);
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn runtime_route_uses_provider_config_default_model_and_query_params() {
         let mut provider_config = ProviderConfig {
@@ -224,7 +224,7 @@ mod tests {
         );
     }
 
-    #[cfg(all(feature = "provider-openai", feature = "realtime"))]
+    #[cfg(all(feature = "provider-openai", feature = "cap-realtime"))]
     #[test]
     fn runtime_route_converts_openai_realtime_to_websocket_url() {
         let route = resolve_builtin_route(RuntimeRouteRequest::new(
@@ -442,7 +442,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn runtime_route_rejects_required_capability_mismatch() {
         let err = resolve_builtin_route(
@@ -462,7 +462,7 @@ mod tests {
         ));
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn runtime_route_falls_back_to_generic_openai_compatible_plugin() {
         let provider_config = ProviderConfig {
@@ -482,7 +482,7 @@ mod tests {
         assert_eq!(route.url, "https://proxy.example/v1/chat/completions");
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn runtime_route_requires_explicit_base_url_for_generic_openai_like_aliases() {
         let provider_config = ProviderConfig {
@@ -591,7 +591,7 @@ mod tests {
         }
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn runtime_route_keeps_invocation_metadata() {
         let provider_config = ProviderConfig {

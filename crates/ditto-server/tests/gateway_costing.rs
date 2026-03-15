@@ -44,7 +44,7 @@ fn build_proxy_backends(
 }
 
 #[tokio::test]
-async fn cost_budget_blocks_proxy_request() -> ditto_core::foundation::error::Result<()> {
+async fn cost_budget_blocks_proxy_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -83,6 +83,7 @@ async fn cost_budget_blocks_proxy_request() -> ditto_core::foundation::error::Re
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -119,7 +120,7 @@ async fn cost_budget_blocks_proxy_request() -> ditto_core::foundation::error::Re
 }
 
 #[tokio::test]
-async fn cost_budget_rejects_unsupported_endpoint() -> ditto_core::foundation::error::Result<()> {
+async fn cost_budget_rejects_unsupported_endpoint() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -158,6 +159,7 @@ async fn cost_budget_rejects_unsupported_endpoint() -> ditto_core::foundation::e
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -193,7 +195,7 @@ async fn cost_budget_rejects_unsupported_endpoint() -> ditto_core::foundation::e
 }
 
 #[tokio::test]
-async fn cost_budget_allows_get_models() -> ditto_core::foundation::error::Result<()> {
+async fn cost_budget_allows_get_models() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -234,6 +236,7 @@ async fn cost_budget_allows_get_models() -> ditto_core::foundation::error::Resul
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -265,8 +268,7 @@ async fn cost_budget_allows_get_models() -> ditto_core::foundation::error::Resul
 }
 
 #[tokio::test]
-async fn cost_budget_rejects_large_multipart_audio_request()
--> ditto_core::foundation::error::Result<()> {
+async fn cost_budget_rejects_large_multipart_audio_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -305,6 +307,7 @@ async fn cost_budget_rejects_large_multipart_audio_request()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -338,7 +341,7 @@ async fn cost_budget_rejects_large_multipart_audio_request()
 }
 
 #[tokio::test]
-async fn project_cost_budget_blocks_proxy_request() -> ditto_core::foundation::error::Result<()> {
+async fn project_cost_budget_blocks_proxy_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -381,6 +384,7 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_core::foundation::e
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -417,7 +421,7 @@ async fn project_cost_budget_blocks_proxy_request() -> ditto_core::foundation::e
 }
 
 #[tokio::test]
-async fn service_tier_pricing_blocks_proxy_request() -> ditto_core::foundation::error::Result<()> {
+async fn service_tier_pricing_blocks_proxy_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -487,6 +491,7 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_core::foundation::
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -518,8 +523,7 @@ async fn service_tier_pricing_blocks_proxy_request() -> ditto_core::foundation::
 }
 
 #[tokio::test]
-async fn backend_model_map_pricing_blocks_proxy_request()
--> ditto_core::foundation::error::Result<()> {
+async fn backend_model_map_pricing_blocks_proxy_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -585,6 +589,7 @@ async fn backend_model_map_pricing_blocks_proxy_request()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -616,7 +621,7 @@ async fn backend_model_map_pricing_blocks_proxy_request()
 }
 
 #[tokio::test]
-async fn cache_read_pricing_allows_second_request() -> ditto_core::foundation::error::Result<()> {
+async fn cache_read_pricing_allows_second_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -670,6 +675,7 @@ async fn cache_read_pricing_allows_second_request() -> ditto_core::foundation::e
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
@@ -710,8 +716,7 @@ async fn cache_read_pricing_allows_second_request() -> ditto_core::foundation::e
 }
 
 #[tokio::test]
-async fn cache_creation_pricing_blocks_second_request() -> ditto_core::foundation::error::Result<()>
-{
+async fn cache_creation_pricing_blocks_second_request() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -765,6 +770,7 @@ async fn cache_creation_pricing_blocks_second_request() -> ditto_core::foundatio
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");

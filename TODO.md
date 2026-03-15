@@ -26,11 +26,11 @@
 
 ## 架构重构状态（2026-03-09）
 
-- [x] `foundation` / `contracts` / `llm_core` 已落地，旧 `core` 仅保留兼容 shim。
+- [x] `foundation` / `contracts` / `llm_core` 已稳定落位到 `crates/ditto-core`；拆分前顶层 `src/` facade 已删除。
 - [x] `capabilities/` 已从单文件 facade 改成真实目录模块。
-- [x] `config/editor.rs` 已迁出到 `apps/config_editor.rs`，`config` 仅保留 schema / parsing / auth 解析边界。
-- [x] `profile` 已降级为 `src/profile.rs` 兼容 shim，真实实现位于 `src/compat/profile/`，旧 `src/profile/` 目录已删除。
-- [x] `catalog` 的共享契约已下沉到 `src/contracts/`，`catalog <-> config` 的直接环依赖已被打断。
+- [x] config editing 已迁入 `crates/ditto-server/src/config_editing.rs`，`crates/ditto-core/src/config/` 仅保留 schema / parsing / auth / routing 语义边界。
+- [x] 旧 `profile` / `compat/profile` 兼容层已退休；当前 provider truth 以 `crates/ditto-core/src/catalog/`、`crates/ditto-core/src/runtime_registry/` 与 `crates/ditto-core/src/providers/openai_compat_profile.rs` 为准。
+- [x] `catalog` 的共享契约已下沉到 `crates/ditto-core/src/contracts/`，`catalog <-> config` 的直接环依赖已被打断。
 - [x] `gateway` 已物理落位到 `domain/`、`application/`、`adapters/`、`transport/http/`；根目录旧模块仅保留兼容 shim。
 - [x] `gateway` 已不再依赖 `include!` 做模块拼装。
 - [x] `gateway` 根导出已改为优先指向新层级路径，旧平铺模块以 `#[doc(hidden)]` 兼容形式保留。
@@ -256,9 +256,9 @@
 - [x] 新增 `ditto-catalog-dashboard` 与 `CATALOG_COMPLETENESS.md`，持续汇总 provider/capability/model completeness，并纳入 `llms.txt` 生成与 `--check` 校验。
 - [x] 新增 `docs/src/roadmap/provider-runtime-rollout.md`，把剩余 runtime gap 收敛为按 capability 分组的落地顺序。
 - [x] 已把 `OpenAiProviderFamily` / quirks 推断从 `profile` 兼容壳迁到 `providers` 共享层，避免继续把 provider 行为塞回 legacy config namespace。
-- [x] 已把 `FileClient` 的 `OpenAI` / `OpenAICompatible` 实现移出 `src/file.rs`，能力层只保留 trait 与数据结构。
+- [x] 已把 `FileClient` 的 `OpenAI` / `OpenAICompatible` 实现移出 `crates/ditto-core/src/capabilities/file.rs`，能力层只保留 trait 与数据结构。
 - [x] 已恢复 `cargo check --features agent`，并补齐 OpenAI-family 共享 HTTP/auth gate。
-- [x] Rust provider catalog 生成结果已从单一 `src/catalog/generated/providers.rs` 拆成按 provider 的 `src/catalog/generated/providers/*.rs`，并保留统一聚合入口 `src/catalog/generated/providers/mod.rs`。
+- [x] Rust provider catalog 生成结果已从单一 `crates/ditto-core/src/catalog/generated/providers/mod.rs` 拆成按 provider 的 `crates/ditto-core/src/catalog/generated/providers/*.rs`，并保留统一聚合入口 `crates/ditto-core/src/catalog/generated/providers/mod.rs`。
 - [x] 已完成 `context.cache` 的第一阶段收口：新增 typed `ContextCacheModel`，并让 DeepSeek / MiniMax 的 runtime、dashboard、provider tests 同步对齐。
 - [x] 已完成 OpenAI native `video.generation` 的第一阶段接入：新增 typed `VideoGenerationModel`，并补齐 `/videos` 资源型 builder、route、provider tests 与 dashboard。
 - [x] 已完成 Google native `image.generation`、`realtime`、`video.generation` 的第一阶段接入：补齐 `predict`/`predictLongRunning`/live builder、typed session/polling、provider tests 与 dashboard；provider-level runtime gap 已清零。
@@ -270,9 +270,9 @@
 ```bash
 cd ditto-llm
 
-cargo fmt -- --check
-cargo run --all-features --bin ditto-catalog-dashboard -- --check
-cargo run --bin ditto-llms-txt -- --check
+cargo fmt --all -- --check
+cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard -- --check
+cargo run -p ditto-core --bin ditto-llms-txt -- --check
 cargo test --all-targets                # default core: provider-openai-compatible + cap-llm
 cargo check --examples                  # default examples must stay generic openai-compatible
 cargo test --all-targets --all-features

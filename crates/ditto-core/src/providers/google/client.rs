@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -17,15 +17,15 @@ use crate::provider_transport::{
     DEFAULT_HTTP_TIMEOUT, apply_http_query_params, default_http_client,
     resolve_http_provider_config,
 };
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Tool, ToolChoice, Usage,
     Warning,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 use crate::capabilities::embedding::EmbeddingModel;
 
 const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
@@ -116,8 +116,9 @@ impl Google {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "google model is not set (set request.model or Google::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "google",
+            "set request.model or Google::with_model",
         ))
     }
 
@@ -136,7 +137,7 @@ impl Google {
         format!("{base}/{path}:generateContent")
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn stream_url(&self, model: &str) -> String {
         let base = self.base_url.trim_end_matches('/');
         let path = Self::model_path(model);

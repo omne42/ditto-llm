@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 use super::openai_like::OpenAiLikeClient;
 
 use crate::contracts::Warning;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, SpeechRequest, SpeechResponse,
     SpeechResponseFormat, TranscriptionResponseFormat,
@@ -154,7 +154,7 @@ async fn transcribe_to_endpoint(
     let mut file_part = Part::bytes(audio).file_name(filename);
     if let Some(media_type) = media_type.as_deref().filter(|s| !s.trim().is_empty()) {
         file_part = file_part.mime_str(media_type).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid transcription media type: {err}"))
+            DittoError::invalid_response_text(format!("invalid transcription media type: {err}"))
         })?;
     }
 
@@ -304,7 +304,7 @@ pub(super) async fn speak(
     )
     .await
     .map_err(|err| {
-        DittoError::InvalidResponse(format!(
+        DittoError::invalid_response_text(format!(
             "audio/speech response too large (max={max_bytes}): {err}"
         ))
     })?;

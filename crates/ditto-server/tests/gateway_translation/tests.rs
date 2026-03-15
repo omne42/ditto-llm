@@ -1,5 +1,5 @@
 #[tokio::test]
-async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -48,7 +48,7 @@ async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::fo
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -88,7 +88,7 @@ async fn gateway_translation_responses_streaming() -> ditto_core::foundation::er
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -186,7 +186,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_delete() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -252,7 +252,7 @@ async fn gateway_translation_responses_delete() -> ditto_core::foundation::error
 
 #[cfg(feature = "gateway-tokenizer")]
 #[tokio::test]
-async fn gateway_translation_responses_input_tokens() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_input_tokens() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -309,7 +309,7 @@ async fn gateway_translation_responses_input_tokens() -> ditto_core::foundation:
 
 #[cfg(not(feature = "gateway-tokenizer"))]
 #[tokio::test]
-async fn gateway_translation_responses_input_tokens_requires_tokenizer() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_input_tokens_requires_tokenizer() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -350,7 +350,7 @@ async fn gateway_translation_responses_input_tokens_requires_tokenizer() -> ditt
 
 #[tokio::test]
 async fn gateway_translation_responses_input_tokens_get_not_treated_as_retrieve()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -385,7 +385,7 @@ async fn gateway_translation_responses_input_tokens_get_not_treated_as_retrieve(
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -420,7 +420,7 @@ async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::foundat
 }
 
 #[tokio::test]
-async fn gateway_translation_embeddings_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_embeddings_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -476,7 +476,7 @@ async fn gateway_translation_embeddings_non_streaming() -> ditto_core::foundatio
 }
 
 #[tokio::test]
-async fn gateway_translation_rejects_endpoint_without_bound_capability() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_rejects_endpoint_without_bound_capability() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -517,7 +517,7 @@ async fn gateway_translation_rejects_endpoint_without_bound_capability() -> ditt
 
 #[tokio::test]
 async fn gateway_translation_rejects_model_capability_mismatch_before_builder_resolution()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -563,7 +563,7 @@ async fn gateway_translation_rejects_model_capability_mismatch_before_builder_re
 }
 
 #[tokio::test]
-async fn gateway_translation_moderations_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_moderations_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -615,7 +615,7 @@ async fn gateway_translation_moderations_non_streaming() -> ditto_core::foundati
 }
 
 #[tokio::test]
-async fn gateway_translation_images_generations_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_images_generations_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -666,7 +666,7 @@ async fn gateway_translation_images_generations_non_streaming() -> ditto_core::f
 }
 
 #[tokio::test]
-async fn gateway_translation_images_edits_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_images_edits_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -741,7 +741,7 @@ async fn gateway_translation_images_edits_non_streaming() -> ditto_core::foundat
 }
 
 #[tokio::test]
-async fn gateway_translation_images_edits_rejects_stream_true() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_images_edits_rejects_stream_true() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -786,7 +786,7 @@ async fn gateway_translation_images_edits_rejects_stream_true() -> ditto_core::f
 }
 
 #[tokio::test]
-async fn gateway_translation_images_edits_rejects_malformed_multipart() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_images_edits_rejects_malformed_multipart() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -831,7 +831,7 @@ async fn gateway_translation_images_edits_rejects_malformed_multipart() -> ditto
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_create_json() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_create_json() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -876,7 +876,7 @@ async fn gateway_translation_videos_create_json() -> ditto_core::foundation::err
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_create_multipart() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_create_multipart() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -921,7 +921,7 @@ async fn gateway_translation_videos_create_multipart() -> ditto_core::foundation
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -999,7 +999,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::founda
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_content_download() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_content_download() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1035,7 +1035,7 @@ async fn gateway_translation_videos_content_download() -> ditto_core::foundation
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1070,7 +1070,7 @@ async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_c
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_remix_json() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_remix_json() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1111,7 +1111,7 @@ async fn gateway_translation_videos_remix_json() -> ditto_core::foundation::erro
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_remix_rejects_stream_true() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_remix_rejects_stream_true() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1152,7 +1152,7 @@ async fn gateway_translation_videos_remix_rejects_stream_true() -> ditto_core::f
 }
 
 #[tokio::test]
-async fn gateway_translation_videos_rejects_stream_true() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_videos_rejects_stream_true() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1194,7 +1194,7 @@ async fn gateway_translation_videos_rejects_stream_true() -> ditto_core::foundat
 }
 
 #[tokio::test]
-async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1242,7 +1242,7 @@ async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_core:
 }
 
 #[tokio::test]
-async fn gateway_translation_audio_translations_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_audio_translations_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1290,7 +1290,7 @@ async fn gateway_translation_audio_translations_non_streaming() -> ditto_core::f
 }
 
 #[tokio::test]
-async fn gateway_translation_audio_speech_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_audio_speech_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1333,7 +1333,7 @@ async fn gateway_translation_audio_speech_non_streaming() -> ditto_core::foundat
 }
 
 #[tokio::test]
-async fn gateway_translation_batches_create() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_batches_create() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1381,7 +1381,7 @@ async fn gateway_translation_batches_create() -> ditto_core::foundation::error::
 }
 
 #[tokio::test]
-async fn gateway_translation_batches_list() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_batches_list() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1422,7 +1422,7 @@ async fn gateway_translation_batches_list() -> ditto_core::foundation::error::Re
 }
 
 #[tokio::test]
-async fn gateway_translation_batches_retrieve() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_batches_retrieve() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1451,7 +1451,7 @@ async fn gateway_translation_batches_retrieve() -> ditto_core::foundation::error
 }
 
 #[tokio::test]
-async fn gateway_translation_batches_cancel() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_batches_cancel() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1480,7 +1480,7 @@ async fn gateway_translation_batches_cancel() -> ditto_core::foundation::error::
 }
 
 #[tokio::test]
-async fn gateway_translation_rerank_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_rerank_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -1532,7 +1532,7 @@ async fn gateway_translation_rerank_non_streaming() -> ditto_core::foundation::e
 
 #[cfg(all(feature = "openai-compatible", feature = "embeddings"))]
 #[tokio::test]
-async fn translation_backend_uses_dotenv_for_lazy_embedding_clients() -> ditto_core::foundation::error::Result<()> {
+async fn translation_backend_uses_dotenv_for_lazy_embedding_clients() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1588,7 +1588,7 @@ async fn translation_backend_uses_dotenv_for_lazy_embedding_clients() -> ditto_c
 
 #[cfg(feature = "cohere")]
 #[tokio::test]
-async fn build_language_model_supports_cohere_from_config() -> ditto_core::foundation::error::Result<()> {
+async fn build_language_model_supports_cohere_from_config() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

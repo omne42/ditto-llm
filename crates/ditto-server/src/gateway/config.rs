@@ -2,13 +2,94 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::Digest as _;
 
 use crate::config::{Env, ProviderConfig};
-use crate::foundation::secrets::resolve_secret_string;
+use secret::resolve_secret_string;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
 };
+
+pub(crate) const VIRTUAL_KEY_TOKEN_HASH_PREFIX: &str = "sha256:";
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GatewayI18nConfig {
+    /// i18n mode: "static" (default), "dynamic", or "composed"
+    #[serde(default = "default_i18n_mode")]
+    pub mode: String,
+    /// For "dynamic" mode: source type ("file" or "env")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// For "file" source: path to translation directory
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// For "env" source: environment variable name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_var: Option<String>,
+    /// Default locale (e.g., "en_US")
+    #[serde(default = "default_i18n_locale")]
+    pub default_locale: String,
+    /// Fallback strategy: "key", "default_locale", or "both"
+    #[serde(default = "default_i18n_fallback")]
+    pub fallback_strategy: String,
+    /// Enable file watching for hot reload (file source only)
+    #[serde(default)]
+    pub watch: bool,
+}
+
+fn default_i18n_mode() -> String {
+    "static".to_string()
+}
+
+fn default_i18n_locale() -> String {
+    "en_US".to_string()
+}
+
+fn default_i18n_fallback() -> String {
+    "both".to_string()
+}
+
+impl GatewayI18nConfig {
+    pub fn validate(&self) -> Result<(), super::GatewayError> {
+        match self.mode.as_str() {
+            "static" => Ok(()),
+            "dynamic" => {
+                let source =
+                    self.source
+                        .as_ref()
+                        .ok_or_else(|| super::GatewayError::InvalidRequest {
+                            reason: "i18n.source required for dynamic mode".to_string(),
+                        })?;
+                match source.as_str() {
+                    "file" => {
+                        if self.path.is_none() {
+                            return Err(super::GatewayError::InvalidRequest {
+                                reason: "i18n.path required for file source".to_string(),
+                            });
+                        }
+                        Ok(())
+                    }
+                    "env" => {
+                        if self.env_var.is_none() {
+                            return Err(super::GatewayError::InvalidRequest {
+                                reason: "i18n.env_var required for env source".to_string(),
+                            });
+                        }
+                        Ok(())
+                    }
+                    _ => Err(super::GatewayError::InvalidRequest {
+                        reason: format!("unknown i18n source: {}", source),
+                    }),
+                }
+            }
+            "composed" => Ok(()),
+            _ => Err(super::GatewayError::InvalidRequest {
+                reason: format!("unknown i18n mode: {}", self.mode),
+            }),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GatewayObservabilityConfig {
@@ -168,6 +249,8 @@ pub struct GatewayConfig {
     pub mcp_servers: Vec<McpServerConfig>,
     #[serde(default)]
     pub observability: GatewayObservabilityConfig,
+    #[serde(default)]
+    pub i18n: GatewayI18nConfig,
 }
 
 impl GatewayConfig {
@@ -206,6 +289,8 @@ impl GatewayConfig {
     pub fn validate(&self) -> Result<(), super::GatewayError> {
         self.observability.redaction.validate()?;
         self.observability.sampling.validate()?;
+        self.i18n.validate()?;
+        validate_virtual_key_configs(&self.virtual_keys)?;
         Ok(())
     }
 }
@@ -608,6 +693,86 @@ impl VirtualKeyConfig {
         resolve_secret_in_string(&mut self.token, env, "virtual_keys[].token").await?;
         Ok(())
     }
+
+    pub(crate) fn token_lookup_key(&self) -> Option<String> {
+        normalize_virtual_key_token_key(&self.token)
+    }
+
+    pub(crate) fn matches_token(&self, presented: &str) -> bool {
+        let Some(expected) = self.token_lookup_key() else {
+            return false;
+        };
+        normalize_virtual_key_token_key(presented).is_some_and(|actual| actual == expected)
+    }
+
+    pub(crate) fn sanitized_for_persistence(&self) -> Self {
+        let mut sanitized = self.clone();
+        sanitized.token = persisted_virtual_key_token(&self.token);
+        sanitized
+    }
+}
+
+pub(crate) fn persisted_virtual_key_token(token: &str) -> String {
+    match normalize_virtual_key_token_key(token) {
+        Some(hash) => format!("{VIRTUAL_KEY_TOKEN_HASH_PREFIX}{hash}"),
+        None => token.to_string(),
+    }
+}
+
+pub(crate) fn normalize_virtual_key_token_key(token: &str) -> Option<String> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Some(hash) = trimmed.strip_prefix(VIRTUAL_KEY_TOKEN_HASH_PREFIX) {
+        let hash = hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        return Some(hash.to_string());
+    }
+
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(trimmed.as_bytes());
+    Some(format!("{:x}", hasher.finalize()))
+}
+
+pub(crate) fn validate_virtual_key_configs(
+    keys: &[VirtualKeyConfig],
+) -> Result<(), super::GatewayError> {
+    let mut seen_ids = std::collections::HashMap::<&str, usize>::new();
+    let mut seen_tokens = std::collections::HashMap::<String, usize>::new();
+
+    for (idx, key) in keys.iter().enumerate() {
+        let id = key.id.trim();
+        if id.is_empty() {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!("virtual_keys[{idx}].id cannot be empty"),
+            });
+        }
+        if let Some(first_idx) = seen_ids.insert(id, idx) {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!(
+                    "duplicate virtual key id `{id}` (first at index {first_idx}, duplicate at index {idx})"
+                ),
+            });
+        }
+
+        let Some(token_key) = normalize_virtual_key_token_key(&key.token) else {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!("virtual_keys[{idx}].token cannot be empty"),
+            });
+        };
+        if let Some(first_idx) = seen_tokens.insert(token_key, idx) {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!(
+                    "duplicate virtual key token (first at index {first_idx}, duplicate at index {idx})"
+                ),
+            });
+        }
+    }
+
+    Ok(())
 }
 
 async fn resolve_secret_in_string(
@@ -833,6 +998,7 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
+            i18n: Default::default(),
         };
 
         config.resolve_secrets(&env).await.expect("resolve secrets");

@@ -1,15 +1,15 @@
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use std::collections::VecDeque;
 use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use base64::Engine;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use base64::engine::general_purpose::STANDARD as BASE64;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use reqwest::Url;
 use serde::Deserialize;
@@ -21,13 +21,13 @@ use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::provider_transport::{
     DEFAULT_HTTP_TIMEOUT, build_http_client, resolve_http_provider_config,
 };
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, Tool, ToolChoice, Usage, Warning,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 const DEFAULT_VERSION: &str = "bedrock-2023-05-31";
 
@@ -85,12 +85,12 @@ impl Bedrock {
 
     pub async fn from_config(config: &ProviderConfig, env: &Env) -> Result<Self> {
         let resolved = resolve_http_provider_config(DEFAULT_HTTP_TIMEOUT, config, None)?;
-        let base_url = resolved.required_base_url("provider base_url is missing")?;
-        let model = resolved.required_default_model("provider default_model is missing")?;
+        let base_url = resolved.required_base_url()?;
+        let model = resolved.required_default_model()?;
         let auth = config
             .auth
             .clone()
-            .ok_or_else(|| DittoError::InvalidResponse("bedrock auth is missing".to_string()))?;
+            .ok_or_else(|| DittoError::provider_auth_missing("bedrock"))?;
         let signer = resolve_sigv4_signer(&auth, env)?;
 
         let mut out = Self::new(signer, base_url, model)?;
@@ -106,8 +106,9 @@ impl Bedrock {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "bedrock model is not set".to_string(),
+        Err(DittoError::provider_model_missing(
+            "bedrock",
+            "set request.model or Bedrock::with_model",
         ))
     }
 
@@ -119,7 +120,7 @@ impl Bedrock {
         format!("{base}/model/{model}/invoke")
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn invoke_stream_url(&self, model: &str) -> String {
         if self.base_url.contains("{model}") {
             let replaced = self.base_url.replace("{model}", model);
@@ -137,7 +138,7 @@ impl Bedrock {
 
     fn build_url_with_query(&self, base: &str) -> Result<String> {
         let mut url = Url::parse(base).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid bedrock base_url {base:?}: {err}"))
+            DittoError::provider_base_url_invalid("bedrock", base, err)
         })?;
         if !self.http_query_params.is_empty() {
             {
@@ -545,7 +546,7 @@ impl Bedrock {
         }
 
         if let Some(tools) = request.tools.clone() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let mapped = tools
                     .iter()
                     .map(|tool| Self::tool_to_anthropic(tool, warnings))
@@ -560,7 +561,7 @@ impl Bedrock {
         }
 
         if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 if *tool_choice == ToolChoice::None {
                     body.remove("tools");
                 } else if let Some(mapped) = Self::tool_choice_to_anthropic(tool_choice) {

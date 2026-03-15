@@ -50,7 +50,7 @@ cargo build -p ditto-server --features gateway --bin ditto-gateway
 特点：
 
 - 你把 upstream 的真实 API key 配在 `backends[].headers`（或 `.env`）
-- 客户端不需要提供 OpenAI key（但这意味着“网关本身就是一个能力入口”，生产请务必加 virtual keys 或外层网关鉴权）
+- 客户端必须提供 Ditto virtual key；`/v1/*`、`/mcp*`、`/a2a/*` 都会 fail-close，不会在 `virtual_keys=[]` 时退化成匿名 relay
 
 ```json
 {
@@ -64,36 +64,24 @@ cargo build -p ditto-server --features gateway --bin ditto-gateway
       "query_params": {}
     }
   ],
-  "virtual_keys": [],
-  "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
-}
-```
-
-> 细节：当 `virtual_keys` 为空时，Ditto 不会把客户端 `Authorization` 当作 virtual key；但如果 backend 配了 `authorization`，它会覆盖同名 header（因此建议客户端不要再传 `Authorization`，避免误解）。
-
-### 模式 B：客户端持有 upstream key（纯反向代理）
-
-特点：
-
-- 你不在 `backends[].headers` 注入 `authorization`
-- 客户端请求时必须自带 `Authorization: Bearer <upstream_key>`（Ditto 会原样转发）
-
-```json
-{
-  "backends": [
+  "virtual_keys": [
     {
-      "name": "primary",
-      "base_url": "https://api.openai.com/v1",
-      "max_in_flight": 64,
-      "timeout_seconds": 60,
-      "headers": {},
-      "query_params": {}
+      "id": "local-dev",
+      "token": "${DITTO_VIRTUAL_KEY}",
+      "enabled": true,
+      "limits": {},
+      "budget": {},
+      "cache": {},
+      "guardrails": {},
+      "passthrough": {},
+      "route": null
     }
   ],
-  "virtual_keys": [],
   "router": { "default_backends": [{ "backend": "primary", "weight": 1.0 }], "rules": [] }
 }
 ```
+
+> 细节：`/v1/*`、`/mcp*`、`/a2a/*` 会把客户端 `Authorization` / `x-api-key` 当作 virtual key，并在转发 upstream 前移除；真正的 upstream 凭证应放在 `backends[].headers` / `provider_config.auth`。
 
 ## 3) 启动（第一个参数必须是 config 路径）
 
@@ -113,18 +101,20 @@ cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.js
 
 ```bash
 curl -sS http://127.0.0.1:8080/health
-curl -sS http://127.0.0.1:8080/v1/models | head
+curl -sS http://127.0.0.1:8080/ready
+curl -sS http://127.0.0.1:8080/v1/models -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" | head
 ```
 
 最小对话（Chat Completions）：
 
 ```bash
 curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" \
   -H "content-type: application/json" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Say hello."}]}' | head
 ```
 
-> 如果你使用的是「模式 B：客户端持有 upstream key」，请额外加上 `-H "authorization: Bearer <UPSTREAM_API_KEY>"`。
+> 请求头里的 `Authorization` / `x-api-key` 会被 Ditto 当作 virtual key；真正的 upstream 凭证应由 backend 配置注入，而不是让客户端直传。
 
 如果你测试的是 `POST /v1/responses`：
 

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 use super::OpenAI;
 
@@ -92,7 +92,7 @@ mod tests {
     use httpmock::{Method::GET, MockServer};
 
     #[tokio::test]
-    async fn list_models_hits_models_endpoint() -> crate::foundation::error::Result<()> {
+    async fn list_models_hits_models_endpoint() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -135,7 +135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retrieve_model_hits_model_resource_endpoint() -> crate::foundation::error::Result<()> {
+    async fn retrieve_model_hits_model_resource_endpoint() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_model_ids_sorts_and_deduplicates() -> crate::foundation::error::Result<()> {
+    async fn list_model_ids_sorts_and_deduplicates() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }

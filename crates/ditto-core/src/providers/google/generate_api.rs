@@ -7,14 +7,14 @@ struct GoogleGenerateResponse {
 }
 
 #[derive(Debug, Deserialize)]
-#[cfg(feature = "streaming")]
-struct GoogleApiErrorEnvelope {
-    error: GoogleApiErrorBody,
+#[cfg(feature = "cap-llm-streaming")]
+struct GoogleApiFailureEnvelope {
+    error: GoogleApiFailureBody,
 }
 
 #[derive(Debug, Deserialize)]
-#[cfg(feature = "streaming")]
-struct GoogleApiErrorBody {
+#[cfg(feature = "cap-llm-streaming")]
+struct GoogleApiFailureBody {
     #[serde(default)]
     message: String,
     #[serde(default, rename = "type")]
@@ -30,7 +30,7 @@ struct PreparedGoogleRequest {
     warnings: Vec<Warning>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GoogleStreamFallbackReason {
     EmptyResponse,
@@ -44,7 +44,7 @@ fn parse_google_candidate(
     genai::parse_google_candidate(candidate, tool_call_seq, has_tool_calls)
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 // YUNWU_GEMINI_STREAM_FALLBACK:
 // Yunwu's Gemini native streaming endpoint can fail before emitting any deltas
 // with an upstream "empty_response" style error. Treat that as a transport-path
@@ -54,7 +54,7 @@ fn parse_google_candidate(
 fn classify_google_stream_fallback(err: &DittoError) -> Option<GoogleStreamFallbackReason> {
     match err {
         DittoError::Api { body, .. } => {
-            let parsed = serde_json::from_str::<GoogleApiErrorEnvelope>(body).ok()?;
+            let parsed = serde_json::from_str::<GoogleApiFailureEnvelope>(body).ok()?;
             let code = parsed.error.code.trim();
             if code == "channel:empty_response" {
                 return Some(GoogleStreamFallbackReason::EmptyResponse);
@@ -73,7 +73,7 @@ fn classify_google_stream_fallback(err: &DittoError) -> Option<GoogleStreamFallb
     }
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 fn usage_has_token_counts(usage: &Usage) -> bool {
     usage.input_tokens.is_some()
         || usage.cache_input_tokens.is_some()
@@ -82,7 +82,7 @@ fn usage_has_token_counts(usage: &Usage) -> bool {
         || usage.total_tokens.is_some()
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 fn stream_chunks_from_generate_response(
     response: GenerateResponse,
 ) -> Vec<Result<crate::contracts::StreamChunk>> {
@@ -218,7 +218,7 @@ impl Google {
         }
 
         if let Some(tools) = request.tools.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let decls = tools
                     .iter()
                     .cloned()
@@ -237,7 +237,7 @@ impl Google {
         }
 
         if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 if let Some(tool_config) = Self::tool_config(Some(tool_choice)) {
                     body.insert("toolConfig".to_string(), tool_config);
                 }
@@ -319,15 +319,16 @@ impl LanguageModel for Google {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            Err(DittoError::builder_capability_feature_missing(
+                "google",
+                "streaming",
             ))
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let PreparedGoogleRequest {
                 model,

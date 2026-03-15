@@ -11,6 +11,8 @@ use std::path::PathBuf;
 ))]
 use std::time::Instant;
 
+use ditto_core::MESSAGE_CATALOG;
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
 #[cfg(feature = "gateway")]
 use serde::Serialize;
 
@@ -53,8 +55,30 @@ struct StoreBenchResult {
 
 #[cfg(feature = "gateway")]
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = parse_args(std::env::args().skip(1))?;
+async fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    if let Err(err) = run(locale, args).await {
+        eprintln!("{}", render_error(err.as_ref(), locale));
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "gateway")]
+async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    if raw_args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("{}", usage(locale));
+        return Ok(());
+    }
+
+    let args = parse_args(raw_args.into_iter(), locale)?;
 
     #[allow(unused_mut)]
     let mut results = Vec::new();
@@ -67,7 +91,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-sqlite"))]
         {
-            return Err("--sqlite requires `--features gateway-store-sqlite`".into());
+            return Err(MESSAGE_CATALOG
+                .render(
+                    locale,
+                    "cli.requires_feature",
+                    &[
+                        MessageArg::new("flag", "--sqlite"),
+                        MessageArg::new("feature", "gateway-store-sqlite"),
+                    ],
+                )
+                .into());
         }
     }
 
@@ -79,7 +112,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-postgres"))]
         {
-            return Err("--pg requires `--features gateway-store-postgres`".into());
+            return Err(MESSAGE_CATALOG
+                .render(
+                    locale,
+                    "cli.requires_feature",
+                    &[
+                        MessageArg::new("flag", "--pg"),
+                        MessageArg::new("feature", "gateway-store-postgres"),
+                    ],
+                )
+                .into());
         }
     }
 
@@ -91,12 +133,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(not(feature = "gateway-store-mysql"))]
         {
-            return Err("--mysql requires `--features gateway-store-mysql`".into());
+            return Err(MESSAGE_CATALOG
+                .render(
+                    locale,
+                    "cli.requires_feature",
+                    &[
+                        MessageArg::new("flag", "--mysql"),
+                        MessageArg::new("feature", "gateway-store-mysql"),
+                    ],
+                )
+                .into());
         }
     }
 
     if results.is_empty() {
-        return Err("no stores selected; pass --sqlite and/or --pg and/or --mysql".into());
+        return Err(no_stores_selected(locale).into());
     }
 
     let report = BenchReport {
@@ -118,13 +169,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(not(feature = "gateway"))]
 fn main() {
-    eprintln!("gateway feature disabled; rebuild with --features gateway");
+    eprintln!(
+        "{}",
+        MESSAGE_CATALOG.render(
+            MESSAGE_CATALOG.default_locale(),
+            "cli.feature_disabled",
+            &[
+                MessageArg::new("feature", "gateway"),
+                MessageArg::new("rebuild_hint", "--features gateway"),
+            ],
+        )
+    );
 }
 
 #[cfg(feature = "gateway")]
 fn parse_args(
     mut args: impl Iterator<Item = String>,
+    locale: Locale,
 ) -> Result<BenchArgs, Box<dyn std::error::Error>> {
+    let usage = usage(locale);
     let mut sqlite_path: Option<PathBuf> = None;
     let mut postgres_url: Option<String> = None;
     let mut mysql_url: Option<String> = None;
@@ -135,45 +198,94 @@ fn parse_args(
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--sqlite" => {
-                sqlite_path = Some(args.next().ok_or("missing value for --sqlite")?.into());
+                sqlite_path = Some(
+                    args.next()
+                        .ok_or_else(|| {
+                            MESSAGE_CATALOG.render(
+                                locale,
+                                "cli.missing_value",
+                                &[MessageArg::new("flag", "--sqlite")],
+                            )
+                        })?
+                        .into(),
+                );
             }
             "--pg" => {
-                postgres_url = Some(args.next().ok_or("missing value for --pg")?);
+                postgres_url = Some(args.next().ok_or_else(|| {
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.missing_value",
+                        &[MessageArg::new("flag", "--pg")],
+                    )
+                })?);
             }
             "--mysql" => {
-                mysql_url = Some(args.next().ok_or("missing value for --mysql")?);
+                mysql_url = Some(args.next().ok_or_else(|| {
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.missing_value",
+                        &[MessageArg::new("flag", "--mysql")],
+                    )
+                })?);
             }
             "--audit-ops" => {
                 audit_ops = args
                     .next()
-                    .ok_or("missing value for --audit-ops")?
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--audit-ops")],
+                        )
+                    })?
                     .parse::<usize>()
-                    .map_err(|_| "invalid --audit-ops")?;
+                    .map_err(|_| invalid_value(locale, "--audit-ops"))?;
             }
             "--reap-ops" => {
                 reap_ops = args
                     .next()
-                    .ok_or("missing value for --reap-ops")?
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--reap-ops")],
+                        )
+                    })?
                     .parse::<usize>()
-                    .map_err(|_| "invalid --reap-ops")?;
+                    .map_err(|_| invalid_value(locale, "--reap-ops"))?;
             }
             "--out" => {
-                out_path = Some(args.next().ok_or("missing value for --out")?.into());
+                out_path = Some(
+                    args.next()
+                        .ok_or_else(|| {
+                            MESSAGE_CATALOG.render(
+                                locale,
+                                "cli.missing_value",
+                                &[MessageArg::new("flag", "--out")],
+                            )
+                        })?
+                        .into(),
+                );
             }
             "--help" | "-h" => {
-                return Err(usage().into());
+                return Err(usage.into());
             }
             other => {
-                return Err(format!("unknown arg: {other}\n{}", usage()).into());
+                let message = MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.unknown_arg",
+                    &[MessageArg::new("arg", other)],
+                );
+                return Err(format!("{message}\n{usage}").into());
             }
         }
     }
 
     if audit_ops == 0 {
-        return Err("--audit-ops must be > 0".into());
+        return Err(must_be_positive(locale, "--audit-ops").into());
     }
     if reap_ops == 0 {
-        return Err("--reap-ops must be > 0".into());
+        return Err(must_be_positive(locale, "--reap-ops").into());
     }
 
     Ok(BenchArgs {
@@ -187,8 +299,53 @@ fn parse_args(
 }
 
 #[cfg(feature = "gateway")]
-fn usage() -> &'static str {
-    "usage: ditto-store-bench [--sqlite PATH] [--pg URL] [--mysql URL] [--audit-ops N] [--reap-ops N] [--out PATH]"
+fn usage(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.usage",
+        &[MessageArg::new(
+            "command_and_syntax",
+            "ditto-store-bench [--sqlite PATH] [--pg URL] [--mysql URL] [--audit-ops N] [--reap-ops N] [--out PATH]",
+        )],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn invalid_value(locale: Locale, flag: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.invalid_value",
+        &[MessageArg::new("label", flag)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn must_be_positive(locale: Locale, flag: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.must_be_positive",
+        &[MessageArg::new("flag", flag)],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn no_stores_selected(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "store_bench.no_stores_selected", &[])
+}
+
+#[cfg(feature = "gateway")]
+fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> String {
+    if let Some(error) = error.downcast_ref::<ditto_core::error::DittoError>() {
+        return error.render(locale);
+    }
+    if let Some(error) = error.downcast_ref::<ditto_core::error::ProviderResolutionError>() {
+        return error.render(locale);
+    }
+    MESSAGE_CATALOG.render(
+        locale,
+        "error.generic",
+        &[MessageArg::new("error", error.to_string())],
+    )
 }
 
 #[cfg(all(feature = "gateway", feature = "gateway-store-sqlite"))]

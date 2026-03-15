@@ -295,8 +295,7 @@ fn openai_text_model_routes_and_behaviors_match_official_catalog() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_llm()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_llm() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_language_model(
         "openai",
         &openai_config("gpt-4.1"),
@@ -316,7 +315,7 @@ async fn gateway_builder_constructs_official_openai_llm()
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_chat_only_model()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model =
         ditto_core::runtime::build_language_model("openai", &openai_config("gpt-4"), &openai_env())
             .await?;
@@ -333,7 +332,7 @@ async fn gateway_builder_constructs_official_openai_chat_only_model()
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_legacy_completion_model()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_language_model(
         "openai",
         &openai_config("davinci-002"),
@@ -352,8 +351,7 @@ async fn gateway_builder_constructs_official_openai_legacy_completion_model()
     feature = "cap-embedding"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_embeddings()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_embeddings() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_embedding_model(
         "openai",
         &openai_config("text-embedding-3-small"),
@@ -374,7 +372,7 @@ async fn gateway_builder_constructs_official_openai_embeddings()
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_image_generation()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_image_generation_model(
         "openai",
         &openai_config("gpt-image-1"),
@@ -394,8 +392,7 @@ async fn gateway_builder_constructs_official_openai_image_generation()
     feature = "cap-image-edit"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_image_edit()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_image_edit() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_image_edit_model(
         "openai",
         &openai_config("gpt-image-1"),
@@ -416,7 +413,7 @@ async fn gateway_builder_constructs_official_openai_image_edit()
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_audio_transcription()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_audio_transcription_model(
         "openai",
         &openai_config("whisper-1"),
@@ -436,8 +433,7 @@ async fn gateway_builder_constructs_official_openai_audio_transcription()
     feature = "cap-audio-speech"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_speech()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_speech() -> ditto_core::error::Result<()> {
     let model =
         ditto_core::runtime::build_speech_model("openai", &openai_config("tts-1"), &openai_env())
             .await?
@@ -454,8 +450,7 @@ async fn gateway_builder_constructs_official_openai_speech()
     feature = "cap-moderation"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_moderation()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_moderation() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_moderation_model(
         "openai",
         &openai_config("omni-moderation-latest"),
@@ -475,8 +470,8 @@ async fn gateway_builder_constructs_official_openai_moderation()
     feature = "cap-batch"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_batch_client()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_batch_client() -> ditto_core::error::Result<()>
+{
     let client =
         ditto_core::runtime::build_batch_client("openai", &openai_config("gpt-4.1"), &openai_env())
             .await?
@@ -493,7 +488,7 @@ async fn gateway_builder_constructs_official_openai_batch_client()
 ))]
 #[tokio::test]
 async fn gateway_builder_constructs_official_openai_video_generation()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_video_generation_model(
         "openai",
         &openai_config("sora-2"),
@@ -513,8 +508,7 @@ async fn gateway_builder_constructs_official_openai_video_generation()
     feature = "cap-realtime"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_official_openai_realtime()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_official_openai_realtime() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_realtime_session_model(
         "openai",
         &openai_config("gpt-realtime"),

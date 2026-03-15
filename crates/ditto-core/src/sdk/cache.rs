@@ -10,7 +10,7 @@ use futures_util::stream;
 use tokio::sync::Mutex;
 
 use crate::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::llm_core::layer::LanguageModelLayer;
 use crate::llm_core::model::LanguageModel;
 use crate::llm_core::model::StreamResult;

@@ -1,14 +1,23 @@
 use serde_json::Value;
 
 use crate::contracts::Warning;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
+
+fn object_json_empty_response() -> DittoError {
+    crate::invalid_response!("error_detail.object.json_empty_response")
+}
+
+fn object_json_parse_failed(prefix: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.object.json_parse_failed",
+        "prefix" => prefix
+    )
+}
 
 pub(super) fn parse_json_from_response_text(text: &str) -> Result<(Value, Option<Warning>)> {
     let raw = text.trim();
     if raw.is_empty() {
-        return Err(DittoError::InvalidResponse(
-            "model returned an empty response; expected JSON".to_string(),
-        ));
+        return Err(object_json_empty_response());
     }
 
     if let Ok(parsed) = serde_json::from_str::<Value>(raw) {
@@ -39,10 +48,9 @@ pub(super) fn parse_json_from_response_text(text: &str) -> Result<(Value, Option
         }
     }
 
-    Err(DittoError::InvalidResponse(format!(
-        "failed to parse model response as JSON (response starts with {:?})",
-        raw.chars().take(120).collect::<String>()
-    )))
+    Err(object_json_parse_failed(
+        &raw.chars().take(120).collect::<String>(),
+    ))
 }
 
 fn extract_code_fence(text: &str) -> Option<String> {

@@ -5,7 +5,7 @@ use crate::providers::openai_like;
 
 use crate::capabilities::ImageGenerationModel;
 use crate::config::{Env, ProviderConfig};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::types::{ImageGenerationRequest, ImageGenerationResponse};
 
 macro_rules! define_openai_like_images {
@@ -14,7 +14,8 @@ macro_rules! define_openai_like_images {
         provider = $provider:literal,
         default_keys = $default_keys:expr,
         from_config = $from_config:path,
-        missing_model_error = $missing_model_error:literal $(,)?
+        model_subject = $model_subject:literal,
+        model_hint = $model_hint:literal $(,)?
     ) => {
         #[derive(Clone)]
         pub struct $name {
@@ -57,8 +58,9 @@ macro_rules! define_openai_like_images {
                 if !self.client.model.trim().is_empty() {
                     return Ok(self.client.model.as_str());
                 }
-                Err(DittoError::InvalidResponse(
-                    $missing_model_error.to_string(),
+                Err(DittoError::provider_model_missing(
+                    $model_subject,
+                    $model_hint,
                 ))
             }
         }
@@ -85,23 +87,24 @@ macro_rules! define_openai_like_images {
     };
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 define_openai_like_images!(
     OpenAIImages,
     provider = "openai",
     default_keys = &["OPENAI_API_KEY"],
     from_config = openai_like::OpenAiLikeClient::from_config_required,
-    missing_model_error =
-        "openai image model is not set (set request.model or OpenAIImages::with_model)",
+    model_subject = "openai image",
+    model_hint = "set request.model or OpenAIImages::with_model",
 );
 
-#[cfg(feature = "openai-compatible")]
+#[cfg(feature = "provider-openai-compatible")]
 define_openai_like_images!(
     OpenAICompatibleImages,
     provider = "openai-compatible",
     default_keys = &["OPENAI_COMPAT_API_KEY", "OPENAI_API_KEY",],
     from_config = openai_like::OpenAiLikeClient::from_config_optional,
-    missing_model_error = "openai-compatible image model is not set (set request.model or OpenAICompatibleImages::with_model)",
+    model_subject = "openai-compatible image",
+    model_hint = "set request.model or OpenAICompatibleImages::with_model",
 );
 
 #[cfg(test)]
@@ -111,7 +114,7 @@ mod tests {
     use crate::types::ImageResponseFormat;
     use httpmock::{Method::POST, MockServer};
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     #[tokio::test]
     async fn generate_images_supports_base64() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
@@ -168,7 +171,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "openai-compatible")]
+    #[cfg(feature = "provider-openai-compatible")]
     #[tokio::test]
     async fn generate_images_supports_url() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

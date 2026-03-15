@@ -43,7 +43,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "embeddings")]
+    #[cfg(feature = "cap-embedding")]
     ModelBinding {
         operation: OperationKind::EMBEDDING,
         selector: ModelSelector::Any,
@@ -62,7 +62,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "images")]
+    #[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Any,
@@ -81,7 +81,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "images")]
+    #[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
     ModelBinding {
         operation: OperationKind::IMAGE_EDIT,
         selector: ModelSelector::Any,
@@ -100,7 +100,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "audio")]
+    #[cfg(any(feature = "cap-audio-transcription", feature = "cap-audio-speech"))]
     ModelBinding {
         operation: OperationKind::AUDIO_SPEECH,
         selector: ModelSelector::Any,
@@ -119,7 +119,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "audio")]
+    #[cfg(any(feature = "cap-audio-transcription", feature = "cap-audio-speech"))]
     ModelBinding {
         operation: OperationKind::AUDIO_TRANSCRIPTION,
         selector: ModelSelector::Any,
@@ -138,7 +138,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "moderations")]
+    #[cfg(feature = "cap-moderation")]
     ModelBinding {
         operation: OperationKind::MODERATION,
         selector: ModelSelector::Any,
@@ -157,7 +157,7 @@ const OPENAI_COMPAT_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_COMPAT_EVIDENCE,
     },
-    #[cfg(feature = "batches")]
+    #[cfg(feature = "cap-batch")]
     ModelBinding {
         operation: OperationKind::BATCH,
         selector: ModelSelector::Any,

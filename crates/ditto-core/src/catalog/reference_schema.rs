@@ -4,9 +4,9 @@ use std::path::Path;
 
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
-use thiserror::Error;
 
 use super::{OperationKind, ProviderCapabilitySet, capability_for_operation};
+use crate::error::ReferenceCatalogLoadError;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ReferenceProviderModelCatalog {
@@ -540,22 +540,6 @@ pub enum ReferenceCatalogValidationIssue {
     },
 }
 
-#[derive(Debug, Error)]
-pub enum ReferenceCatalogLoadError {
-    #[error("failed to read reference catalog {path}: {source}")]
-    Io {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("failed to parse reference catalog JSON: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("failed to parse reference catalog TOML: {0}")]
-    Toml(#[from] toml::de::Error),
-    #[error("unsupported reference catalog extension for {0}")]
-    UnsupportedExtension(String),
-}
-
 fn insert_optional_string(
     target: &mut JsonMap<String, JsonValue>,
     key: &str,
@@ -711,6 +695,8 @@ mod tests {
 
     fn provider_models_dir() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
             .join("catalog")
             .join("provider_models")
     }

@@ -1,23 +1,65 @@
+use ditto_core::MESSAGE_CATALOG;
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+
 #[cfg(feature = "gateway")]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    if let Err(err) = run(locale, args) {
+        eprintln!("{}", render_error(err.as_ref(), locale));
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "gateway")]
+fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::BufRead;
 
-    let mut args = std::env::args().skip(1);
-    let usage = "usage: ditto-audit-verify --input PATH|-";
+    let usage = MESSAGE_CATALOG.render(
+        locale,
+        "cli.usage",
+        &[MessageArg::new(
+            "command_and_syntax",
+            "ditto-audit-verify --input PATH|-",
+        )],
+    );
+    let mut args = raw_args.into_iter();
 
     let mut input: Option<String> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--input" => input = Some(args.next().ok_or("missing value for --input")?),
+            "--input" => {
+                input = Some(args.next().ok_or_else(|| {
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.missing_value",
+                        &[MessageArg::new("flag", "--input")],
+                    )
+                })?);
+            }
             "--help" | "-h" => {
                 println!("{usage}");
                 return Ok(());
             }
-            other => return Err(format!("unknown arg: {other}").into()),
+            other => {
+                let message = MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.unknown_arg",
+                    &[MessageArg::new("arg", other)],
+                );
+                return Err(format!("{message}\n{usage}").into());
+            }
         }
     }
 
-    let input = input.ok_or(usage)?;
+    let input = input.ok_or_else(|| usage.clone())?;
 
     #[derive(Debug, serde::Deserialize)]
     struct AuditExportRecord {
@@ -76,13 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let expected_prev = prev_hash.as_deref().unwrap_or("");
         let got_prev = record.prev_hash.as_deref().unwrap_or("");
         if expected_prev != got_prev {
-            return Err(format!(
-                "hash chain mismatch at line {}: prev_hash expected {} got {}",
-                line_no + 1,
-                expected_prev,
-                got_prev
-            )
-            .into());
+            return Err(hash_chain_mismatch(locale, line_no + 1, expected_prev, got_prev).into());
         }
 
         let base = ditto_server::gateway::AuditLogRecord {
@@ -93,23 +129,68 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let expected_hash = audit_chain_hash(prev_hash.as_deref(), &base);
         if record.hash != expected_hash {
-            return Err(format!(
-                "hash mismatch at line {}: expected {} got {}",
-                line_no + 1,
-                expected_hash,
-                record.hash
-            )
-            .into());
+            return Err(hash_mismatch(locale, line_no + 1, &expected_hash, &record.hash).into());
         }
         prev_hash = Some(record.hash);
     }
 
-    println!("ok");
+    println!("{}", MESSAGE_CATALOG.render(locale, "cli.ok", &[]));
     Ok(())
+}
+
+#[cfg(feature = "gateway")]
+fn hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit.hash_chain_mismatch",
+        &[
+            MessageArg::new("line_no", line_no.to_string()),
+            MessageArg::new("expected", expected),
+            MessageArg::new("got", got),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit.hash_mismatch",
+        &[
+            MessageArg::new("line_no", line_no.to_string()),
+            MessageArg::new("expected", expected),
+            MessageArg::new("got", got),
+        ],
+    )
+}
+
+#[cfg(feature = "gateway")]
+fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> String {
+    if let Some(error) = error.downcast_ref::<ditto_core::error::DittoError>() {
+        return error.render(locale);
+    }
+    if let Some(error) = error.downcast_ref::<ditto_core::error::ProviderResolutionError>() {
+        return error.render(locale);
+    }
+    MESSAGE_CATALOG.render(
+        locale,
+        "error.generic",
+        &[MessageArg::new("error", error.to_string())],
+    )
 }
 
 #[cfg(not(feature = "gateway"))]
 fn main() {
-    eprintln!("ditto-audit-verify requires `--features gateway`");
+    eprintln!(
+        "{}",
+        MESSAGE_CATALOG.render(
+            MESSAGE_CATALOG.default_locale(),
+            "cli.feature_disabled",
+            &[
+                MessageArg::new("feature", "audit verify"),
+                MessageArg::new("rebuild_hint", "--features gateway"),
+            ],
+        )
+    );
     std::process::exit(2);
 }

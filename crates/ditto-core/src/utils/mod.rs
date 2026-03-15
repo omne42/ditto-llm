@@ -1,14 +1,14 @@
-#[cfg(any(feature = "google", feature = "vertex"))]
+#[cfg(any(feature = "provider-google", feature = "provider-vertex"))]
 pub mod json_schema;
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 pub mod params;
 

@@ -1,6 +1,6 @@
 #[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_request_without_v1_prefix()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -31,6 +31,7 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_chat_completions_
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");

@@ -107,7 +107,7 @@ impl LanguageModel for Cohere {
 
         let mut tools = request.tools.unwrap_or_default();
         if !tools.is_empty() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let tool_choice = request.tool_choice.unwrap_or(ToolChoice::Auto);
                 let (mapped_choice, filtered_tools) =
                     Self::normalize_tool_choice(&tool_choice, Some(&tools), &mut warnings);
@@ -236,15 +236,16 @@ impl LanguageModel for Cohere {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            Err(DittoError::builder_capability_feature_missing(
+                "cohere",
+                "streaming",
             ))
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
             let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
@@ -294,7 +295,7 @@ impl LanguageModel for Cohere {
 
             let mut tools = request.tools.unwrap_or_default();
             if !tools.is_empty() {
-                if cfg!(feature = "tools") {
+                if cfg!(feature = "cap-llm-tools") {
                     let tool_choice = request.tool_choice.unwrap_or(ToolChoice::Auto);
                     let (mapped_choice, filtered_tools) =
                         Self::normalize_tool_choice(&tool_choice, Some(&tools), &mut warnings);

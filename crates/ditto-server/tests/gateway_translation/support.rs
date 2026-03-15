@@ -44,7 +44,7 @@ impl LanguageModel for FakeModel {
         "fake-model"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_core::foundation::error::Result<GenerateResponse> {
+    async fn generate(&self, _request: GenerateRequest) -> ditto_core::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::Text {
                 text: "hello".to_string(),
@@ -62,7 +62,7 @@ impl LanguageModel for FakeModel {
         })
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> ditto_core::foundation::error::Result<StreamResult> {
+    async fn stream(&self, _request: GenerateRequest) -> ditto_core::error::Result<StreamResult> {
         let chunks = vec![
             Ok(StreamChunk::ResponseId {
                 id: "resp_fake".to_string(),
@@ -96,7 +96,7 @@ impl LanguageModel for FakeCompactionModel {
         "fake-compaction"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_core::foundation::error::Result<GenerateResponse> {
+    async fn generate(&self, _request: GenerateRequest) -> ditto_core::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::ToolCall {
                 id: "call_0".to_string(),
@@ -124,8 +124,8 @@ impl LanguageModel for FakeCompactionModel {
         })
     }
 
-    async fn stream(&self, _request: GenerateRequest) -> ditto_core::foundation::error::Result<StreamResult> {
-        let chunks: Vec<ditto_core::foundation::error::Result<StreamChunk>> = Vec::new();
+    async fn stream(&self, _request: GenerateRequest) -> ditto_core::error::Result<StreamResult> {
+        let chunks: Vec<ditto_core::error::Result<StreamChunk>> = Vec::new();
         Ok(futures_util::stream::iter(chunks).boxed())
     }
 }
@@ -143,7 +143,7 @@ impl EmbeddingModel for FakeEmbeddingModel {
         "fake-embed"
     }
 
-    async fn embed(&self, texts: Vec<String>) -> ditto_core::foundation::error::Result<Vec<Vec<f32>>> {
+    async fn embed(&self, texts: Vec<String>) -> ditto_core::error::Result<Vec<Vec<f32>>> {
         Ok(texts
             .into_iter()
             .enumerate()
@@ -165,7 +165,7 @@ impl ModerationModel for FakeModerationModel {
         "fake-moderation"
     }
 
-    async fn moderate(&self, request: ModerationRequest) -> ditto_core::foundation::error::Result<ModerationResponse> {
+    async fn moderate(&self, request: ModerationRequest) -> ditto_core::error::Result<ModerationResponse> {
         let flagged = matches!(request.input, ModerationInput::Text(ref text) if text == "bad");
         Ok(ModerationResponse {
             id: Some("modr_fake".to_string()),
@@ -202,7 +202,7 @@ impl ImageGenerationModel for FakeImageModel {
     async fn generate(
         &self,
         _request: ImageGenerationRequest,
-    ) -> ditto_core::foundation::error::Result<ImageGenerationResponse> {
+    ) -> ditto_core::error::Result<ImageGenerationResponse> {
         Ok(ImageGenerationResponse {
             images: vec![
                 ImageSource::Url {
@@ -233,7 +233,7 @@ impl ImageEditModel for FakeImageEditModel {
         "fake-image-edit"
     }
 
-    async fn edit(&self, request: ImageEditRequest) -> ditto_core::foundation::error::Result<ImageEditResponse> {
+    async fn edit(&self, request: ImageEditRequest) -> ditto_core::error::Result<ImageEditResponse> {
         assert_eq!(request.prompt, "remove background");
         assert_eq!(request.model.as_deref(), Some("image-edit-v2"));
         assert_eq!(request.n, Some(2));
@@ -284,7 +284,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
     async fn create(
         &self,
         request: VideoGenerationRequest,
-    ) -> ditto_core::foundation::error::Result<VideoGenerationResponse> {
+    ) -> ditto_core::error::Result<VideoGenerationResponse> {
         match request.prompt.as_str() {
             "road at dusk" => {
                 assert!(request.input_reference.is_none());
@@ -323,13 +323,13 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
                     ..Default::default()
                 })
             }
-            other => Err(ditto_core::foundation::error::DittoError::InvalidResponse(format!(
+            other => Err(ditto_core::error::DittoError::invalid_response_text(format!(
                 "unexpected video prompt: {other}"
             ))),
         }
     }
 
-    async fn retrieve(&self, video_id: &str) -> ditto_core::foundation::error::Result<VideoGenerationResponse> {
+    async fn retrieve(&self, video_id: &str) -> ditto_core::error::Result<VideoGenerationResponse> {
         assert_eq!(video_id, "vid_123");
         Ok(VideoGenerationResponse {
             id: "vid_123".to_string(),
@@ -343,7 +343,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         })
     }
 
-    async fn list(&self, request: VideoListRequest) -> ditto_core::foundation::error::Result<VideoListResponse> {
+    async fn list(&self, request: VideoListRequest) -> ditto_core::error::Result<VideoListResponse> {
         assert_eq!(request.limit, Some(2));
         assert_eq!(request.after.as_deref(), Some("vid_111"));
         assert_eq!(request.order, Some(VideoListOrder::Desc));
@@ -362,7 +362,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         })
     }
 
-    async fn delete(&self, video_id: &str) -> ditto_core::foundation::error::Result<VideoDeleteResponse> {
+    async fn delete(&self, video_id: &str) -> ditto_core::error::Result<VideoDeleteResponse> {
         assert_eq!(video_id, "vid_123");
         Ok(VideoDeleteResponse {
             id: "vid_123".to_string(),
@@ -375,7 +375,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         &self,
         video_id: &str,
         variant: Option<VideoContentVariant>,
-    ) -> ditto_core::foundation::error::Result<FileContent> {
+    ) -> ditto_core::error::Result<FileContent> {
         assert_eq!(video_id, "vid_123");
         assert_eq!(variant, Some(VideoContentVariant::Thumbnail));
         Ok(FileContent {
@@ -388,7 +388,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         &self,
         video_id: &str,
         request: VideoRemixRequest,
-    ) -> ditto_core::foundation::error::Result<VideoGenerationResponse> {
+    ) -> ditto_core::error::Result<VideoGenerationResponse> {
         assert_eq!(video_id, "vid_123");
         assert_eq!(request.prompt, "change angle");
         assert!(request.provider_options.is_none());
@@ -420,7 +420,7 @@ impl AudioTranscriptionModel for FakeAudioTranscriptionModel {
     async fn transcribe(
         &self,
         request: AudioTranscriptionRequest,
-    ) -> ditto_core::foundation::error::Result<AudioTranscriptionResponse> {
+    ) -> ditto_core::error::Result<AudioTranscriptionResponse> {
         let model = request.model.unwrap_or_default();
         Ok(AudioTranscriptionResponse {
             text: format!("transcribed:{model}"),
@@ -443,7 +443,7 @@ impl SpeechModel for FakeSpeechModel {
         "fake-speech"
     }
 
-    async fn speak(&self, request: SpeechRequest) -> ditto_core::foundation::error::Result<SpeechResponse> {
+    async fn speak(&self, request: SpeechRequest) -> ditto_core::error::Result<SpeechResponse> {
         let _ = request;
         Ok(SpeechResponse {
             audio: vec![0, 1, 2, 3],
@@ -463,7 +463,7 @@ impl BatchClient for FakeBatchClient {
         "fake"
     }
 
-    async fn create(&self, request: BatchCreateRequest) -> ditto_core::foundation::error::Result<BatchResponse> {
+    async fn create(&self, request: BatchCreateRequest) -> ditto_core::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: "batch_created".to_string(),
@@ -478,7 +478,7 @@ impl BatchClient for FakeBatchClient {
         })
     }
 
-    async fn retrieve(&self, batch_id: &str) -> ditto_core::foundation::error::Result<BatchResponse> {
+    async fn retrieve(&self, batch_id: &str) -> ditto_core::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: batch_id.to_string(),
@@ -490,7 +490,7 @@ impl BatchClient for FakeBatchClient {
         })
     }
 
-    async fn cancel(&self, batch_id: &str) -> ditto_core::foundation::error::Result<BatchResponse> {
+    async fn cancel(&self, batch_id: &str) -> ditto_core::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: batch_id.to_string(),
@@ -506,7 +506,7 @@ impl BatchClient for FakeBatchClient {
         &self,
         _limit: Option<u32>,
         _after: Option<String>,
-    ) -> ditto_core::foundation::error::Result<BatchListResponse> {
+    ) -> ditto_core::error::Result<BatchListResponse> {
         Ok(BatchListResponse {
             batches: vec![
                 Batch {
@@ -542,7 +542,7 @@ impl RerankModel for FakeRerankModel {
         "fake-rerank"
     }
 
-    async fn rerank(&self, _request: RerankRequest) -> ditto_core::foundation::error::Result<RerankResponse> {
+    async fn rerank(&self, _request: RerankRequest) -> ditto_core::error::Result<RerankResponse> {
         Ok(RerankResponse {
             ranking: vec![
                 RerankResult {
@@ -579,11 +579,12 @@ fn base_gateway() -> Gateway {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     })
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_chat_completions_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -637,7 +638,7 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_core::fou
 }
 
 #[tokio::test]
-async fn gateway_translation_chat_completions_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_chat_completions_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -676,7 +677,7 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_core::foundat
 }
 
 #[tokio::test]
-async fn gateway_translation_completions_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_completions_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -748,7 +749,7 @@ async fn gateway_translation_completions_non_streaming() -> ditto_core::foundati
 }
 
 #[tokio::test]
-async fn gateway_translation_completions_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_completions_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -788,7 +789,7 @@ async fn gateway_translation_completions_streaming() -> ditto_core::foundation::
 }
 
 #[tokio::test]
-async fn gateway_translation_models_list() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_models_list() -> ditto_core::error::Result<()> {
     use std::collections::BTreeMap;
 
     let gateway = base_gateway();
@@ -853,7 +854,7 @@ async fn gateway_translation_models_list() -> ditto_core::foundation::error::Res
 }
 
 #[tokio::test]
-async fn gateway_translation_models_retrieve() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_models_retrieve() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -898,7 +899,7 @@ async fn gateway_translation_models_retrieve() -> ditto_core::foundation::error:
 }
 
 #[tokio::test]
-async fn gateway_translation_models_retrieve_unknown() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_models_retrieve_unknown() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -924,7 +925,7 @@ async fn gateway_translation_models_retrieve_unknown() -> ditto_core::foundation
 }
 
 #[tokio::test]
-async fn gateway_translation_responses_non_streaming() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_responses_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(

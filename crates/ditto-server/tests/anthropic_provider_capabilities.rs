@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use ditto_core::catalog::builtin_registry;
 use ditto_core::config::{Env, ProviderConfig};
 use ditto_core::contracts::{CapabilityKind, OperationKind, ProviderProtocolFamily};
-use ditto_core::foundation::error::{DittoError, ProviderResolutionError};
+use ditto_core::error::{DittoError, ProviderResolutionError};
 
 fn anthropic_env() -> Env {
     Env::parse_dotenv("ANTHROPIC_API_KEY=sk-ant-test\n")
@@ -58,7 +58,7 @@ fn anthropic_catalog_runtime_spec_matches_enabled_capabilities() {
     feature = "cap-llm"
 ))]
 #[tokio::test]
-async fn gateway_builder_constructs_anthropic_llm() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_builder_constructs_anthropic_llm() -> ditto_core::error::Result<()> {
     let model = ditto_core::runtime::build_language_model(
         "anthropic",
         &anthropic_config("claude-3-7-sonnet-20250219"),

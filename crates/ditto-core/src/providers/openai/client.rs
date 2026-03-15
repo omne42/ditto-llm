@@ -1,32 +1,32 @@
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use futures_util::TryStreamExt;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use serde::Deserialize;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use serde_json::{Map, Value};
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use tokio::sync::mpsc;
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use tokio_util::io::StreamReader;
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use super::raw_responses::{
     OpenAIResponsesCompactionRequest, OpenAIResponsesRawEventStream, OpenAIResponsesRawRequest,
 };
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use super::raw_responses::{OpenAIResponsesRawEvent, process_raw_responses_sse};
 use crate::providers::openai_compat_profile::OpenAiCompatibilityProfile;
 use crate::providers::openai_like;
 
 use crate::config::{Env, ProviderConfig};
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use crate::contracts::{
     ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
-#[cfg(feature = "openai")]
-use crate::foundation::error::DittoError;
-use crate::foundation::error::Result;
+#[cfg(feature = "provider-openai")]
+use crate::error::DittoError;
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct OpenAI {
@@ -35,11 +35,11 @@ pub struct OpenAI {
     tool_call_thought_signature_passthrough: Option<bool>,
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) const OPENAI_RESPONSES_RESERVED_PROVIDER_OPTION_KEYS: &[&str] =
     &["reasoning_effort", "response_format", "parallel_tool_calls"];
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
     "instructions",
     "max_output_tokens",
@@ -64,13 +64,13 @@ pub(super) const OPENAI_RESPONSES_PROVIDER_OPTION_SCHEMA_KEYS: &[&str] = &[
     "thinking",
 ];
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) const TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR: &str = "__gts_";
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) const OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE: &str =
     "skip_thought_signature_validator";
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Option<String>) {
     let Some((base_id, hex)) = id.rsplit_once(TOOL_CALL_THOUGHT_SIGNATURE_SEPARATOR) else {
         return (id.to_string(), None);
@@ -100,7 +100,7 @@ pub(super) fn split_tool_call_id_and_thought_signature(id: &str) -> (String, Opt
     (base_id.to_string(), Some(signature))
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) fn encode_tool_call_id_with_thought_signature(
     id: &str,
     thought_signature: Option<&str>,
@@ -186,17 +186,17 @@ impl OpenAI {
         self.client.apply_auth(req)
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn responses_url(&self) -> String {
         self.client.endpoint("responses")
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn responses_compact_url(&self) -> String {
         format!("{}/compact", self.responses_url())
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
         if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
             return Ok(model);
@@ -204,12 +204,13 @@ impl OpenAI {
         if !self.client.model.trim().is_empty() {
             return Ok(self.client.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "openai model is not set (set request.model or OpenAI::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "openai",
+            "set request.model or OpenAI::with_model",
         ))
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn tool_to_openai(tool: &Tool) -> Value {
         let mut out = Map::<String, Value>::new();
         out.insert("type".to_string(), Value::String("function".to_string()));
@@ -228,7 +229,7 @@ impl OpenAI {
         Value::Object(out)
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn tool_choice_to_openai(choice: &ToolChoice) -> Value {
         match choice {
             ToolChoice::Auto => Value::String("auto".to_string()),
@@ -238,7 +239,7 @@ impl OpenAI {
         }
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn tool_call_arguments_to_openai_string(arguments: &Value) -> String {
         match arguments {
             Value::String(raw) => {
@@ -253,7 +254,7 @@ impl OpenAI {
         }
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn should_send_function_call_thought_signature(&self, model: &str) -> bool {
         self.tool_call_thought_signature_passthrough
             .unwrap_or_else(|| {
@@ -262,7 +263,7 @@ impl OpenAI {
             })
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn messages_to_input_with_quirks(
         messages: &[Message],
         include_function_call_thought_signature: bool,
@@ -453,7 +454,7 @@ impl OpenAI {
         (instructions, input, warnings)
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn parse_usage(value: &Value) -> Usage {
         let mut usage = Usage::default();
         if let Some(obj) = value.as_object() {
@@ -486,7 +487,7 @@ impl OpenAI {
         usage
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub(super) fn build_responses_body(
         request: &GenerateRequest,
         model: &str,
@@ -553,7 +554,7 @@ impl OpenAI {
         }
 
         if let Some(tools) = request.tools.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let mapped = tools.iter().map(Self::tool_to_openai).collect();
                 body.insert("tools".to_string(), Value::Array(mapped));
             } else {
@@ -564,7 +565,7 @@ impl OpenAI {
             }
         }
         if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 body.insert(
                     "tool_choice".to_string(),
                     Self::tool_choice_to_openai(tool_choice),
@@ -589,7 +590,7 @@ impl OpenAI {
         Ok((body, warnings))
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub async fn compact_responses_history_raw(
         &self,
         request: &OpenAIResponsesCompactionRequest<'_>,
@@ -608,23 +609,24 @@ impl OpenAI {
         Ok(parsed.output)
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     pub async fn create_response_stream_raw(
         &self,
         request: &OpenAIResponsesRawRequest<'_>,
     ) -> Result<OpenAIResponsesRawEventStream> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            Err(DittoError::builder_capability_feature_missing(
+                "openai",
+                "streaming",
             ))
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             if !request.stream {
-                return Err(DittoError::InvalidResponse(
+                return Err(DittoError::invalid_response_text(
                     "stream=true is required for create_response_stream_raw".to_string(),
                 ));
             }
@@ -705,7 +707,7 @@ impl OpenAI {
     }
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) fn apply_provider_options(
     body: &mut Map<String, Value>,
     provider_options: &crate::provider_options::ProviderOptions,
@@ -732,7 +734,7 @@ pub(super) fn apply_provider_options(
     Ok(())
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(super) fn sanitize_openai_responses_provider_options(
     selected_provider_options: Option<Value>,
     provider_options_context: &'static str,
@@ -774,7 +776,7 @@ pub(super) fn sanitize_openai_responses_provider_options(
     )
 }
 
-#[cfg(all(test, feature = "openai"))]
+#[cfg(all(test, feature = "provider-openai"))]
 mod tests {
     use super::*;
     use crate::config::{OpenAiCompatibleConfig, ProviderAuth};

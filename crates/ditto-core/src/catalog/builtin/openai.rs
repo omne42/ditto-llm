@@ -45,24 +45,6 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         evidence: OPENAI_EVIDENCE,
     },
     ModelBinding {
-        operation: OperationKind::TEXT_COMPLETION,
-        selector: ModelSelector::Any,
-        surface: ApiSurfaceId::OPENAI_TEXT_COMPLETIONS,
-        wire_protocol: WireProtocol::OPENAI_TEXT_COMPLETIONS,
-        endpoint: EndpointTemplate {
-            transport: TransportKind::Http,
-            http_method: Some(HttpMethod::Post),
-            base_url_override: None,
-            path_template: "/v1/completions",
-            query_params: &[],
-        },
-        quirks: None,
-        streaming: None,
-        async_job: None,
-        verification: VerificationStatus::Explicit,
-        evidence: OPENAI_EVIDENCE,
-    },
-    ModelBinding {
         operation: OperationKind::RESPONSE,
         selector: ModelSelector::Any,
         surface: ApiSurfaceId::OPENAI_RESPONSES,
@@ -80,7 +62,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "embeddings")]
+    #[cfg(feature = "cap-embedding")]
     ModelBinding {
         operation: OperationKind::EMBEDDING,
         selector: ModelSelector::Any,
@@ -99,7 +81,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "images")]
+    #[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Any,
@@ -118,7 +100,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "images")]
+    #[cfg(any(feature = "cap-image-generation", feature = "cap-image-edit"))]
     ModelBinding {
         operation: OperationKind::IMAGE_EDIT,
         selector: ModelSelector::Any,
@@ -137,7 +119,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "videos")]
+    #[cfg(feature = "cap-video-generation")]
     ModelBinding {
         operation: OperationKind::VIDEO_GENERATION,
         selector: ModelSelector::Exact(&[
@@ -162,7 +144,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "audio")]
+    #[cfg(any(feature = "cap-audio-transcription", feature = "cap-audio-speech"))]
     ModelBinding {
         operation: OperationKind::AUDIO_SPEECH,
         selector: ModelSelector::Any,
@@ -181,7 +163,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "audio")]
+    #[cfg(any(feature = "cap-audio-transcription", feature = "cap-audio-speech"))]
     ModelBinding {
         operation: OperationKind::AUDIO_TRANSCRIPTION,
         selector: ModelSelector::Any,
@@ -200,7 +182,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "moderations")]
+    #[cfg(feature = "cap-moderation")]
     ModelBinding {
         operation: OperationKind::MODERATION,
         selector: ModelSelector::Any,
@@ -219,7 +201,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "batches")]
+    #[cfg(feature = "cap-batch")]
     ModelBinding {
         operation: OperationKind::BATCH,
         selector: ModelSelector::Any,
@@ -238,7 +220,7 @@ const OPENAI_BINDINGS: &[ModelBinding] = &[
         verification: VerificationStatus::Explicit,
         evidence: OPENAI_EVIDENCE,
     },
-    #[cfg(feature = "realtime")]
+    #[cfg(feature = "cap-realtime")]
     ModelBinding {
         operation: OperationKind::REALTIME_SESSION,
         selector: ModelSelector::Any,

@@ -83,14 +83,10 @@ fn ensure_a2a_card_defaults(card: &mut Map<String, Value>, requested_agent_id: &
         .or_insert_with(|| Value::Array(Vec::new()));
 }
 
-async fn require_virtual_key_if_configured(
+async fn require_virtual_key(
     state: &GatewayHttpState,
     headers: &HeaderMap,
 ) -> Result<bool, axum::response::Response> {
-    if !state.uses_virtual_keys() {
-        return Ok(false);
-    }
-
     let token = extract_virtual_key(headers).ok_or_else(|| {
         error_response(
             StatusCode::UNAUTHORIZED,
@@ -121,6 +117,7 @@ async fn require_virtual_key_if_configured(
         .into_response());
     }
 
+    state.record_request();
     Ok(true)
 }
 
@@ -185,7 +182,7 @@ pub(super) async fn handle_a2a_agent_card(
     headers: HeaderMap,
     Path(agent_id): Path<String>,
 ) -> axum::response::Response {
-    let _strip_authorization = match require_virtual_key_if_configured(&state, &headers).await {
+    let _strip_authorization = match require_virtual_key(&state, &headers).await {
         Ok(strip) => strip,
         Err(resp) => return resp,
     };
@@ -225,7 +222,7 @@ pub(super) async fn handle_a2a_invoke(
     Path(agent_id): Path<String>,
     body: Body,
 ) -> axum::response::Response {
-    let strip_authorization = match require_virtual_key_if_configured(&state, &headers).await {
+    let strip_authorization = match require_virtual_key(&state, &headers).await {
         Ok(strip) => strip,
         Err(resp) => return resp,
     };

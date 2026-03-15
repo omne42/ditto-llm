@@ -11,7 +11,7 @@ use crate::config::{ProviderApi, ProviderCapabilities, ProviderConfig};
 use crate::contracts::{
     CapabilityKind, ContextCacheModeId, InvocationHints, OperationKind, ProviderClass, WireProtocol,
 };
-use crate::foundation::error::{ProviderResolutionError, Result};
+use crate::error::{ProviderResolutionError, Result};
 
 impl BuiltinRuntimeRegistryCatalog {
     pub fn resolve_provider_config_semantics(
@@ -214,11 +214,11 @@ impl BuiltinRuntimeRegistryCatalog {
     }
 
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     pub(crate) fn resolve_catalog_context_cache_profile(
@@ -267,11 +267,11 @@ impl BuiltinRuntimeRegistryCatalog {
     }
 
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     pub(crate) fn provider_requires_reasoning_content_followup(
@@ -290,11 +290,11 @@ impl BuiltinRuntimeRegistryCatalog {
     }
 
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     #[cfg_attr(
-        not(any(feature = "openai", feature = "openai-compatible")),
+        not(any(feature = "provider-openai", feature = "provider-openai-compatible")),
         allow(dead_code)
     )]
     pub(crate) fn provider_required_tool_choice_support(
@@ -396,7 +396,6 @@ fn resolve_explicit_catalog_plugin(
     registry
         .plugin(provider)
         .or_else(|| namespaced_catalog_plugin(registry, provider))
-        .or_else(|| legacy_builder_alias_plugin(registry, provider))
 }
 
 fn resolve_configured_catalog_plugin_hint(
@@ -415,41 +414,6 @@ fn namespaced_catalog_plugin(
 ) -> Option<&'static ProviderPluginDescriptor> {
     let (namespace, _) = provider_name_hint.split_once(".providers.")?;
     resolve_explicit_catalog_plugin(registry, namespace)
-}
-
-fn legacy_builder_alias_plugin(
-    registry: CatalogRegistry,
-    provider_name_hint: &str,
-) -> Option<&'static ProviderPluginDescriptor> {
-    let generic_openai = || {
-        registry
-            .plugin("openai-compatible")
-            .or_else(|| registry.plugin("openai"))
-    };
-
-    match normalized_provider_alias(provider_name_hint).as_str() {
-        "openaicompatible" | "litellm" | "azure" | "azureopenai" | "groq" | "mistral"
-        | "together" | "togetherai" | "fireworks" | "perplexity" | "ollama" | "qwen" => {
-            generic_openai()
-        }
-        "openrouter" => registry.plugin("openrouter").or_else(generic_openai),
-        "deepseek" => registry.plugin("deepseek").or_else(generic_openai),
-        "moonshot" | "moonshotai" | "kimi" => registry.plugin("kimi").or_else(generic_openai),
-        "minimax" => registry.plugin("minimax").or_else(generic_openai),
-        "glm" | "zhipu" => registry.plugin("zhipu").or_else(generic_openai),
-        "doubao" | "ark" => registry.plugin("doubao").or_else(generic_openai),
-        "xai" | "grok" => registry.plugin("xai").or_else(generic_openai),
-        _ => None,
-    }
-}
-
-fn normalized_provider_alias(value: &str) -> String {
-    value
-        .trim()
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .flat_map(|ch| ch.to_lowercase())
-        .collect()
 }
 
 fn parse_enabled_capability_list(enabled_capabilities: &[String]) -> Result<Vec<CapabilityKind>> {
@@ -735,7 +699,7 @@ mod tests {
     use super::*;
     use crate::runtime_registry::builtin_runtime_registry_catalog;
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn rejects_unknown_openai_like_provider_without_explicit_owner() {
         let config = ProviderConfig {
@@ -749,13 +713,13 @@ mod tests {
             .expect_err("unknown provider should fail closed without explicit owner");
         assert!(matches!(
             err,
-            crate::foundation::error::DittoError::ProviderResolution(
-                crate::foundation::error::ProviderResolutionError::CatalogProviderNotFound { .. }
+            crate::error::DittoError::ProviderResolution(
+                crate::error::ProviderResolutionError::CatalogProviderNotFound { .. }
             )
         ));
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn resolves_explicit_openai_compatible_owner_for_custom_provider_node() {
         let config = ProviderConfig {
@@ -789,15 +753,16 @@ mod tests {
         assert_eq!(resolved.builder_provider, "google");
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
-    fn resolve_builtin_builder_provider_keeps_known_openai_aliases() {
+    fn resolve_builtin_builder_provider_rejects_legacy_openai_aliases() {
         let resolved = builtin_runtime_registry_catalog()
-            .resolve_builder_provider("azure-openai", &ProviderConfig::default())
-            .expect("known legacy alias should still resolve");
+            .resolve_builder_provider("azure-openai", &ProviderConfig::default());
 
-        assert_eq!(resolved.catalog_provider, "openai-compatible");
-        assert_eq!(resolved.builder_provider, "openai-compatible");
+        assert!(
+            resolved.is_none(),
+            "legacy provider aliases should fail closed without an explicit provider owner"
+        );
     }
 
     #[cfg(feature = "provider-deepseek")]
@@ -836,7 +801,7 @@ mod tests {
         assert!(profile.supports_mode(ContextCacheMode::AnthropicCompatible));
     }
 
-    #[cfg(any(feature = "provider-openai-compatible", feature = "openai-compatible"))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn builtin_provider_supports_file_builder_accepts_generic_openai_family() {
         let config = ProviderConfig {
@@ -850,7 +815,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "openai")]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn builtin_provider_supports_operation_checks_openai_surface() {
         assert!(

@@ -1,18 +1,18 @@
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use std::collections::HashMap;
 use std::collections::{BTreeMap, HashSet};
 
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 use crate::capabilities::RerankModel;
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 use crate::capabilities::embedding::EmbeddingModel;
 use crate::config::{
     Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_required,
@@ -22,15 +22,15 @@ use crate::provider_transport::{
     DEFAULT_HTTP_TIMEOUT, apply_http_query_params, default_http_client,
     resolve_http_provider_config,
 };
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Role, Tool, ToolChoice,
     Usage, Warning,
 };
-#[cfg(feature = "rerank")]
+#[cfg(feature = "cap-rerank")]
 use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";
 
@@ -129,8 +129,9 @@ impl Cohere {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "cohere chat model is not set (set request.model or Cohere::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "cohere chat",
+            "set request.model or Cohere::with_model",
         ))
     }
 

@@ -67,7 +67,8 @@ cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.js
 
 ```bash
 curl -sS http://127.0.0.1:8080/health
-curl -sS http://127.0.0.1:8080/v1/models | head
+curl -sS http://127.0.0.1:8080/ready
+curl -sS http://127.0.0.1:8080/v1/models -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}" | head
 ```
 
 下一步：

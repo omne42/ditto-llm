@@ -1,12 +1,18 @@
+#[cfg(feature = "gateway")]
+use ditto_core::MESSAGE_CATALOG;
+#[cfg(feature = "gateway")]
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+
 #[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
 fn parse_proxy_failure_action(
     raw: &str,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::proxy_routing::ProxyFailureAction, Box<dyn std::error::Error>> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "none" => Ok(ditto_server::gateway::proxy_routing::ProxyFailureAction::None),
         "fallback" => Ok(ditto_server::gateway::proxy_routing::ProxyFailureAction::Fallback),
         "retry" => Ok(ditto_server::gateway::proxy_routing::ProxyFailureAction::Retry),
-        _ => Err("invalid proxy failure action".into()),
+        _ => Err(invalid_value(locale, "proxy failure action")),
     }
 }
 
@@ -14,6 +20,7 @@ fn parse_proxy_failure_action(
 pub(crate) fn attach_devtools(
     state: ditto_server::gateway::GatewayHttpState,
     devtools_path: Option<String>,
+    _locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     let Some(path) = devtools_path else {
         return Ok(state);
@@ -25,11 +32,14 @@ pub(crate) fn attach_devtools(
 pub(crate) fn attach_devtools(
     state: ditto_server::gateway::GatewayHttpState,
     devtools_path: Option<String>,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if devtools_path.is_some() {
-        return Err(
-            "devtools requires `--features gateway-devtools` (or `sdk` alongside `gateway`)".into(),
-        );
+        return Err(feature_disabled(
+            locale,
+            "devtools",
+            "--features gateway-devtools (or `sdk` alongside `gateway`)",
+        ));
     }
     Ok(state)
 }
@@ -41,10 +51,11 @@ const DEFAULT_PROXY_MAX_IN_FLIGHT: usize = 256;
 pub(crate) fn attach_proxy_backpressure(
     state: ditto_server::gateway::GatewayHttpState,
     max_in_flight: Option<usize>,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     let max = max_in_flight.unwrap_or(DEFAULT_PROXY_MAX_IN_FLIGHT);
     if max == 0 {
-        return Err("--proxy-max-in-flight must be > 0".into());
+        return Err(must_be_positive(locale, "--proxy-max-in-flight"));
     }
     Ok(state.with_proxy_max_in_flight(max))
 }
@@ -53,12 +64,13 @@ pub(crate) fn attach_proxy_backpressure(
 pub(crate) fn attach_proxy_max_body_bytes(
     state: ditto_server::gateway::GatewayHttpState,
     max_body_bytes: Option<usize>,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     let Some(max) = max_body_bytes else {
         return Ok(state);
     };
     if max == 0 {
-        return Err("--proxy-max-body-bytes must be > 0".into());
+        return Err(must_be_positive(locale, "--proxy-max-body-bytes"));
     }
     Ok(state.with_proxy_max_body_bytes(max))
 }
@@ -91,6 +103,7 @@ pub(crate) struct ProxyCacheCliOptions {
 pub(crate) fn attach_proxy_cache(
     state: ditto_server::gateway::GatewayHttpState,
     opts: ProxyCacheCliOptions,
+    _locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if !opts.enabled {
         return Ok(state);
@@ -116,9 +129,14 @@ pub(crate) fn attach_proxy_cache(
 pub(crate) fn attach_proxy_cache(
     state: ditto_server::gateway::GatewayHttpState,
     opts: ProxyCacheCliOptions,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if opts.enabled {
-        return Err("proxy cache requires `--features gateway-proxy-cache`".into());
+        return Err(feature_disabled(
+            locale,
+            "proxy cache",
+            "--features gateway-proxy-cache",
+        ));
     }
     Ok(state)
 }
@@ -172,6 +190,7 @@ impl ProxyRoutingCliOptions {
 pub(crate) fn attach_proxy_routing(
     state: ditto_server::gateway::GatewayHttpState,
     opts: ProxyRoutingCliOptions,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if !opts.any_set() {
         return Ok(state);
@@ -188,10 +207,10 @@ pub(crate) fn attach_proxy_routing(
         config.retry.fallback_status_codes = codes;
     }
     if let Some(action) = opts.network_error_action.as_deref() {
-        config.retry.network_error_action = parse_proxy_failure_action(action)?;
+        config.retry.network_error_action = parse_proxy_failure_action(action, locale)?;
     }
     if let Some(action) = opts.timeout_error_action.as_deref() {
-        config.retry.timeout_error_action = parse_proxy_failure_action(action)?;
+        config.retry.timeout_error_action = parse_proxy_failure_action(action, locale)?;
     }
     config.retry.max_attempts = opts.retry_max_attempts.filter(|v| *v > 0);
 
@@ -222,7 +241,7 @@ pub(crate) fn attach_proxy_routing(
     }
     if let Some(path) = opts.health_check_path {
         if path.trim().is_empty() {
-            return Err("health check path must be non-empty".into());
+            return Err(non_empty_required(locale, "health check path"));
         }
         config.health_check.path = path;
     }
@@ -240,9 +259,14 @@ pub(crate) fn attach_proxy_routing(
 pub(crate) fn attach_proxy_routing(
     state: ditto_server::gateway::GatewayHttpState,
     opts: ProxyRoutingCliOptions,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if opts.any_set() {
-        return Err("proxy routing requires `--features gateway-routing-advanced`".into());
+        return Err(feature_disabled(
+            locale,
+            "proxy routing",
+            "--features gateway-routing-advanced",
+        ));
     }
     Ok(state)
 }
@@ -251,6 +275,7 @@ pub(crate) fn attach_proxy_routing(
 pub(crate) fn attach_pricing_table(
     state: ditto_server::gateway::GatewayHttpState,
     litellm_pricing_path: Option<String>,
+    _locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     let Some(path) = litellm_pricing_path else {
         return Ok(state);
@@ -264,9 +289,14 @@ pub(crate) fn attach_pricing_table(
 pub(crate) fn attach_pricing_table(
     state: ditto_server::gateway::GatewayHttpState,
     litellm_pricing_path: Option<String>,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if litellm_pricing_path.is_some() {
-        return Err("pricing requires `--features gateway-costing`".into());
+        return Err(feature_disabled(
+            locale,
+            "pricing",
+            "--features gateway-costing",
+        ));
     }
     Ok(state)
 }
@@ -279,6 +309,7 @@ pub(crate) fn attach_prometheus_metrics(
     max_model_series: Option<usize>,
     max_backend_series: Option<usize>,
     max_path_series: Option<usize>,
+    _locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if !enabled {
         return Ok(state);
@@ -308,6 +339,7 @@ pub(crate) fn attach_prometheus_metrics(
     max_model_series: Option<usize>,
     max_backend_series: Option<usize>,
     max_path_series: Option<usize>,
+    locale: Locale,
 ) -> Result<ditto_server::gateway::GatewayHttpState, Box<dyn std::error::Error>> {
     if enabled
         || max_key_series.is_some()
@@ -315,7 +347,11 @@ pub(crate) fn attach_prometheus_metrics(
         || max_backend_series.is_some()
         || max_path_series.is_some()
     {
-        return Err("prometheus metrics requires `--features gateway-metrics-prometheus`".into());
+        return Err(feature_disabled(
+            locale,
+            "prometheus metrics",
+            "--features gateway-metrics-prometheus",
+        ));
     }
     Ok(state)
 }
@@ -325,6 +361,7 @@ pub(crate) fn attach_otel(
     enabled: bool,
     endpoint: Option<&str>,
     json_logs: bool,
+    _locale: Locale,
 ) -> Result<Option<ditto_server::gateway::otel::OtelGuard>, Box<dyn std::error::Error>> {
     if !enabled {
         return Ok(None);
@@ -342,9 +379,64 @@ pub(crate) fn attach_otel(
     enabled: bool,
     _endpoint: Option<&str>,
     _json_logs: bool,
+    locale: Locale,
 ) -> Result<Option<()>, Box<dyn std::error::Error>> {
     if enabled {
-        return Err("otel requires `--features gateway-otel`".into());
+        return Err(feature_disabled(locale, "otel", "--features gateway-otel"));
     }
     Ok(None)
+}
+
+#[cfg(feature = "gateway")]
+#[cfg_attr(not(feature = "gateway-routing-advanced"), allow(dead_code))]
+fn invalid_value(locale: Locale, label: &str) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.invalid_value",
+            &[MessageArg::new("label", label)],
+        )
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+fn must_be_positive(locale: Locale, flag: &str) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.must_be_positive",
+            &[MessageArg::new("flag", flag)],
+        )
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+#[cfg_attr(not(feature = "gateway-routing-advanced"), allow(dead_code))]
+fn non_empty_required(locale: Locale, label: &str) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.non_empty_required",
+            &[MessageArg::new("label", label)],
+        )
+        .into()
+}
+
+#[cfg(feature = "gateway")]
+#[allow(dead_code)]
+fn feature_disabled(
+    locale: Locale,
+    feature: &str,
+    rebuild_hint: &str,
+) -> Box<dyn std::error::Error> {
+    MESSAGE_CATALOG
+        .render(
+            locale,
+            "cli.feature_disabled",
+            &[
+                MessageArg::new("feature", feature),
+                MessageArg::new("rebuild_hint", rebuild_hint),
+            ],
+        )
+        .into()
 }

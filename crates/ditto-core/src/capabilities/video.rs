@@ -3,11 +3,20 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use crate::capabilities::file::FileContent;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
     VideoListRequest, VideoListResponse, VideoRemixRequest,
 };
+
+fn unsupported_video_operation(operation: &str, provider: &str, model: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.video.unsupported_operation",
+        "operation" => operation,
+        "provider" => provider,
+        "model" => model
+    )
+}
 
 #[async_trait]
 pub trait VideoGenerationModel: Send + Sync {
@@ -20,20 +29,20 @@ pub trait VideoGenerationModel: Send + Sync {
 
     async fn list(&self, request: VideoListRequest) -> Result<VideoListResponse> {
         let _ = request;
-        Err(DittoError::InvalidResponse(format!(
-            "video listing is not supported by provider={} model={}",
+        Err(unsupported_video_operation(
+            "list",
             self.provider(),
-            self.model_id()
-        )))
+            self.model_id(),
+        ))
     }
 
     async fn delete(&self, video_id: &str) -> Result<VideoDeleteResponse> {
         let _ = video_id;
-        Err(DittoError::InvalidResponse(format!(
-            "video deletion is not supported by provider={} model={}",
+        Err(unsupported_video_operation(
+            "delete",
             self.provider(),
-            self.model_id()
-        )))
+            self.model_id(),
+        ))
     }
 
     async fn download_content(
@@ -43,11 +52,11 @@ pub trait VideoGenerationModel: Send + Sync {
     ) -> Result<FileContent> {
         let _ = video_id;
         let _ = variant;
-        Err(DittoError::InvalidResponse(format!(
-            "video content download is not supported by provider={} model={}",
+        Err(unsupported_video_operation(
+            "download_content",
             self.provider(),
-            self.model_id()
-        )))
+            self.model_id(),
+        ))
     }
 
     async fn remix(
@@ -57,11 +66,11 @@ pub trait VideoGenerationModel: Send + Sync {
     ) -> Result<VideoGenerationResponse> {
         let _ = video_id;
         let _ = request;
-        Err(DittoError::InvalidResponse(format!(
-            "video remix is not supported by provider={} model={}",
+        Err(unsupported_video_operation(
+            "remix",
             self.provider(),
-            self.model_id()
-        )))
+            self.model_id(),
+        ))
     }
 
     async fn create_and_poll(

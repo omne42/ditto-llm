@@ -49,7 +49,7 @@ cargo run -p ditto-server --features gateway --bin ditto-gateway -- ./gateway.js
 然后你可以用 OpenAI-compatible 的方式调用：
 
 ```bash
-curl -sS http://127.0.0.1:8080/v1/models
+curl -sS http://127.0.0.1:8080/v1/models -H "Authorization: Bearer ${DITTO_VIRTUAL_KEY}"
 ```
 
 ## 方式 3：作为 JS/React 客户端（Stream Protocol v1）

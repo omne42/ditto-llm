@@ -28,7 +28,7 @@ use crate::contracts::{
     CapabilityKind, ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
     Message, OperationKind, Role, RuntimeRouteRequest, Usage,
 };
-use crate::foundation::error::DittoError;
+use crate::error::DittoError;
 use crate::gateway::adapters::cache::LocalLruCache;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
@@ -201,15 +201,15 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn EmbeddingModel>>,
         model: &str,
-    ) -> crate::foundation::error::Result<Arc<dyn EmbeddingModel>> {
+    ) -> crate::error::Result<Arc<dyn EmbeddingModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "embedding model is missing".to_string(),
+            return Err(DittoError::invalid_response_text(
+                "embedding model is missing",
             ));
         }
 
@@ -228,7 +228,7 @@ impl TranslationBackendRuntime {
         let model_impl = build_embedding_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "provider backend does not support embeddings: {provider}"
                 ))
             })?;
@@ -249,7 +249,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ModerationModel>>,
-    ) -> crate::foundation::error::Result<Arc<dyn ModerationModel>> {
+    ) -> crate::error::Result<Arc<dyn ModerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -261,7 +261,7 @@ impl TranslationBackendRuntime {
                 build_moderation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support moderations: {provider}"
                         ))
                     })
@@ -275,7 +275,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageGenerationModel>>,
-    ) -> crate::foundation::error::Result<Arc<dyn ImageGenerationModel>> {
+    ) -> crate::error::Result<Arc<dyn ImageGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -287,7 +287,7 @@ impl TranslationBackendRuntime {
                 build_image_generation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support images: {provider}"
                         ))
                     })
@@ -301,7 +301,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageEditModel>>,
-    ) -> crate::foundation::error::Result<Arc<dyn ImageEditModel>> {
+    ) -> crate::error::Result<Arc<dyn ImageEditModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -313,7 +313,7 @@ impl TranslationBackendRuntime {
                 build_image_edit_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support image edits: {provider}"
                         ))
                     })
@@ -327,7 +327,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn VideoGenerationModel>>,
-    ) -> crate::foundation::error::Result<Arc<dyn VideoGenerationModel>> {
+    ) -> crate::error::Result<Arc<dyn VideoGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -339,7 +339,7 @@ impl TranslationBackendRuntime {
                 build_video_generation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support videos: {provider}"
                         ))
                     })
@@ -354,15 +354,15 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn AudioTranscriptionModel>>,
         model: &str,
-    ) -> crate::foundation::error::Result<Arc<dyn AudioTranscriptionModel>> {
+    ) -> crate::error::Result<Arc<dyn AudioTranscriptionModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "audio transcription model is missing".to_string(),
+            return Err(DittoError::invalid_response_text(
+                "audio transcription model is missing",
             ));
         }
 
@@ -381,7 +381,7 @@ impl TranslationBackendRuntime {
         let model_impl = build_audio_transcription_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "provider backend does not support audio transcriptions: {provider}"
                 ))
             })?;
@@ -403,16 +403,14 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn SpeechModel>>,
         model: &str,
-    ) -> crate::foundation::error::Result<Arc<dyn SpeechModel>> {
+    ) -> crate::error::Result<Arc<dyn SpeechModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "speech model is missing".to_string(),
-            ));
+            return Err(DittoError::invalid_response_text("speech model is missing"));
         }
 
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
@@ -430,7 +428,7 @@ impl TranslationBackendRuntime {
         let model_impl = build_speech_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "provider backend does not support audio speech: {provider}"
                 ))
             })?;
@@ -452,16 +450,14 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn RerankModel>>,
         model: &str,
-    ) -> crate::foundation::error::Result<Arc<dyn RerankModel>> {
+    ) -> crate::error::Result<Arc<dyn RerankModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "rerank model is missing".to_string(),
-            ));
+            return Err(DittoError::invalid_response_text("rerank model is missing"));
         }
 
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
@@ -479,7 +475,7 @@ impl TranslationBackendRuntime {
         let model_impl = build_rerank_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "provider backend does not support rerank: {provider}"
                 ))
             })?;
@@ -500,7 +496,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn BatchClient>>,
-    ) -> crate::foundation::error::Result<Arc<dyn BatchClient>> {
+    ) -> crate::error::Result<Arc<dyn BatchClient>> {
         if let Some(client) = direct.cloned() {
             return Ok(client);
         }
@@ -512,7 +508,7 @@ impl TranslationBackendRuntime {
                 build_batch_client(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support batches: {provider}"
                         ))
                     })
@@ -526,7 +522,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn FileClient>>,
-    ) -> crate::foundation::error::Result<Arc<dyn FileClient>> {
+    ) -> crate::error::Result<Arc<dyn FileClient>> {
         if let Some(client) = direct.cloned() {
             return Ok(client);
         }
@@ -538,7 +534,7 @@ impl TranslationBackendRuntime {
                 build_file_client(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "provider backend does not support files: {provider}"
                         ))
                     })
@@ -779,10 +775,7 @@ impl TranslationBackend {
         requested.to_string()
     }
 
-    pub async fn upload_file(
-        &self,
-        request: FileUploadRequest,
-    ) -> crate::foundation::error::Result<String> {
+    pub async fn upload_file(&self, request: FileUploadRequest) -> crate::error::Result<String> {
         let client = self.resolve_file_client().await?;
         client.upload_file_with_purpose(request).await
     }
@@ -791,7 +784,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         texts: Vec<String>,
-    ) -> crate::foundation::error::Result<Vec<Vec<f32>>> {
+    ) -> crate::error::Result<Vec<Vec<f32>>> {
         let model_impl = self
             .runtime
             .resolve_embedding_model(
@@ -807,7 +800,7 @@ impl TranslationBackend {
     pub async fn moderate(
         &self,
         request: ModerationRequest,
-    ) -> crate::foundation::error::Result<ModerationResponse> {
+    ) -> crate::error::Result<ModerationResponse> {
         let model_impl = self
             .runtime
             .resolve_moderation_model(
@@ -822,7 +815,7 @@ impl TranslationBackend {
     pub async fn generate_image(
         &self,
         request: ImageGenerationRequest,
-    ) -> crate::foundation::error::Result<ImageGenerationResponse> {
+    ) -> crate::error::Result<ImageGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_image_generation_model(
@@ -837,7 +830,7 @@ impl TranslationBackend {
     pub async fn edit_image(
         &self,
         request: ImageEditRequest,
-    ) -> crate::foundation::error::Result<ImageEditResponse> {
+    ) -> crate::error::Result<ImageEditResponse> {
         let model_impl = self
             .runtime
             .resolve_image_edit_model(
@@ -852,7 +845,7 @@ impl TranslationBackend {
     pub async fn create_video(
         &self,
         request: VideoGenerationRequest,
-    ) -> crate::foundation::error::Result<VideoGenerationResponse> {
+    ) -> crate::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -867,7 +860,7 @@ impl TranslationBackend {
     pub async fn retrieve_video(
         &self,
         video_id: &str,
-    ) -> crate::foundation::error::Result<VideoGenerationResponse> {
+    ) -> crate::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -882,7 +875,7 @@ impl TranslationBackend {
     pub async fn list_videos(
         &self,
         request: VideoListRequest,
-    ) -> crate::foundation::error::Result<VideoListResponse> {
+    ) -> crate::error::Result<VideoListResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -894,10 +887,7 @@ impl TranslationBackend {
         model_impl.list(request).await
     }
 
-    pub async fn delete_video(
-        &self,
-        video_id: &str,
-    ) -> crate::foundation::error::Result<VideoDeleteResponse> {
+    pub async fn delete_video(&self, video_id: &str) -> crate::error::Result<VideoDeleteResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -913,7 +903,7 @@ impl TranslationBackend {
         &self,
         video_id: &str,
         variant: Option<VideoContentVariant>,
-    ) -> crate::foundation::error::Result<FileContent> {
+    ) -> crate::error::Result<FileContent> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -929,7 +919,7 @@ impl TranslationBackend {
         &self,
         video_id: &str,
         request: VideoRemixRequest,
-    ) -> crate::foundation::error::Result<VideoGenerationResponse> {
+    ) -> crate::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -945,7 +935,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: AudioTranscriptionRequest,
-    ) -> crate::foundation::error::Result<AudioTranscriptionResponse> {
+    ) -> crate::error::Result<AudioTranscriptionResponse> {
         let model_impl = self
             .runtime
             .resolve_audio_transcription_model(
@@ -969,7 +959,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: SpeechRequest,
-    ) -> crate::foundation::error::Result<SpeechResponse> {
+    ) -> crate::error::Result<SpeechResponse> {
         let model_impl = self
             .runtime
             .resolve_speech_model(
@@ -993,7 +983,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: RerankRequest,
-    ) -> crate::foundation::error::Result<RerankResponse> {
+    ) -> crate::error::Result<RerankResponse> {
         let model_impl = self
             .runtime
             .resolve_rerank_model(
@@ -1016,23 +1006,17 @@ impl TranslationBackend {
     pub async fn create_batch(
         &self,
         request: BatchCreateRequest,
-    ) -> crate::foundation::error::Result<BatchResponse> {
+    ) -> crate::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.create(request).await
     }
 
-    pub async fn retrieve_batch(
-        &self,
-        batch_id: &str,
-    ) -> crate::foundation::error::Result<BatchResponse> {
+    pub async fn retrieve_batch(&self, batch_id: &str) -> crate::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.retrieve(batch_id).await
     }
 
-    pub async fn cancel_batch(
-        &self,
-        batch_id: &str,
-    ) -> crate::foundation::error::Result<BatchResponse> {
+    pub async fn cancel_batch(&self, batch_id: &str) -> crate::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.cancel(batch_id).await
     }
@@ -1041,12 +1025,12 @@ impl TranslationBackend {
         &self,
         limit: Option<u32>,
         after: Option<String>,
-    ) -> crate::foundation::error::Result<BatchListResponse> {
+    ) -> crate::error::Result<BatchListResponse> {
         let client = self.resolve_batch_client().await?;
         client.list(limit, after).await
     }
 
-    async fn resolve_batch_client(&self) -> crate::foundation::error::Result<Arc<dyn BatchClient>> {
+    async fn resolve_batch_client(&self) -> crate::error::Result<Arc<dyn BatchClient>> {
         self.runtime
             .resolve_batch_client(self.provider_name(), self.bindings.batch_client.as_ref())
             .await
@@ -1057,11 +1041,11 @@ impl TranslationBackend {
         model: &str,
         instructions: &str,
         input: &[Value],
-    ) -> crate::foundation::error::Result<(Vec<Value>, Usage)> {
+    ) -> crate::error::Result<(Vec<Value>, Usage)> {
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "compaction model is missing".to_string(),
+            return Err(DittoError::invalid_response_text(
+                "compaction model is missing",
             ));
         }
 
@@ -1133,8 +1117,8 @@ impl TranslationBackend {
             .await?;
 
         let Value::Array(items) = out.object else {
-            return Err(DittoError::InvalidResponse(
-                "compaction response is not a JSON array".to_string(),
+            return Err(DittoError::invalid_response_text(
+                "compaction response is not a JSON array",
             ));
         };
 
@@ -2394,18 +2378,28 @@ pub fn provider_response_id_from_chunk(chunk: &crate::contracts::StreamChunk) ->
 }
 
 pub fn map_provider_error_to_openai(
-    err: crate::foundation::error::DittoError,
+    err: crate::error::DittoError,
 ) -> (StatusCode, &'static str, Option<&'static str>, String) {
     match err {
-        crate::foundation::error::DittoError::Api { status, body } => {
+        crate::error::DittoError::Api { status, body } => {
             let status = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
             (status, "api_error", Some("provider_error"), body)
         }
-        crate::foundation::error::DittoError::InvalidResponse(message) => (
+        crate::error::DittoError::InvalidResponse(message)
+            if message.code() == "error_detail.provider.model_missing" =>
+        {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                None,
+                message.to_string(),
+            )
+        }
+        crate::error::DittoError::InvalidResponse(message) => (
             StatusCode::NOT_IMPLEMENTED,
             "invalid_request_error",
             Some("unsupported_feature"),
-            message,
+            message.to_string(),
         ),
         other => (
             StatusCode::BAD_GATEWAY,
@@ -2417,3 +2411,34 @@ pub fn map_provider_error_to_openai(
 }
 
 // end inline: ../../translation/openai_protocol.rs
+
+#[cfg(test)]
+mod error_mapping_tests {
+    use super::map_provider_error_to_openai;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn maps_provider_model_missing_as_bad_request() {
+        let (status, kind, code, message) =
+            map_provider_error_to_openai(crate::error::DittoError::provider_model_missing(
+                "openai",
+                "set request.model or OpenAI::with_model",
+            ));
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(kind, "invalid_request_error");
+        assert_eq!(code, None);
+        assert!(message.contains("model is not set"));
+    }
+
+    #[test]
+    fn maps_provider_config_errors_as_provider_errors() {
+        let (status, kind, code, message) =
+            map_provider_error_to_openai(crate::error::DittoError::provider_auth_missing("vertex"));
+
+        assert_eq!(status, StatusCode::BAD_GATEWAY);
+        assert_eq!(kind, "api_error");
+        assert_eq!(code, Some("provider_error"));
+        assert!(message.contains("config error"));
+    }
+}

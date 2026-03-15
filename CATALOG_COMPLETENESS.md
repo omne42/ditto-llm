@@ -1,7 +1,7 @@
 # Catalog Completeness Dashboard
 
 Generated from the compiled builtin runtime registry plus `catalog/provider_models/*`.
-For a full repo snapshot, regenerate with `cargo run --all-features --bin ditto-catalog-dashboard`.
+For a full repo snapshot, regenerate with `cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard`.
 
 ## Provider Summary
 

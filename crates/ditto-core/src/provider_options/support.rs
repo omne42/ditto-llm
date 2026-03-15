@@ -4,25 +4,25 @@
 //! not.
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 use super::ProviderOptions;
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 use crate::contracts::Warning;
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ProviderOptionsSupport {
@@ -32,10 +32,10 @@ pub(crate) struct ProviderOptionsSupport {
 }
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 impl ProviderOptionsSupport {
     pub(crate) const NONE: Self = Self {
@@ -46,10 +46,10 @@ impl ProviderOptionsSupport {
 }
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "google",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-google",
+    feature = "provider-vertex",
 ))]
 pub(crate) fn warn_unsupported_provider_options(
     provider_display: &str,

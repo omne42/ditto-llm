@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::openai_like::OpenAiLikeClient;
 
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 #[derive(Debug, Deserialize)]
 struct EmbeddingsResponse {

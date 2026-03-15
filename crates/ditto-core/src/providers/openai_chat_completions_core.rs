@@ -1,29 +1,29 @@
 use std::sync::Arc;
 
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 use futures_util::StreamExt;
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 use futures_util::stream;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::config::ProviderConfig;
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use crate::contracts::GenerateResponse;
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 use crate::contracts::StreamChunk;
 use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, ImageSource, Message, Role, Tool,
     ToolChoice, Usage, Warning,
 };
-use crate::foundation::error::{DittoError, Result};
-#[cfg(feature = "openai")]
+use crate::error::{DittoError, Result};
+#[cfg(feature = "provider-openai")]
 use crate::llm_core::model::StreamResult;
 use crate::providers::openai_compat_profile::{
     OpenAiCompatibilityProfile, OpenAiCompatibleModelBehavior, OpenAiProviderFamily,
 };
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 use crate::providers::openai_like;
 
 pub(crate) type OpenAiChatCompletionsModelBehaviorResolver =
@@ -72,7 +72,7 @@ impl Default for OpenAiChatCompletionsRequestQuirks {
     }
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(crate) trait OpenAiChatCompletionsFacade {
     fn provider_name(&self) -> &'static str;
     fn client(&self) -> &openai_like::OpenAiLikeClient;
@@ -771,7 +771,7 @@ pub(crate) fn build_chat_completions_body(
     }
 
     if let Some(tools) = request.tools.as_ref() {
-        if cfg!(feature = "tools") {
+        if cfg!(feature = "cap-llm-tools") {
             let mapped = tools
                 .iter()
                 .map(|tool| tool_to_openai(tool, &mut warnings))
@@ -785,11 +785,11 @@ pub(crate) fn build_chat_completions_body(
         }
     }
     if let Some(tool_choice) = request.tool_choice.as_ref() {
-        if cfg!(feature = "tools") {
+        if cfg!(feature = "cap-llm-tools") {
             if matches!(tool_choice, ToolChoice::Required)
                 && matches!(tool_choice_required_supported(quirks), Some(false))
             {
-                return Err(DittoError::InvalidResponse(format!(
+                return Err(DittoError::invalid_response_text(format!(
                     "{model} does not support tool_choice=required over chat/completions"
                 )));
             }
@@ -924,7 +924,7 @@ pub(crate) fn parse_usage(value: &Value) -> Usage {
 }
 
 #[derive(Debug, Deserialize)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatCompletionsResponse {
     id: String,
     #[serde(default)]
@@ -936,7 +936,7 @@ struct ChatCompletionsResponse {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatChoice {
     #[serde(default)]
     message: ChatMessage,
@@ -945,7 +945,7 @@ struct ChatChoice {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatMessage {
     #[serde(default)]
     content: Option<String>,
@@ -960,7 +960,7 @@ struct ChatMessage {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatFunctionCall {
     #[serde(default)]
     name: String,
@@ -969,7 +969,7 @@ struct ChatFunctionCall {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatToolCall {
     #[serde(default)]
     id: String,
@@ -980,7 +980,7 @@ struct ChatToolCall {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 struct ChatToolFunction {
     #[serde(default)]
     name: String,
@@ -990,9 +990,9 @@ struct ChatToolFunction {
     thought_signature: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatCompletionsChunk {
     #[serde(default)]
     id: Option<String>,
@@ -1002,9 +1002,9 @@ struct ChatCompletionsChunk {
     usage: Option<Value>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatChoiceChunk {
     #[serde(default)]
     delta: ChatDelta,
@@ -1012,9 +1012,9 @@ struct ChatChoiceChunk {
     finish_reason: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatDelta {
     #[serde(default)]
     content: Option<String>,
@@ -1028,9 +1028,9 @@ struct ChatDelta {
     function_call: Option<ChatFunctionCallDelta>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatFunctionCallDelta {
     #[serde(default)]
     name: Option<String>,
@@ -1038,9 +1038,9 @@ struct ChatFunctionCallDelta {
     arguments: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatToolCallDelta {
     #[serde(default)]
     index: usize,
@@ -1052,9 +1052,9 @@ struct ChatToolCallDelta {
     function: Option<ChatToolFunctionDelta>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct ChatToolFunctionDelta {
     #[serde(default)]
     name: Option<String>,
@@ -1064,9 +1064,9 @@ struct ChatToolFunctionDelta {
     thought_signature: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct StreamToolCallState {
     id: Option<String>,
     name: Option<String>,
@@ -1075,17 +1075,17 @@ struct StreamToolCallState {
     pending_arguments: String,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Default)]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 struct StreamState {
     response_id: Option<String>,
     tool_calls: Vec<StreamToolCallState>,
     finish_reason: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(feature = "cap-llm-streaming")]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
     let mut out = Vec::<StreamChunk>::new();
     let mut warnings = Vec::<Warning>::new();
@@ -1156,8 +1156,8 @@ fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
     out
 }
 
-#[cfg(feature = "streaming")]
-#[cfg(all(feature = "openai", feature = "streaming"))]
+#[cfg(feature = "cap-llm-streaming")]
+#[cfg(all(feature = "provider-openai", feature = "cap-llm-streaming"))]
 fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamChunk>, bool)> {
     let chunk = serde_json::from_str::<ChatCompletionsChunk>(data)?;
     let mut out = Vec::<StreamChunk>::new();
@@ -1340,7 +1340,7 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     Ok((out, done))
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(crate) async fn generate_chat_completions<T>(
     adapter: &T,
     request: GenerateRequest,
@@ -1385,7 +1385,7 @@ where
         crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
             .await?;
     let choice = parsed.choices.first().ok_or_else(|| {
-        DittoError::InvalidResponse("chat/completions response has no choices".to_string())
+        DittoError::invalid_response_text("chat/completions response has no choices".to_string())
     })?;
 
     let mut content = Vec::<ContentPart>::new();
@@ -1481,7 +1481,7 @@ where
     })
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 pub(crate) async fn stream_chat_completions<T>(
     adapter: &T,
     request: GenerateRequest,
@@ -1489,16 +1489,17 @@ pub(crate) async fn stream_chat_completions<T>(
 where
     T: OpenAiChatCompletionsFacade + ?Sized,
 {
-    #[cfg(not(feature = "streaming"))]
+    #[cfg(not(feature = "cap-llm-streaming"))]
     {
         let _ = adapter;
         let _ = request;
-        return Err(DittoError::InvalidResponse(
-            "ditto-core built without streaming feature".to_string(),
+        return Err(DittoError::builder_capability_feature_missing(
+            adapter.provider_name(),
+            "streaming",
         ));
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     {
         let model = adapter.resolve_model(&request)?;
         let request_quirks = adapter.request_quirks_for_model(model);

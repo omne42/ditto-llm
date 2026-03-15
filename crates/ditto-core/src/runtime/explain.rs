@@ -5,7 +5,7 @@ use crate::contracts::{
     CapabilityKind, HttpMethod, InvocationHints, RuntimeProviderApi, RuntimeRoute,
     RuntimeRouteRequest, TransportKind, VerificationStatus,
 };
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 use super::builtin::builtin_runtime_assembly;
 use super::route::{

@@ -18,6 +18,7 @@ pub(super) async fn handle_openai_compat_proxy(
 ) -> Result<axum::response::Response, (StatusCode, Json<OpenAiErrorResponse>)> {
     let max_body_bytes = state.proxy.max_body_bytes;
     let (parts, incoming_body) = req.into_parts();
+    let client_supplied_request_id = parts.headers.contains_key("x-request-id");
     let request_id =
         extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
     let path_and_query = parts
@@ -51,6 +52,14 @@ pub(super) async fn handle_openai_compat_proxy(
     #[cfg(feature = "gateway-otel")]
     let _proxy_span_guard = proxy_span.enter();
     if should_stream_large_multipart_request(&parts, path_and_query, max_body_bytes) {
+        if client_supplied_request_id && !parts.method.is_safe() {
+            return Err(openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("unsupported_idempotency"),
+                "x-request-id idempotency is not supported for streaming multipart proxy requests",
+            ));
+        }
         let path_and_query = path_and_query.to_string();
         return handle_openai_compat_proxy_streaming_multipart(
             state,
@@ -104,6 +113,12 @@ pub(super) async fn handle_openai_compat_proxy(
         None
     };
 
+    let _stream_requested = parsed_json
+        .as_ref()
+        .and_then(|value| value.get("stream"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+
     if let Some(response) = maybe_handle_mcp_tools_chat_completions(
         &state,
         &parts,
@@ -137,12 +152,6 @@ pub(super) async fn handle_openai_compat_proxy(
         .as_ref()
         .and_then(|value| extract_max_output_tokens(path_and_query, value))
         .unwrap_or(0);
-
-    let _stream_requested = parsed_json
-        .as_ref()
-        .and_then(|value| value.get("stream"))
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
 
     #[cfg(feature = "gateway-tokenizer")]
     let input_tokens_estimate = parsed_json
@@ -227,6 +236,24 @@ pub(super) async fn handle_openai_compat_proxy(
     )
     .await?;
 
+    let mut request_dedup_leader = match prepare_proxy_request_dedup(
+        &state,
+        &parts.method,
+        path_and_query,
+        &body,
+        &request_id,
+        client_supplied_request_id,
+        virtual_key_id.as_deref(),
+    )
+    .await?
+    {
+        ProxyRequestDedupDecision::Disabled => None,
+        ProxyRequestDedupDecision::Replay(result) => return result,
+        ProxyRequestDedupDecision::Leader(leader) => Some(leader),
+    };
+
+    state.record_request();
+
     #[cfg(not(feature = "gateway-store-redis"))]
     let _ = (
         &limits,
@@ -280,7 +307,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
             }
-            return Err(mapped);
+            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
+                .await;
         }
     }
 
@@ -327,7 +355,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
             }
-            return Err(mapped);
+            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
+                .await;
         }
     }
 
@@ -374,7 +403,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
             }
-            return Err(mapped);
+            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
+                .await;
         }
     }
 
@@ -421,7 +451,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
             }
-            return Err(mapped);
+            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
+                .await;
         }
     }
 
@@ -494,7 +525,8 @@ pub(super) async fn handle_openai_compat_proxy(
         )
         .await
         {
-            return Ok(response);
+            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Ok(response))
+                .await;
         }
     }
 
@@ -551,7 +583,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
-                return Err(err);
+                return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(err))
+                    .await;
             }
         };
 
@@ -605,7 +638,8 @@ pub(super) async fn handle_openai_compat_proxy(
                     }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
-                return Err(err);
+                return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(err))
+                    .await;
             }
         };
 
@@ -661,6 +695,8 @@ pub(super) async fn handle_openai_compat_proxy(
         model: &model,
         service_tier: &service_tier,
         request_id: &request_id,
+        #[cfg(feature = "gateway-routing-advanced")]
+        client_supplied_request_id,
         path_and_query,
         now_epoch_seconds: _now_epoch_seconds,
         charge_tokens,
@@ -726,7 +762,13 @@ pub(super) async fn handle_openai_compat_proxy(
             )
             .await?
             {
-                BackendAttemptOutcome::Response(response) => return Ok(response),
+                BackendAttemptOutcome::Response(response) => {
+                    return finish_proxy_request_dedup_result(
+                        request_dedup_leader.take(),
+                        Ok(response),
+                    )
+                    .await;
+                }
                 BackendAttemptOutcome::Continue(err) => {
                     if let Some(err) = err {
                         last_err = Some(err);
@@ -742,7 +784,13 @@ pub(super) async fn handle_openai_compat_proxy(
 
         match attempt_proxy_backend(attempt_params, &backend_name, idx, &attempted_backends).await?
         {
-            BackendAttemptOutcome::Response(response) => return Ok(response),
+            BackendAttemptOutcome::Response(response) => {
+                return finish_proxy_request_dedup_result(
+                    request_dedup_leader.take(),
+                    Ok(response),
+                )
+                .await;
+            }
             BackendAttemptOutcome::Continue(err) => {
                 if let Some(err) = err {
                     last_err = Some(err);
@@ -780,22 +828,26 @@ pub(super) async fn handle_openai_compat_proxy(
     #[cfg(not(feature = "gateway-metrics-prometheus"))]
     let proxy_metrics = None;
 
-    Err(finalize_openai_compat_proxy_failure(
-        &state,
-        ProxyFailureContext {
-            request_id: &request_id,
-            method: &parts.method,
-            path_and_query,
-            model: &model,
-            virtual_key_id: virtual_key_id.as_deref(),
-            attempted_backends: &attempted_backends,
-            body_len: body.len(),
-            charge_tokens,
-            charge_cost_usd_micros,
-            last_err,
-            metrics: proxy_metrics,
-        },
+    finish_proxy_request_dedup_result(
+        request_dedup_leader.take(),
+        Err(finalize_openai_compat_proxy_failure(
+            &state,
+            ProxyFailureContext {
+                request_id: &request_id,
+                method: &parts.method,
+                path_and_query,
+                model: &model,
+                virtual_key_id: virtual_key_id.as_deref(),
+                attempted_backends: &attempted_backends,
+                body_len: body.len(),
+                charge_tokens,
+                charge_cost_usd_micros,
+                last_err,
+                metrics: proxy_metrics,
+            },
+        )
+        .await),
     )
-    .await)
+    .await
 }
 // end inline: ../../http/openai_compat_proxy.rs

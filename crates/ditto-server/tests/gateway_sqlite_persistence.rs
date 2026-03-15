@@ -43,6 +43,7 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let mut gateway = Gateway::new(config);
     gateway.register_backend("primary", EchoBackend);
@@ -65,7 +66,23 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
     let loaded = store.load_virtual_keys().await.expect("load");
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].id, "key-1");
-    assert_eq!(loaded[0].token, "vk-1");
+    assert!(loaded[0].token.starts_with("sha256:"));
+    let persisted_config = GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: loaded.clone(),
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+        i18n: Default::default(),
+    };
+    assert!(persisted_config.virtual_key("vk-1").is_some());
 
     let request = Request::builder()
         .method("DELETE")
@@ -100,6 +117,7 @@ async fn admin_router_mutation_persists_router_to_sqlite_store() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let mut gateway = Gateway::new(config);
     gateway.register_backend("primary", EchoBackend);

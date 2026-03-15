@@ -1,10 +1,10 @@
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Clone)]
 pub struct OpenAICompatibleEmbeddings {
     client: openai_like::OpenAiLikeClient,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 impl OpenAICompatibleEmbeddings {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
@@ -39,14 +39,14 @@ impl OpenAICompatibleEmbeddings {
         if !self.client.model.trim().is_empty() {
             return Ok(self.client.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "openai-compatible embedding model is not set (set OpenAICompatibleEmbeddings::with_model)"
-                .to_string(),
+        Err(DittoError::provider_model_missing(
+            "openai-compatible embedding",
+            "set OpenAICompatibleEmbeddings::with_model",
         ))
     }
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[async_trait]
 impl EmbeddingModel for OpenAICompatibleEmbeddings {
     fn provider(&self) -> &str {
@@ -236,7 +236,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "embeddings")]
+    #[cfg(feature = "cap-embedding")]
     #[tokio::test]
     async fn embeddings_from_config_resolves_model() -> Result<()> {
         let config = ProviderConfig {
@@ -260,7 +260,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "embeddings")]
+    #[cfg(feature = "cap-embedding")]
     #[tokio::test]
     async fn embeddings_embed_posts_to_embeddings_endpoint_with_query_param_auth() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
@@ -464,7 +464,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn parses_streaming_tool_call_deltas() -> Result<()> {
         let mut state = StreamState::default();
@@ -597,7 +597,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn parses_streaming_legacy_function_call_deltas() -> Result<()> {
         let mut state = StreamState::default();
@@ -658,7 +658,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn parses_streaming_response_id() -> Result<()> {
         let mut state = StreamState::default();
@@ -689,7 +689,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     #[test]
     fn flushes_tool_call_without_id_on_finish_reason() -> Result<()> {
         let mut state = StreamState::default();

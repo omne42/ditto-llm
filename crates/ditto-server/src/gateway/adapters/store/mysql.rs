@@ -5,7 +5,11 @@ use sqlx::Row;
 use sqlx::mysql::MySqlPoolOptions;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
+use super::{
+    AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, ProxyRequestFingerprint,
+    ProxyRequestIdempotencyBeginOutcome, ProxyRequestIdempotencyRecord,
+    ProxyRequestIdempotencyState, ProxyRequestReplayOutcome, RouterConfig, VirtualKeyConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct MySqlStore {
@@ -137,6 +141,21 @@ impl MySqlStore {
                 CONSTRAINT ck_cost_reservations_ts_nonneg CHECK (ts_ms >= 0),
                 INDEX idx_cost_reservations_key_id (key_id),
                 INDEX idx_cost_reservations_ts_ms (ts_ms)
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS proxy_request_idempotency (
+                request_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin PRIMARY KEY NOT NULL,
+                state VARCHAR(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+                owner_token VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+                lease_until_ms BIGINT NULL,
+                expires_at_ms BIGINT NOT NULL,
+                updated_at_ms BIGINT NOT NULL,
+                record_json JSON NOT NULL,
+                INDEX idx_proxy_request_idempotency_expires_at_ms (expires_at_ms),
+                INDEX idx_proxy_request_idempotency_state_lease_until_ms (state, lease_until_ms)
             )",
         )
         .execute(&self.pool)
@@ -335,11 +354,18 @@ impl MySqlStore {
         require_mysql_table(&self.pool, "budget_reservations").await?;
         require_mysql_table(&self.pool, "cost_ledger").await?;
         require_mysql_table(&self.pool, "cost_reservations").await?;
+        require_mysql_table(&self.pool, "proxy_request_idempotency").await?;
 
         require_mysql_column_data_type(&self.pool, "virtual_keys", "value_json", "json").await?;
         require_mysql_column_data_type(&self.pool, "config_state", "value_json", "json").await?;
         require_mysql_column_data_type(&self.pool, "audit_logs", "payload_json", "json").await?;
-
+        require_mysql_column_data_type(
+            &self.pool,
+            "proxy_request_idempotency",
+            "record_json",
+            "json",
+        )
+        .await?;
         require_mysql_column_collation(&self.pool, "virtual_keys", "id", "utf8mb4_bin").await?;
         require_mysql_column_collation(&self.pool, "config_state", "key", "utf8mb4_bin").await?;
         require_mysql_column_collation(&self.pool, "budget_ledger", "key_id", "utf8mb4_bin")
@@ -363,6 +389,27 @@ impl MySqlStore {
         .await?;
         require_mysql_column_collation(&self.pool, "cost_reservations", "key_id", "utf8mb4_bin")
             .await?;
+        require_mysql_column_collation(
+            &self.pool,
+            "proxy_request_idempotency",
+            "request_id",
+            "utf8mb4_bin",
+        )
+        .await?;
+        require_mysql_column_collation(
+            &self.pool,
+            "proxy_request_idempotency",
+            "state",
+            "utf8mb4_bin",
+        )
+        .await?;
+        require_mysql_column_collation(
+            &self.pool,
+            "proxy_request_idempotency",
+            "owner_token",
+            "utf8mb4_bin",
+        )
+        .await?;
 
         require_mysql_index(&self.pool, "audit_logs", "idx_audit_logs_ts_ms").await?;
         require_mysql_index(&self.pool, "audit_logs", "idx_audit_logs_kind_ts_ms").await?;
@@ -388,6 +435,18 @@ impl MySqlStore {
             &self.pool,
             "cost_reservations",
             "idx_cost_reservations_ts_ms",
+        )
+        .await?;
+        require_mysql_index(
+            &self.pool,
+            "proxy_request_idempotency",
+            "idx_proxy_request_idempotency_expires_at_ms",
+        )
+        .await?;
+        require_mysql_index(
+            &self.pool,
+            "proxy_request_idempotency",
+            "idx_proxy_request_idempotency_state_lease_until_ms",
         )
         .await?;
 
@@ -469,7 +528,8 @@ impl MySqlStore {
             .execute(&mut *tx)
             .await?;
         for key in keys {
-            let value_json = serde_json::to_string(key)?;
+            let key = key.sanitized_for_persistence();
+            let value_json = serde_json::to_string(&key)?;
             sqlx::query("INSERT INTO virtual_keys (id, value_json) VALUES (?, ?)")
                 .bind(&key.id)
                 .bind(value_json)
@@ -1269,6 +1329,268 @@ impl MySqlStore {
         }
         Ok(out)
     }
+
+    pub async fn begin_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        fingerprint: &ProxyRequestFingerprint,
+        fingerprint_key: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<ProxyRequestIdempotencyBeginOutcome, MySqlStoreError> {
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = u64_to_i64(lease_until_ms);
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM proxy_request_idempotency WHERE expires_at_ms < ?")
+            .bind(now_ms_i64)
+            .execute(&mut *tx)
+            .await?;
+
+        let row = sqlx::query(
+            "SELECT CAST(record_json AS CHAR) AS record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = ?
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(row) = row {
+            let raw: String = row.try_get("record_json")?;
+            let record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+            if record.fingerprint_key != fingerprint_key {
+                tx.commit().await?;
+                return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict { record });
+            }
+            if record.expires_at_ms >= now_ms {
+                match record.state {
+                    ProxyRequestIdempotencyState::Completed => {
+                        tx.commit().await?;
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::Replay { record });
+                    }
+                    ProxyRequestIdempotencyState::InFlight => {
+                        tx.commit().await?;
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight { record });
+                    }
+                }
+            }
+        }
+
+        let record = new_proxy_request_idempotency_record(
+            request_id.to_string(),
+            fingerprint.clone(),
+            fingerprint_key.to_string(),
+            owner_token.to_string(),
+            now_ms,
+            lease_until_ms,
+        );
+        let record_json = serde_json::to_string(&record)?;
+        sqlx::query(
+            "INSERT INTO proxy_request_idempotency (
+                 request_id,
+                 state,
+                 owner_token,
+                 lease_until_ms,
+                 expires_at_ms,
+                 updated_at_ms,
+                 record_json
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                 state = VALUES(state),
+                 owner_token = VALUES(owner_token),
+                 lease_until_ms = VALUES(lease_until_ms),
+                 expires_at_ms = VALUES(expires_at_ms),
+                 updated_at_ms = VALUES(updated_at_ms),
+                 record_json = VALUES(record_json)",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(record.state))
+        .bind(owner_token)
+        .bind(lease_until_ms_i64)
+        .bind(lease_until_ms_i64)
+        .bind(now_ms_i64)
+        .bind(record_json)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(ProxyRequestIdempotencyBeginOutcome::Acquired)
+    }
+
+    pub async fn get_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        now_ms: u64,
+    ) -> Result<Option<ProxyRequestIdempotencyRecord>, MySqlStoreError> {
+        let row = sqlx::query(
+            "SELECT CAST(record_json AS CHAR) AS record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = ? AND expires_at_ms >= ?",
+        )
+        .bind(request_id)
+        .bind(u64_to_i64(now_ms))
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let raw: String = row.try_get("record_json")?;
+        Ok(Some(serde_json::from_str(&raw)?))
+    }
+
+    pub async fn refresh_proxy_request_idempotency_lease(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<bool, MySqlStoreError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "SELECT CAST(record_json AS CHAR) AS record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = ?
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+        let raw: String = row.try_get("record_json")?;
+        let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+        if record.state != ProxyRequestIdempotencyState::InFlight
+            || record.owner_token.as_deref() != Some(owner_token)
+        {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = u64_to_i64(lease_until_ms);
+        record.updated_at_ms = now_ms;
+        record.lease_until_ms = Some(lease_until_ms);
+        record.expires_at_ms = lease_until_ms;
+        let record_json = serde_json::to_string(&record)?;
+
+        let updated = sqlx::query(
+            "UPDATE proxy_request_idempotency
+             SET lease_until_ms = ?,
+                 expires_at_ms = ?,
+                 updated_at_ms = ?,
+                 record_json = ?
+             WHERE request_id = ? AND owner_token = ? AND state = ?",
+        )
+        .bind(lease_until_ms_i64)
+        .bind(lease_until_ms_i64)
+        .bind(now_ms_i64)
+        .bind(record_json)
+        .bind(request_id)
+        .bind(owner_token)
+        .bind(proxy_request_idempotency_state_label(
+            ProxyRequestIdempotencyState::InFlight,
+        ))
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn complete_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        outcome: &ProxyRequestReplayOutcome,
+        now_ms: u64,
+        replay_ttl_ms: u64,
+    ) -> Result<bool, MySqlStoreError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "SELECT CAST(record_json AS CHAR) AS record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = ?
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+        let raw: String = row.try_get("record_json")?;
+        let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+        if record.state != ProxyRequestIdempotencyState::InFlight
+            || record.owner_token.as_deref() != Some(owner_token)
+        {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let expires_at_ms = now_ms.saturating_add(replay_ttl_ms);
+        let expires_at_ms_i64 = u64_to_i64(expires_at_ms);
+        record.state = ProxyRequestIdempotencyState::Completed;
+        record.owner_token = None;
+        record.lease_until_ms = None;
+        record.completed_at_ms = Some(now_ms);
+        record.updated_at_ms = now_ms;
+        record.expires_at_ms = expires_at_ms;
+        record.outcome = Some(outcome.clone());
+        let record_json = serde_json::to_string(&record)?;
+
+        let updated = sqlx::query(
+            "UPDATE proxy_request_idempotency
+             SET state = ?,
+                 owner_token = NULL,
+                 lease_until_ms = NULL,
+                 expires_at_ms = ?,
+                 updated_at_ms = ?,
+                 record_json = ?
+             WHERE request_id = ? AND owner_token = ?",
+        )
+        .bind(proxy_request_idempotency_state_label(record.state))
+        .bind(expires_at_ms_i64)
+        .bind(now_ms_i64)
+        .bind(record_json)
+        .bind(request_id)
+        .bind(owner_token)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn release_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+    ) -> Result<bool, MySqlStoreError> {
+        let deleted = sqlx::query(
+            "DELETE FROM proxy_request_idempotency
+             WHERE request_id = ? AND state = ? AND owner_token = ?",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(
+            ProxyRequestIdempotencyState::InFlight,
+        ))
+        .bind(owner_token)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(deleted > 0)
+    }
 }
 
 async fn ensure_mysql_index(
@@ -1506,6 +1828,36 @@ fn should_run_retention_reap(last_reap_ms: &AtomicI64, now_ms: i64) -> bool {
             Ok(_) => return true,
             Err(actual) => observed = actual,
         }
+    }
+}
+
+fn proxy_request_idempotency_state_label(state: ProxyRequestIdempotencyState) -> &'static str {
+    match state {
+        ProxyRequestIdempotencyState::InFlight => "in_flight",
+        ProxyRequestIdempotencyState::Completed => "completed",
+    }
+}
+
+fn new_proxy_request_idempotency_record(
+    request_id: String,
+    fingerprint: ProxyRequestFingerprint,
+    fingerprint_key: String,
+    owner_token: String,
+    now_ms: u64,
+    lease_until_ms: u64,
+) -> ProxyRequestIdempotencyRecord {
+    ProxyRequestIdempotencyRecord {
+        request_id,
+        fingerprint,
+        fingerprint_key,
+        state: ProxyRequestIdempotencyState::InFlight,
+        owner_token: Some(owner_token),
+        started_at_ms: now_ms,
+        updated_at_ms: now_ms,
+        lease_until_ms: Some(lease_until_ms),
+        completed_at_ms: None,
+        expires_at_ms: lease_until_ms,
+        outcome: None,
     }
 }
 

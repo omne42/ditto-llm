@@ -9,6 +9,7 @@ enum AdminPermission {
 #[derive(Clone, Debug)]
 pub(super) struct AdminContext {
     pub(super) tenant_id: Option<String>,
+    pub(super) can_manage_secrets: bool,
 }
 
 pub(super) fn ensure_admin_read(
@@ -23,6 +24,20 @@ pub(super) fn ensure_admin_write(
     headers: &HeaderMap,
 ) -> Result<AdminContext, (StatusCode, Json<ErrorResponse>)> {
     ensure_admin(state, headers, AdminPermission::Write)
+}
+
+pub(super) fn ensure_admin_secret_access(
+    admin: &AdminContext,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if admin.can_manage_secrets {
+        return Ok(());
+    }
+
+    Err(error_response(
+        StatusCode::FORBIDDEN,
+        "forbidden",
+        "admin token cannot access virtual key secrets",
+    ))
 }
 
 fn ensure_admin(
@@ -47,12 +62,18 @@ fn ensure_admin(
         .unwrap_or_default();
 
     if write_token.is_some_and(|expected| provided == expected) {
-        return Ok(AdminContext { tenant_id: None });
+        return Ok(AdminContext {
+            tenant_id: None,
+            can_manage_secrets: true,
+        });
     }
 
     if let AdminPermission::Read = permission {
         if read_token.is_some_and(|expected| provided == expected) {
-            return Ok(AdminContext { tenant_id: None });
+            return Ok(AdminContext {
+                tenant_id: None,
+                can_manage_secrets: false,
+            });
         }
     }
 
@@ -68,6 +89,7 @@ fn ensure_admin(
             }
             return Ok(AdminContext {
                 tenant_id: Some(binding.tenant_id.clone()),
+                can_manage_secrets: !binding.read_only,
             });
         }
     }

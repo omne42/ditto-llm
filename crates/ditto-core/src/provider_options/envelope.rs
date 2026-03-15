@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::foundation::error::{DittoError, Result};
+use crate::error::Result;
 
 use super::{ProviderOptions, ResponseFormat};
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 use crate::contracts::Warning;
 
@@ -76,9 +76,10 @@ impl ProviderOptionsEnvelope {
                         .entry(provider.to_string())
                         .or_insert_with(|| Value::Object(Map::new()));
                     let Value::Object(bucket) = slot else {
-                        return Err(DittoError::InvalidResponse(format!(
-                            "invalid provider_options: bucket {provider:?} must be a JSON object"
-                        )));
+                        return Err(crate::invalid_response!(
+                            "error_detail.provider_options.bucket_must_be_object",
+                            "bucket" => provider
+                        ));
                     };
                     bucket.insert("response_format".to_string(), response_format_value);
                     Value::Object(obj)
@@ -88,8 +89,8 @@ impl ProviderOptionsEnvelope {
                 }
             }
             Some(_) => {
-                return Err(DittoError::InvalidResponse(
-                    "provider_options must be a JSON object".to_string(),
+                return Err(crate::invalid_response!(
+                    "error_detail.provider_options.must_be_object"
                 ));
             }
         };
@@ -158,9 +159,6 @@ where
         if let Some(bucket) = obj.get(provider) {
             return Some(bucket);
         }
-        if let Some(bucket) = provider_bucket_alias_key(provider).and_then(|key| obj.get(key)) {
-            return Some(bucket);
-        }
         if let Some(bucket) = obj.get("*") {
             return Some(bucket);
         }
@@ -168,14 +166,6 @@ where
     }
 
     Some(provider_options)
-}
-
-fn provider_bucket_alias_key(provider: &str) -> Option<&str> {
-    match provider {
-        "openai-compatible" => Some("openai_compatible"),
-        "openai_compatible" => Some("openai-compatible"),
-        _ => None,
-    }
 }
 
 pub(crate) fn select_provider_options_value<T>(
@@ -203,8 +193,9 @@ where
 
     if let Some(value) = obj.get("*") {
         let Some(bucket) = value.as_object() else {
-            return Err(DittoError::InvalidResponse(
-                "invalid provider_options: bucket \"*\" must be a JSON object".to_string(),
+            return Err(crate::invalid_response!(
+                "error_detail.provider_options.bucket_must_be_object",
+                "bucket" => "*"
             ));
         };
         for (key, value) in bucket {
@@ -215,21 +206,10 @@ where
 
     if let Some(value) = obj.get(provider) {
         let Some(bucket) = value.as_object() else {
-            return Err(DittoError::InvalidResponse(format!(
-                "invalid provider_options: bucket {provider:?} must be a JSON object"
-            )));
-        };
-        for (key, value) in bucket {
-            merged.insert(key.clone(), value.clone());
-        }
-        has_any = true;
-    } else if let Some(alias) = provider_bucket_alias_key(provider)
-        && let Some(value) = obj.get(alias)
-    {
-        let Some(bucket) = value.as_object() else {
-            return Err(DittoError::InvalidResponse(format!(
-                "invalid provider_options: bucket {alias:?} must be a JSON object"
-            )));
+            return Err(crate::invalid_response!(
+                "error_detail.provider_options.bucket_must_be_object",
+                "bucket" => provider
+            ));
         };
         for (key, value) in bucket {
             merged.insert(key.clone(), value.clone());
@@ -245,13 +225,13 @@ where
 }
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 pub(crate) fn merge_provider_options_into_body(
     body: &mut Map<String, Value>,

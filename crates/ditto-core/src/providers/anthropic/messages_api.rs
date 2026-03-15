@@ -161,7 +161,7 @@ impl LanguageModel for Anthropic {
         }
 
         if let Some(tools) = request.tools {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 let mapped = tools
                     .into_iter()
                     .map(|tool| Self::tool_to_anthropic(&tool, &mut warnings))
@@ -176,7 +176,7 @@ impl LanguageModel for Anthropic {
         }
 
         if let Some(tool_choice) = request.tool_choice {
-            if cfg!(feature = "tools") {
+            if cfg!(feature = "cap-llm-tools") {
                 if tool_choice == ToolChoice::None {
                     body.remove("tools");
                 } else if let Some(mapped) = Self::tool_choice_to_anthropic(&tool_choice) {
@@ -231,15 +231,16 @@ impl LanguageModel for Anthropic {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            Err(DittoError::builder_capability_feature_missing(
+                "anthropic",
+                "streaming",
             ))
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
             let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
@@ -334,7 +335,7 @@ impl LanguageModel for Anthropic {
             }
 
             if let Some(tools) = request.tools {
-                if cfg!(feature = "tools") {
+                if cfg!(feature = "cap-llm-tools") {
                     let mapped = tools
                         .into_iter()
                         .map(|tool| Self::tool_to_anthropic(&tool, &mut warnings))
@@ -344,7 +345,7 @@ impl LanguageModel for Anthropic {
             }
 
             if let Some(tool_choice) = request.tool_choice {
-                if cfg!(feature = "tools") {
+                if cfg!(feature = "cap-llm-tools") {
                     if tool_choice == ToolChoice::None {
                         body.remove("tools");
                     } else if let Some(mapped) = Self::tool_choice_to_anthropic(&tool_choice) {
@@ -556,7 +557,7 @@ impl LanguageModel for Anthropic {
                                     }
                                     "error" => {
                                         done = true;
-                                        buffer.push_back(Err(DittoError::InvalidResponse(data)));
+                                        buffer.push_back(Err(DittoError::invalid_response_text(data)));
                                     }
                                     _ => {}
                                 },

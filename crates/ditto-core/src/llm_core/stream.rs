@@ -14,7 +14,7 @@ use crate::contracts::{
 };
 
 use super::model::{LanguageModel, StreamResult};
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 #[derive(Debug, Clone, Default)]
 pub struct CollectedStream {

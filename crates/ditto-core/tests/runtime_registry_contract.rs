@@ -24,6 +24,33 @@ fn runtime_registry_exposes_openai_compatible_llm_binding() {
     assert!(json.get("providers").is_some());
 }
 
+#[test]
+fn runtime_registry_declares_model_truth_precedence() {
+    use ditto_core::runtime_registry::{
+        MODEL_TRUTH_PRECEDENCE, ModelTruthSource, model_truth_precedence,
+    };
+
+    assert_eq!(
+        model_truth_precedence(),
+        &[
+            ModelTruthSource::UserConfig,
+            ModelTruthSource::RuntimeRegistry,
+            ModelTruthSource::BuiltinCatalog,
+        ]
+    );
+    assert_eq!(
+        MODEL_TRUTH_PRECEDENCE
+            .iter()
+            .map(|source| source.as_str())
+            .collect::<Vec<_>>(),
+        vec!["user-config", "runtime-registry", "builtin-catalog"]
+    );
+    assert_eq!(
+        ModelTruthSource::BuiltinCatalog.role(),
+        "Compiled fallback metadata layer, including generated provider catalog artifacts."
+    );
+}
+
 #[cfg(feature = "provider-google")]
 #[test]
 fn runtime_registry_exposes_generated_google_models() {

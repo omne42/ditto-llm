@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::config::{Env, ProviderAuth, ProviderConfig};
 use crate::contracts::{GenerateRequest, GenerateResponse};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::providers::openai_chat_completions_core::{
     OpenAiChatCompletionsFacade, OpenAiChatCompletionsModelBehaviorResolver,
@@ -110,9 +110,9 @@ impl OpenAIChatCompletions {
         if !self.client.model.trim().is_empty() {
             return Ok(self.client.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "openai chat/completions model is not set (set request.model or OpenAIChatCompletions::with_model)"
-                .to_string(),
+        Err(DittoError::provider_model_missing(
+            "openai chat/completions",
+            "set request.model or OpenAIChatCompletions::with_model",
         ))
     }
 

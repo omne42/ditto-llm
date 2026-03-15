@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::foundation::error::Result;
+use crate::error::Result;
 use crate::types::{ImageEditRequest, ImageEditResponse};
 
 #[async_trait]

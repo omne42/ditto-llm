@@ -10,7 +10,7 @@ use ditto_core::capabilities::{
     FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
 };
 use ditto_core::contracts::{GenerateRequest, GenerateResponse};
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::DittoError;
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
@@ -33,17 +33,14 @@ impl LanguageModel for FakeModel {
     async fn generate(
         &self,
         _request: GenerateRequest,
-    ) -> ditto_core::foundation::error::Result<GenerateResponse> {
-        Err(DittoError::InvalidResponse(
+    ) -> ditto_core::error::Result<GenerateResponse> {
+        Err(DittoError::invalid_response_text(
             "FakeModel.generate should not be called".to_string(),
         ))
     }
 
-    async fn stream(
-        &self,
-        _request: GenerateRequest,
-    ) -> ditto_core::foundation::error::Result<StreamResult> {
-        Err(DittoError::InvalidResponse(
+    async fn stream(&self, _request: GenerateRequest) -> ditto_core::error::Result<StreamResult> {
+        Err(DittoError::invalid_response_text(
             "FakeModel.stream should not be called".to_string(),
         ))
     }
@@ -61,7 +58,7 @@ impl FileClient for FakeFileClient {
     async fn upload_file_with_purpose(
         &self,
         request: FileUploadRequest,
-    ) -> ditto_core::foundation::error::Result<String> {
+    ) -> ditto_core::error::Result<String> {
         assert_eq!(request.filename, "hello.txt");
         assert_eq!(request.purpose, "fine-tune");
         assert_eq!(request.bytes, b"hello world".to_vec());
@@ -69,7 +66,7 @@ impl FileClient for FakeFileClient {
         Ok("file_fake".to_string())
     }
 
-    async fn list_files(&self) -> ditto_core::foundation::error::Result<Vec<FileObject>> {
+    async fn list_files(&self) -> ditto_core::error::Result<Vec<FileObject>> {
         Ok(vec![FileObject {
             id: "file_fake".to_string(),
             bytes: 11,
@@ -81,10 +78,7 @@ impl FileClient for FakeFileClient {
         }])
     }
 
-    async fn retrieve_file(
-        &self,
-        file_id: &str,
-    ) -> ditto_core::foundation::error::Result<FileObject> {
+    async fn retrieve_file(&self, file_id: &str) -> ditto_core::error::Result<FileObject> {
         assert_eq!(file_id, "file_fake");
         Ok(FileObject {
             id: "file_fake".to_string(),
@@ -97,10 +91,7 @@ impl FileClient for FakeFileClient {
         })
     }
 
-    async fn delete_file(
-        &self,
-        file_id: &str,
-    ) -> ditto_core::foundation::error::Result<FileDeleteResponse> {
+    async fn delete_file(&self, file_id: &str) -> ditto_core::error::Result<FileDeleteResponse> {
         assert_eq!(file_id, "file_fake");
         Ok(FileDeleteResponse {
             id: file_id.to_string(),
@@ -108,10 +99,7 @@ impl FileClient for FakeFileClient {
         })
     }
 
-    async fn download_file_content(
-        &self,
-        file_id: &str,
-    ) -> ditto_core::foundation::error::Result<FileContent> {
+    async fn download_file_content(&self, file_id: &str) -> ditto_core::error::Result<FileContent> {
         assert_eq!(file_id, "file_fake");
         Ok(FileContent {
             bytes: b"hello world".to_vec(),
@@ -134,11 +122,12 @@ fn base_gateway() -> Gateway {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     })
 }
 
 #[tokio::test]
-async fn gateway_translation_files_upload() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_files_upload() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -203,7 +192,7 @@ hello world\r\n\
 }
 
 #[tokio::test]
-async fn gateway_translation_files_list() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_files_list() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -250,7 +239,7 @@ async fn gateway_translation_files_list() -> ditto_core::foundation::error::Resu
 }
 
 #[tokio::test]
-async fn gateway_translation_files_retrieve() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_files_retrieve() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -289,7 +278,7 @@ async fn gateway_translation_files_retrieve() -> ditto_core::foundation::error::
 }
 
 #[tokio::test]
-async fn gateway_translation_files_delete() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_files_delete() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(
@@ -329,7 +318,7 @@ async fn gateway_translation_files_delete() -> ditto_core::foundation::error::Re
 }
 
 #[tokio::test]
-async fn gateway_translation_files_content() -> ditto_core::foundation::error::Result<()> {
+async fn gateway_translation_files_content() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
     translation_backends.insert(

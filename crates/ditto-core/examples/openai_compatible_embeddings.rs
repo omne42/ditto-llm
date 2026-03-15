@@ -1,11 +1,12 @@
 use ditto_core::capabilities::EmbeddingModel;
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 use ditto_core::providers::OpenAICompatibleEmbeddings;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
-        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_COMPAT_BASE_URL".to_string()))?;
+    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL").map_err(|_| {
+        DittoError::invalid_response_text("missing OPENAI_COMPAT_BASE_URL".to_string())
+    })?;
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY").unwrap_or_default();
     let model = std::env::var("OPENAI_COMPAT_EMBEDDING_MODEL")
         .unwrap_or_else(|_| "text-embedding-3-small".to_string());

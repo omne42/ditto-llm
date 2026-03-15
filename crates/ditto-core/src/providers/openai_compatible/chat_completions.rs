@@ -59,7 +59,7 @@ struct ChatToolFunction {
     thought_signature: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
 struct ChatCompletionsChunk {
     #[serde(default)]
@@ -70,7 +70,7 @@ struct ChatCompletionsChunk {
     usage: Option<Value>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
 struct ChatChoiceChunk {
     #[serde(default)]
@@ -79,7 +79,7 @@ struct ChatChoiceChunk {
     finish_reason: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
 struct ChatDelta {
     #[serde(default)]
@@ -94,7 +94,7 @@ struct ChatDelta {
     function_call: Option<ChatFunctionCallDelta>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
 struct ChatFunctionCallDelta {
     #[serde(default)]
@@ -103,7 +103,7 @@ struct ChatFunctionCallDelta {
     arguments: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize)]
 struct ChatToolCallDelta {
     #[serde(default)]
@@ -116,7 +116,7 @@ struct ChatToolCallDelta {
     function: Option<ChatToolFunctionDelta>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Deserialize, Default)]
 struct ChatToolFunctionDelta {
     #[serde(default)]
@@ -127,7 +127,7 @@ struct ChatToolFunctionDelta {
     thought_signature: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Default)]
 struct StreamToolCallState {
     id: Option<String>,
@@ -137,7 +137,7 @@ struct StreamToolCallState {
     pending_arguments: String,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 #[derive(Debug, Default)]
 struct StreamState {
     response_id: Option<String>,
@@ -145,7 +145,7 @@ struct StreamState {
     finish_reason: Option<String>,
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
     let mut out = Vec::<StreamChunk>::new();
     let mut warnings = Vec::<Warning>::new();
@@ -213,7 +213,7 @@ fn finalize_stream_state(state: &mut StreamState) -> Vec<StreamChunk> {
     out
 }
 
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamChunk>, bool)> {
     let chunk = serde_json::from_str::<ChatCompletionsChunk>(data)?;
     let mut out = Vec::<StreamChunk>::new();
@@ -440,7 +440,7 @@ impl LanguageModel for OpenAICompatible {
             crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
                 .await?;
         let choice = parsed.choices.first().ok_or_else(|| {
-            DittoError::InvalidResponse("chat/completions response has no choices".to_string())
+            DittoError::invalid_response_text("chat/completions response has no choices".to_string())
         })?;
 
         let mut content = Vec::<ContentPart>::new();
@@ -539,15 +539,16 @@ impl LanguageModel for OpenAICompatible {
     }
 
     async fn stream(&self, request: GenerateRequest) -> Result<StreamResult> {
-        #[cfg(not(feature = "streaming"))]
+        #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            return Err(DittoError::InvalidResponse(
-                "ditto-core built without streaming feature".to_string(),
+            return Err(DittoError::builder_capability_feature_missing(
+                "openai-compatible",
+                "streaming",
             ));
         }
 
-        #[cfg(feature = "streaming")]
+        #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
             let request_quirks = self.request_quirks_for_model(model);
@@ -643,7 +644,7 @@ impl LanguageModel for OpenAICompatible {
     }
 }
 
-#[cfg(all(test, feature = "streaming"))]
+#[cfg(all(test, feature = "cap-llm-streaming"))]
 mod chat_completions_tests {
     use super::*;
 

@@ -5,16 +5,16 @@ use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 use super::policy::HttpClientPolicy;
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "bedrock",
-    feature = "vertex"
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-bedrock",
+    feature = "provider-vertex"
 ))]
 pub(crate) const DEFAULT_HTTP_TIMEOUT: Duration =
     Duration::from_secs(super::policy::DEFAULT_HTTP_TIMEOUT_SECS);
@@ -27,13 +27,20 @@ pub(crate) fn header_map_from_pairs(headers: &BTreeMap<String, String>) -> Resul
             continue;
         }
         let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|err| {
-            DittoError::InvalidResponse(format!("invalid http header name {name:?}: {err}"))
+            crate::invalid_response!(
+                "error_detail.http.header_name_invalid",
+                "name" => name,
+                "error" => err.to_string()
+            )
         })?;
 
         let header_value = HeaderValue::from_str(value).map_err(|err| {
-            DittoError::InvalidResponse(format!(
-                "invalid http header value for {name:?} (value={value:?}): {err}"
-            ))
+            crate::invalid_response!(
+                "error_detail.http.header_value_invalid",
+                "name" => name,
+                "value" => value,
+                "error" => err.to_string()
+            )
         })?;
 
         out.insert(header_name, header_value);
@@ -52,7 +59,7 @@ pub(crate) fn build_http_client_with_policy(
     builder.build().map_err(DittoError::Http)
 }
 
-#[cfg(any(feature = "bedrock", feature = "vertex"))]
+#[cfg(any(feature = "provider-bedrock", feature = "provider-vertex"))]
 pub(crate) fn build_http_client(
     timeout: Duration,
     headers: &BTreeMap<String, String>,
@@ -61,10 +68,10 @@ pub(crate) fn build_http_client(
 }
 
 #[cfg(any(
-    feature = "google",
-    feature = "cohere",
-    feature = "openai",
-    feature = "openai-compatible",
+    feature = "provider-google",
+    feature = "provider-cohere",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
 ))]
 pub(crate) fn default_http_client(timeout: Duration) -> reqwest::Client {
     build_http_client_with_policy(HttpClientPolicy::from_timeout(timeout), &BTreeMap::new())
@@ -76,29 +83,29 @@ pub(crate) struct ResolvedHttpProviderConfig {
     pub(crate) http: reqwest::Client,
     pub(crate) base_url: Option<String>,
     #[cfg(any(
-        feature = "google",
-        feature = "bedrock",
-        feature = "vertex",
-        feature = "openai",
-        feature = "openai-compatible",
+        feature = "provider-google",
+        feature = "provider-bedrock",
+        feature = "provider-vertex",
+        feature = "provider-openai",
+        feature = "provider-openai-compatible",
     ))]
     pub(crate) default_model: Option<String>,
     pub(crate) http_query_params: BTreeMap<String, String>,
 }
 
 impl ResolvedHttpProviderConfig {
-    #[cfg(any(feature = "bedrock", feature = "vertex"))]
-    pub(crate) fn required_base_url(&self, message: &str) -> Result<&str> {
+    #[cfg(any(feature = "provider-bedrock", feature = "provider-vertex"))]
+    pub(crate) fn required_base_url(&self) -> Result<&str> {
         self.base_url
             .as_deref()
-            .ok_or_else(|| DittoError::InvalidResponse(message.to_string()))
+            .ok_or_else(|| crate::invalid_response!("error_detail.http.provider_base_url_missing"))
     }
 
-    #[cfg(any(feature = "bedrock", feature = "vertex",))]
-    pub(crate) fn required_default_model(&self, message: &str) -> Result<&str> {
-        self.default_model
-            .as_deref()
-            .ok_or_else(|| DittoError::InvalidResponse(message.to_string()))
+    #[cfg(any(feature = "provider-bedrock", feature = "provider-vertex",))]
+    pub(crate) fn required_default_model(&self) -> Result<&str> {
+        self.default_model.as_deref().ok_or_else(|| {
+            crate::invalid_response!("error_detail.http.provider_default_model_missing")
+        })
     }
 }
 
@@ -118,11 +125,11 @@ pub(crate) fn resolve_http_provider_config_with_policy(
         http: build_http_client_with_policy(policy, &config.http_headers)?,
         base_url: clean(config.base_url.as_deref()).or_else(|| clean(default_base_url)),
         #[cfg(any(
-            feature = "google",
-            feature = "bedrock",
-            feature = "vertex",
-            feature = "openai",
-            feature = "openai-compatible",
+            feature = "provider-google",
+            feature = "provider-bedrock",
+            feature = "provider-vertex",
+            feature = "provider-openai",
+            feature = "provider-openai-compatible",
         ))]
         default_model: clean(config.default_model.as_deref()),
         http_query_params: config.http_query_params.clone(),

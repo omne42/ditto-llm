@@ -19,7 +19,7 @@ use super::provider_config::{ProviderConfig, normalize_string_list};
 // TOML sketch:
 // ```toml
 // [profiles.fast]
-// provider = "compat-primary"
+// provider = "openai-compatible"
 // base_url = "https://proxy.example/v1"
 // default_model = "chat-small"
 // weight = 3
@@ -29,7 +29,7 @@ use super::provider_config::{ProviderConfig, normalize_string_list};
 // keys = ["OPENAI_COMPAT_API_KEY_A"]
 //
 // [profiles.quality]
-// provider = "compat-primary"
+// provider = "openai-compatible"
 // base_url = "https://proxy.example/v1"
 // default_model = "chat-large"
 // weight = 1
@@ -715,23 +715,25 @@ impl<'a> SelectedPolicy<'a> {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn resolves_thinking_and_completion_with_role_scenario_override() {
         let raw = r#"
 [profiles.primary]
-provider = "compat-primary"
+provider = "openai-compatible"
 base_url = "https://proxy.example/v1"
 weight = 9
 default_model = "gpt-4.1"
 
 [profiles.thinking]
-provider = "compat-primary"
+provider = "openai-compatible"
 base_url = "https://proxy.example/v1"
 weight = 1
 default_model = "o3"
 
 [profiles.backup]
-provider = "deepseek"
+provider = "openai-compatible"
+base_url = "https://api.deepseek.com"
 default_model = "deepseek-chat"
 
 [default.completion]
@@ -780,20 +782,15 @@ targets = [{ profile = "thinking", model = "o3" }]
         assert_eq!(thinking.targets[0].model, "o3");
     }
 
-    #[cfg(any(
-        feature = "provider-openai",
-        feature = "provider-openai-compatible",
-        feature = "openai",
-        feature = "openai-compatible"
-    ))]
+    #[cfg(feature = "provider-openai-compatible")]
     #[test]
     fn weighted_selection_returns_primary_then_fallbacks() {
         let raw = r#"
 {
   "profiles": {
-    "a": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1", "weight": 9 },
-    "b": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-mini", "weight": 1 },
-    "c": { "provider": "openai-primary", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-nano", "weight": 1 }
+    "a": { "provider": "openai-compatible", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1", "weight": 9 },
+    "b": { "provider": "openai-compatible", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-mini", "weight": 1 },
+    "c": { "provider": "openai-compatible", "base_url": "https://proxy.example/v1", "default_model": "gpt-4.1-nano", "weight": 1 }
   },
   "default": {
     "completion": {
@@ -833,7 +830,7 @@ targets = [{ profile = "thinking", model = "o3" }]
 
         let toml_raw = r#"
 [profiles.primary]
-provider = "compat-primary"
+provider = "openai-compatible"
 default_model = "gpt-4.1"
 
 [default.completion]
@@ -844,7 +841,7 @@ targets = [{ profile = "primary" }]
         let json_raw = r#"{
   "profiles": {
     "primary": {
-      "provider": "openai-primary",
+      "provider": "openai-compatible",
       "default_model": "gpt-4.1"
     }
   },
@@ -863,7 +860,7 @@ targets = [{ profile = "primary" }]
         assert_eq!(from_json.profiles.len(), 1);
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn resolve_plan_rejects_catalog_incompatible_model_for_completion() {
         let raw = r#"
@@ -888,7 +885,7 @@ targets = [{ profile = "embedding_only" }]
         assert!(err.contains("text-embedding-3-large"));
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn resolve_plan_accepts_response_only_model_for_completion() {
         let raw = r#"

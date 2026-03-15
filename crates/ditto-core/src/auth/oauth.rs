@@ -3,7 +3,27 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use crate::config::{Env, ProviderAuth};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
+
+fn oauth_field_required(field: &str) -> DittoError {
+    crate::invalid_response!("error_detail.oauth.field_required", "field" => field)
+}
+
+fn oauth_response_missing_access_token() -> DittoError {
+    crate::invalid_response!("error_detail.oauth.response_missing_access_token")
+}
+
+fn oauth_expected_auth() -> DittoError {
+    crate::invalid_response!("error_detail.oauth.expected_auth")
+}
+
+fn oauth_missing_field(label: &str, keys: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.oauth.missing_field",
+        "label" => label,
+        "keys" => keys
+    )
+}
 
 #[derive(Clone)]
 pub struct OAuthToken {
@@ -66,19 +86,13 @@ impl OAuthClientCredentials {
         let client_secret = client_secret.into();
 
         if token_url.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "oauth token_url is required".to_string(),
-            ));
+            return Err(oauth_field_required("token_url"));
         }
         if client_id.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "oauth client_id is required".to_string(),
-            ));
+            return Err(oauth_field_required("client_id"));
         }
         if client_secret.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "oauth client_secret is required".to_string(),
-            ));
+            return Err(oauth_field_required("client_secret"));
         }
 
         Ok(Self {
@@ -131,9 +145,7 @@ impl OAuthClientCredentials {
         let access_token = parsed
             .access_token
             .filter(|token| !token.trim().is_empty())
-            .ok_or_else(|| {
-                DittoError::InvalidResponse("oauth response missing access_token".to_string())
-            })?;
+            .ok_or_else(oauth_response_missing_access_token)?;
         let token_type = parsed
             .token_type
             .filter(|value| !value.trim().is_empty())
@@ -175,9 +187,7 @@ pub fn resolve_oauth_client_credentials(
         extra_params,
     } = auth
     else {
-        return Err(DittoError::InvalidResponse(
-            "expected oauth_client_credentials auth".to_string(),
-        ));
+        return Err(oauth_expected_auth());
     };
 
     let resolved_client_id = resolve_oauth_field(
@@ -233,11 +243,7 @@ fn resolve_oauth_field(
             return Ok(value);
         }
     }
-    Err(DittoError::InvalidResponse(format!(
-        "missing oauth {} (tried: {})",
-        label,
-        candidate_keys.join(", ")
-    )))
+    Err(oauth_missing_field(label, &candidate_keys.join(", ")))
 }
 
 #[cfg(test)]

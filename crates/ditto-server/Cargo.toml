@@ -7,7 +7,7 @@ autobins = false
 autotests = false
 
 [features]
-default = ["gateway", "provider-openai-compatible", "cap-llm"]
+default = ["gateway", "provider-openai-compatible", "cap-llm", "i18n-en-us"]
 
 config-editing = ["dep:toml_edit"]
 config-interactive = ["config-editing"]
@@ -47,14 +47,17 @@ auth = ["ditto_core/auth"]
 sdk = ["ditto_core/sdk"]
 sdk-axum = ["ditto_core/sdk-axum"]
 base64 = ["ditto_core/base64"]
+i18n-en-us = ["ditto_core/i18n-en-us"]
+i18n-zh-cn = ["ditto_core/i18n-zh-cn"]
+i18n-ja-jp = ["ditto_core/i18n-ja-jp"]
 
-openai = ["ditto_core/openai"]
-anthropic = ["ditto_core/anthropic"]
-google = ["ditto_core/google"]
-openai-compatible = ["ditto_core/openai-compatible"]
-cohere = ["ditto_core/cohere"]
-bedrock = ["ditto_core/bedrock"]
-vertex = ["ditto_core/vertex"]
+openai = ["ditto_core/provider-openai"]
+anthropic = ["ditto_core/provider-anthropic"]
+google = ["ditto_core/provider-google"]
+openai-compatible = ["ditto_core/provider-openai-compatible"]
+cohere = ["ditto_core/provider-cohere"]
+bedrock = ["ditto_core/provider-bedrock"]
+vertex = ["ditto_core/provider-vertex"]
 
 provider-openai-compatible = ["ditto_core/provider-openai-compatible"]
 provider-openai = ["ditto_core/provider-openai"]
@@ -74,16 +77,16 @@ provider-qianfan = ["ditto_core/provider-qianfan"]
 provider-xai = ["ditto_core/provider-xai"]
 provider-zhipu = ["ditto_core/provider-zhipu"]
 
-streaming = ["ditto_core/streaming"]
-tools = ["ditto_core/tools"]
-embeddings = ["ditto_core/embeddings"]
-images = ["ditto_core/images"]
-videos = ["ditto_core/videos"]
-audio = ["ditto_core/audio"]
-moderations = ["ditto_core/moderations"]
-rerank = ["ditto_core/rerank"]
-batches = ["ditto_core/batches"]
-realtime = ["ditto_core/realtime"]
+streaming = ["ditto_core/cap-llm-streaming"]
+tools = ["ditto_core/cap-llm-tools"]
+embeddings = ["ditto_core/cap-embedding"]
+images = ["ditto_core/cap-image-generation", "ditto_core/cap-image-edit"]
+videos = ["ditto_core/cap-video-generation"]
+audio = ["ditto_core/cap-audio-transcription", "ditto_core/cap-audio-speech"]
+moderations = ["ditto_core/cap-moderation"]
+rerank = ["ditto_core/cap-rerank"]
+batches = ["ditto_core/cap-batch"]
+realtime = ["ditto_core/cap-realtime"]
 
 cap-llm = ["ditto_core/cap-llm"]
 cap-embedding = ["ditto_core/cap-embedding"]
@@ -104,6 +107,7 @@ integration = ["ditto_core/integration"]
 
 [dependencies]
 ditto_core = { package = "ditto-core", path = "../ditto-core", default-features = false }
+secret = { path = "../../../omne_foundation/crates/secret" }
 async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
 bytes = "1"
@@ -133,8 +137,8 @@ tracing-opentelemetry = { version = "0.32", optional = true }
 tiktoken-rs = { version = "0.9.1", optional = true }
 
 [dev-dependencies]
-ditto-gateway-contract-types = { path = "../ditto-gateway-contract-types" }
 httpmock = "0.8.2"
+serde_yaml = "0.9"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 

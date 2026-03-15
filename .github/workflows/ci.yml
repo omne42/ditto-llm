@@ -89,21 +89,90 @@ jobs:
         if: steps.base_contract.outputs.has_base == '1'
         working-directory: ditto-llm
         run: |
-          cargo run --manifest-path crates/ditto-gateway-contract-guard/Cargo.toml -- \
+          cargo run -p ditto-core --features contract-guard --bin ditto-gateway-contract-guard -- \
             --base "${{ steps.base_contract.outputs.base_path }}" \
             --head ./contracts/gateway-contract-v0.1.openapi.yaml \
-            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
-            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml
+            --contract-lib ./crates/ditto-server/src/gateway/contracts/types.rs \
+            --contract-cargo ./crates/ditto-server/Cargo.toml
 
       - name: Contract guard (bootstrap mode)
         if: steps.base_contract.outputs.has_base != '1'
         working-directory: ditto-llm
         run: |
-          cargo run --manifest-path crates/ditto-gateway-contract-guard/Cargo.toml -- \
+          cargo run -p ditto-core --features contract-guard --bin ditto-gateway-contract-guard -- \
             --head ./contracts/gateway-contract-v0.1.openapi.yaml \
-            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
-            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml \
+            --contract-lib ./crates/ditto-server/src/gateway/contracts/types.rs \
+            --contract-cargo ./crates/ditto-server/Cargo.toml \
             --allow-missing-base
+
+  rust-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: cargo audit
+        working-directory: ditto-llm
+        run: cargo audit
+
+  rust-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          components: llvm-tools-preview
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ditto-llm -> target
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate ditto-core contract coverage baseline
+        working-directory: ditto-llm
+        run: |
+          mkdir -p coverage
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov -p ditto-core \
+            --test default_core_contract \
+            --test catalog_resolver_contract \
+            --test runtime_explain_contract \
+            --test runtime_registry_contract \
+            --test runtime_route_contract \
+            --test runtime_transport_contract \
+            --test transport_policy_contract \
+            --no-report
+          cargo llvm-cov report --lcov --output-path coverage/ditto-core.lcov
+          cargo llvm-cov report --summary-only | tee coverage/ditto-core-summary.txt
+          cat coverage/ditto-core-summary.txt >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: |
+            ditto-llm/coverage/ditto-core.lcov
+            ditto-llm/coverage/ditto-core-summary.txt
 
   rust:
     runs-on: ubuntu-latest
@@ -212,6 +281,14 @@ jobs:
       - name: cargo test (ditto-server all targets compile)
         working-directory: ditto-llm
         run: cargo test -p ditto-server --all-targets --no-run --all-features
+
+      - name: cargo test (gateway resilience slice)
+        working-directory: ditto-llm
+        run: |
+          cargo test -p ditto-server --features "gateway gateway-routing-advanced" --test gateway_openai_proxy max_in_flight
+          cargo test -p ditto-server --features "gateway gateway-routing-advanced" --test gateway_openai_proxy health_check_skips_unhealthy_backends
+          cargo test -p ditto-server --features "gateway gateway-routing-advanced" --test gateway_openai_proxy circuit_breaker
+          cargo test -p ditto-server --features "gateway gateway-routing-advanced" --test gateway_openai_proxy timeout
 
       - name: cargo check (ditto-core no default features)
         working-directory: ditto-llm

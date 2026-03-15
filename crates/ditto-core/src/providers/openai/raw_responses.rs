@@ -1,18 +1,18 @@
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 use futures_util::StreamExt;
 
-#[cfg(all(test, feature = "openai"))]
+#[cfg(all(test, feature = "provider-openai"))]
 use super::OpenAI;
 use crate::contracts::{Tool, ToolChoice};
-#[cfg(feature = "openai")]
-use crate::foundation::error::DittoError;
-use crate::foundation::error::Result;
+#[cfg(feature = "provider-openai")]
+use crate::error::DittoError;
+use crate::error::Result;
 use crate::provider_options::ResponseFormat;
 
 pub struct OpenAIResponsesRawRequest<'a> {
@@ -76,7 +76,7 @@ impl Drop for OpenAIResponsesRawEventStream {
 }
 
 #[derive(Debug, Deserialize)]
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 struct RawResponsesStreamEvent {
     #[serde(rename = "type")]
     kind: String,
@@ -88,7 +88,7 @@ struct RawResponsesStreamEvent {
     delta: Option<String>,
 }
 
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 fn parse_raw_responses_event(
     event: RawResponsesStreamEvent,
 ) -> Result<Option<OpenAIResponsesRawEvent>> {
@@ -147,7 +147,7 @@ fn parse_raw_responses_event(
     }
 }
 
-#[cfg(all(feature = "streaming", feature = "openai"))]
+#[cfg(all(feature = "cap-llm-streaming", feature = "provider-openai"))]
 pub(super) async fn process_raw_responses_sse<R>(
     reader: R,
     tx_event: mpsc::Sender<Result<OpenAIResponsesRawEvent>>,
@@ -176,7 +176,7 @@ pub(super) async fn process_raw_responses_sse<R>(
         match next {
             Ok(data) => {
                 let event = serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
-                    DittoError::InvalidResponse(format!(
+                    DittoError::invalid_response_text(format!(
                         "failed to parse responses SSE event: {err}; data_prefix={}",
                         truncate_for_error(&data, 1024)
                     ))
@@ -203,13 +203,13 @@ pub(super) async fn process_raw_responses_sse<R>(
     }
 }
 
-#[cfg(all(test, feature = "openai"))]
+#[cfg(all(test, feature = "provider-openai"))]
 mod tests {
     use super::super::client::{
         OPENAI_RESPONSES_DUMMY_THOUGHT_SIGNATURE, apply_provider_options,
         sanitize_openai_responses_provider_options, split_tool_call_id_and_thought_signature,
     };
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     use super::super::responses::finish_reason_for_final_event;
     use super::super::responses::{map_responses_finish_reason, parse_openai_output};
     use super::*;
@@ -222,15 +222,15 @@ mod tests {
     use serde_json::Map;
     use serde_json::json;
     use std::collections::BTreeMap;
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     use tokio::io::AsyncWriteExt;
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     use tokio::sync::mpsc;
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     use tokio::time::{Duration, timeout};
 
     #[tokio::test]
-    async fn from_config_resolves_api_key_and_model() -> crate::foundation::error::Result<()> {
+    async fn from_config_resolves_api_key_and_model() -> crate::error::Result<()> {
         let config = ProviderConfig {
             base_url: Some("http://localhost:1234/v1".to_string()),
             default_model: Some("test-model".to_string()),
@@ -253,7 +253,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_posts_to_files_endpoint() -> crate::foundation::error::Result<()> {
+    async fn upload_file_posts_to_files_endpoint() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn download_file_content_is_bounded() -> crate::foundation::error::Result<()> {
+    async fn download_file_content_is_bounded() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -306,6 +306,7 @@ mod tests {
         mock.assert_async().await;
         match err {
             DittoError::InvalidResponse(message) => {
+                let message = message.to_string();
                 assert!(message.contains("exceeds max bytes"));
             }
             other => panic!("unexpected error: {other:?}"),
@@ -314,8 +315,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compact_responses_history_raw_posts_to_compact_endpoint()
-    -> crate::foundation::error::Result<()> {
+    async fn compact_responses_history_raw_posts_to_compact_endpoint() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -368,8 +368,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(feature = "streaming")]
-    async fn raw_responses_sse_parses_expected_events() -> crate::foundation::error::Result<()> {
+    #[cfg(feature = "cap-llm-streaming")]
+    async fn raw_responses_sse_parses_expected_events() -> crate::error::Result<()> {
         let sse = concat!(
             "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n",
             "data: {\"type\":\"ignored.event\",\"foo\":\"bar\"}\n\n",
@@ -433,9 +433,8 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(feature = "streaming")]
-    async fn raw_responses_sse_stops_when_receiver_is_dropped()
-    -> crate::foundation::error::Result<()> {
+    #[cfg(feature = "cap-llm-streaming")]
+    async fn raw_responses_sse_stops_when_receiver_is_dropped() -> crate::error::Result<()> {
         let (reader, mut writer) = tokio::io::duplex(1024);
         let reader = tokio::io::BufReader::new(reader);
         let (tx_event, rx_event) = mpsc::channel::<Result<OpenAIResponsesRawEvent>>(1);
@@ -450,12 +449,12 @@ mod tests {
         timeout(Duration::from_millis(500), task)
             .await
             .map_err(|_| {
-                DittoError::InvalidResponse(
+                DittoError::invalid_response_text(
                     "raw responses SSE processor did not stop after receiver drop".to_string(),
                 )
             })?
             .map_err(|err| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "raw responses SSE processor task failed: {err}"
                 ))
             })?;
@@ -464,7 +463,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_uses_query_param_auth() -> crate::foundation::error::Result<()> {
+    async fn upload_file_uses_query_param_auth() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -507,7 +506,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn upload_file_includes_default_query_params() -> crate::foundation::error::Result<()> {
+    async fn upload_file_includes_default_query_params() -> crate::error::Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {
             return Ok(());
         }
@@ -755,8 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_provider_options_maps_reasoning_and_response_format()
-    -> crate::foundation::error::Result<()> {
+    fn apply_provider_options_maps_reasoning_and_response_format() -> crate::error::Result<()> {
         let mut body = Map::<String, Value>::new();
         let options = crate::provider_options::ProviderOptions {
             reasoning_effort: Some(crate::provider_options::ReasoningEffort::High),
@@ -819,8 +817,7 @@ mod tests {
     }
 
     #[test]
-    fn build_responses_body_merges_only_sanitized_provider_options()
-    -> crate::foundation::error::Result<()> {
+    fn build_responses_body_merges_only_sanitized_provider_options() -> crate::error::Result<()> {
         let request = GenerateRequest::from(vec![Message::user("hello")]);
         let provider_options = crate::provider_options::ProviderOptions::default();
         let (sanitized_provider_options, mut schema_warnings) =
@@ -902,7 +899,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn finish_reason_for_final_event_prefers_response_payload() {
         let response = json!({
             "status": "completed",
@@ -916,7 +913,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "streaming")]
+    #[cfg(feature = "cap-llm-streaming")]
     fn finish_reason_for_final_event_marks_tool_calls() {
         let response = json!({ "status": "completed" });
         assert_eq!(

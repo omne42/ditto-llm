@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use ditto_core::auth::{SigV4Signer, SigV4Timestamp};
-use ditto_core::foundation::error::Result;
+use ditto_core::error::Result;
 
 #[test]
 fn sigv4_headers_match_example_signature() -> Result<()> {

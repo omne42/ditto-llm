@@ -2,11 +2,15 @@
 
 use bytes::Bytes;
 use futures_util::StreamExt;
-#[cfg(any(feature = "gateway", feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(
+    feature = "gateway",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible"
+))]
 use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 use super::policy::HttpResponseBodyPolicy;
 
@@ -57,7 +61,11 @@ async fn response_bytes_truncated(
     Ok((out, truncated))
 }
 
-#[cfg(any(feature = "gateway", feature = "openai", feature = "openai-compatible"))]
+#[cfg(any(
+    feature = "gateway",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible"
+))]
 pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
     response: reqwest::Response,
     headers: &HeaderMap,
@@ -70,10 +78,13 @@ pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<usize>().ok());
     if content_length.is_some_and(|len| len > max_bytes) {
-        return Err(DittoError::InvalidResponse(format!(
-            "content-length={:?} exceeds max bytes ({max_bytes})",
-            content_length
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.http.content_length_exceeds_max_bytes",
+            "content_length" => content_length
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "?".to_string()),
+            "max_bytes" => max_bytes.to_string()
+        ));
     }
 
     let initial_capacity = content_length.map(|len| len.min(max_bytes)).unwrap_or(0);
@@ -82,9 +93,10 @@ pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
     while let Some(next) = stream.next().await {
         let chunk = next?;
         if buffered.len().saturating_add(chunk.len()) > max_bytes {
-            return Err(DittoError::InvalidResponse(format!(
-                "response exceeded max bytes ({max_bytes})"
-            )));
+            return Err(crate::invalid_response!(
+                "error_detail.http.response_exceeded_max_bytes",
+                "max_bytes" => max_bytes.to_string()
+            ));
         }
         buffered.extend_from_slice(chunk.as_ref());
     }
@@ -140,10 +152,13 @@ pub(crate) async fn send_checked_bytes_with_policy(
         .and_then(|len| usize::try_from(len).ok());
     if status.is_success() && content_length.is_some_and(|len| len > policy.max_response_body_bytes)
     {
-        return Err(DittoError::InvalidResponse(format!(
-            "content-length={content_length:?} exceeds max bytes ({})",
-            policy.max_response_body_bytes
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.http.content_length_exceeds_max_bytes",
+            "content_length" => content_length
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "?".to_string()),
+            "max_bytes" => policy.max_response_body_bytes.to_string()
+        ));
     }
     let (bytes, truncated) =
         response_bytes_truncated(response, policy.max_response_body_bytes).await?;
@@ -159,10 +174,10 @@ pub(crate) async fn send_checked_bytes_with_policy(
         return Err(DittoError::Api { status, body });
     }
     if truncated {
-        return Err(DittoError::InvalidResponse(format!(
-            "response exceeded max bytes ({})",
-            policy.max_response_body_bytes
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.http.response_exceeded_max_bytes",
+            "max_bytes" => policy.max_response_body_bytes.to_string()
+        ));
     }
     Ok(bytes)
 }
@@ -170,7 +185,7 @@ pub(crate) async fn send_checked_bytes_with_policy(
 #[cfg(test)]
 mod tests {
     use super::HttpResponseBodyPolicy;
-    use crate::foundation::error::DittoError;
+    use crate::error::DittoError;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -226,8 +241,19 @@ mod tests {
         let result = super::send_checked_bytes(client.get(format!("http://{addr}/"))).await;
         match result {
             Err(DittoError::InvalidResponse(message)) => {
-                assert!(message.contains("content-length"));
-                assert!(message.contains("exceeds max bytes"));
+                assert_eq!(
+                    message.code(),
+                    "error_detail.http.content_length_exceeds_max_bytes"
+                );
+                assert_eq!(
+                    message
+                        .args()
+                        .iter()
+                        .find(|arg| arg.name() == "content_length")
+                        .and_then(|arg| arg.text())
+                        .map(str::to_owned),
+                    Some(oversized.to_string())
+                );
             }
             other => panic!("unexpected result: {other:?}"),
         }

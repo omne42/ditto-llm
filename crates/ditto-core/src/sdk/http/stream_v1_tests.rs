@@ -3,7 +3,7 @@ mod tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
-    use crate::foundation::error::DittoError;
+    use crate::error::DittoError;
     use crate::llm_core::model::StreamResult;
     use crate::sdk::protocol::{StreamEventV1, decode_v1};
     use crate::contracts::StreamChunk;
@@ -67,7 +67,7 @@ mod tests {
             Ok(StreamChunk::TextDelta {
                 text: "hello".to_string(),
             }),
-            Err(DittoError::InvalidResponse("boom".to_string())),
+            Err(DittoError::invalid_response_text("boom".to_string())),
         ];
         let stream: StreamResult = stream::iter(chunks).boxed();
 
@@ -119,7 +119,7 @@ mod tests {
             Ok(StreamChunk::TextDelta {
                 text: "hello".to_string(),
             }),
-            Err(DittoError::InvalidResponse("boom".to_string())),
+            Err(DittoError::invalid_response_text("boom".to_string())),
         ];
         let stream: StreamResult = stream::iter(chunks).boxed();
 

@@ -1,11 +1,11 @@
 use ditto_core::capabilities::EmbeddingModel;
-use ditto_core::foundation::error::{DittoError, Result};
+use ditto_core::error::{DittoError, Result};
 use ditto_core::providers::OpenAIEmbeddings;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY")
-        .map_err(|_| DittoError::InvalidResponse("missing OPENAI_API_KEY".to_string()))?;
+        .map_err(|_| DittoError::invalid_response_text("missing OPENAI_API_KEY".to_string()))?;
     let model = std::env::var("OPENAI_EMBEDDING_MODEL")
         .unwrap_or_else(|_| "text-embedding-3-small".to_string());
 

@@ -7,7 +7,11 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use redis::AsyncCommands;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
+use super::{
+    AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, ProxyRequestFingerprint,
+    ProxyRequestIdempotencyBeginOutcome, ProxyRequestIdempotencyRecord,
+    ProxyRequestIdempotencyState, ProxyRequestReplayOutcome, RouterConfig, VirtualKeyConfig,
+};
 
 #[cfg(feature = "gateway-proxy-cache")]
 use super::{
@@ -28,6 +32,123 @@ use serde::{Deserialize, Serialize};
 // maintenance endpoint) based on their stored `ts_ms`.
 const DEFAULT_RESERVATION_TTL_SECS: u64 = 0;
 const AUDIT_RETENTION_REAP_INTERVAL_MS: i64 = 30_000;
+const BEGIN_PROXY_REQUEST_IDEMPOTENCY_SCRIPT: &str = r#"
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local lease_ttl_ms = tonumber(ARGV[2])
+local record_json = ARGV[3]
+local fingerprint_key = ARGV[4]
+
+local raw = redis.call('GET', key)
+if not raw then
+  redis.call('PSETEX', key, lease_ttl_ms, record_json)
+  return { 'acquired' }
+end
+
+local ok, record = pcall(cjson.decode, raw)
+if not ok then
+  redis.call('PSETEX', key, lease_ttl_ms, record_json)
+  return { 'acquired' }
+end
+
+local expires_at_ms = tonumber(record['expires_at_ms'] or '0')
+if expires_at_ms < now_ms then
+  redis.call('PSETEX', key, lease_ttl_ms, record_json)
+  return { 'acquired' }
+end
+
+if record['fingerprint_key'] ~= fingerprint_key then
+  return { 'conflict', raw }
+end
+
+if record['state'] == 'completed' then
+  return { 'replay', raw }
+end
+
+return { 'in_flight', raw }
+"#;
+
+const COMPLETE_PROXY_REQUEST_IDEMPOTENCY_SCRIPT: &str = r#"
+local key = KEYS[1]
+local owner_token = ARGV[1]
+local replay_ttl_ms = tonumber(ARGV[2])
+local record_json = ARGV[3]
+
+local raw = redis.call('GET', key)
+if not raw then
+  return 0
+end
+
+local ok, record = pcall(cjson.decode, raw)
+if not ok then
+  return 0
+end
+
+if record['state'] ~= 'in_flight' then
+  return 0
+end
+
+if record['owner_token'] ~= owner_token then
+  return 0
+end
+
+redis.call('PSETEX', key, replay_ttl_ms, record_json)
+return 1
+"#;
+
+const REFRESH_PROXY_REQUEST_IDEMPOTENCY_SCRIPT: &str = r#"
+local key = KEYS[1]
+local owner_token = ARGV[1]
+local lease_ttl_ms = tonumber(ARGV[2])
+local record_json = ARGV[3]
+
+local raw = redis.call('GET', key)
+if not raw then
+  return 0
+end
+
+local ok, record = pcall(cjson.decode, raw)
+if not ok then
+  return 0
+end
+
+if record['state'] ~= 'in_flight' then
+  return 0
+end
+
+if record['owner_token'] ~= owner_token then
+  return 0
+end
+
+redis.call('PSETEX', key, lease_ttl_ms, record_json)
+return 1
+"#;
+
+const RELEASE_PROXY_REQUEST_IDEMPOTENCY_SCRIPT: &str = r#"
+local key = KEYS[1]
+local owner_token = ARGV[1]
+
+local raw = redis.call('GET', key)
+if not raw then
+  return 0
+end
+
+local ok, record = pcall(cjson.decode, raw)
+if not ok then
+  return 0
+end
+
+if record['state'] ~= 'in_flight' then
+  return 0
+end
+
+if record['owner_token'] ~= owner_token then
+  return 0
+end
+
+redis.call('DEL', key)
+return 1
+"#;
 
 #[derive(Clone, Debug)]
 pub struct RedisStore {
@@ -43,6 +164,10 @@ pub enum RedisStoreError {
     Redis(#[from] redis::RedisError),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("utf8 error: {0}")]
+    Utf8(#[from] std::str::Utf8Error),
+    #[error("integer parse error: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
     #[error("budget exceeded: limit={limit} attempted={attempted}")]
     BudgetExceeded { limit: u64, attempted: u64 },
     #[error(
@@ -184,6 +309,10 @@ impl RedisStore {
         format!("{}:audit:{id}", self.prefix)
     }
 
+    fn key_proxy_request_idempotency(&self, request_id: &str) -> String {
+        format!("{}:proxy_request_idempotency:{request_id}", self.prefix)
+    }
+
     #[cfg(feature = "gateway-proxy-cache")]
     fn key_proxy_cache_response(&self, cache_key: &str) -> String {
         format!("{}:proxy_cache:{cache_key}", self.prefix)
@@ -232,6 +361,7 @@ fn should_run_retention_reap(last_reap_ms: &AtomicI64, now_ms: i64) -> bool {
         }
     }
 }
+
 // end inline: ../../../redis_store/store.rs
 // inlined from ../../../redis_store/virtual_keys_and_proxy_cache.rs
 impl RedisStore {
@@ -257,7 +387,8 @@ impl RedisStore {
         let mut pipe = redis::pipe();
         pipe.atomic().del(&redis_key);
         for key in keys {
-            pipe.hset(&redis_key, &key.id, serde_json::to_string(key)?);
+            let key = key.sanitized_for_persistence();
+            pipe.hset(&redis_key, &key.id, serde_json::to_string(&key)?);
         }
         let _: () = pipe.query_async(&mut conn).await?;
         Ok(())
@@ -281,6 +412,162 @@ impl RedisStore {
         let redis_key = self.key_router_config();
         let _: () = conn.set(redis_key, serde_json::to_string(router)?).await?;
         Ok(())
+    }
+
+    pub async fn begin_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        fingerprint: &ProxyRequestFingerprint,
+        fingerprint_key: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<ProxyRequestIdempotencyBeginOutcome, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let record = ProxyRequestIdempotencyRecord {
+            request_id: request_id.to_string(),
+            fingerprint: fingerprint.clone(),
+            fingerprint_key: fingerprint_key.to_string(),
+            state: ProxyRequestIdempotencyState::InFlight,
+            owner_token: Some(owner_token.to_string()),
+            started_at_ms: now_ms,
+            updated_at_ms: now_ms,
+            lease_until_ms: Some(now_ms.saturating_add(lease_ttl_ms)),
+            completed_at_ms: None,
+            expires_at_ms: now_ms.saturating_add(lease_ttl_ms),
+            outcome: None,
+        };
+        let payload = serde_json::to_string(&record)?;
+        let script = redis::Script::new(BEGIN_PROXY_REQUEST_IDEMPOTENCY_SCRIPT);
+        let result: Vec<String> = script
+            .key(self.key_proxy_request_idempotency(request_id))
+            .arg(now_ms.to_string())
+            .arg(lease_ttl_ms.max(1).to_string())
+            .arg(payload)
+            .arg(fingerprint_key)
+            .invoke_async(&mut conn)
+            .await?;
+        match result.first().map(String::as_str) {
+            Some("acquired") => Ok(ProxyRequestIdempotencyBeginOutcome::Acquired),
+            Some("replay") => Ok(ProxyRequestIdempotencyBeginOutcome::Replay {
+                record: serde_json::from_str(
+                    result.get(1).map(String::as_str).unwrap_or_default(),
+                )?,
+            }),
+            Some("in_flight") => Ok(ProxyRequestIdempotencyBeginOutcome::InFlight {
+                record: serde_json::from_str(
+                    result.get(1).map(String::as_str).unwrap_or_default(),
+                )?,
+            }),
+            Some("conflict") => Ok(ProxyRequestIdempotencyBeginOutcome::Conflict {
+                record: serde_json::from_str(
+                    result.get(1).map(String::as_str).unwrap_or_default(),
+                )?,
+            }),
+            _ => Ok(ProxyRequestIdempotencyBeginOutcome::Acquired),
+        }
+    }
+
+    pub async fn get_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        _now_ms: u64,
+    ) -> Result<Option<ProxyRequestIdempotencyRecord>, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let raw: Option<String> = conn
+            .get(self.key_proxy_request_idempotency(request_id))
+            .await?;
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::from_str(&raw)?))
+    }
+
+    pub async fn refresh_proxy_request_idempotency_lease(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<bool, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let key = self.key_proxy_request_idempotency(request_id);
+        let raw: Option<String> = conn.get(&key).await?;
+        let Some(raw) = raw else {
+            return Ok(false);
+        };
+        let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+        if record.owner_token.as_deref() != Some(owner_token)
+            || !matches!(record.state, super::ProxyRequestIdempotencyState::InFlight)
+        {
+            return Ok(false);
+        }
+
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        record.updated_at_ms = now_ms;
+        record.lease_until_ms = Some(lease_until_ms);
+        record.expires_at_ms = lease_until_ms;
+        let payload = serde_json::to_string(&record)?;
+        let updated: i64 = redis::Script::new(REFRESH_PROXY_REQUEST_IDEMPOTENCY_SCRIPT)
+            .key(key)
+            .arg(owner_token)
+            .arg(lease_ttl_ms.max(1).to_string())
+            .arg(payload)
+            .invoke_async(&mut conn)
+            .await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn complete_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        outcome: &ProxyRequestReplayOutcome,
+        now_ms: u64,
+        replay_ttl_ms: u64,
+    ) -> Result<bool, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let key = self.key_proxy_request_idempotency(request_id);
+        let raw: Option<String> = conn.get(&key).await?;
+        let Some(raw) = raw else {
+            return Ok(false);
+        };
+        let mut record: ProxyRequestIdempotencyRecord = serde_json::from_str(&raw)?;
+        if record.owner_token.as_deref() != Some(owner_token)
+            || !matches!(record.state, ProxyRequestIdempotencyState::InFlight)
+        {
+            return Ok(false);
+        }
+        record.state = ProxyRequestIdempotencyState::Completed;
+        record.owner_token = None;
+        record.lease_until_ms = None;
+        record.completed_at_ms = Some(now_ms);
+        record.updated_at_ms = now_ms;
+        record.expires_at_ms = now_ms.saturating_add(replay_ttl_ms);
+        record.outcome = Some(outcome.clone());
+        let payload = serde_json::to_string(&record)?;
+        let updated: i64 = redis::Script::new(COMPLETE_PROXY_REQUEST_IDEMPOTENCY_SCRIPT)
+            .key(key)
+            .arg(owner_token)
+            .arg(replay_ttl_ms.max(1).to_string())
+            .arg(payload)
+            .invoke_async(&mut conn)
+            .await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn release_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+    ) -> Result<bool, RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let deleted: i64 = redis::Script::new(RELEASE_PROXY_REQUEST_IDEMPOTENCY_SCRIPT)
+            .key(self.key_proxy_request_idempotency(request_id))
+            .arg(owner_token)
+            .invoke_async(&mut conn)
+            .await?;
+        Ok(deleted > 0)
     }
 
     #[cfg(feature = "gateway-proxy-cache")]

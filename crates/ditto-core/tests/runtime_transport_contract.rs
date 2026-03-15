@@ -4,10 +4,7 @@ use std::collections::BTreeMap;
 use ditto_core::config::ProviderApi;
 use ditto_core::config::{ProviderAuth, ProviderConfig};
 use ditto_core::contracts::{CapabilityKind, OperationKind};
-#[cfg(all(
-    feature = "realtime",
-    any(feature = "provider-openai", feature = "openai")
-))]
+#[cfg(all(feature = "cap-realtime", feature = "provider-openai"))]
 use ditto_core::runtime::RuntimeTransportBaseUrlRewrite;
 use ditto_core::runtime::{
     RuntimeTransportAuthPlan, RuntimeTransportAuthSelectionSource,
@@ -119,10 +116,7 @@ fn runtime_transport_plan_uses_google_default_header_auth_for_yunwu() {
     }
 }
 
-#[cfg(all(
-    feature = "realtime",
-    any(feature = "provider-openai", feature = "openai")
-))]
+#[cfg(all(feature = "cap-realtime", feature = "provider-openai"))]
 #[test]
 fn runtime_transport_plan_reports_websocket_base_url_rewrite() {
     let provider_config = ProviderConfig {

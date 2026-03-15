@@ -1,13 +1,13 @@
 #![cfg(feature = "config-editing")]
 
 use ditto_core::config::ProviderApi;
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::DittoError;
 use ditto_server::config_editing::{
     ConfigScope, ProviderAuthType, ProviderNamespace, ProviderUpsertRequest, upsert_provider_config,
 };
 
 #[tokio::test]
-async fn provider_template_stays_minimal() -> ditto_core::foundation::error::Result<()> {
+async fn provider_template_stays_minimal() -> ditto_core::error::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join("config_local.toml");
     tokio::fs::write(&config_path, "[project_config]\nenabled = true\n").await?;
@@ -50,7 +50,7 @@ async fn provider_template_stays_minimal() -> ditto_core::foundation::error::Res
 
     let parsed = tokio::fs::read_to_string(&config_path).await?;
     let value = toml::from_str::<toml::Value>(&parsed)
-        .map_err(|err| DittoError::Config(format!("parse test toml: {err}")))?;
+        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
     let provider = value
         .get("openai")
         .and_then(|v| v.get("providers"))
@@ -105,8 +105,7 @@ async fn provider_template_stays_minimal() -> ditto_core::foundation::error::Res
 }
 
 #[tokio::test]
-async fn editing_rejects_unsupported_enabled_capability()
--> ditto_core::foundation::error::Result<()> {
+async fn editing_rejects_unsupported_enabled_capability() -> ditto_core::error::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join("config_local.toml");
     tokio::fs::write(&config_path, "[project_config]\nenabled = true\n").await?;
@@ -156,7 +155,7 @@ async fn editing_rejects_unsupported_enabled_capability()
         assert!(matches!(
             err,
             DittoError::ProviderResolution(
-                ditto_core::foundation::error::ProviderResolutionError::ConfiguredCapabilityUnsupported {
+                ditto_core::error::ProviderResolutionError::ConfiguredCapabilityUnsupported {
                     ref provider,
                     ref capability
                 }
@@ -168,8 +167,8 @@ async fn editing_rejects_unsupported_enabled_capability()
 }
 
 #[tokio::test]
-async fn provider_upsert_accepts_caller_resolved_model_whitelist()
--> ditto_core::foundation::error::Result<()> {
+async fn provider_upsert_accepts_caller_resolved_model_whitelist() -> ditto_core::error::Result<()>
+{
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join("config_local.toml");
     tokio::fs::write(&config_path, "[project_config]\nenabled = true\n").await?;
@@ -212,7 +211,7 @@ async fn provider_upsert_accepts_caller_resolved_model_whitelist()
     assert_eq!(report.discovered_models, 2);
     let parsed = tokio::fs::read_to_string(&config_path).await?;
     let value = toml::from_str::<toml::Value>(&parsed)
-        .map_err(|err| DittoError::Config(format!("parse test toml: {err}")))?;
+        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
     let provider = value
         .get("openai")
         .and_then(|v| v.get("providers"))

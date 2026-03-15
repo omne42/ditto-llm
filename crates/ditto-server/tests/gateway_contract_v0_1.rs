@@ -8,10 +8,10 @@ use std::collections::{BTreeMap, HashMap};
 
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use ditto_gateway_contract_types::{
+use ditto_server::gateway::contracts::types::{
     AuditLogRecord as ContractAuditLogRecord, BudgetLedgerRecord as ContractBudgetLedgerRecord,
     CostLedgerRecord as ContractCostLedgerRecord, HealthResponse, ProxyJsonEnvelope,
-    ReapReservationsRequest, ReapReservationsResponse,
+    ReadinessResponse, ReapReservationsRequest, ReapReservationsResponse,
 };
 use ditto_server::gateway::{
     BackendConfig, Gateway, GatewayConfig, GatewayError, GatewayHttpState, ProxyBackend,
@@ -113,6 +113,7 @@ async fn gateway_contract_v0_1_endpoints_match_types() -> Result<(), Box<dyn std
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config)?;
@@ -132,6 +133,22 @@ async fn gateway_contract_v0_1_endpoints_match_types() -> Result<(), Box<dyn std
     let health_body = to_bytes(health_res.into_body(), usize::MAX).await?;
     let health: HealthResponse = serde_json::from_slice(&health_body)?;
     assert_eq!(health.status, "ok");
+
+    let ready_req = Request::builder()
+        .method("GET")
+        .uri("/ready")
+        .body(Body::empty())?;
+    let ready_res = app.clone().oneshot(ready_req).await.unwrap();
+    assert_eq!(ready_res.status(), StatusCode::OK);
+    let ready_body = to_bytes(ready_res.into_body(), usize::MAX).await?;
+    let ready: ReadinessResponse = serde_json::from_slice(&ready_body)?;
+    assert_eq!(ready.status, "ready");
+    assert!(
+        ready
+            .checks
+            .iter()
+            .any(|check| check.name == "store.sqlite" && check.status == "ok")
+    );
 
     let proxy_req = Request::builder()
         .method("POST")

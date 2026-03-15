@@ -24,6 +24,7 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -110,6 +111,7 @@ data: [DONE]
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -194,6 +196,7 @@ data: second
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -258,6 +261,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -344,7 +348,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
 
 #[cfg(feature = "gateway-proxy-cache")]
 #[tokio::test]
-async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
+async fn openai_compat_proxy_cache_scopes_by_virtual_key_x_api_key() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
     }
@@ -366,7 +370,10 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
 
     let config = GatewayConfig {
         backends: vec![backend_config("primary", upstream.base_url(), "Bearer sk-test")],
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![
+            VirtualKeyConfig::new("key-a", "sk-client-a"),
+            VirtualKeyConfig::new("key-b", "sk-client-b"),
+        ],
         router: RouterConfig {
             default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
             rules: Vec::new(),
@@ -374,6 +381,7 @@ async fn openai_compat_proxy_cache_scopes_by_x_api_key_when_no_virtual_keys() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -481,6 +489,7 @@ async fn openai_compat_proxy_cache_varies_by_semantic_request_headers() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -593,6 +602,7 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_by_path_and_model() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

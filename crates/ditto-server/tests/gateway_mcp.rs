@@ -15,7 +15,7 @@ use tower::util::ServiceExt;
 fn base_config() -> GatewayConfig {
     GatewayConfig {
         backends: Vec::new(),
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
             default_backends: vec![RouteBackend {
                 backend: "primary".to_string(),
@@ -26,12 +26,17 @@ fn base_config() -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     }
 }
 
+fn with_virtual_key(builder: axum::http::request::Builder) -> axum::http::request::Builder {
+    builder.header("authorization", "Bearer vk-1")
+}
+
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_core::error::Result<()>
+{
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -78,7 +83,7 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -111,8 +116,7 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_autopaginates_until_complete()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -166,7 +170,7 @@ async fn gateway_mcp_tools_list_autopaginates_until_complete()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -208,8 +212,7 @@ async fn gateway_mcp_tools_list_autopaginates_until_complete()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -245,7 +248,7 @@ async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -287,7 +290,7 @@ async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor()
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -311,7 +314,7 @@ async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("x-mcp-servers", "a,b")
@@ -349,7 +352,7 @@ async fn gateway_mcp_tools_list_rejects_cursor_when_multiple_servers_selected()
 
 #[tokio::test]
 async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -410,7 +413,7 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("x-mcp-servers", "b,a")
@@ -453,7 +456,7 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
 
 #[tokio::test]
 async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -504,7 +507,7 @@ async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("x-mcp-servers", "alpha,alpha-1")
@@ -541,7 +544,7 @@ async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
 
 #[tokio::test]
 async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -571,7 +574,7 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("x-mcp-servers", "alpha,alpha-1")
@@ -616,7 +619,7 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_after_server_prefix()
 
 #[tokio::test]
 async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -634,7 +637,7 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -667,8 +670,7 @@ async fn gateway_mcp_tools_call_rejects_empty_tool_name_single_server()
 }
 
 #[tokio::test]
-async fn gateway_mcp_bounded_backend_response_prevents_oom()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -698,7 +700,7 @@ async fn gateway_mcp_bounded_backend_response_prevents_oom()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -739,8 +741,7 @@ async fn gateway_mcp_bounded_backend_response_prevents_oom()
 }
 
 #[tokio::test]
-async fn gateway_mcp_requires_virtual_key_when_configured()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -765,9 +766,6 @@ async fn gateway_mcp_requires_virtual_key_when_configured()
             );
     });
 
-    let mut config = base_config();
-    config.virtual_keys = vec![VirtualKeyConfig::new("key-1", "vk-1")];
-
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
@@ -775,7 +773,7 @@ async fn gateway_mcp_requires_virtual_key_when_configured()
             .expect("mcp state"),
     );
 
-    let gateway = Gateway::new(config);
+    let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
@@ -817,13 +815,39 @@ async fn gateway_mcp_requires_virtual_key_when_configured()
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_remains_fail_closed_without_provisioned_keys() -> ditto_core::error::Result<()>
+{
+    let mut config = base_config();
+    config.virtual_keys = Vec::new();
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
+    let app = ditto_server::gateway::http::router(state);
+
+    let request = with_virtual_key(Request::builder())
+        .method("POST")
+        .uri("/mcp")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error() -> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -846,13 +870,13 @@ async fn gateway_mcp_jsonrpc_parse_error_returns_jsonrpc_error()
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params() -> ditto_core::error::Result<()>
+{
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("x-mcp-servers", "missing")
@@ -889,13 +913,13 @@ async fn gateway_mcp_jsonrpc_unknown_server_returns_invalid_params()
 }
 
 #[tokio::test]
-async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers() -> ditto_core::error::Result<()>
+{
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp")
         .header("content-type", "application/json")
@@ -924,13 +948,12 @@ async fn gateway_mcp_jsonrpc_initialize_succeeds_without_servers()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_invalid_json_returns_400()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_list_http_invalid_json_returns_400() -> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp/tools/list")
         .header("content-type", "application/json")
@@ -952,13 +975,12 @@ async fn gateway_mcp_tools_list_http_invalid_json_returns_400()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_http_invalid_json_returns_400()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_call_http_invalid_json_returns_400() -> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp/tools/call")
         .header("content-type", "application/json")
@@ -981,12 +1003,12 @@ async fn gateway_mcp_tools_call_http_invalid_json_returns_400()
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_http_get_rejects_when_no_servers_configured()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("GET")
         .uri("/mcp/tools/list")
         .body(Body::empty())
@@ -1013,13 +1035,12 @@ async fn gateway_mcp_tools_list_http_get_rejects_when_no_servers_configured()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_unknown_server_returns_404()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_list_http_unknown_server_returns_404() -> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp/tools/list")
         .header("content-type", "application/json")
@@ -1047,13 +1068,12 @@ async fn gateway_mcp_tools_list_http_unknown_server_returns_404()
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_call_http_unknown_server_returns_404()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_call_http_unknown_server_returns_404() -> ditto_core::error::Result<()> {
     let gateway = Gateway::new(base_config());
     let state = GatewayHttpState::new(gateway).with_mcp_servers(HashMap::new());
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp/tools/call")
         .header("content-type", "application/json")
@@ -1078,7 +1098,7 @@ async fn gateway_mcp_tools_call_http_unknown_server_returns_404()
 
 #[tokio::test]
 async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_selected()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1102,7 +1122,7 @@ async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_select
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("POST")
         .uri("/mcp/tools/list")
         .header("content-type", "application/json")
@@ -1136,8 +1156,8 @@ async fn gateway_mcp_tools_list_http_rejects_cursor_when_multiple_servers_select
 }
 
 #[tokio::test]
-async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502()
--> ditto_core::foundation::error::Result<()> {
+async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502() -> ditto_core::error::Result<()>
+{
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -1166,7 +1186,7 @@ async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502()
     let state = GatewayHttpState::new(gateway).with_mcp_servers(mcp_servers);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = with_virtual_key(Request::builder())
         .method("GET")
         .uri("/mcp/tools/list")
         .body(Body::empty())

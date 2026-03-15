@@ -1,6 +1,6 @@
 use super::route::RuntimeResolvedBaseUrlSource;
 use crate::contracts::{RuntimeProviderApi, RuntimeProviderHints, TransportKind};
-use crate::foundation::error::{ProviderResolutionError, Result};
+use crate::error::{ProviderResolutionError, Result};
 
 pub(super) fn resolve_runtime_base_url(
     endpoint_override: Option<&str>,

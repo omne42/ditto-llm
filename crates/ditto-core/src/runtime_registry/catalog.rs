@@ -64,6 +64,9 @@ pub(crate) struct ResolvedBuiltinBuilderProvider {
 ///
 /// The underlying truth still lives in `catalog`, but callers now enter through
 /// `runtime_registry` instead of reaching a grab bag of global helper functions.
+/// Generated provider catalogs are compiled into the builtin catalog before this
+/// view is materialized, so they remain part of the builtin layer rather than a
+/// separate precedence tier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltinRuntimeRegistryCatalog {
     registry: CatalogRegistry,

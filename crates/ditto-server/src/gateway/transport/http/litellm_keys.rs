@@ -5,7 +5,7 @@
     feature = "gateway-store-redis"
 ))]
 use super::admin_persistence::append_admin_audit_log;
-use super::admin_persistence::persist_virtual_keys;
+use super::admin_persistence::apply_control_plane_change;
 use super::*;
 
 use axum::Router;
@@ -101,6 +101,8 @@ struct LitellmKeyListQuery {
     key_alias: Option<String>,
     #[serde(default)]
     return_full_object: Option<bool>,
+    #[serde(default)]
+    include_tokens: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,12 +128,28 @@ fn litellm_key_info_value(key: &VirtualKeyConfig) -> serde_json::Value {
     })
 }
 
-fn litellm_key_full_value(key: &VirtualKeyConfig) -> serde_json::Value {
+fn litellm_visible_token(key: &VirtualKeyConfig, expose_secret: bool) -> String {
+    if expose_secret {
+        key.token.clone()
+    } else {
+        "redacted".to_string()
+    }
+}
+
+fn litellm_list_value(key: &VirtualKeyConfig, expose_secret: bool) -> serde_json::Value {
+    if expose_secret {
+        serde_json::Value::String(key.token.clone())
+    } else {
+        serde_json::Value::String(key.id.clone())
+    }
+}
+
+fn litellm_key_full_value(key: &VirtualKeyConfig, expose_secret: bool) -> serde_json::Value {
     let mut value = litellm_key_info_value(key);
     if let Some(obj) = value.as_object_mut() {
         obj.insert(
             "token".to_string(),
-            serde_json::Value::String(key.token.clone()),
+            serde_json::Value::String(litellm_visible_token(key, expose_secret)),
         );
     }
     value
@@ -224,25 +242,32 @@ async fn litellm_key_generate(
         }
     }
 
-    let persisted_keys = state.gateway.mutate_control_plane(
-        |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
-            if gateway
-                .list_virtual_keys()
-                .iter()
-                .any(|existing| existing.id == virtual_key.id)
-            {
-                return Err(error_response(
-                    StatusCode::CONFLICT,
-                    "conflict",
-                    "key_alias already exists",
-                ));
-            }
-            gateway.upsert_virtual_key(virtual_key.clone());
-            Ok(gateway.list_virtual_keys())
-        },
-    )?;
-    state.sync_control_plane_from_gateway();
-    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.generate").await?;
+    let (_, _) = apply_control_plane_change(&state, "litellm.key.generate", |gateway| {
+        let existing = gateway.list_virtual_keys();
+        if existing
+            .iter()
+            .any(|candidate| candidate.id == virtual_key.id)
+        {
+            return Err(error_response(
+                StatusCode::CONFLICT,
+                "conflict",
+                "key_alias already exists",
+            ));
+        }
+        if existing
+            .iter()
+            .any(|candidate| candidate.matches_token(&virtual_key.token))
+        {
+            return Err(error_response(
+                StatusCode::CONFLICT,
+                "conflict",
+                "key already exists",
+            ));
+        }
+        gateway.upsert_virtual_key(virtual_key.clone());
+        Ok(())
+    })
+    .await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -312,9 +337,16 @@ struct LitellmKeyUpdateRequest {
 fn litellm_generate_response_from_virtual_key(
     key: &VirtualKeyConfig,
 ) -> LitellmKeyGenerateResponse {
+    litellm_generate_response_from_virtual_key_with_token(key, key.token.clone())
+}
+
+fn litellm_generate_response_from_virtual_key_with_token(
+    key: &VirtualKeyConfig,
+    token: String,
+) -> LitellmKeyGenerateResponse {
     LitellmKeyGenerateResponse {
-        key: key.token.clone(),
-        token: Some(key.token.clone()),
+        key: token.clone(),
+        token: Some(token),
         key_alias: Some(key.id.clone()),
         key_name: Some(key.id.clone()),
         user_id: key.user_id.clone(),
@@ -327,6 +359,17 @@ fn litellm_generate_response_from_virtual_key(
         rpm_limit: key.limits.rpm,
         tpm_limit: key.limits.tpm,
         models: key.guardrails.allow_models.clone(),
+    }
+}
+
+fn litellm_presented_token_or_stored(key: &VirtualKeyConfig, presented: &str) -> String {
+    if key
+        .token
+        .starts_with(crate::gateway::config::VIRTUAL_KEY_TOKEN_HASH_PREFIX)
+    {
+        presented.to_string()
+    } else {
+        key.token.clone()
     }
 }
 
@@ -368,11 +411,17 @@ async fn litellm_key_update(
                 .map(|v| v.to_string())
         });
 
-    let (key, persisted_keys) = state.gateway.mutate_control_plane(
+    let (key, _) = apply_control_plane_change(
+        &state,
+        "litellm.key.update",
         |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
             let keys = gateway.list_virtual_keys();
 
-            let Some(existing) = keys.iter().find(|key| key.token == key_token).cloned() else {
+            let Some(existing) = keys
+                .iter()
+                .find(|key| key.matches_token(key_token))
+                .cloned()
+            else {
                 return Err(error_response(
                     StatusCode::NOT_FOUND,
                     "not_found",
@@ -461,12 +510,10 @@ async fn litellm_key_update(
             }
 
             gateway.upsert_virtual_key(key.clone());
-            Ok((key, gateway.list_virtual_keys()))
+            Ok(key)
         },
-    )?;
-    state.sync_control_plane_from_gateway();
-
-    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.update").await?;
+    )
+    .await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -495,7 +542,10 @@ async fn litellm_key_update(
     )
     .await;
 
-    Ok(Json(litellm_generate_response_from_virtual_key(&key)))
+    Ok(Json(litellm_generate_response_from_virtual_key_with_token(
+        &key,
+        litellm_presented_token_or_stored(&key, key_token),
+    )))
 }
 
 async fn litellm_key_delete(
@@ -518,11 +568,13 @@ async fn litellm_key_delete(
         ));
     }
 
-    let mut deleted_keys: Vec<String> = Vec::new();
-    let mut deleted_key_ids: Vec<String> = Vec::new();
-    let mut missing: Vec<String> = Vec::new();
-    let persisted_keys = state.gateway.mutate_control_plane(
+    let ((deleted_keys, deleted_key_ids), _) = apply_control_plane_change(
+        &state,
+        "litellm.key.delete",
         |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
+            let mut deleted_keys = Vec::<String>::new();
+            let mut deleted_key_ids = Vec::<String>::new();
+            let mut missing = Vec::<String>::new();
             let mut current = gateway.list_virtual_keys();
 
             for alias in aliases {
@@ -563,7 +615,7 @@ async fn litellm_key_delete(
                 }
                 let Some((found_id, found_tenant)) = current
                     .iter()
-                    .find(|key| key.token == token)
+                    .find(|key| key.matches_token(&token))
                     .map(|key| (key.id.clone(), key.tenant_id.clone()))
                 else {
                     missing.push(token);
@@ -587,20 +639,25 @@ async fn litellm_key_delete(
                 }
             }
 
-            Ok(gateway.list_virtual_keys())
+            if !missing.is_empty() {
+                return Err(error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "not all keys passed in were deleted",
+                ));
+            }
+
+            Ok((deleted_keys, deleted_key_ids))
         },
-    )?;
-    state.sync_control_plane_from_gateway();
-
-    if !missing.is_empty() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            "not all keys passed in were deleted",
-        ));
-    }
-
-    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.delete").await?;
+    )
+    .await?;
+    #[cfg(not(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    )))]
+    let _ = &deleted_key_ids;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -666,11 +723,15 @@ async fn litellm_key_info(
     let key = state
         .list_virtual_keys_snapshot()
         .into_iter()
-        .find(|key| key.token == token)
+        .find(|key| key.matches_token(&token))
         .ok_or_else(|| {
             error_response(StatusCode::NOT_FOUND, "not_found", "virtual key not found")
         })?;
 
+    let expose_secret = admin
+        .as_ref()
+        .map(|admin| admin.can_manage_secrets)
+        .unwrap_or(true);
     if let Some(admin) = admin {
         if let Some(admin_tenant) = admin.tenant_id.as_deref() {
             if key.tenant_id.as_deref() != Some(admin_tenant) {
@@ -684,7 +745,11 @@ async fn litellm_key_info(
     }
 
     Ok(Json(LitellmKeyInfoResponse {
-        key: token,
+        key: if expose_secret {
+            token
+        } else {
+            "redacted".to_string()
+        },
         info: litellm_key_info_value(&key),
     }))
 }
@@ -695,6 +760,11 @@ async fn litellm_key_list(
     Query(query): Query<LitellmKeyListQuery>,
 ) -> Result<Json<LitellmKeyListResponse>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
+    let include_tokens = query.include_tokens.unwrap_or(false);
+    if include_tokens {
+        ensure_admin_secret_access(&admin)?;
+    }
+    let expose_secret = include_tokens && admin.can_manage_secrets;
 
     let return_full_object = query.return_full_object.unwrap_or(false);
     let page = query.page.unwrap_or(1).max(1);
@@ -763,9 +833,9 @@ async fn litellm_key_list(
     let mut out = Vec::<serde_json::Value>::with_capacity(keys.len());
     for key in keys {
         if return_full_object {
-            out.push(litellm_key_full_value(&key));
+            out.push(litellm_key_full_value(&key, expose_secret));
         } else {
-            out.push(serde_json::Value::String(key.token));
+            out.push(litellm_list_value(&key, expose_secret));
         }
     }
 
@@ -904,11 +974,13 @@ async fn litellm_key_regenerate_inner(
                 .map(|v| v.to_string())
         });
 
-    let (key, persisted_keys) = state.gateway.mutate_control_plane(
+    let (key, _) = apply_control_plane_change(
+        &state,
+        "litellm.key.regenerate",
         |gateway| -> Result<_, (StatusCode, Json<ErrorResponse>)> {
             let keys = gateway.list_virtual_keys();
 
-            let Some(existing) = keys.iter().find(|key| key.token == token).cloned() else {
+            let Some(existing) = keys.iter().find(|key| key.matches_token(&token)).cloned() else {
                 return Err(error_response(
                     StatusCode::NOT_FOUND,
                     "not_found",
@@ -928,7 +1000,7 @@ async fn litellm_key_regenerate_inner(
 
             if keys
                 .iter()
-                .any(|candidate| candidate.token == new_token && candidate.id != existing.id)
+                .any(|candidate| candidate.matches_token(&new_token) && candidate.id != existing.id)
             {
                 return Err(error_response(
                     StatusCode::CONFLICT,
@@ -1009,12 +1081,10 @@ async fn litellm_key_regenerate_inner(
             }
 
             gateway.upsert_virtual_key(key.clone());
-            Ok((key, gateway.list_virtual_keys()))
+            Ok(key)
         },
-    )?;
-    state.sync_control_plane_from_gateway();
-
-    let _ = persist_virtual_keys(&state, &persisted_keys, "litellm.key.regenerate").await?;
+    )
+    .await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(

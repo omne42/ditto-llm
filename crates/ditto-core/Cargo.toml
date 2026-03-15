@@ -4,33 +4,30 @@ version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 autoexamples = false
+autobins = false
 
 [features]
-default = ["provider-openai-compatible", "cap-llm"]
+default = ["provider-openai-compatible", "cap-llm", "i18n-en-us"]
 
 agent = ["dep:regex", "dep:safe-fs-tools"]
+contract-guard = ["dep:regex", "dep:serde_yaml"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
 sdk-axum = ["sdk", "dep:axum"]
 base64 = ["dep:base64"]
+i18n-en-us = []
+i18n-zh-cn = []
+i18n-ja-jp = []
+i18n-dynamic = []
 
-# Internal protocol/provider implementation toggles retained for cfg compatibility.
-openai = []
-anthropic = []
-google = []
-openai-compatible = []
-cohere = []
-bedrock = ["auth", "base64"]
-vertex = ["auth"]
-
-# Public provider packs.
-provider-openai-compatible = ["openai-compatible"]
-provider-openai = ["openai"]
-provider-anthropic = ["anthropic"]
-provider-google = ["google"]
-provider-cohere = ["cohere"]
-provider-bedrock = ["bedrock"]
-provider-vertex = ["vertex"]
+# Providers.
+provider-openai-compatible = []
+provider-openai = []
+provider-anthropic = []
+provider-google = []
+provider-cohere = []
+provider-bedrock = ["auth", "base64"]
+provider-vertex = ["auth"]
 provider-bailian = []
 provider-deepseek = ["provider-openai-compatible"]
 provider-doubao = []
@@ -42,33 +39,24 @@ provider-qianfan = []
 provider-xai = ["provider-openai-compatible"]
 provider-zhipu = []
 
-# Internal capability toggles retained for cfg compatibility.
-streaming = []
-tools = []
-embeddings = []
-images = []
-videos = ["dep:base64"]
-audio = []
-moderations = []
-rerank = []
-batches = []
-realtime = []
-
-# Public capability packs.
-cap-llm = ["streaming", "tools"]
-cap-embedding = ["embeddings"]
-cap-image-generation = ["images"]
-cap-image-edit = ["images"]
-cap-audio-transcription = ["audio"]
-cap-audio-speech = ["audio"]
-cap-moderation = ["moderations"]
-cap-rerank = ["rerank"]
-cap-batch = ["batches"]
-cap-realtime = ["realtime"]
+# Capabilities.
+cap-llm-streaming = []
+cap-llm-tools = []
+cap-llm = ["cap-llm-streaming", "cap-llm-tools"]
+cap-embedding = []
+cap-image-generation = []
+cap-image-edit = []
+cap-audio-transcription = []
+cap-audio-speech = []
+cap-moderation = []
+cap-rerank = []
+cap-batch = []
+cap-realtime = []
+cap-video-generation = ["dep:base64"]
 
 # Bundles.
 all-providers = ["provider-openai-compatible", "provider-openai", "provider-anthropic", "provider-google", "provider-cohere", "provider-bedrock", "provider-vertex", "provider-bailian", "provider-deepseek", "provider-doubao", "provider-hunyuan", "provider-kimi", "provider-minimax", "provider-openrouter", "provider-qianfan", "provider-xai", "provider-zhipu"]
-all-capabilities = ["cap-llm", "cap-embedding", "cap-image-generation", "cap-image-edit", "cap-audio-transcription", "cap-audio-speech", "cap-moderation", "cap-rerank", "cap-batch", "cap-realtime"]
+all-capabilities = ["cap-llm", "cap-embedding", "cap-image-generation", "cap-image-edit", "cap-audio-transcription", "cap-audio-speech", "cap-moderation", "cap-rerank", "cap-batch", "cap-realtime", "cap-video-generation"]
 all = ["all-providers", "all-capabilities"]
 
 integration = []
@@ -80,11 +68,15 @@ base64 = { version = "0.22", optional = true }
 bytes = "1"
 futures-util = "0.3"
 hmac = { version = "0.12", optional = true }
+error = { path = "../../../omne_foundation/crates/error" }
+i18n = { path = "../../../omne_foundation/crates/i18n" }
+secret = { path = "../../../omne_foundation/crates/secret" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 regex = { version = "1", optional = true }
 safe-fs-tools = { path = "../../../safe-fs-tools", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = { version = "0.9", optional = true }
 sha2 = { version = "0.10", optional = true }
 thiserror = "1"
 time = { version = "0.3", features = ["formatting", "macros"], optional = true }
@@ -96,6 +88,11 @@ toml = "0.8"
 httpmock = "0.8.2"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "ditto-gateway-contract-guard"
+path = "src/bin/ditto-gateway-contract-guard.rs"
+required-features = ["contract-guard"]
 
 [[example]]
 name = "anthropic_messages"

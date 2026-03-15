@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use futures_util::stream::BoxStream;
 
 use crate::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 pub type StreamResult = BoxStream<'static, Result<StreamChunk>>;
 

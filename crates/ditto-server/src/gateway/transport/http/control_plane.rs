@@ -20,9 +20,9 @@ impl GatewayControlPlaneSnapshot {
         let virtual_keys = gateway.list_virtual_keys();
         let mut virtual_key_token_index = HashMap::new();
         for (idx, key) in virtual_keys.iter().enumerate() {
-            virtual_key_token_index
-                .entry(key.token.clone())
-                .or_insert(idx);
+            if let Some(token_key) = key.token_lookup_key() {
+                virtual_key_token_index.entry(token_key).or_insert(idx);
+            }
         }
 
         let router_config = gateway.router_config();
@@ -45,13 +45,16 @@ impl GatewayControlPlaneSnapshot {
     }
 
     fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        if let Some(index) = self.virtual_key_token_index.get(token).copied()
+        if let Some(token_key) = crate::gateway::config::normalize_virtual_key_token_key(token)
+            && let Some(index) = self.virtual_key_token_index.get(&token_key).copied()
             && let Some(key) = self.virtual_keys.get(index)
-            && key.token == token
+            && key.matches_token(token)
         {
             return Some(key);
         }
-        self.virtual_keys.iter().find(|key| key.token == token)
+        self.virtual_keys
+            .iter()
+            .find(|key| key.matches_token(token))
     }
 }
 

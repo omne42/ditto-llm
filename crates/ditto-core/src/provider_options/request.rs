@@ -6,7 +6,7 @@
 use serde_json::Value;
 
 use crate::contracts::GenerateRequest;
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 use super::{ProviderOptions, ProviderOptionsEnvelope, ResponseFormat};
 
@@ -76,8 +76,8 @@ pub fn request_parsed_provider_options(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::foundation::error::DittoError;
-    use crate::foundation::error::Result;
+    use crate::error::DittoError;
+    use crate::error::Result;
     use crate::provider_options::{JsonSchemaFormat, ReasoningEffort};
     use serde_json::json;
 
@@ -141,7 +141,7 @@ mod tests {
     }
 
     #[test]
-    fn request_provider_options_supports_openai_compatible_alias_key() -> Result<()> {
+    fn request_provider_options_rejects_openai_compatible_alias_key() {
         let request = GenerateRequest {
             provider_options: Some(ProviderOptionsEnvelope::from(json!({
                 "openai_compatible": { "parallel_tool_calls": true }
@@ -149,11 +149,9 @@ mod tests {
             ..GenerateRequest::from(vec![])
         };
 
-        let selected = request_provider_options_value_for(&request, "openai-compatible")?
-            .expect("alias bucket should exist");
-        let parsed = ProviderOptions::from_value(selected)?;
-        assert_eq!(parsed.parallel_tool_calls, Some(true));
-        Ok(())
+        let selected = request_provider_options_value_for(&request, "openai-compatible")
+            .expect("alias buckets should not error");
+        assert!(selected.is_none(), "legacy alias bucket should not resolve");
     }
 
     #[test]

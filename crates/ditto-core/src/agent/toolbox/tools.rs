@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::contracts::Tool;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 use super::{ToolCall, ToolExecutor, ToolResult};
 

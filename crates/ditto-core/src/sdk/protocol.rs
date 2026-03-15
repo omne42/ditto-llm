@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::StreamChunk;
-use crate::foundation::error::{DittoError, Result};
+use crate::error::Result;
 
 pub const STREAM_PROTOCOL_VERSION: u8 = 1;
 
@@ -61,10 +61,10 @@ pub fn encode_line_v1(event: &StreamEventV1) -> Result<String> {
 pub fn decode_v1(input: &str) -> Result<StreamEventV1> {
     let envelope: StreamEnvelopeV1 = serde_json::from_str(input.trim())?;
     if envelope.v != STREAM_PROTOCOL_VERSION {
-        return Err(DittoError::InvalidResponse(format!(
-            "unsupported stream protocol version {}",
-            envelope.v
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.stream_protocol.unsupported_version",
+            "version" => envelope.v.to_string()
+        ));
     }
     Ok(envelope.event)
 }

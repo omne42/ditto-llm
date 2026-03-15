@@ -1,24 +1,33 @@
+//! Gateway contract guard — validates OpenAPI contract changes with semver gating.
+//!
+//! Requires the `contract-guard` feature.
+
+#![cfg(feature = "contract-guard")]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
 use serde_yaml::Value;
 
+use crate::MESSAGE_CATALOG;
+use crate::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+
 const DEFAULT_HEAD_OPENAPI: &str = "contracts/gateway-contract-v0.1.openapi.yaml";
-const DEFAULT_CONTRACT_LIB: &str = "crates/ditto-gateway-contract-types/src/lib.rs";
-const DEFAULT_CONTRACT_CARGO: &str = "crates/ditto-gateway-contract-types/Cargo.toml";
+const DEFAULT_CONTRACT_LIB: &str = "crates/ditto-server/src/gateway/contracts/types.rs";
+const DEFAULT_CONTRACT_CARGO: &str = "crates/ditto-server/Cargo.toml";
 
 const METHODS: [&str; 8] = [
     "get", "put", "post", "delete", "patch", "options", "head", "trace",
 ];
 
 #[derive(Debug, Clone)]
-struct Args {
-    base_openapi: Option<PathBuf>,
-    head_openapi: PathBuf,
-    contract_lib: PathBuf,
-    contract_cargo: PathBuf,
-    allow_missing_base: bool,
+pub(crate) struct Args {
+    pub base_openapi: Option<PathBuf>,
+    pub head_openapi: PathBuf,
+    pub contract_lib: PathBuf,
+    pub contract_cargo: PathBuf,
+    pub allow_missing_base: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,17 +87,36 @@ struct DiffResult {
     non_breaking: Vec<String>,
 }
 
-fn main() {
-    match parse_args(std::env::args().skip(1)).and_then(run) {
+pub fn cli_main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    match parse_args(args.into_iter(), locale).and_then(|args| run(args, locale)) {
         Ok(()) => {}
         Err(err) => {
-            eprintln!("contract guard failed: {err}");
+            eprintln!(
+                "{}",
+                MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.contract_guard_failed",
+                    &[MessageArg::new("error", err)],
+                )
+            );
             std::process::exit(1);
         }
     }
 }
 
-fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
+pub(crate) fn parse_args(
+    mut args: impl Iterator<Item = String>,
+    locale: Locale,
+) -> Result<Args, String> {
     let mut parsed = Args {
         base_openapi: None,
         head_openapi: PathBuf::from(DEFAULT_HEAD_OPENAPI),
@@ -100,31 +128,70 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--base" => {
-                parsed.base_openapi = Some(args.next().ok_or("missing value for --base")?.into());
+                parsed.base_openapi = Some(
+                    args.next()
+                        .ok_or_else(|| {
+                            MESSAGE_CATALOG.render(
+                                locale,
+                                "cli.missing_value",
+                                &[MessageArg::new("flag", "--base")],
+                            )
+                        })?
+                        .into(),
+                );
             }
             "--head" => {
-                parsed.head_openapi = args.next().ok_or("missing value for --head")?.into();
+                parsed.head_openapi = args
+                    .next()
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--head")],
+                        )
+                    })?
+                    .into();
             }
             "--contract-lib" => {
                 parsed.contract_lib = args
                     .next()
-                    .ok_or("missing value for --contract-lib")?
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--contract-lib")],
+                        )
+                    })?
                     .into();
             }
             "--contract-cargo" => {
                 parsed.contract_cargo = args
                     .next()
-                    .ok_or("missing value for --contract-cargo")?
+                    .ok_or_else(|| {
+                        MESSAGE_CATALOG.render(
+                            locale,
+                            "cli.missing_value",
+                            &[MessageArg::new("flag", "--contract-cargo")],
+                        )
+                    })?
                     .into();
             }
             "--allow-missing-base" => {
                 parsed.allow_missing_base = true;
             }
             "--help" | "-h" => {
-                return Err(usage().to_string());
+                return Err(usage(locale));
             }
             other => {
-                return Err(format!("unknown arg: {other}\n{}", usage()));
+                return Err(format!(
+                    "{}\n{}",
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.unknown_arg",
+                        &[MessageArg::new("arg", other)],
+                    ),
+                    usage(locale)
+                ));
             }
         }
     }
@@ -132,11 +199,18 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
     Ok(parsed)
 }
 
-fn usage() -> &'static str {
-    "usage: ditto-gateway-contract-guard [--base PATH] [--head PATH] [--contract-lib PATH] [--contract-cargo PATH] [--allow-missing-base]"
+fn usage(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.usage",
+        &[MessageArg::new(
+            "command_and_syntax",
+            "ditto-gateway-contract-guard [--lang LOCALE] [--base PATH] [--head PATH] [--contract-lib PATH] [--contract-cargo PATH] [--allow-missing-base]",
+        )],
+    )
 }
 
-fn run(args: Args) -> Result<(), String> {
+pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
     let head_raw = std::fs::read_to_string(&args.head_openapi)
         .map_err(|err| format!("read head openapi `{}`: {err}", args.head_openapi.display()))?;
     let head_doc = parse_yaml(&head_raw, &args.head_openapi)?;
@@ -177,25 +251,38 @@ fn run(args: Args) -> Result<(), String> {
     if base_path.is_none() {
         if args.allow_missing_base {
             println!(
-                "contract guard: no base provided, validated only consistency checks (openapi/types/cargo)"
+                "{}",
+                MESSAGE_CATALOG.render(locale, "cli.contract_guard_consistency_only_no_base", &[])
             );
             return Ok(());
         }
-        return Err("missing --base; pass --allow-missing-base for bootstrap mode".to_string());
+        return Err(MESSAGE_CATALOG.render(
+            locale,
+            "cli.requires",
+            &[
+                MessageArg::new("flag", "--base"),
+                MessageArg::new("requirement", "--allow-missing-base for bootstrap mode"),
+            ],
+        ));
     }
 
     let base_path = base_path.expect("checked is_some");
     if !base_path.exists() {
         if args.allow_missing_base {
             println!(
-                "contract guard: base `{}` not found, validated only consistency checks (openapi/types/cargo)",
-                base_path.display()
+                "{}",
+                MESSAGE_CATALOG.render(
+                    locale,
+                    "cli.contract_guard_consistency_only_missing_base",
+                    &[MessageArg::new("path", base_path.display().to_string())],
+                )
             );
             return Ok(());
         }
-        return Err(format!(
-            "base openapi `{}` not found (use --allow-missing-base if intentional)",
-            base_path.display()
+        return Err(MESSAGE_CATALOG.render(
+            locale,
+            "cli.contract_guard_base_not_found",
+            &[MessageArg::new("path", base_path.display().to_string())],
         ));
     }
 
@@ -222,17 +309,42 @@ fn run(args: Args) -> Result<(), String> {
     enforce_semver_gate(base_version, head_version, change_kind)?;
 
     println!(
-        "contract guard: base_version={} head_version={} change_kind={}",
-        base_version, head_version, change_kind
+        "{}",
+        MESSAGE_CATALOG.render(
+            locale,
+            "cli.contract_guard_summary",
+            &[
+                MessageArg::new("base_version", base_version.to_string()),
+                MessageArg::new("head_version", head_version.to_string()),
+                MessageArg::new("change_kind", change_kind.to_string()),
+            ],
+        )
     );
     for reason in &diff.breaking {
-        println!("breaking: {reason}");
+        println!(
+            "{}",
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.breaking",
+                &[MessageArg::new("reason", reason.as_str())],
+            )
+        );
     }
     for reason in &diff.non_breaking {
-        println!("non_breaking: {reason}");
+        println!(
+            "{}",
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.non_breaking",
+                &[MessageArg::new("reason", reason.as_str())],
+            )
+        );
     }
     if change_kind == ChangeKind::Patch {
-        println!("non_breaking: textual-only contract edits");
+        println!(
+            "{}",
+            MESSAGE_CATALOG.render(locale, "cli.textual_only_contract_edits", &[])
+        );
     }
 
     Ok(())

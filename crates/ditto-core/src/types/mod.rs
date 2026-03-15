@@ -9,13 +9,13 @@
 mod audio;
 mod batch;
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 mod generate_request_support;
 mod image;
@@ -36,19 +36,19 @@ pub use image::{
 pub use moderation::{ModerationInput, ModerationRequest, ModerationResponse, ModerationResult};
 pub use rerank::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
 pub use video::{
-    VideoContentVariant, VideoDeleteResponse, VideoGenerationError, VideoGenerationRequest,
+    VideoContentVariant, VideoDeleteResponse, VideoGenerationFailure, VideoGenerationRequest,
     VideoGenerationResponse, VideoGenerationStatus, VideoListOrder, VideoListRequest,
     VideoListResponse, VideoRemixRequest,
 };
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "bedrock",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-bedrock",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 #[doc(hidden)]
 pub use generate_request_support::{

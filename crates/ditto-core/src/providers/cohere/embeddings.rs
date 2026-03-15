@@ -1,4 +1,4 @@
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[derive(Clone)]
 pub struct CohereEmbeddings {
     http: reqwest::Client,
@@ -8,7 +8,7 @@ pub struct CohereEmbeddings {
     http_query_params: BTreeMap<String, String>,
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 impl CohereEmbeddings {
     pub fn new(api_key: impl Into<String>) -> Self {
         let http = default_http_client(DEFAULT_HTTP_TIMEOUT);
@@ -92,13 +92,14 @@ impl CohereEmbeddings {
         if !self.model.trim().is_empty() {
             return Ok(self.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "cohere embedding model is not set (set CohereEmbeddings::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "cohere embedding",
+            "set CohereEmbeddings::with_model",
         ))
     }
 }
 
-#[cfg(feature = "embeddings")]
+#[cfg(feature = "cap-embedding")]
 #[async_trait]
 impl EmbeddingModel for CohereEmbeddings {
     fn provider(&self) -> &str {

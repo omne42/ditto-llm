@@ -1,7 +1,7 @@
 #![cfg(feature = "auth")]
 
 use ditto_core::auth::OAuthClientCredentials;
-use ditto_core::foundation::error::Result;
+use ditto_core::error::Result;
 use httpmock::{Method::POST, MockServer};
 
 #[tokio::test]

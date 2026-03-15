@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::StreamExt;
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -16,13 +16,13 @@ use crate::provider_transport::{
     DEFAULT_HTTP_TIMEOUT, apply_http_query_params, default_http_client,
     resolve_http_provider_config,
 };
-#[cfg(feature = "streaming")]
+#[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     Role, Tool, ToolChoice, Usage, Warning,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const DEFAULT_VERSION: &str = "2023-06-01";
@@ -125,8 +125,9 @@ impl Anthropic {
         if !self.default_model.trim().is_empty() {
             return Ok(self.default_model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "anthropic model is not set (set request.model or Anthropic::with_model)".to_string(),
+        Err(DittoError::provider_model_missing(
+            "anthropic",
+            "set request.model or Anthropic::with_model",
         ))
     }
 

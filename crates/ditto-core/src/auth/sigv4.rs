@@ -6,9 +6,66 @@ use sha2::{Digest, Sha256};
 use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 
 use crate::config::{Env, ProviderAuth};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 type HmacSha256 = Hmac<Sha256>;
+
+fn sigv4_format_amz_date_failed(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sigv4.format_amz_date_failed",
+        "error" => error.to_string()
+    )
+}
+
+fn sigv4_format_date_failed(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sigv4.format_date_failed",
+        "error" => error.to_string()
+    )
+}
+
+fn sigv4_amz_date_too_short() -> DittoError {
+    crate::invalid_response!("error_detail.sigv4.amz_date_too_short")
+}
+
+fn sigv4_field_required(field: &str) -> DittoError {
+    crate::invalid_response!("error_detail.sigv4.field_required", "field" => field)
+}
+
+fn sigv4_method_empty() -> DittoError {
+    crate::invalid_response!("error_detail.sigv4.method_empty")
+}
+
+fn sigv4_url_invalid(url: &str, error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sigv4.url_invalid",
+        "url" => url,
+        "error" => error.to_string()
+    )
+}
+
+fn sigv4_url_missing_host() -> DittoError {
+    crate::invalid_response!("error_detail.sigv4.url_missing_host")
+}
+
+fn sigv4_hmac_key_invalid(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sigv4.hmac_key_invalid",
+        "error" => error.to_string()
+    )
+}
+
+fn sigv4_expected_auth() -> DittoError {
+    crate::invalid_response!("error_detail.sigv4.expected_auth")
+}
+
+fn sigv4_missing_env(label: &str, keys: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sigv4.missing_env",
+        "label" => label,
+        "keys" => keys
+    )
+}
 
 #[derive(Debug, Clone)]
 pub struct SigV4Timestamp {
@@ -27,21 +84,19 @@ impl SigV4Timestamp {
             format_description!("[year][month][day]T[hour][minute][second]Z");
         const DATE_FORMAT: &[FormatItem<'_>] = format_description!("[year][month][day]");
 
-        let amz_date = datetime.format(AMZ_FORMAT).map_err(|err| {
-            DittoError::InvalidResponse(format!("failed to format sigv4 amz date: {err}"))
-        })?;
-        let date = datetime.format(DATE_FORMAT).map_err(|err| {
-            DittoError::InvalidResponse(format!("failed to format sigv4 date: {err}"))
-        })?;
+        let amz_date = datetime
+            .format(AMZ_FORMAT)
+            .map_err(sigv4_format_amz_date_failed)?;
+        let date = datetime
+            .format(DATE_FORMAT)
+            .map_err(sigv4_format_date_failed)?;
         Ok(Self { amz_date, date })
     }
 
     pub fn from_amz_date(amz_date: &str) -> Result<Self> {
         let amz_date = amz_date.trim();
         if amz_date.len() < 8 {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 amz date must be at least 8 chars".to_string(),
-            ));
+            return Err(sigv4_amz_date_too_short());
         }
         Ok(Self {
             amz_date: amz_date.to_string(),
@@ -88,24 +143,16 @@ impl SigV4Signer {
         let service = service.into();
 
         if access_key.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 access_key is required".to_string(),
-            ));
+            return Err(sigv4_field_required("access_key"));
         }
         if secret_key.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 secret_key is required".to_string(),
-            ));
+            return Err(sigv4_field_required("secret_key"));
         }
         if region.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 region is required".to_string(),
-            ));
+            return Err(sigv4_field_required("region"));
         }
         if service.trim().is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 service is required".to_string(),
-            ));
+            return Err(sigv4_field_required("service"));
         }
 
         Ok(Self {
@@ -127,17 +174,11 @@ impl SigV4Signer {
     ) -> Result<SigV4SigningResult> {
         let method = method.trim();
         if method.is_empty() {
-            return Err(DittoError::InvalidResponse(
-                "sigv4 method must be non-empty".to_string(),
-            ));
+            return Err(sigv4_method_empty());
         }
 
-        let url = Url::parse(url).map_err(|err| {
-            DittoError::InvalidResponse(format!("sigv4 invalid url {url:?}: {err}"))
-        })?;
-        let host = url
-            .host_str()
-            .ok_or_else(|| DittoError::InvalidResponse("sigv4 url missing host".to_string()))?;
+        let url = Url::parse(url).map_err(|err| sigv4_url_invalid(url, err))?;
+        let host = url.host_str().ok_or_else(sigv4_url_missing_host)?;
         let host = match url.port() {
             Some(port) => format!("{host}:{port}"),
             None => host.to_string(),
@@ -351,8 +392,7 @@ fn normalize_header_value(value: &str) -> String {
 }
 
 fn hmac_sha256(key: &[u8], data: &str) -> Result<Vec<u8>> {
-    let mut mac = HmacSha256::new_from_slice(key)
-        .map_err(|err| DittoError::InvalidResponse(format!("sigv4 invalid hmac key: {err}")))?;
+    let mut mac = HmacSha256::new_from_slice(key).map_err(sigv4_hmac_key_invalid)?;
     mac.update(data.as_bytes());
     Ok(mac.finalize().into_bytes().to_vec())
 }
@@ -384,9 +424,7 @@ pub fn resolve_sigv4_signer(auth: &ProviderAuth, env: &Env) -> Result<SigV4Signe
         service,
     } = auth
     else {
-        return Err(DittoError::InvalidResponse(
-            "expected sigv4 auth".to_string(),
-        ));
+        return Err(sigv4_expected_auth());
     };
 
     let access_key = resolve_required_env(
@@ -429,11 +467,7 @@ fn resolve_required_env(
             return Ok(value);
         }
     }
-    Err(DittoError::InvalidResponse(format!(
-        "missing sigv4 {} (tried: {})",
-        label,
-        candidate_keys.join(", ")
-    )))
+    Err(sigv4_missing_env(label, &candidate_keys.join(", ")))
 }
 
 fn resolve_optional_env(env: &Env, keys: &[String], defaults: &[&str]) -> Option<String> {

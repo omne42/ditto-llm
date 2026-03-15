@@ -21,7 +21,7 @@ impl EventStreamDecoder {
             .gt(&MAX_EVENTSTREAM_BUFFER_BYTES)
         {
             self.buffer.clear();
-            return Err(DittoError::InvalidResponse(format!(
+            return Err(DittoError::invalid_response_text(format!(
                 "eventstream buffer exceeded max bytes ({MAX_EVENTSTREAM_BUFFER_BYTES})"
             )));
         }
@@ -36,13 +36,13 @@ impl EventStreamDecoder {
         let total_len = u32::from_be_bytes(self.buffer[0..4].try_into().ok()?) as usize;
         if total_len < 16 {
             self.buffer.clear();
-            return Some(Err(DittoError::InvalidResponse(
+            return Some(Err(DittoError::invalid_response_text(
                 "eventstream total_len too small".to_string(),
             )));
         }
         if total_len > MAX_EVENTSTREAM_MESSAGE_BYTES {
             self.buffer.clear();
-            return Some(Err(DittoError::InvalidResponse(format!(
+            return Some(Err(DittoError::invalid_response_text(format!(
                 "eventstream total_len too large ({total_len}; max {MAX_EVENTSTREAM_MESSAGE_BYTES})"
             ))));
         }
@@ -54,14 +54,14 @@ impl EventStreamDecoder {
         let headers_end = headers_start.saturating_add(headers_len);
         if headers_end > total_len {
             self.buffer.clear();
-            return Some(Err(DittoError::InvalidResponse(
+            return Some(Err(DittoError::invalid_response_text(
                 "eventstream invalid headers length".to_string(),
             )));
         }
         let payload_end = total_len.saturating_sub(4);
         if headers_end > payload_end {
             self.buffer.clear();
-            return Some(Err(DittoError::InvalidResponse(
+            return Some(Err(DittoError::invalid_response_text(
                 "eventstream invalid payload length".to_string(),
             )));
         }
@@ -83,25 +83,25 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
     let mut idx = 0usize;
     while idx < bytes.len() {
         let name_len = *bytes.get(idx).ok_or_else(|| {
-            DittoError::InvalidResponse("eventstream header missing name length".to_string())
+            DittoError::invalid_response_text("eventstream header missing name length".to_string())
         })? as usize;
         idx += 1;
         if idx + name_len > bytes.len() {
-            return Err(DittoError::InvalidResponse(
+            return Err(DittoError::invalid_response_text(
                 "eventstream header name truncated".to_string(),
             ));
         }
         let name = std::str::from_utf8(&bytes[idx..idx + name_len]).map_err(|err| {
-            DittoError::InvalidResponse(format!("eventstream bad header name: {err}"))
+            DittoError::invalid_response_text(format!("eventstream bad header name: {err}"))
         })?;
         idx += name_len;
         let value_type = *bytes.get(idx).ok_or_else(|| {
-            DittoError::InvalidResponse("eventstream header missing type".to_string())
+            DittoError::invalid_response_text("eventstream header missing type".to_string())
         })?;
         idx += 1;
         let ensure_len = |idx: usize, needed: usize, label: &str| -> Result<()> {
             if idx + needed > bytes.len() {
-                return Err(DittoError::InvalidResponse(format!(
+                return Err(DittoError::invalid_response_text(format!(
                     "eventstream header value truncated ({label})"
                 )));
             }
@@ -133,7 +133,7 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
                 ensure_len(idx, len, "bytes")?;
                 if value_type == 7 {
                     let value = std::str::from_utf8(&bytes[idx..idx + len]).map_err(|err| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "eventstream header value utf8 error: {err}"
                         ))
                     })?;
@@ -150,7 +150,7 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
                 idx += 16;
             }
             other => {
-                return Err(DittoError::InvalidResponse(format!(
+                return Err(DittoError::invalid_response_text(format!(
                     "eventstream unsupported header type {other}"
                 )));
             }
@@ -211,7 +211,7 @@ fn parse_bedrock_event(message: &EventStreamMessage) -> Result<Option<String>> {
         .map(String::as_str)
         .unwrap_or("event");
     if message_type != "event" {
-        return Err(DittoError::InvalidResponse(format!(
+        return Err(DittoError::invalid_response_text(format!(
             "bedrock eventstream message-type={message_type}"
         )));
     }
@@ -220,12 +220,12 @@ fn parse_bedrock_event(message: &EventStreamMessage) -> Result<Option<String>> {
     let bytes = outer
         .get("bytes")
         .and_then(Value::as_str)
-        .ok_or_else(|| DittoError::InvalidResponse("bedrock event missing bytes".to_string()))?;
+        .ok_or_else(|| DittoError::invalid_response_text("bedrock event missing bytes".to_string()))?;
     let decoded = BASE64.decode(bytes).map_err(|err| {
-        DittoError::InvalidResponse(format!("bedrock base64 decode failed: {err}"))
+        DittoError::invalid_response_text(format!("bedrock base64 decode failed: {err}"))
     })?;
     let json = String::from_utf8(decoded).map_err(|err| {
-        DittoError::InvalidResponse(format!("bedrock event bytes not utf8: {err}"))
+        DittoError::invalid_response_text(format!("bedrock event bytes not utf8: {err}"))
     })?;
     Ok(Some(json))
 }

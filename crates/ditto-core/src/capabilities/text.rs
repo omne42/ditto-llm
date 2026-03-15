@@ -7,7 +7,7 @@ use futures_util::stream;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::llm_core::stream::StreamCollector;
 // Text capability keeps text-oriented request/response contracts together.
@@ -16,6 +16,19 @@ use crate::contracts::{
     FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Usage, Warning,
 };
 use crate::utils::task::AbortOnDrop;
+
+fn stream_text_state_lock_poisoned() -> DittoError {
+    crate::invalid_response!("error_detail.stream.text_state_lock_poisoned")
+}
+
+fn stream_text_failed(error: &str) -> DittoError {
+    crate::invalid_response!("error_detail.stream.text_failed", "error" => error)
+}
+
+#[cfg(test)]
+fn text_not_implemented() -> DittoError {
+    crate::invalid_response!("error_detail.text.not_implemented")
+}
 
 #[derive(Debug, Clone)]
 pub struct GenerateTextResponse {
@@ -50,14 +63,15 @@ impl StreamTextHandle {
     }
 
     pub fn final_response(&self) -> Result<Option<GenerateResponse>> {
-        let state = self.state.lock().map_err(|_| {
-            DittoError::InvalidResponse("stream text state lock is poisoned".to_string())
-        })?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| stream_text_state_lock_poisoned())?;
         if !state.done {
             return Ok(None);
         }
         if let Some(err) = state.final_error.as_deref() {
-            return Err(DittoError::InvalidResponse(err.to_string()));
+            return Err(stream_text_failed(err));
         }
         Ok(state.final_response.clone())
     }
@@ -239,7 +253,7 @@ pub fn stream_text_from_stream(stream: StreamResult) -> StreamTextResult {
                     }
                     if text_enabled_task.load(Ordering::Relaxed)
                         && text_tx
-                            .send(Err(DittoError::InvalidResponse(err_string)))
+                            .send(Err(stream_text_failed(&err_string)))
                             .await
                             .is_err()
                     {
@@ -341,7 +355,7 @@ mod tests {
         }
 
         async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
-            Err(DittoError::InvalidResponse("not implemented".to_string()))
+            Err(text_not_implemented())
         }
     }
 

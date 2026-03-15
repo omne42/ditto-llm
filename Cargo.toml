@@ -2,13 +2,9 @@
 members = [
   "crates/ditto-core",
   "crates/ditto-server",
-  "crates/ditto-gateway-contract-guard",
-  "crates/ditto-gateway-contract-types",
 ]
 default-members = [
   "crates/ditto-core",
   "crates/ditto-server",
-  "crates/ditto-gateway-contract-guard",
-  "crates/ditto-gateway-contract-types",
 ]
 resolver = "2"

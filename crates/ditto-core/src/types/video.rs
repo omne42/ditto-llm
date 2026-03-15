@@ -38,7 +38,7 @@ impl VideoGenerationStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct VideoGenerationError {
+pub struct VideoGenerationFailure {
     pub code: String,
     pub message: String,
 }
@@ -85,7 +85,7 @@ pub struct VideoGenerationResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub size: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<VideoGenerationError>,
+    pub error: Option<VideoGenerationFailure>,
     #[serde(default)]
     pub warnings: Vec<Warning>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

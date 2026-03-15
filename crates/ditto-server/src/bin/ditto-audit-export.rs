@@ -1,22 +1,31 @@
+use ditto_core::MESSAGE_CATALOG;
+use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+
 #[cfg(feature = "gateway")]
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            eprintln!("{err}");
+            std::process::exit(2);
+        }
+    };
+
+    if let Err(err) = run(locale, args).await {
+        eprintln!("{}", render_error(err.as_ref(), locale));
+        std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "gateway")]
+async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     use futures_util::StreamExt as _;
     use tokio::io::AsyncWriteExt as _;
 
-    let mut args = std::env::args().skip(1);
-    let usage = concat!(
-        "usage: ditto-audit-export \\\n",
-        "  --base-url URL \\\n",
-        "  (--admin-token TOKEN | --admin-token-env ENV) \\\n",
-        "  --output PATH|- \\\n",
-        "  [--format jsonl|csv] [--limit N] [--since-ts-ms MS] [--before-ts-ms MS] \\\n",
-        "  [--manifest-output PATH] \\\n",
-        "  [--upload DEST] [--upload-manifest DEST] \\\n",
-        "  [--s3-object-lock-mode MODE] [--s3-object-lock-retain-until-date RFC3339] [--s3-object-lock-legal-hold-status STATUS]\n",
-        "\n",
-        "DEST may be s3://bucket/key, gs://bucket/object, or http(s)://... (PUT).\n",
-    );
+    let usage = audit_export_usage(locale);
+    let mut args = raw_args.into_iter();
 
     let mut base_url: Option<String> = None;
     let mut admin_token: Option<String> = None;
@@ -36,68 +45,107 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
-            "--base-url" => base_url = Some(args.next().ok_or("missing value for --base-url")?),
+            "--base-url" => {
+                base_url = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--base-url"))?,
+                )
+            }
             "--admin-token" => {
-                admin_token = Some(args.next().ok_or("missing value for --admin-token")?)
+                admin_token = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--admin-token"))?,
+                )
             }
             "--admin-token-env" => {
-                admin_token_env = Some(args.next().ok_or("missing value for --admin-token-env")?)
+                admin_token_env = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--admin-token-env"))?,
+                )
             }
-            "--format" => format = args.next().ok_or("missing value for --format")?,
-            "--limit" => limit = args.next().ok_or("missing value for --limit")?.parse()?,
+            "--format" => {
+                format = args
+                    .next()
+                    .ok_or_else(|| cli_missing_value(locale, "--format"))?
+            }
+            "--limit" => {
+                limit = args
+                    .next()
+                    .ok_or_else(|| cli_missing_value(locale, "--limit"))?
+                    .parse()
+                    .map_err(|_| cli_invalid_value(locale, "--limit"))?
+            }
             "--since-ts-ms" => {
                 since_ts_ms = Some(
                     args.next()
-                        .ok_or("missing value for --since-ts-ms")?
-                        .parse()?,
+                        .ok_or_else(|| cli_missing_value(locale, "--since-ts-ms"))?
+                        .parse()
+                        .map_err(|_| cli_invalid_value(locale, "--since-ts-ms"))?,
                 )
             }
             "--before-ts-ms" => {
                 before_ts_ms = Some(
                     args.next()
-                        .ok_or("missing value for --before-ts-ms")?
-                        .parse()?,
+                        .ok_or_else(|| cli_missing_value(locale, "--before-ts-ms"))?
+                        .parse()
+                        .map_err(|_| cli_invalid_value(locale, "--before-ts-ms"))?,
                 )
             }
-            "--output" => output = Some(args.next().ok_or("missing value for --output")?),
-            "--manifest-output" => {
-                manifest_output = Some(args.next().ok_or("missing value for --manifest-output")?)
+            "--output" => {
+                output = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--output"))?,
+                )
             }
-            "--upload" => upload = Some(args.next().ok_or("missing value for --upload")?),
+            "--manifest-output" => {
+                manifest_output = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--manifest-output"))?,
+                )
+            }
+            "--upload" => {
+                upload = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--upload"))?,
+                )
+            }
             "--upload-manifest" => {
-                upload_manifest = Some(args.next().ok_or("missing value for --upload-manifest")?)
+                upload_manifest = Some(
+                    args.next()
+                        .ok_or_else(|| cli_missing_value(locale, "--upload-manifest"))?,
+                )
             }
             "--s3-object-lock-mode" => {
                 s3_object_lock_mode = Some(
                     args.next()
-                        .ok_or("missing value for --s3-object-lock-mode")?,
+                        .ok_or_else(|| cli_missing_value(locale, "--s3-object-lock-mode"))?,
                 )
             }
             "--s3-object-lock-retain-until-date" => {
-                s3_object_lock_retain_until_date = Some(
-                    args.next()
-                        .ok_or("missing value for --s3-object-lock-retain-until-date")?,
-                )
+                s3_object_lock_retain_until_date = Some(args.next().ok_or_else(|| {
+                    cli_missing_value(locale, "--s3-object-lock-retain-until-date")
+                })?)
             }
             "--s3-object-lock-legal-hold-status" => {
-                s3_object_lock_legal_hold_status = Some(
-                    args.next()
-                        .ok_or("missing value for --s3-object-lock-legal-hold-status")?,
-                )
+                s3_object_lock_legal_hold_status = Some(args.next().ok_or_else(|| {
+                    cli_missing_value(locale, "--s3-object-lock-legal-hold-status")
+                })?)
             }
             "--help" | "-h" => {
                 println!("{usage}");
                 return Ok(());
             }
-            other => return Err(format!("unknown arg: {other}").into()),
+            other => {
+                return Err(cli_unknown_arg(locale, other, Some(&usage)).into());
+            }
         }
     }
 
-    let base_url = base_url.ok_or(usage)?;
-    let output = output.ok_or(usage)?;
+    let base_url = base_url.ok_or_else(|| usage.clone())?;
+    let output = output.ok_or_else(|| usage.clone())?;
 
     if output == "-" && upload.is_some() {
-        return Err("cannot use --output - together with --upload".into());
+        return Err(audit_export_cannot_combine_output_upload(locale).into());
     }
 
     let admin_token = admin_token
@@ -107,15 +155,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(err) => format!("__ERROR__:{env}:{err}"),
             })
         })
-        .ok_or("missing --admin-token or --admin-token-env")?;
+        .ok_or_else(|| audit_export_missing_admin_token(locale))?;
 
     if let Some(error) = admin_token.strip_prefix("__ERROR__:") {
-        return Err(format!("failed to read admin token from env: {error}").into());
+        return Err(audit_export_failed_to_read_admin_token(locale, error).into());
     }
 
     let format = format.trim().to_ascii_lowercase();
     if format != "jsonl" && format != "ndjson" && format != "csv" {
-        return Err(format!("unsupported format: {format}").into());
+        return Err(audit_export_unsupported_format(locale, &format).into());
     }
 
     let base = base_url.trim_end_matches('/');
@@ -142,7 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("export failed: HTTP {status} {body}").into());
+        return Err(audit_export_export_failed(locale, &status.to_string(), &body).into());
     }
 
     let content_type = match format.as_str() {
@@ -162,7 +210,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             bytes_written = bytes_written.saturating_add(chunk.len() as u64);
         }
         stdout.flush()?;
-        eprintln!("wrote {bytes_written} bytes to stdout");
+        eprintln!("{}", cli_wrote_bytes_to_stdout(locale, bytes_written));
         return Ok(());
     }
 
@@ -183,7 +231,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sha256_hex = hex_lower(&hasher.finalize());
 
     let (records, chain_last_hash) = if format == "jsonl" || format == "ndjson" {
-        let (records, last) = verify_audit_export_jsonl(&output)?;
+        let (records, last) = verify_audit_export_jsonl(locale, &output)?;
         (Some(records), last)
     } else {
         (None, None)
@@ -210,6 +258,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(dest) = upload.as_deref() {
         upload_file(
+            locale,
             &client,
             &output,
             dest,
@@ -222,6 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let manifest_dest = upload_manifest.unwrap_or_else(|| format!("{dest}.manifest.json"));
         upload_file(
+            locale,
             &client,
             &manifest_output,
             &manifest_dest,
@@ -233,9 +283,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     }
 
-    println!("ok");
-    eprintln!("output: {output}");
-    eprintln!("manifest: {manifest_output}");
+    println!("{}", cli_ok(locale));
+    eprintln!("{}", cli_output_path(locale, &output));
+    eprintln!("{}", cli_manifest_path(locale, &manifest_output));
     Ok(())
 }
 
@@ -279,6 +329,7 @@ fn audit_chain_hash(
 
 #[cfg(feature = "gateway")]
 fn verify_audit_export_jsonl(
+    locale: Locale,
     path: &str,
 ) -> Result<(usize, Option<String>), Box<dyn std::error::Error>> {
     use std::io::BufRead as _;
@@ -310,13 +361,9 @@ fn verify_audit_export_jsonl(
         let expected_prev = prev_hash.as_deref().unwrap_or("");
         let got_prev = record.prev_hash.as_deref().unwrap_or("");
         if expected_prev != got_prev {
-            return Err(format!(
-                "hash chain mismatch at line {}: prev_hash expected {} got {}",
-                line_no + 1,
-                expected_prev,
-                got_prev
-            )
-            .into());
+            return Err(
+                audit_hash_chain_mismatch(locale, line_no + 1, expected_prev, got_prev).into(),
+            );
         }
 
         let base = ditto_server::gateway::AuditLogRecord {
@@ -327,13 +374,9 @@ fn verify_audit_export_jsonl(
         };
         let expected_hash = audit_chain_hash(prev_hash.as_deref(), &base);
         if record.hash != expected_hash {
-            return Err(format!(
-                "hash mismatch at line {}: expected {} got {}",
-                line_no + 1,
-                expected_hash,
-                record.hash
-            )
-            .into());
+            return Err(
+                audit_hash_mismatch(locale, line_no + 1, &expected_hash, &record.hash).into(),
+            );
         }
         prev_hash = Some(record.hash);
         count = count.saturating_add(1);
@@ -344,6 +387,7 @@ fn verify_audit_export_jsonl(
 
 #[cfg(feature = "gateway")]
 async fn upload_file(
+    locale: Locale,
     client: &reqwest::Client,
     local_path: &str,
     dest: &str,
@@ -354,6 +398,7 @@ async fn upload_file(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((bucket, key)) = parse_s3_uri(dest) {
         return upload_to_s3_via_aws_cli(
+            locale,
             local_path,
             &bucket,
             &key,
@@ -366,14 +411,14 @@ async fn upload_file(
     }
 
     if dest.starts_with("gs://") {
-        return upload_to_gcs_via_gsutil(local_path, dest, content_type).await;
+        return upload_to_gcs_via_gsutil(locale, local_path, dest, content_type).await;
     }
 
     if dest.starts_with("http://") || dest.starts_with("https://") {
-        return upload_to_http_put(client, local_path, dest, content_type).await;
+        return upload_to_http_put(locale, client, local_path, dest, content_type).await;
     }
 
-    Err(format!("unsupported upload destination: {dest}").into())
+    Err(audit_export_unsupported_upload_destination(locale, dest).into())
 }
 
 #[cfg(feature = "gateway")]
@@ -411,6 +456,7 @@ mod tests {
 
 #[cfg(feature = "gateway")]
 async fn upload_to_s3_via_aws_cli(
+    locale: Locale,
     local_path: &str,
     bucket: &str,
     key: &str,
@@ -443,10 +489,10 @@ async fn upload_to_s3_via_aws_cli(
 
     let output = cmd.output().await?;
     if !output.status.success() {
-        return Err(format!(
-            "aws s3api put-object failed (exit={}): {}",
+        return Err(audit_export_aws_put_object_failed(
+            locale,
             output.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&output.stderr)
+            &String::from_utf8_lossy(&output.stderr),
         )
         .into());
     }
@@ -455,6 +501,7 @@ async fn upload_to_s3_via_aws_cli(
 
 #[cfg(feature = "gateway")]
 async fn upload_to_gcs_via_gsutil(
+    locale: Locale,
     local_path: &str,
     dest: &str,
     content_type: &str,
@@ -468,10 +515,10 @@ async fn upload_to_gcs_via_gsutil(
 
     let output = cmd.output().await?;
     if !output.status.success() {
-        return Err(format!(
-            "gsutil cp failed (exit={}): {}",
+        return Err(audit_export_gsutil_cp_failed(
+            locale,
             output.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&output.stderr)
+            &String::from_utf8_lossy(&output.stderr),
         )
         .into());
     }
@@ -480,6 +527,7 @@ async fn upload_to_gcs_via_gsutil(
 
 #[cfg(feature = "gateway")]
 async fn upload_to_http_put(
+    locale: Locale,
     client: &reqwest::Client,
     local_path: &str,
     dest: &str,
@@ -501,13 +549,187 @@ async fn upload_to_http_put(
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(format!("http upload failed: HTTP {status} {body}").into());
+        return Err(audit_export_http_upload_failed(locale, &status.to_string(), &body).into());
     }
     Ok(())
 }
 
 #[cfg(not(feature = "gateway"))]
 fn main() {
-    eprintln!("ditto-audit-export requires `--features gateway`");
+    eprintln!(
+        "{}",
+        cli_feature_disabled(
+            MESSAGE_CATALOG.default_locale(),
+            "audit export",
+            "--features gateway"
+        )
+    );
     std::process::exit(2);
+}
+
+#[cfg(feature = "gateway")]
+fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> String {
+    if let Some(error) = error.downcast_ref::<ditto_core::error::DittoError>() {
+        return error.render(locale);
+    }
+    if let Some(error) = error.downcast_ref::<ditto_core::error::ProviderResolutionError>() {
+        return error.render(locale);
+    }
+    MESSAGE_CATALOG.render(
+        locale,
+        "error.generic",
+        &[MessageArg::new("error", error.to_string())],
+    )
+}
+
+fn cli_missing_value(locale: Locale, flag: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.missing_value",
+        &[MessageArg::new("flag", flag)],
+    )
+}
+
+fn cli_invalid_value(locale: Locale, label: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.invalid_value",
+        &[MessageArg::new("label", label)],
+    )
+}
+
+fn cli_unknown_arg(locale: Locale, arg: &str, usage: Option<&str>) -> String {
+    let message = MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[MessageArg::new("arg", arg)]);
+    match usage {
+        Some(usage) if !usage.trim().is_empty() => format!("{message}\n{usage}"),
+        _ => message,
+    }
+}
+
+fn cli_wrote_bytes_to_stdout(locale: Locale, bytes_written: u64) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.wrote_bytes_to_stdout",
+        &[MessageArg::new("bytes_written", bytes_written.to_string())],
+    )
+}
+
+fn cli_ok(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "cli.ok", &[])
+}
+
+fn cli_output_path(locale: Locale, path: &str) -> String {
+    MESSAGE_CATALOG.render(locale, "cli.output_path", &[MessageArg::new("path", path)])
+}
+
+fn cli_manifest_path(locale: Locale, path: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.manifest_path",
+        &[MessageArg::new("path", path)],
+    )
+}
+
+fn audit_hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit.hash_chain_mismatch",
+        &[
+            MessageArg::new("line_no", line_no.to_string()),
+            MessageArg::new("expected", expected),
+            MessageArg::new("got", got),
+        ],
+    )
+}
+
+fn audit_hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit.hash_mismatch",
+        &[
+            MessageArg::new("line_no", line_no.to_string()),
+            MessageArg::new("expected", expected),
+            MessageArg::new("got", got),
+        ],
+    )
+}
+
+fn audit_export_usage(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "audit_export.usage", &[])
+}
+
+fn audit_export_cannot_combine_output_upload(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "audit_export.cannot_combine_output_upload", &[])
+}
+
+fn audit_export_missing_admin_token(locale: Locale) -> String {
+    MESSAGE_CATALOG.render(locale, "audit_export.missing_admin_token", &[])
+}
+
+fn audit_export_failed_to_read_admin_token(locale: Locale, error: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.failed_to_read_admin_token",
+        &[MessageArg::new("error", error)],
+    )
+}
+
+fn audit_export_unsupported_format(locale: Locale, format: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.unsupported_format",
+        &[MessageArg::new("format", format)],
+    )
+}
+
+fn audit_export_export_failed(locale: Locale, status: &str, body: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.export_failed",
+        &[
+            MessageArg::new("status", status),
+            MessageArg::new("body", body),
+        ],
+    )
+}
+
+fn audit_export_unsupported_upload_destination(locale: Locale, dest: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.unsupported_upload_destination",
+        &[MessageArg::new("dest", dest)],
+    )
+}
+
+fn audit_export_aws_put_object_failed(locale: Locale, exit_code: i32, stderr: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.aws_put_object_failed",
+        &[
+            MessageArg::new("exit_code", exit_code.to_string()),
+            MessageArg::new("stderr", stderr),
+        ],
+    )
+}
+
+fn audit_export_gsutil_cp_failed(locale: Locale, exit_code: i32, stderr: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.gsutil_cp_failed",
+        &[
+            MessageArg::new("exit_code", exit_code.to_string()),
+            MessageArg::new("stderr", stderr),
+        ],
+    )
+}
+
+fn audit_export_http_upload_failed(locale: Locale, status: &str, body: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "audit_export.http_upload_failed",
+        &[
+            MessageArg::new("status", status),
+            MessageArg::new("body", body),
+        ],
+    )
 }

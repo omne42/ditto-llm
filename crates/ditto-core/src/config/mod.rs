@@ -24,27 +24,27 @@ pub use routing_policy::{
 };
 
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
-    feature = "vertex",
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
+    feature = "provider-vertex",
 ))]
 pub(crate) use auth::HttpAuth;
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
 ))]
 pub(crate) use auth::resolve_provider_request_auth_required;
 #[cfg(any(
-    feature = "anthropic",
-    feature = "cohere",
-    feature = "google",
-    feature = "openai",
-    feature = "openai-compatible",
+    feature = "provider-anthropic",
+    feature = "provider-cohere",
+    feature = "provider-google",
+    feature = "provider-openai",
+    feature = "provider-openai-compatible",
 ))]
 pub(crate) use auth::{RequestAuth, resolve_provider_request_auth_optional};

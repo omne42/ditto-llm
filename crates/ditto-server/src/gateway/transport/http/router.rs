@@ -43,6 +43,7 @@ use axum::routing::{any, get, post, put};
 fn base_http_router() -> Router<GatewayHttpState> {
     Router::new()
         .route("/health", get(health))
+        .route("/ready", get(ready))
         .route("/metrics", get(metrics))
         .route("/v1/gateway", post(handle_gateway))
         .route(

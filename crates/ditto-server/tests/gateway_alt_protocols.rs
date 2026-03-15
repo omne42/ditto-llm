@@ -107,6 +107,7 @@ async fn anthropic_messages_proxy_translates_to_openai_chat_completions() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -217,6 +218,7 @@ async fn anthropic_messages_proxy_forwards_x_api_key_when_virtual_keys_disabled(
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -294,6 +296,7 @@ async fn anthropic_messages_proxy_accepts_messages_alias() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -346,6 +349,7 @@ async fn anthropic_count_tokens_accepts_messages_alias() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let gateway = Gateway::new(config);
     let state = GatewayHttpState::new(gateway);
@@ -417,6 +421,7 @@ async fn anthropic_messages_streaming_translates_openai_sse() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -506,6 +511,7 @@ async fn google_generate_content_forwards_x_goog_api_key_when_virtual_keys_disab
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -575,6 +581,7 @@ async fn google_generate_content_forwards_query_key_when_virtual_keys_disabled()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -647,6 +654,7 @@ async fn google_generate_content_translates_to_openai_chat_completions() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -743,6 +751,7 @@ async fn google_generate_content_accepts_virtual_key_via_query_param() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -831,6 +840,7 @@ async fn cloudcode_generate_content_wraps_google_format() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

@@ -8,7 +8,7 @@ use crate::capabilities::realtime::{
     RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
 };
 use crate::config::{Env, ProviderConfig, RequestAuth};
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 const OPENAI_REALTIME_BETA_HEADER: &str = "realtime=v1";
 
@@ -58,9 +58,9 @@ impl OpenAIRealtime {
         if !self.client.model.trim().is_empty() {
             return Ok(self.client.model.as_str());
         }
-        Err(DittoError::InvalidResponse(
-            "openai realtime model is not set (set request.model or OpenAIRealtime::with_model)"
-                .to_string(),
+        Err(DittoError::provider_model_missing(
+            "openai realtime",
+            "set request.model or OpenAIRealtime::with_model",
         ))
     }
 }
@@ -92,7 +92,7 @@ impl RealtimeSessionModel for OpenAIRealtime {
             match auth {
                 RequestAuth::Http(http) => {
                     let value = http.value.to_str().map_err(|err| {
-                        DittoError::InvalidResponse(format!(
+                        DittoError::invalid_response_text(format!(
                             "invalid realtime auth header value for {}: {err}",
                             http.header.as_str()
                         ))
@@ -108,7 +108,7 @@ impl RealtimeSessionModel for OpenAIRealtime {
         let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
         let mut url = reqwest::Url::parse(&openai_like::join_endpoint(&base_url, "realtime"))
             .map_err(|err| {
-                DittoError::InvalidResponse(format!(
+                DittoError::invalid_response_text(format!(
                     "invalid realtime websocket url {base_url:?}: {err}"
                 ))
             })?;

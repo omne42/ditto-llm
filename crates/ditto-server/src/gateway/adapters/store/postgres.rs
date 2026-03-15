@@ -6,7 +6,11 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::types::Json;
 use thiserror::Error;
 
-use super::{AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, RouterConfig, VirtualKeyConfig};
+use super::{
+    AuditLogRecord, BudgetLedgerRecord, CostLedgerRecord, ProxyRequestFingerprint,
+    ProxyRequestIdempotencyBeginOutcome, ProxyRequestIdempotencyRecord,
+    ProxyRequestIdempotencyState, ProxyRequestReplayOutcome, RouterConfig, VirtualKeyConfig,
+};
 
 #[derive(Clone, Debug)]
 pub struct PostgresStore {
@@ -174,6 +178,31 @@ impl PostgresStore {
         )
         .execute(&self.pool)
         .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS proxy_request_idempotency (
+                request_id TEXT PRIMARY KEY NOT NULL,
+                state TEXT NOT NULL,
+                owner_token TEXT,
+                lease_until_ms BIGINT,
+                expires_at_ms BIGINT NOT NULL,
+                updated_at_ms BIGINT NOT NULL,
+                record_json JSONB NOT NULL
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_request_idempotency_expires_at_ms
+             ON proxy_request_idempotency(expires_at_ms)",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_proxy_request_idempotency_state_lease_until_ms
+             ON proxy_request_idempotency(state, lease_until_ms)",
+        )
+        .execute(&self.pool)
+        .await?;
 
         // Best-effort in-place upgrades for deployments that created TEXT columns earlier.
         sqlx::query(
@@ -280,6 +309,7 @@ impl PostgresStore {
         require_pg_table(&self.pool, "budget_reservations").await?;
         require_pg_table(&self.pool, "cost_ledger").await?;
         require_pg_table(&self.pool, "cost_reservations").await?;
+        require_pg_table(&self.pool, "proxy_request_idempotency").await?;
 
         require_pg_column_udt(&self.pool, "virtual_keys", "value_json", "jsonb").await?;
         require_pg_column_udt(&self.pool, "config_state", "value_json", "jsonb").await?;
@@ -287,6 +317,18 @@ impl PostgresStore {
 
         require_pg_index(&self.pool, "audit_logs", "idx_audit_logs_ts_ms").await?;
         require_pg_index(&self.pool, "audit_logs", "idx_audit_logs_kind_ts_ms").await?;
+        require_pg_index(
+            &self.pool,
+            "proxy_request_idempotency",
+            "idx_proxy_request_idempotency_expires_at_ms",
+        )
+        .await?;
+        require_pg_index(
+            &self.pool,
+            "proxy_request_idempotency",
+            "idx_proxy_request_idempotency_state_lease_until_ms",
+        )
+        .await?;
         require_pg_index(
             &self.pool,
             "budget_reservations",
@@ -382,7 +424,8 @@ impl PostgresStore {
             .execute(&mut *tx)
             .await?;
         for key in keys {
-            let value_json = serde_json::to_value(key)?;
+            let key = key.sanitized_for_persistence();
+            let value_json = serde_json::to_value(&key)?;
             sqlx::query("INSERT INTO virtual_keys (id, value_json) VALUES ($1, $2)")
                 .bind(&key.id)
                 .bind(Json(value_json))
@@ -1189,6 +1232,262 @@ impl PostgresStore {
         }
         Ok(out)
     }
+
+    pub async fn begin_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        fingerprint: &ProxyRequestFingerprint,
+        fingerprint_key: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<ProxyRequestIdempotencyBeginOutcome, PostgresStoreError> {
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = u64_to_i64(lease_until_ms);
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM proxy_request_idempotency WHERE expires_at_ms < $1")
+            .bind(now_ms_i64)
+            .execute(&mut *tx)
+            .await?;
+
+        let row = sqlx::query(
+            "SELECT record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = $1
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(row) = row {
+            let Json(record): Json<ProxyRequestIdempotencyRecord> = row.try_get("record_json")?;
+            if record.fingerprint_key != fingerprint_key {
+                tx.commit().await?;
+                return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict { record });
+            }
+            if record.expires_at_ms >= now_ms {
+                match record.state {
+                    ProxyRequestIdempotencyState::Completed => {
+                        tx.commit().await?;
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::Replay { record });
+                    }
+                    ProxyRequestIdempotencyState::InFlight => {
+                        tx.commit().await?;
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight { record });
+                    }
+                }
+            }
+        }
+
+        let record = new_proxy_request_idempotency_record(
+            request_id.to_string(),
+            fingerprint.clone(),
+            fingerprint_key.to_string(),
+            owner_token.to_string(),
+            now_ms,
+            lease_until_ms,
+        );
+        sqlx::query(
+            "INSERT INTO proxy_request_idempotency (
+                 request_id,
+                 state,
+                 owner_token,
+                 lease_until_ms,
+                 expires_at_ms,
+                 updated_at_ms,
+                 record_json
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (request_id) DO UPDATE SET
+                 state = EXCLUDED.state,
+                 owner_token = EXCLUDED.owner_token,
+                 lease_until_ms = EXCLUDED.lease_until_ms,
+                 expires_at_ms = EXCLUDED.expires_at_ms,
+                 updated_at_ms = EXCLUDED.updated_at_ms,
+                 record_json = EXCLUDED.record_json",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(record.state))
+        .bind(owner_token)
+        .bind(lease_until_ms_i64)
+        .bind(lease_until_ms_i64)
+        .bind(now_ms_i64)
+        .bind(Json(&record))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(ProxyRequestIdempotencyBeginOutcome::Acquired)
+    }
+
+    pub async fn get_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        now_ms: u64,
+    ) -> Result<Option<ProxyRequestIdempotencyRecord>, PostgresStoreError> {
+        let row = sqlx::query(
+            "SELECT record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = $1 AND expires_at_ms >= $2",
+        )
+        .bind(request_id)
+        .bind(u64_to_i64(now_ms))
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let Json(record): Json<ProxyRequestIdempotencyRecord> = row.try_get("record_json")?;
+        Ok(Some(record))
+    }
+
+    pub async fn refresh_proxy_request_idempotency_lease(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        now_ms: u64,
+        lease_ttl_ms: u64,
+    ) -> Result<bool, PostgresStoreError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "SELECT record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = $1
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+        let Json(mut record): Json<ProxyRequestIdempotencyRecord> = row.try_get("record_json")?;
+        if record.state != ProxyRequestIdempotencyState::InFlight
+            || record.owner_token.as_deref() != Some(owner_token)
+        {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
+        let lease_until_ms_i64 = u64_to_i64(lease_until_ms);
+        record.updated_at_ms = now_ms;
+        record.lease_until_ms = Some(lease_until_ms);
+        record.expires_at_ms = lease_until_ms;
+
+        let updated = sqlx::query(
+            "UPDATE proxy_request_idempotency
+             SET lease_until_ms = $3,
+                 expires_at_ms = $4,
+                 updated_at_ms = $5,
+                 record_json = $6
+             WHERE request_id = $1 AND owner_token = $2 AND state = $7",
+        )
+        .bind(request_id)
+        .bind(owner_token)
+        .bind(lease_until_ms_i64)
+        .bind(lease_until_ms_i64)
+        .bind(now_ms_i64)
+        .bind(Json(&record))
+        .bind(proxy_request_idempotency_state_label(
+            ProxyRequestIdempotencyState::InFlight,
+        ))
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn complete_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+        outcome: &ProxyRequestReplayOutcome,
+        now_ms: u64,
+        replay_ttl_ms: u64,
+    ) -> Result<bool, PostgresStoreError> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "SELECT record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = $1
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            tx.commit().await?;
+            return Ok(false);
+        };
+        let Json(mut record): Json<ProxyRequestIdempotencyRecord> = row.try_get("record_json")?;
+        if record.state != ProxyRequestIdempotencyState::InFlight
+            || record.owner_token.as_deref() != Some(owner_token)
+        {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        let now_ms_i64 = u64_to_i64(now_ms);
+        let expires_at_ms = now_ms.saturating_add(replay_ttl_ms);
+        let expires_at_ms_i64 = u64_to_i64(expires_at_ms);
+        record.state = ProxyRequestIdempotencyState::Completed;
+        record.owner_token = None;
+        record.lease_until_ms = None;
+        record.completed_at_ms = Some(now_ms);
+        record.updated_at_ms = now_ms;
+        record.expires_at_ms = expires_at_ms;
+        record.outcome = Some(outcome.clone());
+
+        let updated = sqlx::query(
+            "UPDATE proxy_request_idempotency
+             SET state = $2,
+                 owner_token = NULL,
+                 lease_until_ms = NULL,
+                 expires_at_ms = $3,
+                 updated_at_ms = $4,
+                 record_json = $5
+             WHERE request_id = $1 AND owner_token = $6",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(record.state))
+        .bind(expires_at_ms_i64)
+        .bind(now_ms_i64)
+        .bind(Json(&record))
+        .bind(owner_token)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+
+        tx.commit().await?;
+        Ok(updated > 0)
+    }
+
+    pub async fn release_proxy_request_idempotency(
+        &self,
+        request_id: &str,
+        owner_token: &str,
+    ) -> Result<bool, PostgresStoreError> {
+        let deleted = sqlx::query(
+            "DELETE FROM proxy_request_idempotency
+             WHERE request_id = $1 AND state = $2 AND owner_token = $3",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(
+            ProxyRequestIdempotencyState::InFlight,
+        ))
+        .bind(owner_token)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(deleted > 0)
+    }
 }
 
 async fn ensure_pg_check_constraint(
@@ -1373,6 +1672,36 @@ fn should_run_retention_reap(last_reap_ms: &AtomicI64, now_ms: i64) -> bool {
             Ok(_) => return true,
             Err(actual) => observed = actual,
         }
+    }
+}
+
+fn proxy_request_idempotency_state_label(state: ProxyRequestIdempotencyState) -> &'static str {
+    match state {
+        ProxyRequestIdempotencyState::InFlight => "in_flight",
+        ProxyRequestIdempotencyState::Completed => "completed",
+    }
+}
+
+fn new_proxy_request_idempotency_record(
+    request_id: String,
+    fingerprint: ProxyRequestFingerprint,
+    fingerprint_key: String,
+    owner_token: String,
+    now_ms: u64,
+    lease_until_ms: u64,
+) -> ProxyRequestIdempotencyRecord {
+    ProxyRequestIdempotencyRecord {
+        request_id,
+        fingerprint,
+        fingerprint_key,
+        state: ProxyRequestIdempotencyState::InFlight,
+        owner_token: Some(owner_token),
+        started_at_ms: now_ms,
+        updated_at_ms: now_ms,
+        lease_until_ms: Some(lease_until_ms),
+        completed_at_ms: None,
+        expires_at_ms: lease_until_ms,
+        outcome: None,
     }
 }
 

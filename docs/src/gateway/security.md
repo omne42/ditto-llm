@@ -46,7 +46,7 @@
 
 ## 2) Virtual Keys：把“对外 API key”当作一等公民
 
-启用 virtual keys 后（`gateway.json.virtual_keys` 非空）：
+Proxy-compatible HTTP surfaces 默认 fail-close：
 
 - 所有 `/v1/*` 请求必须携带 virtual key
 - Ditto 会把客户端的 `authorization` / `x-api-key` 当作 virtual key，并在转发 upstream 前移除，避免泄露
@@ -62,7 +62,7 @@
 
 只有当你显式设置 `--admin-token*`（write）或 `--admin-read-token*`（read-only）时，Ditto 才会挂载 `/admin/*`。
 
-建议把 read-only token 用于只读观测与审计查询；写操作只给 write token。
+建议把 read-only token 用于只读观测与审计查询；写操作只给 write token。`include_tokens=true` 这类 secret 导出不会对 read-only token 放行。
 
 部署建议：
 

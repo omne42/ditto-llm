@@ -1,5 +1,5 @@
 use ditto_core::contracts::{GenerateRequest, Message};
-use ditto_core::foundation::error::Result;
+use ditto_core::error::Result;
 use ditto_core::llm_core::model::LanguageModel;
 use ditto_core::providers::Anthropic;
 use httpmock::{Method::POST, MockServer};

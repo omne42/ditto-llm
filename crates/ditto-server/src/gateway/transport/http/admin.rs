@@ -5,7 +5,7 @@
     feature = "gateway-store-redis"
 ))]
 use super::admin_persistence::append_admin_audit_log;
-use super::admin_persistence::persist_virtual_keys;
+use super::admin_persistence::apply_control_plane_change;
 use super::*;
 
 // inlined from admin/handlers.rs
@@ -1943,6 +1943,9 @@ pub(super) async fn list_keys(
     Query(query): Query<ListKeysQuery>,
 ) -> Result<Json<Vec<VirtualKeyConfig>>, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_read(&state, &headers)?;
+    if query.include_tokens {
+        ensure_admin_secret_access(&admin)?;
+    }
     let mut keys = state.list_virtual_keys_snapshot();
 
     if let Some(enabled) = query.enabled {
@@ -2055,13 +2058,10 @@ pub(super) async fn upsert_key(
             format!("invalid guardrails config: {err}"),
         ));
     }
-    let (inserted, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
-        let inserted = gateway.upsert_virtual_key(key.clone());
-        let persisted_keys = gateway.list_virtual_keys();
-        (inserted, persisted_keys)
-    });
-    state.sync_control_plane_from_gateway();
-    let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.upsert").await?;
+    let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
+        Ok(gateway.upsert_virtual_key(key.clone()))
+    })
+    .await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -2130,13 +2130,10 @@ pub(super) async fn upsert_key_with_id(
             format!("invalid guardrails config: {err}"),
         ));
     }
-    let (inserted, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
-        let inserted = gateway.upsert_virtual_key(key.clone());
-        let persisted_keys = gateway.list_virtual_keys();
-        (inserted, persisted_keys)
-    });
-    state.sync_control_plane_from_gateway();
-    let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.upsert").await?;
+    let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
+        Ok(gateway.upsert_virtual_key(key.clone()))
+    })
+    .await?;
 
     #[cfg(feature = "sdk")]
     emit_devtools_log(
@@ -2183,7 +2180,7 @@ pub(super) async fn delete_key(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let admin = ensure_admin_write(&state, &headers)?;
-    let (removed, persisted_keys) = state.gateway.mutate_control_plane(|gateway| {
+    apply_control_plane_change(&state, "admin.key.delete", |gateway| {
         if let Some(admin_tenant) = admin.tenant_id.as_deref() {
             let existing = gateway.list_virtual_keys();
             let Some(existing_key) = existing.iter().find(|key| key.id == id) else {
@@ -2201,47 +2198,39 @@ pub(super) async fn delete_key(
                 ));
             }
         }
-        let removed = gateway.remove_virtual_key(&id).is_some();
-        let persisted_keys = gateway.list_virtual_keys();
-        Ok((removed, persisted_keys))
-    })?;
-    state.sync_control_plane_from_gateway();
-    if removed {
-        let _ = persist_virtual_keys(&state, &persisted_keys, "admin.key.delete").await?;
+        gateway.remove_virtual_key(&id).ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, "not_found", "virtual key not found")
+        })?;
+        Ok(())
+    })
+    .await?;
 
-        #[cfg(feature = "sdk")]
-        emit_devtools_log(
-            &state,
-            "admin.key.delete",
-            serde_json::json!({
-                "key_id": &id,
-            }),
-        );
+    #[cfg(feature = "sdk")]
+    emit_devtools_log(
+        &state,
+        "admin.key.delete",
+        serde_json::json!({
+            "key_id": &id,
+        }),
+    );
 
-        #[cfg(any(
-            feature = "gateway-store-sqlite",
-            feature = "gateway-store-postgres",
-            feature = "gateway-store-mysql",
-            feature = "gateway-store-redis"
-        ))]
-        append_admin_audit_log(
-            &state,
-            "admin.key.delete",
-            serde_json::json!({
-                "key_id": &id,
-                "tenant_id": admin.tenant_id.as_deref(),
-            }),
-        )
-        .await;
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
+    append_admin_audit_log(
+        &state,
+        "admin.key.delete",
+        serde_json::json!({
+            "key_id": &id,
+            "tenant_id": admin.tenant_id.as_deref(),
+        }),
+    )
+    .await;
 
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(error_response(
-            StatusCode::NOT_FOUND,
-            "not_found",
-            "virtual key not found",
-        ))
-    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 const MAX_ADMIN_LIST_LIMIT: usize = 10_000;
@@ -2775,6 +2764,7 @@ mod admin_auth_tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
+            i18n: Default::default(),
         };
         GatewayHttpState::new(crate::gateway::Gateway::new(config))
     }

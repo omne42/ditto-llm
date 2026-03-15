@@ -10,11 +10,40 @@ use crate::config::ProviderConfig;
 use crate::contracts::{
     CapabilityKind, RuntimeRoute, RuntimeRouteRequest, invocation_operations_for_capability,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
 
 // RUNTIME-BUILDER-ASSEMBLY-PROTOCOL: keep provider/config/capability ->
 // builder-backend/config resolution in one owner so `model_builders` stays
 // focused on adapter instantiation instead of accumulating route semantics.
+
+fn unsupported_provider_backend(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.unsupported_provider_backend",
+        "provider" => provider
+    )
+}
+
+fn route_resolution_failed(
+    provider: &str,
+    model: &str,
+    capability: CapabilityKind,
+    attempts: usize,
+) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.route_resolution_failed",
+        "provider" => provider,
+        "model" => model,
+        "capability" => capability.to_string(),
+        "attempts" => attempts.to_string()
+    )
+}
+
+fn context_cache_model_missing(provider: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.builder.context_cache_model_missing_config_hint",
+        "provider" => provider
+    )
+}
 
 pub(super) fn configured_default_model(config: &ProviderConfig) -> Option<&str> {
     config
@@ -69,17 +98,13 @@ pub(super) fn default_builder_assembly(
     let runtime = builtin_runtime_assembly();
     let provider = provider.trim();
     if provider.is_empty() {
-        return Err(DittoError::InvalidResponse(
-            "unsupported provider backend: ".to_string(),
-        ));
+        return Err(unsupported_provider_backend(provider));
     }
 
     let plugin = runtime
         .registry()
         .resolve_builder_provider(provider, config)
-        .ok_or_else(|| {
-            DittoError::InvalidResponse(format!("unsupported provider backend: {provider}"))
-        })?;
+        .ok_or_else(|| unsupported_provider_backend(provider))?;
 
     let mut runtime_config = config.clone();
     if runtime_config.base_url.is_none() {
@@ -113,7 +138,7 @@ pub(super) fn resolve_builder_assembly(
 
     if let Some(model) = requested_model {
         let mut first_error = None;
-        let mut error_messages = Vec::<String>::new();
+        let mut error_count = 0usize;
         for &operation in invocation_operations_for_capability(request.capability) {
             match resolve_runtime_route(
                 &runtime.catalog(),
@@ -138,32 +163,24 @@ pub(super) fn resolve_builder_assembly(
                     });
                 }
                 Err(err) => {
+                    error_count += 1;
                     if first_error.is_none() {
                         first_error = Some(err);
-                    } else {
-                        error_messages.push(err.to_string());
                     }
                 }
             }
         }
 
-        if error_messages.is_empty() {
+        if error_count <= 1 {
             return Err(first_error.expect("builder route resolution should record an error"));
         }
 
-        let mut messages = Vec::with_capacity(error_messages.len() + 1);
-        messages.push(
-            first_error
-                .expect("builder route resolution should record an error")
-                .to_string(),
-        );
-        messages.extend(error_messages);
-        return Err(DittoError::InvalidResponse(format!(
-            "failed to resolve runtime route for provider={} model={model} capability={}: {}",
+        return Err(route_resolution_failed(
             plugin.catalog_provider,
+            model,
             request.capability,
-            messages.join("; ")
-        )));
+            error_count,
+        ));
     }
 
     if !runtime.registry().provider_supports_capability(
@@ -173,7 +190,7 @@ pub(super) fn resolve_builder_assembly(
         request.capability,
     ) {
         return Err(
-            crate::foundation::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
+            crate::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
                 provider: plugin.catalog_provider.to_string(),
                 model: "*".to_string(),
                 capability: request.capability.to_string(),
@@ -202,9 +219,7 @@ pub(super) fn resolve_context_cache_assembly(
                 .catalog()
                 .plugin_for_runtime_request(provider, config.runtime_hints())
         })
-        .ok_or_else(|| {
-            DittoError::InvalidResponse(format!("unsupported provider backend: {provider}"))
-        })?;
+        .ok_or_else(|| unsupported_provider_backend(provider))?;
     let mut runtime_config = config.clone();
     if runtime_config.base_url.is_none() {
         runtime_config.base_url = plugin.default_base_url.map(str::to_string);
@@ -214,12 +229,8 @@ pub(super) fn resolve_context_cache_assembly(
         behavior_provider: plugin.id,
         config: runtime_config,
     };
-    let model = configured_default_model(config).ok_or_else(|| {
-        DittoError::InvalidResponse(format!(
-            "context cache model is not set for provider {} (set ProviderConfig.default_model)",
-            fallback.behavior_provider
-        ))
-    })?;
+    let model = configured_default_model(config)
+        .ok_or_else(|| context_cache_model_missing(fallback.behavior_provider))?;
 
     if !runtime.registry().provider_supports_capability(
         provider,
@@ -228,7 +239,7 @@ pub(super) fn resolve_context_cache_assembly(
         CapabilityKind::CONTEXT_CACHE,
     ) {
         return Err(
-            crate::foundation::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
+            crate::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
                 provider: fallback.behavior_provider.to_string(),
                 model: model.to_string(),
                 capability: CapabilityKind::CONTEXT_CACHE.to_string(),

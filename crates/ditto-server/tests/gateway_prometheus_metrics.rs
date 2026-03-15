@@ -44,8 +44,7 @@ fn build_proxy_backends(
 }
 
 #[tokio::test]
-async fn prometheus_metrics_endpoint_tracks_proxy_counters()
--> ditto_core::foundation::error::Result<()> {
+async fn prometheus_metrics_endpoint_tracks_proxy_counters() -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -76,6 +75,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -162,8 +162,8 @@ async fn prometheus_metrics_endpoint_tracks_proxy_counters()
 
 #[cfg(feature = "gateway-proxy-cache")]
 #[tokio::test]
-async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters()
--> ditto_core::foundation::error::Result<()> {
+async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters() -> ditto_core::error::Result<()>
+{
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -194,6 +194,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters()
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -288,7 +289,7 @@ async fn prometheus_metrics_endpoint_tracks_proxy_cache_counters()
 
 #[tokio::test]
 async fn prometheus_metrics_endpoint_redacts_labels_with_observability_policy()
--> ditto_core::foundation::error::Result<()> {
+-> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }
@@ -327,6 +328,7 @@ async fn prometheus_metrics_endpoint_redacts_labels_with_observability_policy()
             redaction,
             sampling: Default::default(),
         },
+        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

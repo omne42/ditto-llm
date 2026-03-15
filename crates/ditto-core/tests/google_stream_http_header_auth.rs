@@ -1,4 +1,4 @@
-#![cfg(all(feature = "google", feature = "streaming"))]
+#![cfg(all(feature = "provider-google", feature = "cap-llm-streaming"))]
 
 use std::collections::BTreeMap;
 
@@ -11,8 +11,8 @@ use futures_util::StreamExt;
 use httpmock::{Method::POST, MockServer};
 
 #[tokio::test]
-async fn google_stream_supports_authorization_bearer_header_auth()
--> ditto_core::foundation::error::Result<()> {
+async fn google_stream_supports_authorization_bearer_header_auth() -> ditto_core::error::Result<()>
+{
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return Ok(());
     }

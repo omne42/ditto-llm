@@ -12,6 +12,7 @@ pub(crate) use crate::contracts::{
     RuntimeProviderHints, RuntimeRoute, RuntimeRouteRequest, TransportKind, VerificationStatus,
     WireProtocol, capability_for_operation,
 };
+pub use crate::error::ReferenceCatalogLoadError;
 pub use builtin::{builtin_provider_plugins, builtin_registry};
 pub use provider_runtime::{
     ModelCapabilityDescriptor, ProviderCapabilityBinding, ProviderCapabilityResolution,
@@ -19,11 +20,11 @@ pub use provider_runtime::{
 };
 pub use reference_schema::{
     ReferenceCatalogExpectation, ReferenceCatalogExpectationIssue,
-    ReferenceCatalogExpectationReport, ReferenceCatalogLoadError, ReferenceCatalogRole,
-    ReferenceCatalogValidationIssue, ReferenceCatalogValidationReport,
-    ReferenceModelCapabilityProfile, ReferenceModelEntry, ReferenceModelRecord,
-    ReferenceProviderAuth, ReferenceProviderCapabilityProfile, ReferenceProviderDescriptor,
-    ReferenceProviderModelCatalog, core_provider_reference_catalog_expectations,
+    ReferenceCatalogExpectationReport, ReferenceCatalogRole, ReferenceCatalogValidationIssue,
+    ReferenceCatalogValidationReport, ReferenceModelCapabilityProfile, ReferenceModelEntry,
+    ReferenceModelRecord, ReferenceProviderAuth, ReferenceProviderCapabilityProfile,
+    ReferenceProviderDescriptor, ReferenceProviderModelCatalog,
+    core_provider_reference_catalog_expectations,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -333,7 +334,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn builtin_registry_resolves_generic_openai_chat() {
         let resolved = builtin_registry()
@@ -354,7 +355,7 @@ mod tests {
         assert_eq!(resolved.async_job, None);
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn builtin_registry_exposes_official_openai_models() {
         let registry = builtin_registry();
@@ -370,7 +371,7 @@ mod tests {
         );
     }
 
-    #[cfg(any(feature = "provider-openai", feature = "openai"))]
+    #[cfg(feature = "provider-openai")]
     #[test]
     fn builtin_registry_supports_operation_queries() {
         let registry = builtin_registry();
@@ -378,10 +379,7 @@ mod tests {
         assert!(!registry.supports_operation("openai", "", OperationKind::CHAT_COMPLETION));
     }
 
-    #[cfg(all(
-        feature = "embeddings",
-        any(feature = "provider-openai", feature = "openai")
-    ))]
+    #[cfg(all(feature = "cap-embedding", feature = "provider-openai"))]
     #[test]
     fn builtin_registry_resolves_generic_openai_embeddings() {
         let resolved = builtin_registry()

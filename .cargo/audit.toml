@@ -1,0 +1,7 @@
+[advisories]
+ignore = [
+    # Transitive through sqlx-mysql. RustSec currently has no fixed upgrade for
+    # this advisory, so CI tracks it as an explicit temporary exception instead
+    # of silently leaving cargo-audit red forever.
+    "RUSTSEC-2023-0071",
+]

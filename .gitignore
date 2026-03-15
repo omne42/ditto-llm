@@ -21,3 +21,7 @@ pnpm-debug.log*
 /.omne_data/
 /.omne-data/
 gateway.local.json
+
+
+.tmp
+tmp

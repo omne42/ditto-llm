@@ -5,7 +5,42 @@ use futures_util::stream::{self, BoxStream};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt};
 use tokio_util::io::StreamReader;
 
-use crate::foundation::error::{DittoError, Result};
+use crate::error::{DittoError, Result};
+
+fn sse_limit_must_be_positive(limit: &str) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sse.limit_must_be_positive",
+        "limit" => limit
+    )
+}
+
+fn sse_line_too_large(max_line_bytes: usize) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sse.line_too_large",
+        "max_line_bytes" => max_line_bytes.to_string()
+    )
+}
+
+fn sse_event_too_large(max_event_bytes: usize) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sse.event_too_large",
+        "max_event_bytes" => max_event_bytes.to_string()
+    )
+}
+
+fn sse_read_line_failed(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sse.read_line_failed",
+        "error" => error.to_string()
+    )
+}
+
+fn sse_invalid_utf8(error: impl std::fmt::Display) -> DittoError {
+    crate::invalid_response!(
+        "error_detail.sse.invalid_utf8",
+        "error" => error.to_string()
+    )
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SseLimits {
@@ -31,9 +66,7 @@ where
     R: AsyncBufRead + Unpin,
 {
     if max_bytes == 0 {
-        return Err(DittoError::InvalidResponse(
-            "max_bytes must be > 0".to_string(),
-        ));
+        return Err(sse_limit_must_be_positive("max_line_bytes"));
     }
 
     out.clear();
@@ -48,9 +81,7 @@ where
         let take_len = newline_pos.map(|pos| pos + 1).unwrap_or(buf.len());
 
         if out.len().saturating_add(take_len) > max_bytes {
-            return Err(DittoError::InvalidResponse(format!(
-                "SSE line exceeds max_line_bytes={max_bytes}"
-            )));
+            return Err(sse_line_too_large(max_bytes));
         }
 
         out.extend_from_slice(&buf[..take_len]);
@@ -72,9 +103,7 @@ where
     R: AsyncBufRead + Unpin,
 {
     if limits.max_event_bytes == 0 {
-        return Err(DittoError::InvalidResponse(
-            "max_event_bytes must be > 0".to_string(),
-        ));
+        return Err(sse_limit_must_be_positive("max_event_bytes"));
     }
 
     buffer.clear();
@@ -82,9 +111,7 @@ where
     loop {
         let has_line = read_next_line_bytes_limited(reader, line_bytes, limits.max_line_bytes)
             .await
-            .map_err(|err| {
-                DittoError::InvalidResponse(format!("failed to read SSE line: {err}"))
-            })?;
+            .map_err(sse_read_line_failed)?;
         if !has_line {
             if buffer.is_empty() {
                 return Ok(None);
@@ -93,8 +120,7 @@ where
             return Ok(Some(data));
         }
 
-        let line = std::str::from_utf8(line_bytes)
-            .map_err(|err| DittoError::InvalidResponse(format!("invalid SSE UTF-8: {err}")))?;
+        let line = std::str::from_utf8(line_bytes).map_err(sse_invalid_utf8)?;
         let line = line.trim_end_matches(['\r', '\n']);
 
         if line.is_empty() {
@@ -117,10 +143,7 @@ where
                 .saturating_add(rest.len())
                 > limits.max_event_bytes
             {
-                return Err(DittoError::InvalidResponse(format!(
-                    "SSE event exceeds max_event_bytes={}",
-                    limits.max_event_bytes
-                )));
+                return Err(sse_event_too_large(limits.max_event_bytes));
             }
             if separator_bytes == 1 {
                 buffer.push('\n');
@@ -155,69 +178,6 @@ where
     R: AsyncBufRead + Unpin + Send + 'static,
 {
     sse_data_stream_from_reader_with_limits(reader, SseLimits::default())
-}
-
-#[allow(dead_code)]
-#[deprecated(note = "use sse_data_stream_from_reader(_with_limits) for bounded parsing")]
-pub fn sse_data_stream_from_lines<R>(
-    lines: tokio::io::Lines<R>,
-) -> BoxStream<'static, Result<String>>
-where
-    R: AsyncBufRead + Unpin + Send + 'static,
-{
-    Box::pin(stream::try_unfold(
-        (lines, String::new(), SseLimits::default()),
-        |(mut lines, mut buffer, limits)| async move {
-            buffer.clear();
-
-            loop {
-                let Some(line) = lines.next_line().await? else {
-                    if buffer.is_empty() {
-                        return Ok(None);
-                    }
-                    return Ok(Some((std::mem::take(&mut buffer), (lines, buffer, limits))));
-                };
-
-                if line.len() > limits.max_line_bytes {
-                    return Err(DittoError::InvalidResponse(format!(
-                        "SSE line exceeds max_line_bytes={}",
-                        limits.max_line_bytes
-                    )));
-                }
-
-                let line = line.trim_end_matches('\r');
-                if line.is_empty() {
-                    if buffer.is_empty() {
-                        continue;
-                    }
-                    if buffer == "[DONE]" {
-                        return Ok(None);
-                    }
-                    return Ok(Some((std::mem::take(&mut buffer), (lines, buffer, limits))));
-                }
-
-                if let Some(rest) = line.strip_prefix("data:") {
-                    let rest = rest.trim_start();
-                    let separator_bytes = usize::from(!buffer.is_empty());
-                    if buffer
-                        .len()
-                        .saturating_add(separator_bytes)
-                        .saturating_add(rest.len())
-                        > limits.max_event_bytes
-                    {
-                        return Err(DittoError::InvalidResponse(format!(
-                            "SSE event exceeds max_event_bytes={}",
-                            limits.max_event_bytes
-                        )));
-                    }
-                    if separator_bytes == 1 {
-                        buffer.push('\n');
-                    }
-                    buffer.push_str(rest);
-                }
-            }
-        },
-    ))
 }
 
 pub fn sse_data_stream_from_response(

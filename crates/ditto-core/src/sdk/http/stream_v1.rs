@@ -5,7 +5,7 @@ use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use futures_util::stream::{self, BoxStream};
 
-use crate::foundation::error::DittoError;
+use crate::error::DittoError;
 use crate::llm_core::model::StreamResult;
 
 use super::protocol::{StreamEventV1, encode_v1_bytes};

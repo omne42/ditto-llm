@@ -1,6 +1,6 @@
 #![cfg(feature = "config-interactive")]
 
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::DittoError;
 use ditto_server::config_editing::{
     ConfigScope, ModelUpsertRequest, ProviderAuthType, ProviderNamespace, ProviderUpsertRequest,
     complete_model_upsert_request_interactive, complete_provider_upsert_request_interactive,
@@ -43,7 +43,7 @@ fn provider_interactive_requires_tty() {
     })
     .expect_err("non-tty tests should reject interactive mode");
 
-    assert!(matches!(err, DittoError::Config(message) if message.contains("TTY")));
+    assert!(matches!(err, DittoError::Config(message) if message.to_string().contains("TTY")));
 }
 
 #[test]
@@ -63,5 +63,5 @@ fn model_interactive_requires_tty() {
     })
     .expect_err("non-tty tests should reject interactive mode");
 
-    assert!(matches!(err, DittoError::Config(message) if message.contains("TTY")));
+    assert!(matches!(err, DittoError::Config(message) if message.to_string().contains("TTY")));
 }

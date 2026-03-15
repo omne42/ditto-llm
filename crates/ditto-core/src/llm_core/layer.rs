@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::contracts::{GenerateRequest, GenerateResponse};
-use crate::foundation::error::Result;
+use crate::error::Result;
 
 use super::model::{LanguageModel, StreamResult};
 

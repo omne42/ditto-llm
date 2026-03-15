@@ -6,7 +6,7 @@ use crate::contracts::{
     CapabilityKind, InvocationHints, OperationKind, ResolvedEndpoint, ResolvedInvocation,
     RuntimeRoute, RuntimeRouteRequest,
 };
-use crate::foundation::error::{DittoError, Result};
+use crate::error::Result;
 
 use super::builtin::builtin_runtime_assembly;
 use super::explain::{http_method_name, transport_name};
@@ -387,10 +387,10 @@ fn transport_auth_plan_from_hint(
             prefix: hint.prefix.map(str::to_string),
             credential,
         }),
-        _ => Err(DittoError::InvalidResponse(format!(
-            "provider {} auth hint is missing a transport injection target",
-            source_provider_label(source)
-        ))),
+        _ => Err(crate::invalid_response!(
+            "error_detail.runtime_transport.auth_hint_target_missing",
+            "provider" => source_provider_label(source)
+        )),
     }
 }
 
@@ -400,10 +400,10 @@ fn apply_default_auth_target(
     credential: RuntimeTransportCredentialSource,
 ) -> Result<RuntimeTransportAuthPlan> {
     let Some(hint) = plugin.auth_hint else {
-        return Err(DittoError::InvalidResponse(format!(
-            "provider {} cannot infer a default auth transport target",
-            plugin.id
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.runtime_transport.default_auth_target_unavailable",
+            "provider" => plugin.id
+        ));
     };
 
     match (hint.header_name, hint.query_param) {
@@ -419,10 +419,10 @@ fn apply_default_auth_target(
             prefix: hint.prefix.map(str::to_string),
             credential,
         }),
-        _ => Err(DittoError::InvalidResponse(format!(
-            "provider {} default auth hint is missing a transport injection target",
-            plugin.id
-        ))),
+        _ => Err(crate::invalid_response!(
+            "error_detail.runtime_transport.default_auth_hint_target_missing",
+            "provider" => plugin.id
+        )),
     }
 }
 

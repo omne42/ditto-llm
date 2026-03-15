@@ -191,7 +191,7 @@ These are the rules that code review should enforce.
 - `crate::config` and `crate::runtime` now exist as real facades instead of only aspirational names.
 - `catalog/resolver.rs` already resolves config types through `crate::config`, not `crate::profile`.
 - OpenAI-compatible family quirks inference moved out of the legacy `profile` namespace into a provider-shared module; `profile` remains a compatibility shell.
-- `src/file.rs` is back to being a pure capability facade; `FileClient` implementations now live in provider code.
+- `crates/ditto-core/src/capabilities/file.rs` is back to being a pure capability facade; `FileClient` implementations now live in provider code.
 - `cargo check --features agent` is green again after repairing shared OpenAI-family gates.
 
 ## Immediate Corrections

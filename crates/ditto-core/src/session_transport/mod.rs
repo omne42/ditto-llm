@@ -22,14 +22,14 @@ pub use sse::{
 #[allow(unused_imports)]
 pub(crate) use streaming::init_sse_stream;
 
-#[cfg(feature = "realtime")]
+#[cfg(feature = "cap-realtime")]
 pub(crate) fn to_websocket_base_url(base_url: &str) -> String {
     resolve_websocket_base_url(base_url).base_url
 }
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "realtime")]
+    #[cfg(feature = "cap-realtime")]
     #[test]
     fn to_websocket_base_url_rewrites_http_and_https() {
         assert_eq!(

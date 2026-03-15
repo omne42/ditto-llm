@@ -1,10 +1,12 @@
 #[cfg(feature = "gateway")]
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "gateway")]
 use ditto_core::config::ProviderApi;
 #[cfg(feature = "gateway")]
-use ditto_core::foundation::error::DittoError;
+use ditto_core::error::{DittoError, StructuredMessage};
+#[cfg(feature = "gateway")]
+use ditto_core::i18n::{Locale, MessageArg};
 #[cfg(feature = "gateway")]
 use ditto_server::config_editing::{
     ConfigScope, ModelDeleteRequest, ModelListRequest, ModelShowRequest, ModelUpsertRequest,
@@ -21,11 +23,27 @@ use ditto_server::config_editing::{
 #[cfg(feature = "gateway")]
 use serde_json::Value;
 
+#[cfg(feature = "gateway")]
+use crate::ditto_gateway::clap_i18n::{
+    LocalizedCliError, localize_clap_command, render_clap_error,
+};
+
+#[cfg(feature = "gateway")]
+fn config_error(_locale: Locale, key: &'static str, args: &[MessageArg<'_>]) -> DittoError {
+    let message = args
+        .iter()
+        .fold(StructuredMessage::new(key), |message, arg| {
+            message.arg(arg.name(), arg.value())
+        });
+    DittoError::Config(message)
+}
+
 #[cfg(all(feature = "gateway", feature = "config-interactive"))]
 fn maybe_complete_provider_request_interactive(
     request: ProviderUpsertRequest,
     use_interactive: bool,
-) -> ditto_core::foundation::error::Result<ProviderUpsertRequest> {
+    _locale: Locale,
+) -> ditto_core::error::Result<ProviderUpsertRequest> {
     if use_interactive {
         complete_provider_upsert_request_interactive(request)
     } else {
@@ -37,10 +55,13 @@ fn maybe_complete_provider_request_interactive(
 fn maybe_complete_provider_request_interactive(
     request: ProviderUpsertRequest,
     use_interactive: bool,
-) -> ditto_core::foundation::error::Result<ProviderUpsertRequest> {
+    locale: Locale,
+) -> ditto_core::error::Result<ProviderUpsertRequest> {
     if use_interactive {
-        Err(DittoError::Config(
-            "interactive config editing requires the `gateway-cli-interactive` feature".to_string(),
+        Err(config_error(
+            locale,
+            "config_cli.interactive_feature_disabled",
+            &[],
         ))
     } else {
         Ok(request)
@@ -51,7 +72,8 @@ fn maybe_complete_provider_request_interactive(
 fn maybe_complete_model_request_interactive(
     request: ModelUpsertRequest,
     use_interactive: bool,
-) -> ditto_core::foundation::error::Result<ModelUpsertRequest> {
+    _locale: Locale,
+) -> ditto_core::error::Result<ModelUpsertRequest> {
     if use_interactive {
         complete_model_upsert_request_interactive(request)
     } else {
@@ -63,10 +85,13 @@ fn maybe_complete_model_request_interactive(
 fn maybe_complete_model_request_interactive(
     request: ModelUpsertRequest,
     use_interactive: bool,
-) -> ditto_core::foundation::error::Result<ModelUpsertRequest> {
+    locale: Locale,
+) -> ditto_core::error::Result<ModelUpsertRequest> {
     if use_interactive {
-        Err(DittoError::Config(
-            "interactive config editing requires the `gateway-cli-interactive` feature".to_string(),
+        Err(config_error(
+            locale,
+            "config_cli.interactive_feature_disabled",
+            &[],
         ))
     } else {
         Ok(request)
@@ -76,7 +101,8 @@ fn maybe_complete_model_request_interactive(
 #[cfg(feature = "gateway")]
 async fn maybe_resolve_provider_request_discovery(
     mut request: ProviderUpsertRequest,
-) -> ditto_core::foundation::error::Result<ProviderUpsertRequest> {
+    locale: Locale,
+) -> ditto_core::error::Result<ProviderUpsertRequest> {
     if !request.discover_models || !request.model_whitelist.is_empty() {
         if let Some(limit) = request.model_limit {
             request.model_whitelist.truncate(limit);
@@ -86,7 +112,7 @@ async fn maybe_resolve_provider_request_discovery(
 
     // Provider model discovery is a CLI-side effect. `config_editing` only
     // consumes the resolved whitelist so L0 stays a pure config mutation layer.
-    request.model_whitelist = discover_models_for_provider(&request).await?;
+    request.model_whitelist = discover_models_for_provider(&request, locale).await?;
     if let Some(limit) = request.model_limit {
         request.model_whitelist.truncate(limit);
     }
@@ -96,25 +122,24 @@ async fn maybe_resolve_provider_request_discovery(
 #[cfg(feature = "gateway")]
 async fn discover_models_for_provider(
     request: &ProviderUpsertRequest,
-) -> ditto_core::foundation::error::Result<Vec<String>> {
+    locale: Locale,
+) -> ditto_core::error::Result<Vec<String>> {
     let base_url = request
         .base_url
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            DittoError::Config(
-                "provider base_url is required when --discover-models is resolved outside config_editing".to_string(),
-            )
-        })?;
+        .ok_or_else(|| config_error(locale, "config_cli.discover.base_url_required", &[]))?;
     let api = infer_discovery_api(request);
     if matches!(api, ProviderApi::AnthropicMessages) {
-        return Err(DittoError::Config(
-            "discover_models for anthropic_messages is not implemented".to_string(),
+        return Err(config_error(
+            locale,
+            "config_cli.discover.anthropic_unimplemented",
+            &[],
         ));
     }
 
-    let key = resolve_discovery_key(request)?;
+    let key = resolve_discovery_key(request, locale)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
@@ -189,7 +214,8 @@ fn infer_discovery_api(request: &ProviderUpsertRequest) -> ProviderApi {
 #[cfg(feature = "gateway")]
 fn resolve_discovery_key(
     request: &ProviderUpsertRequest,
-) -> ditto_core::foundation::error::Result<String> {
+    locale: Locale,
+) -> ditto_core::error::Result<String> {
     if let Some(api_key) = request
         .discovery_api_key
         .as_deref()
@@ -208,8 +234,10 @@ fn resolve_discovery_key(
         }
     }
 
-    Err(DittoError::Config(
-        "discover_models needs discovery_api_key or auth_keys env var".to_string(),
+    Err(config_error(
+        locale,
+        "config_cli.discover.auth_missing",
+        &[],
     ))
 }
 
@@ -661,6 +689,7 @@ struct ModelDeleteArgs {
 #[cfg(feature = "gateway")]
 pub(crate) async fn maybe_run_config_cli(
     args: Vec<String>,
+    locale: Locale,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let Some(first) = args.first().map(String::as_str) else {
         return Ok(false);
@@ -672,7 +701,29 @@ pub(crate) async fn maybe_run_config_cli(
     let argv = std::iter::once("ditto-gateway".to_string())
         .chain(args)
         .collect::<Vec<_>>();
-    let cli = ConfigCli::try_parse_from(argv).map_err(|err| err.to_string())?;
+    let mut command = localize_clap_command(ConfigCli::command(), locale);
+    let mut matches = match command.try_get_matches_from_mut(argv) {
+        Ok(matches) => matches,
+        Err(err) => {
+            let kind = err.kind();
+            let rendered = render_clap_error(&mut command, err, locale);
+            if matches!(
+                kind,
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) {
+                print!("{rendered}");
+                return Ok(true);
+            }
+            return Err(Box::new(LocalizedCliError::new(rendered)));
+        }
+    };
+    let cli = ConfigCli::from_arg_matches_mut(&mut matches).map_err(|err| {
+        Box::new(LocalizedCliError::new(render_clap_error(
+            &mut command,
+            err,
+            locale,
+        ))) as Box<dyn std::error::Error>
+    })?;
 
     match cli.command {
         ConfigCommand::Provider { command } => match command {
@@ -716,8 +767,9 @@ pub(crate) async fn maybe_run_config_cli(
                     register_models: args.register_models,
                     model_limit: args.model_limit,
                 };
-                request = maybe_complete_provider_request_interactive(request, use_interactive)?;
-                request = maybe_resolve_provider_request_discovery(request).await?;
+                request =
+                    maybe_complete_provider_request_interactive(request, use_interactive, locale)?;
+                request = maybe_resolve_provider_request_discovery(request, locale).await?;
                 let report = upsert_provider_config(request).await?;
                 print_json_or_pretty(args.json, &serde_json::to_value(report)?)?;
             }
@@ -778,7 +830,8 @@ pub(crate) async fn maybe_run_config_cli(
                     auto_compact_token_limit: args.auto_compact_token_limit,
                     prompt_cache: args.prompt_cache,
                 };
-                request = maybe_complete_model_request_interactive(request, use_interactive)?;
+                request =
+                    maybe_complete_model_request_interactive(request, use_interactive, locale)?;
                 let report = upsert_model_config(request).await?;
                 print_json_or_pretty(args.json, &serde_json::to_value(report)?)?;
             }

@@ -18,6 +18,7 @@ mod openai_compat_proxy_preamble;
 mod openai_compat_proxy_proxy_cache_hit;
 mod openai_compat_proxy_proxy_failure;
 mod openai_compat_proxy_rate_limit;
+mod openai_compat_proxy_request_dedup;
 mod openai_compat_proxy_request_schema;
 mod openai_compat_proxy_streaming_multipart;
 mod openai_models;
@@ -31,7 +32,7 @@ mod router;
 mod translation_backend;
 pub use self::a2a::A2aAgentState;
 use self::admin::{error_response, map_gateway_error};
-use self::admin_auth::{ensure_admin_read, ensure_admin_write};
+use self::admin_auth::{ensure_admin_read, ensure_admin_secret_access, ensure_admin_write};
 use self::config_versions::{
     ConfigVersionHistory, ConfigVersionInfo, diff_config_versions, export_config,
     get_config_version, get_config_version_by_id, list_config_versions, rollback_config_version,
@@ -59,6 +60,10 @@ use self::openai_compat_proxy_proxy_failure::{
 };
 #[cfg(feature = "gateway-store-redis")]
 use self::openai_compat_proxy_rate_limit::normalize_rate_limit_route;
+use self::openai_compat_proxy_request_dedup::{
+    LocalProxyRequestIdempotencyStore, ProxyRequestDedupDecision,
+    finish_proxy_request_dedup_result, prepare_proxy_request_dedup,
+};
 use self::openai_compat_proxy_request_schema::{
     extract_max_output_tokens, validate_openai_request_schema,
 };
@@ -213,6 +218,7 @@ use super::{
     GatewayStateFile, LimitsConfig, ObservabilitySnapshot, ProxyBackend, RouterConfig,
     VirtualKeyConfig, lock_unpoisoned,
 };
+use crate::gateway::{GatewayConfig, ProxyRequestIdempotencyStore};
 
 static REQUEST_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -287,6 +293,7 @@ struct GatewayProxyRuntimeState {
     backend_health: Option<Arc<Mutex<HashMap<String, BackendHealth>>>>,
     #[cfg(feature = "gateway-routing-advanced")]
     health_check_task: Option<Arc<AbortOnDrop>>,
+    request_dedup: Arc<LocalProxyRequestIdempotencyStore>,
 }
 
 impl GatewayProxyRuntimeState {
@@ -310,6 +317,7 @@ impl GatewayProxyRuntimeState {
             backend_health: None,
             #[cfg(feature = "gateway-routing-advanced")]
             health_check_task: None,
+            request_dedup: Arc::new(LocalProxyRequestIdempotencyStore::default()),
         }
     }
 }
@@ -558,6 +566,27 @@ impl GatewayHttpState {
         self
     }
 
+    fn proxy_request_idempotency_store(&self) -> Arc<dyn ProxyRequestIdempotencyStore> {
+        #[cfg(feature = "gateway-store-redis")]
+        if let Some(store) = self.stores.redis.as_ref() {
+            return Arc::new(store.clone());
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = self.stores.postgres.as_ref() {
+            return Arc::new(store.clone());
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = self.stores.mysql.as_ref() {
+            return Arc::new(store.clone());
+        }
+        #[cfg(feature = "gateway-store-sqlite")]
+        if let Some(store) = self.stores.sqlite.as_ref() {
+            return Arc::new(store.clone());
+        }
+
+        self.proxy.request_dedup.clone()
+    }
+
     #[cfg(feature = "gateway-store-sqlite")]
     pub fn with_sqlite_store(mut self, store: SqliteStore) -> Self {
         self.stores.sqlite = Some(store);
@@ -655,9 +684,186 @@ struct HealthResponse {
     status: &'static str,
 }
 
+#[derive(Debug, Serialize)]
+struct ReadinessCheck {
+    name: String,
+    status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ReadinessResponse {
+    status: &'static str,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    checks: Vec<ReadinessCheck>,
+}
+
 // inlined from core/diagnostics.rs
 async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
+}
+
+async fn ready(State(state): State<GatewayHttpState>) -> (StatusCode, Json<ReadinessResponse>) {
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis",
+        feature = "gateway-routing-advanced"
+    ))]
+    let mut checks: Vec<ReadinessCheck> = Vec::new();
+    #[cfg(not(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis",
+        feature = "gateway-routing-advanced"
+    )))]
+    let checks: Vec<ReadinessCheck> = Vec::new();
+
+    #[cfg(feature = "gateway-store-sqlite")]
+    if let Some(store) = state.stores.sqlite.as_ref() {
+        match store.ping().await {
+            Ok(()) => checks.push(ReadinessCheck {
+                name: "store.sqlite".to_string(),
+                status: "ok",
+                detail: None,
+            }),
+            Err(err) => checks.push(ReadinessCheck {
+                name: "store.sqlite".to_string(),
+                status: "error",
+                detail: Some(err.to_string()),
+            }),
+        }
+    }
+
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.stores.postgres.as_ref() {
+        match store.ping().await {
+            Ok(()) => checks.push(ReadinessCheck {
+                name: "store.postgres".to_string(),
+                status: "ok",
+                detail: None,
+            }),
+            Err(err) => checks.push(ReadinessCheck {
+                name: "store.postgres".to_string(),
+                status: "error",
+                detail: Some(err.to_string()),
+            }),
+        }
+    }
+
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.stores.mysql.as_ref() {
+        match store.ping().await {
+            Ok(()) => checks.push(ReadinessCheck {
+                name: "store.mysql".to_string(),
+                status: "ok",
+                detail: None,
+            }),
+            Err(err) => checks.push(ReadinessCheck {
+                name: "store.mysql".to_string(),
+                status: "error",
+                detail: Some(err.to_string()),
+            }),
+        }
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if let Some(store) = state.stores.redis.as_ref() {
+        match store.ping().await {
+            Ok(()) => checks.push(ReadinessCheck {
+                name: "store.redis".to_string(),
+                status: "ok",
+                detail: None,
+            }),
+            Err(err) => checks.push(ReadinessCheck {
+                name: "store.redis".to_string(),
+                status: "error",
+                detail: Some(err.to_string()),
+            }),
+        }
+    }
+
+    #[cfg(feature = "gateway-routing-advanced")]
+    if let Some(config) = state.proxy.routing.as_ref()
+        && config.health_check.enabled
+    {
+        let mut backend_names: Vec<String> =
+            state.backends.proxy_backends.keys().cloned().collect();
+        backend_names.sort();
+
+        if let Some(health) = state.proxy.backend_health.as_ref() {
+            let snapshots = {
+                let health = health.lock().await;
+                backend_names
+                    .iter()
+                    .map(|backend_name| {
+                        (
+                            backend_name.clone(),
+                            health
+                                .get(backend_name)
+                                .map(|entry| entry.snapshot(backend_name)),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+
+            for (backend_name, snapshot) in snapshots {
+                let check_name = format!("backend.{backend_name}");
+                match snapshot {
+                    Some(snapshot) if snapshot.health_check_healthy == Some(true) => {
+                        checks.push(ReadinessCheck {
+                            name: check_name,
+                            status: "ok",
+                            detail: None,
+                        });
+                    }
+                    Some(snapshot) => checks.push(ReadinessCheck {
+                        name: check_name,
+                        status: "error",
+                        detail: Some(snapshot.health_check_last_error.unwrap_or_else(|| {
+                            "backend health check reported unhealthy".to_string()
+                        })),
+                    }),
+                    None => checks.push(ReadinessCheck {
+                        name: check_name,
+                        status: "error",
+                        detail: Some("backend health check has not completed yet".to_string()),
+                    }),
+                }
+            }
+        } else {
+            checks.push(ReadinessCheck {
+                name: "backend_health".to_string(),
+                status: "error",
+                detail: Some("backend health tracking is not initialized".to_string()),
+            });
+        }
+    }
+
+    #[cfg(not(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis",
+        feature = "gateway-routing-advanced"
+    )))]
+    let _ = &state;
+
+    let is_ready = checks.iter().all(|check| check.status == "ok");
+    let status = if is_ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    let body = ReadinessResponse {
+        status: if is_ready { "ready" } else { "not_ready" },
+        checks,
+    };
+
+    (status, Json(body))
 }
 
 async fn metrics(State(state): State<GatewayHttpState>) -> Json<ObservabilitySnapshot> {
@@ -920,24 +1126,24 @@ async fn handle_gateway(
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct OpenAiErrorDetail {
     message: String,
     #[serde(rename = "type")]
-    kind: &'static str,
+    kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<&'static str>,
+    code: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct OpenAiErrorResponse {
     error: OpenAiErrorDetail,
 }
 
 fn openai_error(
     status: StatusCode,
-    kind: &'static str,
-    code: Option<&'static str>,
+    kind: impl Into<String>,
+    code: Option<&str>,
     message: impl std::fmt::Display,
 ) -> (StatusCode, Json<OpenAiErrorResponse>) {
     (
@@ -945,8 +1151,8 @@ fn openai_error(
         Json(OpenAiErrorResponse {
             error: OpenAiErrorDetail {
                 message: message.to_string(),
-                kind,
-                code,
+                kind: kind.into(),
+                code: code.map(ToString::to_string),
             },
         }),
     )

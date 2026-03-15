@@ -3,7 +3,7 @@ impl super::OpenAI {
         &self,
         filename: impl Into<String>,
         bytes: Vec<u8>,
-    ) -> crate::foundation::error::Result<String> {
+    ) -> crate::error::Result<String> {
         self.upload_file_with_purpose(filename, bytes, "assistants", None)
             .await
     }
@@ -14,7 +14,7 @@ impl super::OpenAI {
         bytes: Vec<u8>,
         purpose: impl Into<String>,
         media_type: Option<&str>,
-    ) -> crate::foundation::error::Result<String> {
+    ) -> crate::error::Result<String> {
         self.client
             .upload_file_with_purpose(crate::capabilities::file::FileUploadRequest {
                 filename: filename.into(),
@@ -27,33 +27,33 @@ impl super::OpenAI {
 
     pub async fn list_files(
         &self,
-    ) -> crate::foundation::error::Result<Vec<crate::capabilities::file::FileObject>> {
+    ) -> crate::error::Result<Vec<crate::capabilities::file::FileObject>> {
         self.client.list_files().await
     }
 
     pub async fn retrieve_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileObject> {
+    ) -> crate::error::Result<crate::capabilities::file::FileObject> {
         self.client.retrieve_file(file_id).await
     }
 
     pub async fn delete_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileDeleteResponse> {
+    ) -> crate::error::Result<crate::capabilities::file::FileDeleteResponse> {
         self.client.delete_file(file_id).await
     }
 
     pub async fn download_file_content(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileContent> {
+    ) -> crate::error::Result<crate::capabilities::file::FileContent> {
         self.client.download_file_content(file_id).await
     }
 }
 
-#[cfg(feature = "openai")]
+#[cfg(feature = "provider-openai")]
 #[::async_trait::async_trait]
 impl crate::capabilities::file::FileClient for super::OpenAI {
     fn provider_name(&self) -> &str {
@@ -63,7 +63,7 @@ impl crate::capabilities::file::FileClient for super::OpenAI {
     async fn upload_file_with_purpose(
         &self,
         request: crate::capabilities::file::FileUploadRequest,
-    ) -> crate::foundation::error::Result<String> {
+    ) -> crate::error::Result<String> {
         self.upload_file_with_purpose(
             request.filename,
             request.bytes,
@@ -73,30 +73,28 @@ impl crate::capabilities::file::FileClient for super::OpenAI {
         .await
     }
 
-    async fn list_files(
-        &self,
-    ) -> crate::foundation::error::Result<Vec<crate::capabilities::file::FileObject>> {
+    async fn list_files(&self) -> crate::error::Result<Vec<crate::capabilities::file::FileObject>> {
         self.list_files().await
     }
 
     async fn retrieve_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileObject> {
+    ) -> crate::error::Result<crate::capabilities::file::FileObject> {
         self.retrieve_file(file_id).await
     }
 
     async fn delete_file(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileDeleteResponse> {
+    ) -> crate::error::Result<crate::capabilities::file::FileDeleteResponse> {
         self.delete_file(file_id).await
     }
 
     async fn download_file_content(
         &self,
         file_id: &str,
-    ) -> crate::foundation::error::Result<crate::capabilities::file::FileContent> {
+    ) -> crate::error::Result<crate::capabilities::file::FileContent> {
         self.download_file_content(file_id).await
     }
 }
