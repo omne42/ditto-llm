@@ -10,7 +10,6 @@ use ditto_core::capabilities::{
     FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
 };
 use ditto_core::contracts::{GenerateRequest, GenerateResponse};
-use ditto_core::error::DittoError;
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
@@ -34,14 +33,16 @@ impl LanguageModel for FakeModel {
         &self,
         _request: GenerateRequest,
     ) -> ditto_core::error::Result<GenerateResponse> {
-        Err(DittoError::invalid_response_text(
-            "FakeModel.generate should not be called".to_string(),
+        Err(ditto_core::invalid_response!(
+            "error_detail.freeform",
+            "message" => "FakeModel.generate should not be called"
         ))
     }
 
     async fn stream(&self, _request: GenerateRequest) -> ditto_core::error::Result<StreamResult> {
-        Err(DittoError::invalid_response_text(
-            "FakeModel.stream should not be called".to_string(),
+        Err(ditto_core::invalid_response!(
+            "error_detail.freeform",
+            "message" => "FakeModel.stream should not be called"
         ))
     }
 }
@@ -122,7 +123,6 @@ fn base_gateway() -> Gateway {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     })
 }
 

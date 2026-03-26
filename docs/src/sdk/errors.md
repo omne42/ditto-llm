@@ -1,6 +1,6 @@
 # 错误处理
 
-Ditto 统一使用 `ditto_core::Result<T>`（即 `Result<T, DittoError>`）。
+Ditto 统一使用 `ditto_core::error::Result<T>`（即 `Result<T, DittoError>`）。
 
 ## DittoError 结构
 
@@ -10,10 +10,12 @@ Ditto 统一使用 `ditto_core::Result<T>`（即 `Result<T, DittoError>`）。
   - provider 返回非 2xx 时的错误（Ditto 会尽量把 body 读出来，便于排障）
 - `Http(reqwest::Error)` / `Io(std::io::Error)` / `Json(serde_json::Error)`
   - 网络、IO、JSON 解析错误
-- `InvalidResponse(String)`
+- `InvalidResponse(StructuredText)`
   - 协议不符合预期、字段缺失、无法解析等“语义错误”
-- `AuthCommand(String)`
+- `AuthCommand(StructuredText)`
   - `ProviderAuth::Command` 执行失败
+- `SecretCommand(StructuredText)`
+  - `secret://...` 解析过程中由外部 secret CLI/provider 命令失败
 
 ## 生产建议
 

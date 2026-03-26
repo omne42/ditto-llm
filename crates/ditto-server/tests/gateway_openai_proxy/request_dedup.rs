@@ -71,7 +71,6 @@ async fn openai_compat_proxy_replays_completed_request_by_client_request_id() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -154,7 +153,6 @@ async fn openai_compat_proxy_replays_streamed_request_by_client_request_id() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -252,7 +250,6 @@ async fn openai_compat_proxy_coalesces_in_flight_duplicates_by_client_request_id
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -334,7 +331,6 @@ async fn openai_compat_proxy_rejects_conflicting_request_reuse_by_client_request
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

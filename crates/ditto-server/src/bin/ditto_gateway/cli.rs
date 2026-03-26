@@ -2,9 +2,9 @@
 use std::path::PathBuf;
 
 #[cfg(feature = "gateway")]
-use ditto_core::MESSAGE_CATALOG;
+use ditto_core::resources::MESSAGE_CATALOG;
 #[cfg(feature = "gateway")]
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(feature = "gateway")]
 #[derive(Debug)]
@@ -78,7 +78,10 @@ pub(crate) struct GatewayCliArgs {
 pub(crate) fn parse_gateway_cli_args(
     args: impl Iterator<Item = String>,
 ) -> Result<GatewayCliArgs, Box<dyn std::error::Error>> {
-    parse_gateway_cli_args_with_locale(args, MESSAGE_CATALOG.default_locale())
+    parse_gateway_cli_args_with_locale(
+        args,
+        MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US),
+    )
 }
 
 #[cfg(feature = "gateway")]
@@ -267,8 +270,8 @@ pub(crate) fn parse_gateway_cli_args_with_locale(
                         locale,
                         "cli.requires_feature",
                         &[
-                            MessageArg::new("flag", "--audit-retention-secs"),
-                            MessageArg::new(
+                            TemplateArg::new("flag", "--audit-retention-secs"),
+                            TemplateArg::new(
                                 "feature",
                                 "gateway-store-sqlite | gateway-store-postgres | gateway-store-mysql | gateway-store-redis",
                             ),
@@ -627,15 +630,16 @@ pub(crate) async fn resolve_cli_secret(
         return Ok(raw);
     }
 
-    let resolved = secret::resolve_secret_string(raw.as_str(), env)
+    let resolved = secret_kit::resolve_secret(raw.as_str(), env)
         .await
+        .map(|secret| secret.into_owned())
         .map_err(|err| {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.failed_to_resolve",
                 &[
-                    MessageArg::new("label", label),
-                    MessageArg::new("error", err.to_string()),
+                    TemplateArg::new("label", label),
+                    TemplateArg::new("error", err.to_string()),
                 ],
             )
         })?;
@@ -644,7 +648,7 @@ pub(crate) async fn resolve_cli_secret(
             .render(
                 locale,
                 "cli.resolved_empty",
-                &[MessageArg::new("label", label)],
+                &[TemplateArg::new("label", label)],
             )
             .into());
     }
@@ -656,7 +660,7 @@ pub(crate) fn gateway_cli_usage(locale: Locale) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new("command_and_syntax", usage_syntax())],
+        &[TemplateArg::new("command_and_syntax", usage_syntax())],
     )
 }
 
@@ -664,11 +668,11 @@ pub(crate) fn gateway_cli_usage(locale: Locale) -> String {
 fn usage_syntax() -> &'static str {
     #[cfg(feature = "gateway-config-yaml")]
     {
-        "ditto-gateway <config.(json|yaml)> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "ditto-gateway [config.(json|yaml)] [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
     #[cfg(not(feature = "gateway-config-yaml"))]
     {
-        "ditto-gateway <config.json> [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
+        "ditto-gateway [config.json] [--dotenv PATH] [--listen|--addr HOST:PORT] [--admin-token TOKEN] [--admin-token-env ENV] [--admin-read-token TOKEN] [--admin-read-token-env ENV] [--admin-tenant-token TENANT=TOKEN] [--admin-tenant-token-env TENANT=ENV] [--admin-tenant-read-token TENANT=TOKEN] [--admin-tenant-read-token-env TENANT=ENV] [--state PATH] [--sqlite PATH] [--pg URL] [--pg-env ENV] [--mysql URL] [--mysql-env ENV] [--redis URL] [--redis-env ENV] [--redis-prefix PREFIX] [--audit-retention-secs SECS] [--db-doctor] [--backend name=url] [--upstream name=base_url] [--json-logs] [--proxy-cache] [--proxy-cache-ttl SECS] [--proxy-cache-max-entries N] [--proxy-cache-max-body-bytes N] [--proxy-cache-max-total-body-bytes N] [--proxy-cache-streaming] [--proxy-cache-max-stream-body-bytes N] [--proxy-max-body-bytes N] [--proxy-usage-max-body-bytes N] [--proxy-max-in-flight N] [--proxy-retry] [--proxy-retry-status-codes CODES] [--proxy-fallback-status-codes CODES] [--proxy-network-error-action ACTION] [--proxy-timeout-error-action ACTION] [--proxy-retry-max-attempts N] [--proxy-circuit-breaker] [--proxy-cb-failure-threshold N] [--proxy-cb-cooldown-secs SECS] [--proxy-cb-failure-status-codes CODES] [--proxy-cb-no-network-errors] [--proxy-cb-no-timeout-errors] [--proxy-cb-no-server-errors] [--proxy-health-checks] [--proxy-health-check-path PATH] [--proxy-health-check-interval-secs SECS] [--proxy-health-check-timeout-secs SECS] [--pricing-litellm PATH] [--prometheus-metrics] [--prometheus-max-key-series N] [--prometheus-max-model-series N] [--prometheus-max-backend-series N] [--prometheus-max-path-series N] [--devtools PATH] [--otel] [--otel-endpoint URL] [--otel-json]"
     }
 }
 
@@ -683,7 +687,7 @@ fn next_value(
             .render(
                 locale,
                 "cli.missing_value",
-                &[MessageArg::new("flag", flag)],
+                &[TemplateArg::new("flag", flag)],
             )
             .into()
     })
@@ -708,7 +712,7 @@ fn invalid_value(locale: Locale, flag: &str) -> Box<dyn std::error::Error> {
         .render(
             locale,
             "cli.invalid_value",
-            &[MessageArg::new("label", flag)],
+            &[TemplateArg::new("label", flag)],
         )
         .into()
 }
@@ -720,8 +724,8 @@ fn invalid_spec(locale: Locale, flag: &str, expected: &str) -> Box<dyn std::erro
             locale,
             "cli.invalid_spec",
             &[
-                MessageArg::new("label", flag),
-                MessageArg::new("expected", expected),
+                TemplateArg::new("label", flag),
+                TemplateArg::new("expected", expected),
             ],
         )
         .into()
@@ -743,7 +747,8 @@ fn invalid_status_code(locale: Locale) -> Box<dyn std::error::Error> {
 
 #[cfg(feature = "gateway")]
 fn unknown_arg(locale: Locale, arg: &str, usage: &str) -> Box<dyn std::error::Error> {
-    let message = MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[MessageArg::new("arg", arg)]);
+    let message =
+        MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[TemplateArg::new("arg", arg)]);
     format!("{message}\n{usage}").into()
 }
 

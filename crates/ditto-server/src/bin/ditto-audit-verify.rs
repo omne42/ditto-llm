@@ -1,9 +1,13 @@
-use ditto_core::MESSAGE_CATALOG;
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use ditto_core::resources::MESSAGE_CATALOG;
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(feature = "gateway")]
 fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let Err(err) = ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
+        eprintln!("{err:?}");
+        std::process::exit(2);
+    }
     let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -25,7 +29,7 @@ fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::
     let usage = MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new(
+        &[TemplateArg::new(
             "command_and_syntax",
             "ditto-audit-verify --input PATH|-",
         )],
@@ -40,7 +44,7 @@ fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::
                     MESSAGE_CATALOG.render(
                         locale,
                         "cli.missing_value",
-                        &[MessageArg::new("flag", "--input")],
+                        &[TemplateArg::new("flag", "--input")],
                     )
                 })?);
             }
@@ -52,7 +56,7 @@ fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::
                 let message = MESSAGE_CATALOG.render(
                     locale,
                     "cli.unknown_arg",
-                    &[MessageArg::new("arg", other)],
+                    &[TemplateArg::new("arg", other)],
                 );
                 return Err(format!("{message}\n{usage}").into());
             }
@@ -70,33 +74,6 @@ fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::
         #[serde(default)]
         prev_hash: Option<String>,
         hash: String,
-    }
-
-    fn hex_lower(bytes: &[u8]) -> String {
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-        for byte in bytes {
-            out.push(char::from(HEX[usize::from(byte >> 4)]));
-            out.push(char::from(HEX[usize::from(byte & 0x0f)]));
-        }
-        out
-    }
-
-    fn audit_chain_hash(
-        prev_hash: Option<&str>,
-        record: &ditto_server::gateway::AuditLogRecord,
-    ) -> String {
-        use sha2::Digest as _;
-
-        let mut hasher = sha2::Sha256::new();
-        if let Some(prev_hash) = prev_hash {
-            hasher.update(prev_hash.as_bytes());
-        }
-        hasher.update(b"\n");
-        if let Ok(serialized) = serde_json::to_vec(record) {
-            hasher.update(&serialized);
-        }
-        hex_lower(&hasher.finalize())
     }
 
     let reader: Box<dyn BufRead> = if input == "-" {
@@ -127,7 +104,8 @@ fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::error::
             kind: record.kind,
             payload: record.payload,
         };
-        let expected_hash = audit_chain_hash(prev_hash.as_deref(), &base);
+        let expected_hash =
+            ditto_server::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &base);
         if record.hash != expected_hash {
             return Err(hash_mismatch(locale, line_no + 1, &expected_hash, &record.hash).into());
         }
@@ -144,9 +122,9 @@ fn hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str
         locale,
         "audit.hash_chain_mismatch",
         &[
-            MessageArg::new("line_no", line_no.to_string()),
-            MessageArg::new("expected", expected),
-            MessageArg::new("got", got),
+            TemplateArg::new("line_no", line_no.to_string()),
+            TemplateArg::new("expected", expected),
+            TemplateArg::new("got", got),
         ],
     )
 }
@@ -157,9 +135,9 @@ fn hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> S
         locale,
         "audit.hash_mismatch",
         &[
-            MessageArg::new("line_no", line_no.to_string()),
-            MessageArg::new("expected", expected),
-            MessageArg::new("got", got),
+            TemplateArg::new("line_no", line_no.to_string()),
+            TemplateArg::new("expected", expected),
+            TemplateArg::new("got", got),
         ],
     )
 }
@@ -175,7 +153,7 @@ fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> St
     MESSAGE_CATALOG.render(
         locale,
         "error.generic",
-        &[MessageArg::new("error", error.to_string())],
+        &[TemplateArg::new("error", error.to_string())],
     )
 }
 
@@ -184,11 +162,11 @@ fn main() {
     eprintln!(
         "{}",
         MESSAGE_CATALOG.render(
-            MESSAGE_CATALOG.default_locale(),
+            MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US),
             "cli.feature_disabled",
             &[
-                MessageArg::new("feature", "audit verify"),
-                MessageArg::new("rebuild_hint", "--features gateway"),
+                TemplateArg::new("feature", "audit verify"),
+                TemplateArg::new("rebuild_hint", "--features gateway"),
             ],
         )
     );

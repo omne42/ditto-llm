@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ::secret::SecretEnvironment;
+use ::secret_kit::{SecretCommandRuntime, SecretEnvironment, SecretString};
 
 #[derive(Clone, Default)]
 pub struct Env {
@@ -32,10 +32,12 @@ impl Env {
 }
 
 impl SecretEnvironment for Env {
-    fn get_secret_env(&self, key: &str) -> Option<String> {
-        self.get(key)
+    fn get_secret(&self, key: &str) -> Option<SecretString> {
+        self.get(key).map(SecretString::from)
     }
 }
+
+impl SecretCommandRuntime for Env {}
 
 pub fn parse_dotenv(contents: &str) -> BTreeMap<String, String> {
     let mut out = BTreeMap::<String, String>::new();

@@ -351,7 +351,7 @@ pub(crate) const GOOGLE_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::EMBEDDING,
         selector: ModelSelector::Exact(&["gemini-embedding", "gemini-embedding-exp"]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::GOOGLE_EMBED_CONTENT,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -369,7 +369,7 @@ pub(crate) const GOOGLE_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Exact(&["imagen-4"]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::GOOGLE_PREDICT,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -392,7 +392,7 @@ pub(crate) const GOOGLE_BINDINGS: &[ModelBinding] = &[
             "gemini-2.5-flash-preview-native-audio-dialog",
             "lyria",
         ]),
-        surface: ApiSurfaceId::OPENAI_REALTIME,
+        surface: ApiSurfaceId::GOOGLE_LIVE,
         wire_protocol: WireProtocol::GOOGLE_LIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::WebSocket,
@@ -410,7 +410,7 @@ pub(crate) const GOOGLE_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::VIDEO_GENERATION,
         selector: ModelSelector::Exact(&["veo-2"]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::GOOGLE_PREDICT_LONG_RUNNING,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -436,12 +436,12 @@ pub const GOOGLE_PLUGIN: ProviderPluginDescriptor = ProviderPluginDescriptor {
     display_name: "Google AI for Developers",
     class: ProviderClass::NativeGoogle,
     default_base_url: Some("https://generativelanguage.googleapis.com/v1beta"),
-    supported_auth: &[AuthMethodKind::ApiKeyHeader, AuthMethodKind::ApiKeyQuery],
+    supported_auth: &[AuthMethodKind::ApiKeyQuery],
     auth_hint: Some(ProviderAuthHint {
-        method: AuthMethodKind::ApiKeyHeader,
-        env_keys: &["GOOGLE_API_KEY", "GEMINI_API_KEY"],
-        query_param: None,
-        header_name: Some("x-goog-api-key"),
+        method: AuthMethodKind::ApiKeyQuery,
+        env_keys: &["GOOGLE_API_KEY"],
+        query_param: Some("key"),
+        header_name: None,
         prefix: None,
     }),
     models: GOOGLE_MODELS,

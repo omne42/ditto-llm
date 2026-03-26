@@ -11,8 +11,8 @@ use std::path::PathBuf;
 ))]
 use std::time::Instant;
 
-use ditto_core::MESSAGE_CATALOG;
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use ditto_core::resources::MESSAGE_CATALOG;
+use i18n_kit::{Locale, TemplateArg};
 #[cfg(feature = "gateway")]
 use serde::Serialize;
 
@@ -57,6 +57,10 @@ struct StoreBenchResult {
 #[tokio::main]
 async fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let Err(err) = ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
+        eprintln!("{err:?}");
+        std::process::exit(2);
+    }
     let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -96,8 +100,8 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
                     locale,
                     "cli.requires_feature",
                     &[
-                        MessageArg::new("flag", "--sqlite"),
-                        MessageArg::new("feature", "gateway-store-sqlite"),
+                        TemplateArg::new("flag", "--sqlite"),
+                        TemplateArg::new("feature", "gateway-store-sqlite"),
                     ],
                 )
                 .into());
@@ -117,8 +121,8 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
                     locale,
                     "cli.requires_feature",
                     &[
-                        MessageArg::new("flag", "--pg"),
-                        MessageArg::new("feature", "gateway-store-postgres"),
+                        TemplateArg::new("flag", "--pg"),
+                        TemplateArg::new("feature", "gateway-store-postgres"),
                     ],
                 )
                 .into());
@@ -138,8 +142,8 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
                     locale,
                     "cli.requires_feature",
                     &[
-                        MessageArg::new("flag", "--mysql"),
-                        MessageArg::new("feature", "gateway-store-mysql"),
+                        TemplateArg::new("flag", "--mysql"),
+                        TemplateArg::new("feature", "gateway-store-mysql"),
                     ],
                 )
                 .into());
@@ -172,11 +176,11 @@ fn main() {
     eprintln!(
         "{}",
         MESSAGE_CATALOG.render(
-            MESSAGE_CATALOG.default_locale(),
+            MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US),
             "cli.feature_disabled",
             &[
-                MessageArg::new("feature", "gateway"),
-                MessageArg::new("rebuild_hint", "--features gateway"),
+                TemplateArg::new("feature", "gateway"),
+                TemplateArg::new("rebuild_hint", "--features gateway"),
             ],
         )
     );
@@ -204,7 +208,7 @@ fn parse_args(
                             MESSAGE_CATALOG.render(
                                 locale,
                                 "cli.missing_value",
-                                &[MessageArg::new("flag", "--sqlite")],
+                                &[TemplateArg::new("flag", "--sqlite")],
                             )
                         })?
                         .into(),
@@ -215,7 +219,7 @@ fn parse_args(
                     MESSAGE_CATALOG.render(
                         locale,
                         "cli.missing_value",
-                        &[MessageArg::new("flag", "--pg")],
+                        &[TemplateArg::new("flag", "--pg")],
                     )
                 })?);
             }
@@ -224,7 +228,7 @@ fn parse_args(
                     MESSAGE_CATALOG.render(
                         locale,
                         "cli.missing_value",
-                        &[MessageArg::new("flag", "--mysql")],
+                        &[TemplateArg::new("flag", "--mysql")],
                     )
                 })?);
             }
@@ -235,7 +239,7 @@ fn parse_args(
                         MESSAGE_CATALOG.render(
                             locale,
                             "cli.missing_value",
-                            &[MessageArg::new("flag", "--audit-ops")],
+                            &[TemplateArg::new("flag", "--audit-ops")],
                         )
                     })?
                     .parse::<usize>()
@@ -248,7 +252,7 @@ fn parse_args(
                         MESSAGE_CATALOG.render(
                             locale,
                             "cli.missing_value",
-                            &[MessageArg::new("flag", "--reap-ops")],
+                            &[TemplateArg::new("flag", "--reap-ops")],
                         )
                     })?
                     .parse::<usize>()
@@ -261,7 +265,7 @@ fn parse_args(
                             MESSAGE_CATALOG.render(
                                 locale,
                                 "cli.missing_value",
-                                &[MessageArg::new("flag", "--out")],
+                                &[TemplateArg::new("flag", "--out")],
                             )
                         })?
                         .into(),
@@ -274,7 +278,7 @@ fn parse_args(
                 let message = MESSAGE_CATALOG.render(
                     locale,
                     "cli.unknown_arg",
-                    &[MessageArg::new("arg", other)],
+                    &[TemplateArg::new("arg", other)],
                 );
                 return Err(format!("{message}\n{usage}").into());
             }
@@ -303,7 +307,7 @@ fn usage(locale: Locale) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new(
+        &[TemplateArg::new(
             "command_and_syntax",
             "ditto-store-bench [--sqlite PATH] [--pg URL] [--mysql URL] [--audit-ops N] [--reap-ops N] [--out PATH]",
         )],
@@ -315,7 +319,7 @@ fn invalid_value(locale: Locale, flag: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.invalid_value",
-        &[MessageArg::new("label", flag)],
+        &[TemplateArg::new("label", flag)],
     )
 }
 
@@ -324,7 +328,7 @@ fn must_be_positive(locale: Locale, flag: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.must_be_positive",
-        &[MessageArg::new("flag", flag)],
+        &[TemplateArg::new("flag", flag)],
     )
 }
 
@@ -344,7 +348,7 @@ fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> St
     MESSAGE_CATALOG.render(
         locale,
         "error.generic",
-        &[MessageArg::new("error", error.to_string())],
+        &[TemplateArg::new("error", error.to_string())],
     )
 }
 

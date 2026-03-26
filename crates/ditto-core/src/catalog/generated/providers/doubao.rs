@@ -1012,7 +1012,7 @@ pub(crate) const DOUBAO_BINDINGS: &[ModelBinding] = &[
             "doubao-embedding-large-text-250515",
             "doubao-embedding-text-240715",
         ]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::ARK_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -1059,7 +1059,7 @@ pub(crate) const DOUBAO_BINDINGS: &[ModelBinding] = &[
             "doubao-seedream-5-0-260128",
             "doubao-seedream-5-0-lite-260128",
         ]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::ARK_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -1138,7 +1138,7 @@ pub(crate) const DOUBAO_BINDINGS: &[ModelBinding] = &[
             "doubao-seedance-1-0-pro-fast-251015",
             "doubao-seedance-1-5-pro-251215",
         ]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::ARK_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

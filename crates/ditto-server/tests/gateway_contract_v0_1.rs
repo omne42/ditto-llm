@@ -113,7 +113,6 @@ async fn gateway_contract_v0_1_endpoints_match_types() -> Result<(), Box<dyn std
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
 
     let proxy_backends = build_proxy_backends(&config)?;

@@ -1,9 +1,46 @@
 use std::fmt::{self, Display, Formatter};
 
-use ::i18n::{Locale, MessageArg, MessageCatalog, MessageCatalogExt as _};
+use crate::resources::MESSAGE_CATALOG;
+use i18n_kit::{Catalog, Locale, TemplateArg, render_structured_text};
 use thiserror::Error;
 
-pub use ::error::{StructuredMessage, StructuredMessageArg, StructuredMessageValue};
+pub use structured_text_kit::{
+    CatalogArgRef, CatalogArgValueRef, StructuredText, structured_text, try_structured_text,
+};
+use structured_text_kit::{CatalogText, StructuredTextValidationError};
+
+pub fn try_structured_text_from_text_args(
+    key: &str,
+    args: &[TemplateArg<'_>],
+) -> std::result::Result<StructuredText, StructuredTextValidationError> {
+    let mut message = CatalogText::try_new(key)?;
+    for arg in args {
+        message.try_with_value_arg(arg.name(), arg.value())?;
+    }
+    Ok(StructuredText::from(message))
+}
+
+fn text_detail(message: impl ToString) -> StructuredText {
+    StructuredText::freeform(message.to_string())
+}
+
+fn render_with_runtime_catalog(
+    locale: Locale,
+    render: impl FnOnce(&dyn Catalog, Locale) -> String,
+) -> String {
+    MESSAGE_CATALOG
+        .with_catalog(|catalog| render(catalog, locale))
+        .unwrap_or_else(|error| format!("catalog initialization failed: {error}"))
+}
+
+fn default_runtime_locale() -> Locale {
+    MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US)
+}
+
+#[cfg(test)]
+fn runtime_locale_enabled(locale: Locale) -> bool {
+    MESSAGE_CATALOG.locale_enabled(locale).unwrap_or(false)
+}
 
 #[derive(Debug)]
 pub enum ProviderResolutionError {
@@ -47,148 +84,32 @@ pub enum ProviderResolutionError {
 
 impl Display for ProviderResolutionError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&::error::render_localized(
-            self,
-            &crate::MESSAGE_CATALOG,
-            crate::MESSAGE_CATALOG.default_locale(),
+        f.write_str(&render_with_runtime_catalog(
+            default_runtime_locale(),
+            |catalog, locale| render_provider_resolution_error(catalog, locale, self),
         ))
     }
 }
 
 impl std::error::Error for ProviderResolutionError {}
 
-impl ::error::LocalizedMessage for ProviderResolutionError {
-    fn render_localized<C>(&self, catalog: &C, locale: Locale) -> String
-    where
-        C: MessageCatalog + ?Sized,
-    {
-        match self {
-            Self::RuntimeRouteProviderMissing => catalog.render(
-                locale,
-                "provider_resolution.runtime_route_provider_missing",
-                &[],
-            ),
-            Self::CatalogProviderNotFound { provider } => catalog.render(
-                locale,
-                "provider_resolution.catalog_provider_not_found",
-                &[MessageArg::new("provider", provider.as_str())],
-            ),
-            Self::CatalogRouteNotFound {
-                provider,
-                model,
-                operation,
-            } => catalog.render(
-                locale,
-                "provider_resolution.catalog_route_not_found",
-                &[
-                    MessageArg::new("provider", provider.as_str()),
-                    MessageArg::new("model", model.as_str()),
-                    MessageArg::new("operation", operation.as_str()),
-                ],
-            ),
-            Self::RuntimeRouteModelMissing => catalog.render(
-                locale,
-                "provider_resolution.runtime_route_model_missing",
-                &[],
-            ),
-            Self::RuntimeRouteBaseUrlMissing => catalog.render(
-                locale,
-                "provider_resolution.runtime_route_base_url_missing",
-                &[],
-            ),
-            Self::ProviderBaseUrlMissing => {
-                catalog.render(locale, "provider_resolution.provider_base_url_missing", &[])
-            }
-            Self::UnsupportedProviderClass {
-                provider_hint,
-                resolved_provider,
-                resolved_class,
-            } => catalog.render(
-                locale,
-                "provider_resolution.unsupported_provider_class",
-                &[
-                    MessageArg::new("provider_hint", format!("{provider_hint:?}")),
-                    MessageArg::new("resolved_provider", resolved_provider.as_str()),
-                    MessageArg::new("resolved_class", resolved_class.as_str()),
-                ],
-            ),
-            Self::GenericOpenAiCompatiblePluginUnavailable => catalog.render(
-                locale,
-                "provider_resolution.generic_openai_compatible_plugin_unavailable",
-                &[],
-            ),
-            Self::ProviderCapabilitiesRequireLlm { scope } => catalog.render(
-                locale,
-                "provider_resolution.provider_capabilities_require_llm",
-                &[MessageArg::new("scope", scope.as_str())],
-            ),
-            Self::ConfiguredProviderNotFound { provider } => catalog.render(
-                locale,
-                "provider_resolution.configured_provider_not_found",
-                &[MessageArg::new("provider", provider.as_str())],
-            ),
-            Self::ConfiguredCapabilityUnknown { capability } => catalog.render(
-                locale,
-                "provider_resolution.configured_capability_unknown",
-                &[MessageArg::new("capability", capability.as_str())],
-            ),
-            Self::ConfiguredCapabilityUnsupported {
-                provider,
-                capability,
-            } => catalog.render(
-                locale,
-                "provider_resolution.configured_capability_unsupported",
-                &[
-                    MessageArg::new("provider", provider.as_str()),
-                    MessageArg::new("capability", capability.as_str()),
-                ],
-            ),
-            Self::RuntimeRouteCapabilityUnsupported {
-                provider,
-                model,
-                capability,
-            } => catalog.render(
-                locale,
-                "provider_resolution.runtime_route_capability_unsupported",
-                &[
-                    MessageArg::new("provider", provider.as_str()),
-                    MessageArg::new("model", model.as_str()),
-                    MessageArg::new("capability", capability.as_str()),
-                ],
-            ),
-        }
-    }
-}
-
 impl ProviderResolutionError {
     #[must_use]
     pub fn render(&self, locale: Locale) -> String {
-        ::error::render_localized(self, &crate::MESSAGE_CATALOG, locale)
-    }
-
-    #[must_use]
-    pub fn localized(
-        &self,
-        locale: Locale,
-    ) -> ::error::LocalizedDisplay<'_, Self, ::i18n::StaticJsonCatalog> {
-        ::error::localized(self, &crate::MESSAGE_CATALOG, locale)
+        render_with_runtime_catalog(locale, |catalog, locale| {
+            render_provider_resolution_error(catalog, locale, self)
+        })
     }
 }
 
 #[derive(Debug, Error)]
 pub enum ReferenceCatalogLoadError {
-    #[error("failed to read reference catalog {path}: {source}")]
-    Io {
-        path: String,
+    #[error("reference catalog load failed: {source}")]
+    Config {
+        #[from]
         #[source]
-        source: std::io::Error,
+        source: config_kit::Error,
     },
-    #[error("failed to parse reference catalog JSON: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("failed to parse reference catalog TOML: {0}")]
-    Toml(#[from] toml::de::Error),
-    #[error("unsupported reference catalog extension for {0}")]
-    UnsupportedExtension(String),
 }
 
 #[derive(Debug)]
@@ -199,10 +120,11 @@ pub enum DittoError {
     },
     Http(reqwest::Error),
     Io(std::io::Error),
-    InvalidResponse(::error::StructuredMessage),
+    InvalidResponse(StructuredText),
     ProviderResolution(ProviderResolutionError),
-    AuthCommand(::error::StructuredMessage),
-    Config(::error::StructuredMessage),
+    AuthCommand(StructuredText),
+    SecretCommand(StructuredText),
+    Config(StructuredText),
     Json(serde_json::Error),
 }
 
@@ -210,10 +132,9 @@ pub type Result<T> = std::result::Result<T, DittoError>;
 
 impl Display for DittoError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&::error::render_localized(
-            self,
-            &crate::MESSAGE_CATALOG,
-            crate::MESSAGE_CATALOG.default_locale(),
+        f.write_str(&render_with_runtime_catalog(
+            default_runtime_locale(),
+            |catalog, locale| render_ditto_error(catalog, locale, self),
         ))
     }
 }
@@ -227,6 +148,7 @@ impl std::error::Error for DittoError {
             Self::InvalidResponse(_) => None,
             Self::ProviderResolution(err) => Some(err),
             Self::AuthCommand(_) => None,
+            Self::SecretCommand(_) => None,
             Self::Config(_) => None,
             Self::Json(err) => Some(err),
         }
@@ -236,46 +158,36 @@ impl std::error::Error for DittoError {
 impl DittoError {
     #[must_use]
     pub fn render(&self, locale: Locale) -> String {
-        ::error::render_localized(self, &crate::MESSAGE_CATALOG, locale)
-    }
-
-    #[must_use]
-    pub fn localized(
-        &self,
-        locale: Locale,
-    ) -> ::error::LocalizedDisplay<'_, Self, ::i18n::StaticJsonCatalog> {
-        ::error::localized(self, &crate::MESSAGE_CATALOG, locale)
+        render_with_runtime_catalog(locale, |catalog, locale| {
+            render_ditto_error(catalog, locale, self)
+        })
     }
 
     #[must_use]
     pub fn invalid_response_text(message: impl ToString) -> Self {
-        Self::InvalidResponse(StructuredMessage::freeform(message))
+        Self::InvalidResponse(text_detail(message))
     }
 
     #[must_use]
     pub fn auth_command_text(message: impl ToString) -> Self {
-        Self::AuthCommand(StructuredMessage::freeform(message))
-    }
-
-    #[must_use]
-    pub fn config_text(message: impl ToString) -> Self {
-        Self::Config(StructuredMessage::freeform(message))
+        Self::AuthCommand(text_detail(message))
     }
 
     #[must_use]
     pub fn provider_model_missing(subject: impl ToString, hint: impl ToString) -> Self {
-        Self::InvalidResponse(
-            StructuredMessage::new("error_detail.provider.model_missing")
-                .arg("subject", subject)
-                .arg("hint", hint),
-        )
+        Self::InvalidResponse(structured_text!(
+            "error_detail.provider.model_missing",
+            "subject" => subject.to_string(),
+            "hint" => hint.to_string()
+        ))
     }
 
     #[must_use]
     pub fn provider_auth_missing(provider: impl ToString) -> Self {
-        Self::Config(
-            StructuredMessage::new("error_detail.provider.auth_missing").arg("provider", provider),
-        )
+        Self::Config(structured_text!(
+            "error_detail.provider.auth_missing",
+            "provider" => provider.to_string()
+        ))
     }
 
     #[must_use]
@@ -284,12 +196,12 @@ impl DittoError {
         base_url: impl ToString,
         error: impl ToString,
     ) -> Self {
-        Self::Config(
-            StructuredMessage::new("error_detail.provider.base_url_invalid")
-                .arg("subject", subject)
-                .arg("base_url", base_url)
-                .arg("error", error),
-        )
+        Self::Config(structured_text!(
+            "error_detail.provider.base_url_invalid",
+            "subject" => subject.to_string(),
+            "base_url" => base_url.to_string(),
+            "error" => error.to_string()
+        ))
     }
 
     #[must_use]
@@ -297,69 +209,176 @@ impl DittoError {
         provider: impl ToString,
         capability: impl ToString,
     ) -> Self {
-        Self::InvalidResponse(
-            StructuredMessage::new("error_detail.builder.capability_feature_missing")
-                .arg("provider", provider)
-                .arg("capability", capability),
-        )
+        Self::InvalidResponse(structured_text!(
+            "error_detail.builder.capability_feature_missing",
+            "provider" => provider.to_string(),
+            "capability" => capability.to_string()
+        ))
     }
 }
 
-impl ::error::LocalizedMessage for DittoError {
-    fn render_localized<C>(&self, catalog: &C, locale: Locale) -> String
-    where
-        C: MessageCatalog + ?Sized,
-    {
-        match self {
-            Self::Api { status, body } => catalog.render(
-                locale,
-                "error.api",
-                &[
-                    MessageArg::new("status", status.to_string()),
-                    MessageArg::new("body", body.as_str()),
-                ],
-            ),
-            Self::Http(err) => catalog.render(
-                locale,
-                "error.http",
-                &[MessageArg::new("error", err.to_string())],
-            ),
-            Self::Io(err) => catalog.render(
-                locale,
-                "error.io",
-                &[MessageArg::new("error", err.to_string())],
-            ),
-            Self::InvalidResponse(message) => catalog.render(
-                locale,
-                "error.invalid_response",
-                &[MessageArg::new(
-                    "message",
-                    ::error::render_structured_message(catalog, locale, message),
-                )],
-            ),
-            Self::ProviderResolution(error) => error.render_localized(catalog, locale),
-            Self::AuthCommand(message) => catalog.render(
-                locale,
-                "error.auth_command",
-                &[MessageArg::new(
-                    "message",
-                    ::error::render_structured_message(catalog, locale, message),
-                )],
-            ),
-            Self::Config(message) => catalog.render(
-                locale,
-                "error.config",
-                &[MessageArg::new(
-                    "message",
-                    ::error::render_structured_message(catalog, locale, message),
-                )],
-            ),
-            Self::Json(err) => catalog.render(
-                locale,
-                "error.json_parse",
-                &[MessageArg::new("error", err.to_string())],
-            ),
+fn render_provider_resolution_error(
+    catalog: &dyn Catalog,
+    locale: Locale,
+    error: &ProviderResolutionError,
+) -> String {
+    match error {
+        ProviderResolutionError::RuntimeRouteProviderMissing => catalog.render_text(
+            locale,
+            "provider_resolution.runtime_route_provider_missing",
+            &[],
+        ),
+        ProviderResolutionError::CatalogProviderNotFound { provider } => catalog.render_text(
+            locale,
+            "provider_resolution.catalog_provider_not_found",
+            &[TemplateArg::new("provider", provider.as_str())],
+        ),
+        ProviderResolutionError::CatalogRouteNotFound {
+            provider,
+            model,
+            operation,
+        } => catalog.render_text(
+            locale,
+            "provider_resolution.catalog_route_not_found",
+            &[
+                TemplateArg::new("provider", provider.as_str()),
+                TemplateArg::new("model", model.as_str()),
+                TemplateArg::new("operation", operation.as_str()),
+            ],
+        ),
+        ProviderResolutionError::RuntimeRouteModelMissing => catalog.render_text(
+            locale,
+            "provider_resolution.runtime_route_model_missing",
+            &[],
+        ),
+        ProviderResolutionError::RuntimeRouteBaseUrlMissing => catalog.render_text(
+            locale,
+            "provider_resolution.runtime_route_base_url_missing",
+            &[],
+        ),
+        ProviderResolutionError::ProviderBaseUrlMissing => {
+            catalog.render_text(locale, "provider_resolution.provider_base_url_missing", &[])
         }
+        ProviderResolutionError::UnsupportedProviderClass {
+            provider_hint,
+            resolved_provider,
+            resolved_class,
+        } => catalog.render_text(
+            locale,
+            "provider_resolution.unsupported_provider_class",
+            &[
+                TemplateArg::new("provider_hint", provider_hint.as_str()),
+                TemplateArg::new("resolved_provider", resolved_provider.as_str()),
+                TemplateArg::new("resolved_class", resolved_class.as_str()),
+            ],
+        ),
+        ProviderResolutionError::GenericOpenAiCompatiblePluginUnavailable => catalog.render_text(
+            locale,
+            "provider_resolution.generic_openai_compatible_plugin_unavailable",
+            &[],
+        ),
+        ProviderResolutionError::ProviderCapabilitiesRequireLlm { scope } => catalog.render_text(
+            locale,
+            "provider_resolution.provider_capabilities_require_llm",
+            &[TemplateArg::new("scope", scope.as_str())],
+        ),
+        ProviderResolutionError::ConfiguredProviderNotFound { provider } => catalog.render_text(
+            locale,
+            "provider_resolution.configured_provider_not_found",
+            &[TemplateArg::new("provider", provider.as_str())],
+        ),
+        ProviderResolutionError::ConfiguredCapabilityUnknown { capability } => catalog.render_text(
+            locale,
+            "provider_resolution.configured_capability_unknown",
+            &[TemplateArg::new("capability", capability.as_str())],
+        ),
+        ProviderResolutionError::ConfiguredCapabilityUnsupported {
+            provider,
+            capability,
+        } => catalog.render_text(
+            locale,
+            "provider_resolution.configured_capability_unsupported",
+            &[
+                TemplateArg::new("provider", provider.as_str()),
+                TemplateArg::new("capability", capability.as_str()),
+            ],
+        ),
+        ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
+            provider,
+            model,
+            capability,
+        } => catalog.render_text(
+            locale,
+            "provider_resolution.runtime_route_capability_unsupported",
+            &[
+                TemplateArg::new("provider", provider.as_str()),
+                TemplateArg::new("model", model.as_str()),
+                TemplateArg::new("capability", capability.as_str()),
+            ],
+        ),
+    }
+}
+
+fn render_ditto_error(catalog: &dyn Catalog, locale: Locale, error: &DittoError) -> String {
+    match error {
+        DittoError::Api { status, body } => catalog.render_text(
+            locale,
+            "error.api",
+            &[
+                TemplateArg::new("status", status.to_string()),
+                TemplateArg::new("body", body.as_str()),
+            ],
+        ),
+        DittoError::Http(err) => catalog.render_text(
+            locale,
+            "error.http",
+            &[TemplateArg::new("error", err.to_string())],
+        ),
+        DittoError::Io(err) => catalog.render_text(
+            locale,
+            "error.io",
+            &[TemplateArg::new("error", err.to_string())],
+        ),
+        DittoError::InvalidResponse(message) => catalog.render_text(
+            locale,
+            "error.invalid_response",
+            &[TemplateArg::new(
+                "message",
+                render_structured_text(catalog, locale, message),
+            )],
+        ),
+        DittoError::ProviderResolution(error) => {
+            render_provider_resolution_error(catalog, locale, error)
+        }
+        DittoError::AuthCommand(message) => catalog.render_text(
+            locale,
+            "error.auth_command",
+            &[TemplateArg::new(
+                "message",
+                render_structured_text(catalog, locale, message),
+            )],
+        ),
+        DittoError::SecretCommand(message) => catalog.render_text(
+            locale,
+            "error.secret_command",
+            &[TemplateArg::new(
+                "message",
+                render_structured_text(catalog, locale, message),
+            )],
+        ),
+        DittoError::Config(message) => catalog.render_text(
+            locale,
+            "error.config",
+            &[TemplateArg::new(
+                "message",
+                render_structured_text(catalog, locale, message),
+            )],
+        ),
+        DittoError::Json(err) => catalog.render_text(
+            locale,
+            "error.json_parse",
+            &[TemplateArg::new("error", err.to_string())],
+        ),
     }
 }
 
@@ -387,55 +406,103 @@ impl From<serde_json::Error> for DittoError {
     }
 }
 
-impl From<::secret::SecretError> for DittoError {
-    fn from(value: ::secret::SecretError) -> Self {
+impl From<::secret_kit::SecretError> for DittoError {
+    fn from(value: ::secret_kit::SecretError) -> Self {
         match value {
-            ::secret::SecretError::Io(err) => Self::Io(err),
-            ::secret::SecretError::Json(err) => Self::Json(err),
-            ::secret::SecretError::InvalidSpec(message) => Self::InvalidResponse(message),
-            ::secret::SecretError::AuthCommand(message) => Self::AuthCommand(message),
+            ::secret_kit::SecretError::Io { source, .. } => Self::Io(source),
+            ::secret_kit::SecretError::Json { source, .. } => Self::Json(source),
+            ::secret_kit::SecretError::Lookup(message) => Self::InvalidResponse(message),
+            ::secret_kit::SecretError::InvalidSpec(message) => Self::InvalidResponse(message),
+            ::secret_kit::SecretError::Command(message) => Self::SecretCommand(message),
         }
     }
 }
 
 #[macro_export]
+#[doc(hidden)]
+macro_rules! __ditto_checked_structured_text {
+    ($result:expr) => {
+        match $result {
+            Ok(message) => message,
+            Err(error) => $crate::error::StructuredText::freeform(error.to_string()),
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! invalid_response {
+    ($code:literal $(,)?) => {
+        $crate::error::DittoError::InvalidResponse(
+            $crate::error::structured_text!($code)
+        )
+    };
+    ($code:literal, $($rest:tt)*) => {
+        $crate::error::DittoError::InvalidResponse(
+            $crate::error::structured_text!($code, $($rest)*)
+        )
+    };
     ($code:expr $(,)?) => {
         $crate::error::DittoError::InvalidResponse(
-            ::error::structured_message!($code)
+            $crate::__ditto_checked_structured_text!($crate::error::try_structured_text!($code))
         )
     };
     ($code:expr, $($rest:tt)*) => {
         $crate::error::DittoError::InvalidResponse(
-            ::error::structured_message!($code, $($rest)*)
+            $crate::__ditto_checked_structured_text!(
+                $crate::error::try_structured_text!($code, $($rest)*)
+            )
         )
     };
 }
 
 #[macro_export]
 macro_rules! auth_command_error {
+    ($code:literal $(,)?) => {
+        $crate::error::DittoError::AuthCommand(
+            $crate::error::structured_text!($code)
+        )
+    };
+    ($code:literal, $($rest:tt)*) => {
+        $crate::error::DittoError::AuthCommand(
+            $crate::error::structured_text!($code, $($rest)*)
+        )
+    };
     ($code:expr $(,)?) => {
         $crate::error::DittoError::AuthCommand(
-            ::error::structured_message!($code)
+            $crate::__ditto_checked_structured_text!($crate::error::try_structured_text!($code))
         )
     };
     ($code:expr, $($rest:tt)*) => {
         $crate::error::DittoError::AuthCommand(
-            ::error::structured_message!($code, $($rest)*)
+            $crate::__ditto_checked_structured_text!(
+                $crate::error::try_structured_text!($code, $($rest)*)
+            )
         )
     };
 }
 
 #[macro_export]
 macro_rules! config_error {
+    ($code:literal $(,)?) => {
+        $crate::error::DittoError::Config(
+            $crate::error::structured_text!($code)
+        )
+    };
+    ($code:literal, $($rest:tt)*) => {
+        $crate::error::DittoError::Config(
+            $crate::error::structured_text!($code, $($rest)*)
+        )
+    };
     ($code:expr $(,)?) => {
         $crate::error::DittoError::Config(
-            ::error::structured_message!($code)
+            $crate::__ditto_checked_structured_text!($crate::error::try_structured_text!($code))
         )
     };
     ($code:expr, $($rest:tt)*) => {
         $crate::error::DittoError::Config(
-            ::error::structured_message!($code, $($rest)*)
+            $crate::__ditto_checked_structured_text!(
+                $crate::error::try_structured_text!($code, $($rest)*)
+            )
         )
     };
 }
@@ -443,8 +510,14 @@ macro_rules! config_error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::i18n::Locale;
+    use i18n_kit::Locale;
     use std::error::Error as _;
+
+    fn render_structured_with_runtime_catalog(locale: Locale, message: &StructuredText) -> String {
+        MESSAGE_CATALOG
+            .with_catalog(|catalog| render_structured_text(catalog, locale, message))
+            .unwrap_or_else(|error| format!("catalog initialization failed: {error}"))
+    }
 
     #[test]
     fn provider_config_helpers_return_config_errors() {
@@ -459,18 +532,19 @@ mod tests {
     }
 
     #[test]
-    fn structured_message_macro_preserves_nested_messages() {
-        let message = ::error::structured_message!(
+    fn structured_text_macro_preserves_nested_messages() {
+        let message = try_structured_text!(
             "error.invalid_response",
-            "message" => @message StructuredMessage::new("error_detail.auth.header_name_empty"),
-        );
+            "message" => @text structured_text!("error_detail.auth.header_name_empty"),
+        )
+        .expect("nested structured message should be valid");
 
         let nested = message
-            .args()
-            .iter()
-            .find(|arg| arg.name() == "message")
-            .and_then(StructuredMessageArg::message_value)
-            .map(StructuredMessage::code);
+            .as_catalog()
+            .and_then(|message| message.arg("message"))
+            .and_then(|arg| arg.nested_text_value())
+            .and_then(|message| message.as_catalog())
+            .map(|message| message.code());
         assert_eq!(nested, Some("error_detail.auth.header_name_empty"));
     }
 
@@ -506,37 +580,34 @@ mod tests {
         };
         assert!(api_error.source().is_none());
         assert!(
-            DittoError::InvalidResponse(::error::StructuredMessage::freeform("boom"))
+            DittoError::InvalidResponse(text_detail("boom"))
                 .source()
                 .is_none()
         );
         assert!(
-            DittoError::AuthCommand(::error::StructuredMessage::freeform("boom"))
+            DittoError::AuthCommand(text_detail("boom"))
                 .source()
                 .is_none()
         );
         assert!(
-            DittoError::Config(::error::StructuredMessage::freeform("boom"))
+            DittoError::SecretCommand(text_detail("boom"))
                 .source()
                 .is_none()
         );
+        assert!(DittoError::Config(text_detail("boom")).source().is_none());
     }
 
     #[test]
     fn display_uses_default_locale_rendering() {
         let error = DittoError::provider_auth_missing("vertex");
-        assert_eq!(
-            error.to_string(),
-            error.render(crate::MESSAGE_CATALOG.default_locale())
-        );
+        assert_eq!(error.to_string(), error.render(default_runtime_locale()));
     }
 
-    #[cfg(feature = "i18n-en-us")]
     #[test]
     fn localized_render_helpers_use_requested_locale() {
-        let message = ::error::StructuredMessage::new("error_detail.auth.header_name_empty");
+        let message = structured_text!("error_detail.auth.header_name_empty");
         assert_eq!(
-            ::error::render_structured_message(&crate::MESSAGE_CATALOG, Locale::EnUs, &message),
+            render_structured_with_runtime_catalog(Locale::EN_US, &message),
             "auth header name must be non-empty"
         );
 
@@ -544,26 +615,22 @@ mod tests {
             provider: "acme".to_string(),
         };
         assert_eq!(
-            provider_error.render(Locale::EnUs),
+            provider_error.render(Locale::EN_US),
             "catalog provider not found: acme"
         );
 
         let error = DittoError::provider_auth_missing("vertex");
         assert_eq!(
-            error.render(Locale::EnUs),
+            error.render(Locale::EN_US),
             "config error: vertex auth is missing"
-        );
-        assert_eq!(
-            error.localized(Locale::EnUs).to_string(),
-            error.render(Locale::EnUs)
         );
     }
 
     #[test]
     fn rendering_falls_back_to_default_locale_when_catalog_is_unavailable() {
-        let Some(unavailable_locale) = [Locale::EnUs, Locale::ZhCn, Locale::JaJp]
+        let Some(unavailable_locale) = [Locale::EN_US, Locale::ZH_CN, Locale::JA_JP]
             .into_iter()
-            .find(|locale| !crate::MESSAGE_CATALOG.locale_enabled(*locale))
+            .find(|locale| !runtime_locale_enabled(*locale))
         else {
             return;
         };
@@ -571,7 +638,7 @@ mod tests {
         let error = DittoError::provider_auth_missing("vertex");
         assert_eq!(
             error.render(unavailable_locale),
-            error.render(crate::MESSAGE_CATALOG.default_locale())
+            error.render(default_runtime_locale())
         );
     }
 }

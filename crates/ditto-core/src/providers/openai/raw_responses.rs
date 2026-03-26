@@ -10,8 +10,6 @@ use futures_util::StreamExt;
 #[cfg(all(test, feature = "provider-openai"))]
 use super::OpenAI;
 use crate::contracts::{Tool, ToolChoice};
-#[cfg(feature = "provider-openai")]
-use crate::error::DittoError;
 use crate::error::Result;
 use crate::provider_options::ResponseFormat;
 
@@ -176,10 +174,11 @@ pub(super) async fn process_raw_responses_sse<R>(
         match next {
             Ok(data) => {
                 let event = serde_json::from_str::<RawResponsesStreamEvent>(&data).map_err(|err| {
-                    DittoError::invalid_response_text(format!(
-                        "failed to parse responses SSE event: {err}; data_prefix={}",
-                        truncate_for_error(&data, 1024)
-                    ))
+                    crate::invalid_response!(
+                        "error_detail.openai.responses_sse_event_parse_failed",
+                        "error" => err.to_string(),
+                        "data_prefix" => truncate_for_error(&data, 1024)
+                    )
                 });
                 match event.and_then(parse_raw_responses_event) {
                     Ok(Some(parsed)) => {
@@ -217,6 +216,7 @@ mod tests {
     use crate::contracts::{
         ContentPart, FileSource, FinishReason, GenerateRequest, Message, Role, Warning,
     };
+    use crate::error::DittoError;
     use crate::llm_core::model::LanguageModel;
     use httpmock::{Method::GET, Method::POST, MockServer};
     use serde_json::Map;
@@ -306,8 +306,13 @@ mod tests {
         mock.assert_async().await;
         match err {
             DittoError::InvalidResponse(message) => {
-                let message = message.to_string();
-                assert!(message.contains("exceeds max bytes"));
+                assert!(matches!(
+                    message.as_catalog().map(|message| message.code()),
+                    Some(
+                        "error_detail.http.content_length_exceeds_max_bytes"
+                            | "error_detail.http.response_exceeded_max_bytes"
+                    )
+                ));
             }
             other => panic!("unexpected error: {other:?}"),
         }
@@ -449,14 +454,13 @@ mod tests {
         timeout(Duration::from_millis(500), task)
             .await
             .map_err(|_| {
-                DittoError::invalid_response_text(
-                    "raw responses SSE processor did not stop after receiver drop".to_string(),
-                )
+                crate::invalid_response!("error_detail.openai.responses_sse_receiver_drop_timeout")
             })?
             .map_err(|err| {
-                DittoError::invalid_response_text(format!(
-                    "raw responses SSE processor task failed: {err}"
-                ))
+                crate::invalid_response!(
+                    "error_detail.openai.responses_sse_task_failed",
+                    "error" => err.to_string()
+                )
             })?;
 
         Ok(())

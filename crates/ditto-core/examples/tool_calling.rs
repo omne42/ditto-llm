@@ -1,5 +1,5 @@
 use ditto_core::contracts::{ContentPart, GenerateRequest, Message, Role, Tool, ToolChoice};
-use ditto_core::error::{DittoError, Result};
+use ditto_core::error::Result;
 use ditto_core::llm_core::model::LanguageModel;
 use ditto_core::providers::OpenAICompatible;
 use serde_json::json;
@@ -13,10 +13,16 @@ fn add(arguments: &serde_json::Value) -> serde_json::Value {
 #[tokio::main]
 async fn main() -> Result<()> {
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL").map_err(|_| {
-        DittoError::invalid_response_text("missing OPENAI_COMPAT_BASE_URL".to_string())
+        ditto_core::invalid_response!(
+            "error_detail.freeform",
+            "message" => "missing OPENAI_COMPAT_BASE_URL"
+        )
     })?;
     let model = std::env::var("OPENAI_COMPAT_MODEL").map_err(|_| {
-        DittoError::invalid_response_text("missing OPENAI_COMPAT_MODEL".to_string())
+        ditto_core::invalid_response!(
+            "error_detail.freeform",
+            "message" => "missing OPENAI_COMPAT_MODEL"
+        )
     })?;
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY").unwrap_or_default();
 

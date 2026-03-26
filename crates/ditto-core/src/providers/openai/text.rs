@@ -7,7 +7,7 @@ use super::OpenAIChatCompletions;
 use crate::config::{Env, ProviderApi, ProviderConfig};
 use crate::contracts::OperationKind;
 use crate::contracts::{GenerateRequest, GenerateResponse};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,9 +58,10 @@ impl OpenAITextModel {
             return self.ensure_surface_supported(model, OpenAITextSurface::ChatCompletions);
         }
 
-        Err(DittoError::invalid_response_text(format!(
-            "openai model {model} has no supported text invocation surface in the builtin catalog"
-        )))
+        Err(crate::invalid_response!(
+            "error_detail.openai.text_model_no_supported_surface",
+            "model" => model
+        ))
     }
 
     fn ensure_surface_supported(
@@ -73,18 +74,20 @@ impl OpenAITextModel {
                 if self.supports_operation(model, OperationKind::RESPONSE)? {
                     Ok(surface)
                 } else {
-                    Err(DittoError::invalid_response_text(format!(
-                        "openai model {model} does not support /v1/responses"
-                    )))
+                    Err(crate::invalid_response!(
+                        "error_detail.openai.text_model_responses_unsupported",
+                        "model" => model
+                    ))
                 }
             }
             OpenAITextSurface::ChatCompletions => {
                 if self.supports_operation(model, OperationKind::CHAT_COMPLETION)? {
                     Ok(surface)
                 } else {
-                    Err(DittoError::invalid_response_text(format!(
-                        "openai model {model} does not support /v1/chat/completions"
-                    )))
+                    Err(crate::invalid_response!(
+                        "error_detail.openai.text_model_chat_completions_unsupported",
+                        "model" => model
+                    ))
                 }
             }
         }
@@ -108,11 +111,9 @@ fn preferred_surface_from_config(
     match upstream_api {
         Some(ProviderApi::OpenaiResponses) => Ok(Some(OpenAITextSurface::Responses)),
         Some(ProviderApi::OpenaiChatCompletions) => Ok(Some(OpenAITextSurface::ChatCompletions)),
-        Some(ProviderApi::GeminiGenerateContent) | Some(ProviderApi::AnthropicMessages) => {
-            Err(DittoError::invalid_response_text(
-                "openai text model cannot be configured with a non-openai upstream_api".to_string(),
-            ))
-        }
+        Some(ProviderApi::GeminiGenerateContent) | Some(ProviderApi::AnthropicMessages) => Err(
+            crate::invalid_response!("error_detail.openai.text_model_non_openai_upstream_api"),
+        ),
         None => Ok(None),
     }
 }
@@ -187,9 +188,14 @@ mod tests {
         let err = model
             .ensure_surface_supported("computer-use-preview", OpenAITextSurface::ChatCompletions)
             .expect_err("response-only model should reject chat/completions");
-        assert!(
-            err.to_string()
-                .contains("does not support /v1/chat/completions")
-        );
+        match err {
+            crate::error::DittoError::InvalidResponse(message) => {
+                assert_eq!(
+                    message.as_catalog().map(|message| message.code()),
+                    Some("error_detail.openai.text_model_chat_completions_unsupported")
+                );
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }

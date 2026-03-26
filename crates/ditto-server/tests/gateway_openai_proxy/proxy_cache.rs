@@ -24,7 +24,6 @@ async fn openai_compat_proxy_caches_non_streaming_json_responses() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -111,7 +110,6 @@ data: [DONE]
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -196,7 +194,6 @@ data: second
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -261,7 +258,6 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_key() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -381,7 +377,6 @@ async fn openai_compat_proxy_cache_scopes_by_virtual_key_x_api_key() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -489,7 +484,6 @@ async fn openai_compat_proxy_cache_varies_by_semantic_request_headers() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);
@@ -602,7 +596,6 @@ async fn openai_compat_proxy_admin_can_purge_proxy_cache_by_path_and_model() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
     let gateway = Gateway::new(config);

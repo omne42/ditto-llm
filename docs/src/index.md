@@ -37,10 +37,12 @@ Ditto-LLM 的近期取舍是：
 最小示例（文本生成）：
 
 ```rust
-use ditto_core::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").expect("missing OPENAI_API_KEY");
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
     let req = vec![Message::user("Say hello in one sentence.")].into();
@@ -101,6 +103,8 @@ Ditto 提供最小 JS/React 客户端用于解析 **Stream Protocol v1**（SSE/N
 如果你在用 LLM 辅助理解 Ditto（例如让它帮你改配置/写集成代码），可以直接把仓库根目录的 `llms.txt` 丢给它作为上下文入口。
 
 `llms.txt` 包含一段“手写入口 + 约定”，并在末尾追加 **自动聚合的文档全文**（来自 `docs/src/SUMMARY.md`）。
+
+默认只聚合当前产品文档；带 `<!-- llms-txt:exclude -->` 标记的历史审查/归档页会继续保留在 mdBook 中，但不会进入 `llms.txt`。
 
 为了便于部署文档站点时也能直接访问到它，仓库还会同步维护一份 `docs/src/llms.txt`（`mdbook build docs` 后会出现在站点根路径的 `/llms.txt`）。
 

@@ -1,10 +1,42 @@
-use ditto_core::MESSAGE_CATALOG;
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use ditto_core::resources::MESSAGE_CATALOG;
+use i18n_kit::{Locale, TemplateArg};
+#[cfg(feature = "gateway")]
+use omne_integrity_primitives::Sha256Hasher;
+
+#[cfg(feature = "gateway")]
+#[derive(Clone, Copy)]
+struct UploadOptions<'a> {
+    content_type: &'a str,
+    s3_object_lock_mode: Option<&'a str>,
+    s3_object_lock_retain_until_date: Option<&'a str>,
+    s3_object_lock_legal_hold_status: Option<&'a str>,
+}
+
+#[cfg(feature = "gateway")]
+impl<'a> UploadOptions<'a> {
+    fn new(
+        content_type: &'a str,
+        s3_object_lock_mode: &'a Option<String>,
+        s3_object_lock_retain_until_date: &'a Option<String>,
+        s3_object_lock_legal_hold_status: &'a Option<String>,
+    ) -> Self {
+        Self {
+            content_type,
+            s3_object_lock_mode: s3_object_lock_mode.as_deref(),
+            s3_object_lock_retain_until_date: s3_object_lock_retain_until_date.as_deref(),
+            s3_object_lock_legal_hold_status: s3_object_lock_legal_hold_status.as_deref(),
+        }
+    }
+}
 
 #[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let Err(err) = ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
+        eprintln!("{err:?}");
+        std::process::exit(2);
+    }
     let (locale, args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -215,8 +247,7 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
     }
 
     let mut file = tokio::fs::File::create(&output).await?;
-    use sha2::Digest as _;
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256Hasher::new();
     let mut bytes_written: u64 = 0;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
@@ -228,7 +259,7 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
     file.flush().await?;
     drop(file);
 
-    let sha256_hex = hex_lower(&hasher.finalize());
+    let sha256_hex = hasher.finalize().to_string();
 
     let (records, chain_last_hash) = if format == "jsonl" || format == "ndjson" {
         let (records, last) = verify_audit_export_jsonl(locale, &output)?;
@@ -257,17 +288,13 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
     tokio::fs::write(&manifest_output, serialized).await?;
 
     if let Some(dest) = upload.as_deref() {
-        upload_file(
-            locale,
-            &client,
-            &output,
-            dest,
+        let upload_options = UploadOptions::new(
             content_type,
             &s3_object_lock_mode,
             &s3_object_lock_retain_until_date,
             &s3_object_lock_legal_hold_status,
-        )
-        .await?;
+        );
+        upload_file(locale, &client, &output, dest, upload_options).await?;
 
         let manifest_dest = upload_manifest.unwrap_or_else(|| format!("{dest}.manifest.json"));
         upload_file(
@@ -275,10 +302,10 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
             &client,
             &manifest_output,
             &manifest_dest,
-            "application/json",
-            &s3_object_lock_mode,
-            &s3_object_lock_retain_until_date,
-            &s3_object_lock_legal_hold_status,
+            UploadOptions {
+                content_type: "application/json",
+                ..upload_options
+            },
         )
         .await?;
     }
@@ -296,35 +323,6 @@ fn now_ms() -> u128 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or_default()
-}
-
-#[cfg(feature = "gateway")]
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for byte in bytes {
-        out.push(char::from(HEX[usize::from(byte >> 4)]));
-        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    out
-}
-
-#[cfg(feature = "gateway")]
-fn audit_chain_hash(
-    prev_hash: Option<&str>,
-    record: &ditto_server::gateway::AuditLogRecord,
-) -> String {
-    use sha2::Digest as _;
-
-    let mut hasher = sha2::Sha256::new();
-    if let Some(prev_hash) = prev_hash {
-        hasher.update(prev_hash.as_bytes());
-    }
-    hasher.update(b"\n");
-    if let Ok(serialized) = serde_json::to_vec(record) {
-        hasher.update(&serialized);
-    }
-    hex_lower(&hasher.finalize())
 }
 
 #[cfg(feature = "gateway")]
@@ -372,7 +370,8 @@ fn verify_audit_export_jsonl(
             kind: record.kind,
             payload: record.payload,
         };
-        let expected_hash = audit_chain_hash(prev_hash.as_deref(), &base);
+        let expected_hash =
+            ditto_server::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &base);
         if record.hash != expected_hash {
             return Err(
                 audit_hash_mismatch(locale, line_no + 1, &expected_hash, &record.hash).into(),
@@ -391,31 +390,18 @@ async fn upload_file(
     client: &reqwest::Client,
     local_path: &str,
     dest: &str,
-    content_type: &str,
-    s3_object_lock_mode: &Option<String>,
-    s3_object_lock_retain_until_date: &Option<String>,
-    s3_object_lock_legal_hold_status: &Option<String>,
+    options: UploadOptions<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((bucket, key)) = parse_s3_uri(dest) {
-        return upload_to_s3_via_aws_cli(
-            locale,
-            local_path,
-            &bucket,
-            &key,
-            content_type,
-            s3_object_lock_mode,
-            s3_object_lock_retain_until_date,
-            s3_object_lock_legal_hold_status,
-        )
-        .await;
+        return upload_to_s3_via_aws_cli(locale, local_path, &bucket, &key, options).await;
     }
 
     if dest.starts_with("gs://") {
-        return upload_to_gcs_via_gsutil(locale, local_path, dest, content_type).await;
+        return upload_to_gcs_via_gsutil(locale, local_path, dest, options.content_type).await;
     }
 
     if dest.starts_with("http://") || dest.starts_with("https://") {
-        return upload_to_http_put(locale, client, local_path, dest, content_type).await;
+        return upload_to_http_put(locale, client, local_path, dest, options.content_type).await;
     }
 
     Err(audit_export_unsupported_upload_destination(locale, dest).into())
@@ -460,10 +446,7 @@ async fn upload_to_s3_via_aws_cli(
     local_path: &str,
     bucket: &str,
     key: &str,
-    content_type: &str,
-    object_lock_mode: &Option<String>,
-    object_lock_retain_until_date: &Option<String>,
-    object_lock_legal_hold_status: &Option<String>,
+    options: UploadOptions<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = tokio::process::Command::new("aws");
     cmd.arg("s3api")
@@ -475,15 +458,15 @@ async fn upload_to_s3_via_aws_cli(
         .arg("--body")
         .arg(local_path)
         .arg("--content-type")
-        .arg(content_type);
+        .arg(options.content_type);
 
-    if let Some(value) = object_lock_mode.as_deref() {
+    if let Some(value) = options.s3_object_lock_mode {
         cmd.arg("--object-lock-mode").arg(value);
     }
-    if let Some(value) = object_lock_retain_until_date.as_deref() {
+    if let Some(value) = options.s3_object_lock_retain_until_date {
         cmd.arg("--object-lock-retain-until-date").arg(value);
     }
-    if let Some(value) = object_lock_legal_hold_status.as_deref() {
+    if let Some(value) = options.s3_object_lock_legal_hold_status {
         cmd.arg("--object-lock-legal-hold-status").arg(value);
     }
 
@@ -559,7 +542,7 @@ fn main() {
     eprintln!(
         "{}",
         cli_feature_disabled(
-            MESSAGE_CATALOG.default_locale(),
+            MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US),
             "audit export",
             "--features gateway"
         )
@@ -578,7 +561,7 @@ fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> St
     MESSAGE_CATALOG.render(
         locale,
         "error.generic",
-        &[MessageArg::new("error", error.to_string())],
+        &[TemplateArg::new("error", error.to_string())],
     )
 }
 
@@ -586,7 +569,7 @@ fn cli_missing_value(locale: Locale, flag: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.missing_value",
-        &[MessageArg::new("flag", flag)],
+        &[TemplateArg::new("flag", flag)],
     )
 }
 
@@ -594,12 +577,13 @@ fn cli_invalid_value(locale: Locale, label: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.invalid_value",
-        &[MessageArg::new("label", label)],
+        &[TemplateArg::new("label", label)],
     )
 }
 
 fn cli_unknown_arg(locale: Locale, arg: &str, usage: Option<&str>) -> String {
-    let message = MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[MessageArg::new("arg", arg)]);
+    let message =
+        MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[TemplateArg::new("arg", arg)]);
     match usage {
         Some(usage) if !usage.trim().is_empty() => format!("{message}\n{usage}"),
         _ => message,
@@ -610,7 +594,7 @@ fn cli_wrote_bytes_to_stdout(locale: Locale, bytes_written: u64) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.wrote_bytes_to_stdout",
-        &[MessageArg::new("bytes_written", bytes_written.to_string())],
+        &[TemplateArg::new("bytes_written", bytes_written.to_string())],
     )
 }
 
@@ -619,14 +603,14 @@ fn cli_ok(locale: Locale) -> String {
 }
 
 fn cli_output_path(locale: Locale, path: &str) -> String {
-    MESSAGE_CATALOG.render(locale, "cli.output_path", &[MessageArg::new("path", path)])
+    MESSAGE_CATALOG.render(locale, "cli.output_path", &[TemplateArg::new("path", path)])
 }
 
 fn cli_manifest_path(locale: Locale, path: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.manifest_path",
-        &[MessageArg::new("path", path)],
+        &[TemplateArg::new("path", path)],
     )
 }
 
@@ -635,9 +619,9 @@ fn audit_hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got
         locale,
         "audit.hash_chain_mismatch",
         &[
-            MessageArg::new("line_no", line_no.to_string()),
-            MessageArg::new("expected", expected),
-            MessageArg::new("got", got),
+            TemplateArg::new("line_no", line_no.to_string()),
+            TemplateArg::new("expected", expected),
+            TemplateArg::new("got", got),
         ],
     )
 }
@@ -647,9 +631,9 @@ fn audit_hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str
         locale,
         "audit.hash_mismatch",
         &[
-            MessageArg::new("line_no", line_no.to_string()),
-            MessageArg::new("expected", expected),
-            MessageArg::new("got", got),
+            TemplateArg::new("line_no", line_no.to_string()),
+            TemplateArg::new("expected", expected),
+            TemplateArg::new("got", got),
         ],
     )
 }
@@ -670,7 +654,7 @@ fn audit_export_failed_to_read_admin_token(locale: Locale, error: &str) -> Strin
     MESSAGE_CATALOG.render(
         locale,
         "audit_export.failed_to_read_admin_token",
-        &[MessageArg::new("error", error)],
+        &[TemplateArg::new("error", error)],
     )
 }
 
@@ -678,7 +662,7 @@ fn audit_export_unsupported_format(locale: Locale, format: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "audit_export.unsupported_format",
-        &[MessageArg::new("format", format)],
+        &[TemplateArg::new("format", format)],
     )
 }
 
@@ -687,8 +671,8 @@ fn audit_export_export_failed(locale: Locale, status: &str, body: &str) -> Strin
         locale,
         "audit_export.export_failed",
         &[
-            MessageArg::new("status", status),
-            MessageArg::new("body", body),
+            TemplateArg::new("status", status),
+            TemplateArg::new("body", body),
         ],
     )
 }
@@ -697,7 +681,7 @@ fn audit_export_unsupported_upload_destination(locale: Locale, dest: &str) -> St
     MESSAGE_CATALOG.render(
         locale,
         "audit_export.unsupported_upload_destination",
-        &[MessageArg::new("dest", dest)],
+        &[TemplateArg::new("dest", dest)],
     )
 }
 
@@ -706,8 +690,8 @@ fn audit_export_aws_put_object_failed(locale: Locale, exit_code: i32, stderr: &s
         locale,
         "audit_export.aws_put_object_failed",
         &[
-            MessageArg::new("exit_code", exit_code.to_string()),
-            MessageArg::new("stderr", stderr),
+            TemplateArg::new("exit_code", exit_code.to_string()),
+            TemplateArg::new("stderr", stderr),
         ],
     )
 }
@@ -717,8 +701,8 @@ fn audit_export_gsutil_cp_failed(locale: Locale, exit_code: i32, stderr: &str) -
         locale,
         "audit_export.gsutil_cp_failed",
         &[
-            MessageArg::new("exit_code", exit_code.to_string()),
-            MessageArg::new("stderr", stderr),
+            TemplateArg::new("exit_code", exit_code.to_string()),
+            TemplateArg::new("stderr", stderr),
         ],
     )
 }
@@ -728,8 +712,8 @@ fn audit_export_http_upload_failed(locale: Locale, status: &str, body: &str) -> 
         locale,
         "audit_export.http_upload_failed",
         &[
-            MessageArg::new("status", status),
-            MessageArg::new("body", body),
+            TemplateArg::new("status", status),
+            TemplateArg::new("body", body),
         ],
     )
 }

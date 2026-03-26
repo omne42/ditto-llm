@@ -49,8 +49,13 @@ async fn provider_template_stays_minimal() -> ditto_core::error::Result<()> {
     assert!(report.updated);
 
     let parsed = tokio::fs::read_to_string(&config_path).await?;
-    let value = toml::from_str::<toml::Value>(&parsed)
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+    let value = toml::from_str::<toml::Value>(&parsed).map_err(|err| {
+        ditto_core::config_error!(
+            "error_detail.config.parse_toml",
+            "path" => "test toml",
+            "error" => err.to_string()
+        )
+    })?;
     let provider = value
         .get("openai")
         .and_then(|v| v.get("providers"))
@@ -210,8 +215,13 @@ async fn provider_upsert_accepts_caller_resolved_model_whitelist() -> ditto_core
 
     assert_eq!(report.discovered_models, 2);
     let parsed = tokio::fs::read_to_string(&config_path).await?;
-    let value = toml::from_str::<toml::Value>(&parsed)
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+    let value = toml::from_str::<toml::Value>(&parsed).map_err(|err| {
+        ditto_core::config_error!(
+            "error_detail.config.parse_toml",
+            "path" => "test toml",
+            "error" => err.to_string()
+        )
+    })?;
     let provider = value
         .get("openai")
         .and_then(|v| v.get("providers"))

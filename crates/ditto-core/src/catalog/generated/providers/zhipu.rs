@@ -831,7 +831,7 @@ pub(crate) const ZHIPU_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::EMBEDDING,
         selector: ModelSelector::Exact(&["embedding-2", "embedding-3"]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::ZHIPU_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -854,7 +854,7 @@ pub(crate) const ZHIPU_BINDINGS: &[ModelBinding] = &[
             "cogview-4-250304",
             "glm-image",
         ]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::ZHIPU_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -908,7 +908,7 @@ pub(crate) const ZHIPU_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::REALTIME_SESSION,
         selector: ModelSelector::Exact(&["glm-realtime-air", "glm-realtime-flash"]),
-        surface: ApiSurfaceId::OPENAI_REALTIME,
+        surface: ApiSurfaceId::GOOGLE_LIVE,
         wire_protocol: WireProtocol::ZHIPU_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::WebSocket,
@@ -954,7 +954,7 @@ pub(crate) const ZHIPU_BINDINGS: &[ModelBinding] = &[
             "viduq1-start-end",
             "viduq1-text",
         ]),
-        surface: ApiSurfaceId::new("video.generation.async"),
+        surface: ApiSurfaceId::OPENAI_VIDEOS,
         wire_protocol: WireProtocol::ZHIPU_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

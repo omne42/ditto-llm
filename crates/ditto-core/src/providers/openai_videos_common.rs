@@ -8,7 +8,7 @@ use super::openai_like::OpenAiLikeClient;
 use crate::capabilities::file::FileContent;
 use crate::contracts::Warning;
 use crate::error::Result;
-use crate::error::{DittoError, Result as DittoResult};
+use crate::error::Result as DittoResult;
 use crate::types::{
     VideoContentVariant, VideoDeleteResponse, VideoGenerationFailure, VideoGenerationRequest,
     VideoGenerationResponse, VideoGenerationStatus, VideoListOrder, VideoListRequest,
@@ -145,9 +145,11 @@ fn video_reference_part(upload: crate::types::VideoReferenceUpload) -> DittoResu
     let mut part = Part::bytes(upload.data).file_name(upload.filename);
     if let Some(media_type) = upload.media_type.as_deref() {
         part = part.mime_str(media_type).map_err(|err| {
-            DittoError::invalid_response_text(format!(
-                "invalid video reference media type {media_type:?}: {err}"
-            ))
+            crate::invalid_response!(
+                "error_detail.openai.video_reference_media_type_invalid",
+                "media_type" => media_type,
+                "error" => err.to_string()
+            )
         })?;
     }
     Ok(part)

@@ -7,6 +7,7 @@
 use super::admin_persistence::append_admin_audit_log;
 use super::admin_persistence::apply_control_plane_change;
 use super::*;
+use omne_integrity_primitives::Sha256Hasher;
 
 #[derive(Clone, Debug, Serialize)]
 pub(super) struct ConfigVersionInfo {
@@ -106,35 +107,19 @@ fn now_epoch_millis_u64() -> u64 {
 }
 
 fn virtual_keys_sha256(virtual_keys: &[VirtualKeyConfig]) -> String {
-    use sha2::Digest as _;
-
     let payload = serde_json::to_vec(virtual_keys).unwrap_or_default();
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256Hasher::new();
     hasher.update(b"ditto-gateway-config-version-v1|");
     hasher.update(payload);
-
-    hex_lower_bytes(&hasher.finalize())
+    hasher.finalize().to_string()
 }
 
 fn router_sha256(router: &RouterConfig) -> String {
-    use sha2::Digest as _;
-
     let payload = serde_json::to_vec(router).unwrap_or_default();
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256Hasher::new();
     hasher.update(b"ditto-gateway-router-version-v1|");
     hasher.update(payload);
-
-    hex_lower_bytes(&hasher.finalize())
-}
-
-fn hex_lower_bytes(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for &byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
+    hasher.finalize().to_string()
 }
 
 const MAX_CONFIG_VERSIONS_LIMIT: usize = 1_000;

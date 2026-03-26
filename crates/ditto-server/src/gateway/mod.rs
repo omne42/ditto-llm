@@ -68,6 +68,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use async_trait::async_trait;
+use omne_integrity_primitives::Sha256Hasher;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -207,9 +208,7 @@ impl GatewayRequest {
 }
 
 fn control_plane_cache_key(key_id: &str, request: &GatewayRequest) -> String {
-    use sha2::Digest as _;
-
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256Hasher::new();
     hasher.update(b"ditto-gateway-cache-v2|");
     hasher.update(key_id.as_bytes());
     hasher.update(b"|");
@@ -227,21 +226,11 @@ fn control_plane_cache_key(key_id: &str, request: &GatewayRequest) -> String {
             .to_le_bytes(),
     );
 
-    hex_lower(&hasher.finalize())
+    hasher.finalize().to_string()
 }
 
 fn hash64_fnv1a(bytes: &[u8]) -> u64 {
     fnv1a64_update(fnv1a64_init(), bytes)
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for &byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
 }
 
 const FNV1A64_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
@@ -334,7 +323,6 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
-            i18n: Default::default(),
         };
         let gateway = Gateway::new(config);
         assert!(gateway.virtual_key_by_token("vk-old").is_some());
@@ -365,7 +353,6 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
-            i18n: Default::default(),
         };
         let mut gateway = Gateway::new(config);
         gateway.register_backend("primary", TestBackend);
@@ -415,7 +402,6 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
-            i18n: Default::default(),
         };
         let mut gateway = Gateway::new(config);
         gateway.register_backend("primary", TestBackend);

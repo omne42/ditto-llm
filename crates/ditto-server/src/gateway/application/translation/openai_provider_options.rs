@@ -1,7 +1,7 @@
 use serde_json::{Map, Value};
 
-use crate::contracts::GenerateRequest;
 use crate::provider_options::{ProviderOptions, ReasoningEffort, ResponseFormat};
+use ditto_core::contracts::GenerateRequest;
 
 pub(super) fn apply_openai_request_provider_options(
     request: &mut GenerateRequest,

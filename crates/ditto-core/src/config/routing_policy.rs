@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use config_kit::{ConfigFormat, ConfigFormatSet, ConfigLoadOptions, load_config_document};
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{CapabilityKind, OperationKind};
@@ -200,11 +201,15 @@ pub enum RoutingConfigFormat {
 
 impl ProviderRoutingConfig {
     pub fn from_json_str(raw: &str) -> Result<Self, String> {
-        serde_json::from_str(raw).map_err(|err| format!("parse routing json: {err}"))
+        ConfigFormat::Json
+            .parse(raw)
+            .map_err(|err| format!("parse routing json: {err}"))
     }
 
     pub fn from_toml_str(raw: &str) -> Result<Self, String> {
-        toml::from_str(raw).map_err(|err| format!("parse routing toml: {err}"))
+        ConfigFormat::Toml
+            .parse(raw)
+            .map_err(|err| format!("parse routing toml: {err}"))
     }
 
     pub fn from_str_auto(raw: &str) -> Result<Self, String> {
@@ -218,19 +223,12 @@ impl ProviderRoutingConfig {
 
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, String> {
         let path = path.as_ref();
-        let raw = std::fs::read_to_string(path)
-            .map_err(|err| format!("read {}: {err}", path.display()))?;
-        let format = match path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.to_ascii_lowercase())
-            .as_deref()
-        {
-            Some("json") => Some(RoutingConfigFormat::Json),
-            Some("toml") => Some(RoutingConfigFormat::Toml),
-            _ => None,
-        };
-        Self::from_str_with_format(&raw, format)
+        let document = load_config_document(path, routing_config_load_options(path)?)
+            .map_err(|err| err.to_string())?;
+        let format = document.format();
+        document
+            .parse_as::<Self>(ConfigFormatSet::JSON_TOML)
+            .map_err(|err| format!("parse routing {format}: {err}"))
     }
 
     pub fn from_str_with_format(
@@ -469,6 +467,22 @@ impl ProviderRoutingConfig {
             }
         }
         best
+    }
+}
+
+fn routing_config_load_options(path: &Path) -> Result<ConfigLoadOptions, String> {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("json") => {
+            Ok(ConfigLoadOptions::new().with_format(ConfigFormat::Json))
+        }
+        Some(ext) if ext.eq_ignore_ascii_case("toml") => {
+            Ok(ConfigLoadOptions::new().with_format(ConfigFormat::Toml))
+        }
+        Some(ext) => Err(format!(
+            "unsupported routing config extension .{ext} for {}",
+            path.display()
+        )),
+        None => Ok(ConfigLoadOptions::new().with_default_format(ConfigFormat::Json)),
     }
 }
 

@@ -17,18 +17,6 @@ use futures_util::stream;
 use serde_json::{Map, Value};
 use tokio::sync::{Mutex, OnceCell};
 
-use crate::capabilities::BatchClient;
-use crate::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
-use crate::capabilities::embedding::EmbeddingModel;
-use crate::capabilities::file::{FileClient, FileContent, FileUploadRequest};
-use crate::capabilities::video::VideoGenerationModel;
-use crate::capabilities::{ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel};
-use crate::config::{Env, ProviderConfig};
-use crate::contracts::{
-    CapabilityKind, ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
-    Message, OperationKind, Role, RuntimeRouteRequest, Usage,
-};
-use crate::error::DittoError;
 use crate::gateway::adapters::cache::LocalLruCache;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
@@ -45,6 +33,19 @@ use crate::types::{
     SpeechRequest, SpeechResponse, SpeechResponseFormat, TranscriptionResponseFormat,
     VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
     VideoListRequest, VideoListResponse, VideoRemixRequest,
+};
+use ditto_core::capabilities::BatchClient;
+use ditto_core::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
+use ditto_core::capabilities::embedding::EmbeddingModel;
+use ditto_core::capabilities::file::{FileClient, FileContent, FileUploadRequest};
+use ditto_core::capabilities::video::VideoGenerationModel;
+use ditto_core::capabilities::{
+    ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel,
+};
+use ditto_core::config::{Env, ProviderConfig};
+use ditto_core::contracts::{
+    CapabilityKind, ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
+    Message, OperationKind, Role, RuntimeRouteRequest, Usage,
 };
 pub use endpoint_routing::*;
 pub use files_api::*;
@@ -201,15 +202,15 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn EmbeddingModel>>,
         model: &str,
-    ) -> crate::error::Result<Arc<dyn EmbeddingModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn EmbeddingModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::invalid_response_text(
-                "embedding model is missing",
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.embedding_model_missing"
             ));
         }
 
@@ -228,9 +229,10 @@ impl TranslationBackendRuntime {
         let model_impl = build_embedding_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::invalid_response_text(format!(
-                    "provider backend does not support embeddings: {provider}"
-                ))
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_embeddings_unsupported",
+                    "provider" => provider
+                )
             })?;
 
         if cacheable {
@@ -249,7 +251,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ModerationModel>>,
-    ) -> crate::error::Result<Arc<dyn ModerationModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn ModerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -261,9 +263,10 @@ impl TranslationBackendRuntime {
                 build_moderation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support moderations: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_moderations_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -275,7 +278,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageGenerationModel>>,
-    ) -> crate::error::Result<Arc<dyn ImageGenerationModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn ImageGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -287,9 +290,10 @@ impl TranslationBackendRuntime {
                 build_image_generation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support images: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_images_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -301,7 +305,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageEditModel>>,
-    ) -> crate::error::Result<Arc<dyn ImageEditModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn ImageEditModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -313,9 +317,10 @@ impl TranslationBackendRuntime {
                 build_image_edit_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support image edits: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_image_edits_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -327,7 +332,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn VideoGenerationModel>>,
-    ) -> crate::error::Result<Arc<dyn VideoGenerationModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn VideoGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
@@ -339,9 +344,10 @@ impl TranslationBackendRuntime {
                 build_video_generation_model(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support videos: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_videos_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -354,15 +360,15 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn AudioTranscriptionModel>>,
         model: &str,
-    ) -> crate::error::Result<Arc<dyn AudioTranscriptionModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn AudioTranscriptionModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::invalid_response_text(
-                "audio transcription model is missing",
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.audio_transcription_model_missing"
             ));
         }
 
@@ -381,9 +387,10 @@ impl TranslationBackendRuntime {
         let model_impl = build_audio_transcription_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::invalid_response_text(format!(
-                    "provider backend does not support audio transcriptions: {provider}"
-                ))
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_audio_transcriptions_unsupported",
+                    "provider" => provider
+                )
             })?;
 
         if cacheable {
@@ -403,14 +410,16 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn SpeechModel>>,
         model: &str,
-    ) -> crate::error::Result<Arc<dyn SpeechModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn SpeechModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::invalid_response_text("speech model is missing"));
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.speech_model_missing"
+            ));
         }
 
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
@@ -428,9 +437,10 @@ impl TranslationBackendRuntime {
         let model_impl = build_speech_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::invalid_response_text(format!(
-                    "provider backend does not support audio speech: {provider}"
-                ))
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_audio_speech_unsupported",
+                    "provider" => provider
+                )
             })?;
 
         if cacheable {
@@ -450,14 +460,16 @@ impl TranslationBackendRuntime {
         provider: &str,
         direct: Option<&Arc<dyn RerankModel>>,
         model: &str,
-    ) -> crate::error::Result<Arc<dyn RerankModel>> {
+    ) -> ditto_core::error::Result<Arc<dyn RerankModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::invalid_response_text("rerank model is missing"));
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.rerank_model_missing"
+            ));
         }
 
         let cacheable = model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
@@ -475,9 +487,10 @@ impl TranslationBackendRuntime {
         let model_impl = build_rerank_model(provider, &cfg, &self.env)
             .await?
             .ok_or_else(|| {
-                DittoError::invalid_response_text(format!(
-                    "provider backend does not support rerank: {provider}"
-                ))
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_rerank_unsupported",
+                    "provider" => provider
+                )
             })?;
 
         if cacheable {
@@ -496,7 +509,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn BatchClient>>,
-    ) -> crate::error::Result<Arc<dyn BatchClient>> {
+    ) -> ditto_core::error::Result<Arc<dyn BatchClient>> {
         if let Some(client) = direct.cloned() {
             return Ok(client);
         }
@@ -508,9 +521,10 @@ impl TranslationBackendRuntime {
                 build_batch_client(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support batches: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_batches_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -522,7 +536,7 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn FileClient>>,
-    ) -> crate::error::Result<Arc<dyn FileClient>> {
+    ) -> ditto_core::error::Result<Arc<dyn FileClient>> {
         if let Some(client) = direct.cloned() {
             return Ok(client);
         }
@@ -534,9 +548,10 @@ impl TranslationBackendRuntime {
                 build_file_client(provider.as_str(), &self.provider_config, &self.env)
                     .await?
                     .ok_or_else(|| {
-                        DittoError::invalid_response_text(format!(
-                            "provider backend does not support files: {provider}"
-                        ))
+                        ditto_core::invalid_response!(
+                            "error_detail.translation.provider_files_unsupported",
+                            "provider" => provider.as_str()
+                        )
                     })
             })
             .await?;
@@ -775,7 +790,10 @@ impl TranslationBackend {
         requested.to_string()
     }
 
-    pub async fn upload_file(&self, request: FileUploadRequest) -> crate::error::Result<String> {
+    pub async fn upload_file(
+        &self,
+        request: FileUploadRequest,
+    ) -> ditto_core::error::Result<String> {
         let client = self.resolve_file_client().await?;
         client.upload_file_with_purpose(request).await
     }
@@ -784,7 +802,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         texts: Vec<String>,
-    ) -> crate::error::Result<Vec<Vec<f32>>> {
+    ) -> ditto_core::error::Result<Vec<Vec<f32>>> {
         let model_impl = self
             .runtime
             .resolve_embedding_model(
@@ -800,7 +818,7 @@ impl TranslationBackend {
     pub async fn moderate(
         &self,
         request: ModerationRequest,
-    ) -> crate::error::Result<ModerationResponse> {
+    ) -> ditto_core::error::Result<ModerationResponse> {
         let model_impl = self
             .runtime
             .resolve_moderation_model(
@@ -815,7 +833,7 @@ impl TranslationBackend {
     pub async fn generate_image(
         &self,
         request: ImageGenerationRequest,
-    ) -> crate::error::Result<ImageGenerationResponse> {
+    ) -> ditto_core::error::Result<ImageGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_image_generation_model(
@@ -830,7 +848,7 @@ impl TranslationBackend {
     pub async fn edit_image(
         &self,
         request: ImageEditRequest,
-    ) -> crate::error::Result<ImageEditResponse> {
+    ) -> ditto_core::error::Result<ImageEditResponse> {
         let model_impl = self
             .runtime
             .resolve_image_edit_model(
@@ -845,7 +863,7 @@ impl TranslationBackend {
     pub async fn create_video(
         &self,
         request: VideoGenerationRequest,
-    ) -> crate::error::Result<VideoGenerationResponse> {
+    ) -> ditto_core::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -860,7 +878,7 @@ impl TranslationBackend {
     pub async fn retrieve_video(
         &self,
         video_id: &str,
-    ) -> crate::error::Result<VideoGenerationResponse> {
+    ) -> ditto_core::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -875,7 +893,7 @@ impl TranslationBackend {
     pub async fn list_videos(
         &self,
         request: VideoListRequest,
-    ) -> crate::error::Result<VideoListResponse> {
+    ) -> ditto_core::error::Result<VideoListResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -887,7 +905,10 @@ impl TranslationBackend {
         model_impl.list(request).await
     }
 
-    pub async fn delete_video(&self, video_id: &str) -> crate::error::Result<VideoDeleteResponse> {
+    pub async fn delete_video(
+        &self,
+        video_id: &str,
+    ) -> ditto_core::error::Result<VideoDeleteResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -903,7 +924,7 @@ impl TranslationBackend {
         &self,
         video_id: &str,
         variant: Option<VideoContentVariant>,
-    ) -> crate::error::Result<FileContent> {
+    ) -> ditto_core::error::Result<FileContent> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -919,7 +940,7 @@ impl TranslationBackend {
         &self,
         video_id: &str,
         request: VideoRemixRequest,
-    ) -> crate::error::Result<VideoGenerationResponse> {
+    ) -> ditto_core::error::Result<VideoGenerationResponse> {
         let model_impl = self
             .runtime
             .resolve_video_generation_model(
@@ -935,7 +956,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: AudioTranscriptionRequest,
-    ) -> crate::error::Result<AudioTranscriptionResponse> {
+    ) -> ditto_core::error::Result<AudioTranscriptionResponse> {
         let model_impl = self
             .runtime
             .resolve_audio_transcription_model(
@@ -959,7 +980,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: SpeechRequest,
-    ) -> crate::error::Result<SpeechResponse> {
+    ) -> ditto_core::error::Result<SpeechResponse> {
         let model_impl = self
             .runtime
             .resolve_speech_model(
@@ -983,7 +1004,7 @@ impl TranslationBackend {
         &self,
         model: &str,
         mut request: RerankRequest,
-    ) -> crate::error::Result<RerankResponse> {
+    ) -> ditto_core::error::Result<RerankResponse> {
         let model_impl = self
             .runtime
             .resolve_rerank_model(
@@ -1006,17 +1027,17 @@ impl TranslationBackend {
     pub async fn create_batch(
         &self,
         request: BatchCreateRequest,
-    ) -> crate::error::Result<BatchResponse> {
+    ) -> ditto_core::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.create(request).await
     }
 
-    pub async fn retrieve_batch(&self, batch_id: &str) -> crate::error::Result<BatchResponse> {
+    pub async fn retrieve_batch(&self, batch_id: &str) -> ditto_core::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.retrieve(batch_id).await
     }
 
-    pub async fn cancel_batch(&self, batch_id: &str) -> crate::error::Result<BatchResponse> {
+    pub async fn cancel_batch(&self, batch_id: &str) -> ditto_core::error::Result<BatchResponse> {
         let client = self.resolve_batch_client().await?;
         client.cancel(batch_id).await
     }
@@ -1025,12 +1046,12 @@ impl TranslationBackend {
         &self,
         limit: Option<u32>,
         after: Option<String>,
-    ) -> crate::error::Result<BatchListResponse> {
+    ) -> ditto_core::error::Result<BatchListResponse> {
         let client = self.resolve_batch_client().await?;
         client.list(limit, after).await
     }
 
-    async fn resolve_batch_client(&self) -> crate::error::Result<Arc<dyn BatchClient>> {
+    async fn resolve_batch_client(&self) -> ditto_core::error::Result<Arc<dyn BatchClient>> {
         self.runtime
             .resolve_batch_client(self.provider_name(), self.bindings.batch_client.as_ref())
             .await
@@ -1041,11 +1062,11 @@ impl TranslationBackend {
         model: &str,
         instructions: &str,
         input: &[Value],
-    ) -> crate::error::Result<(Vec<Value>, Usage)> {
+    ) -> ditto_core::error::Result<(Vec<Value>, Usage)> {
         let model = model.trim();
         if model.is_empty() {
-            return Err(DittoError::invalid_response_text(
-                "compaction model is missing",
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.compaction_model_missing"
             ));
         }
 
@@ -1117,8 +1138,8 @@ impl TranslationBackend {
             .await?;
 
         let Value::Array(items) = out.object else {
-            return Err(DittoError::invalid_response_text(
-                "compaction response is not a JSON array",
+            return Err(ditto_core::invalid_response!(
+                "error_detail.translation.compaction_response_not_json_array"
             ));
         };
 
@@ -1860,14 +1881,14 @@ pub fn stream_to_chat_completions_sse(
                     match inner.next().await {
                         Some(Ok(chunk)) => {
                             match chunk {
-                                crate::contracts::StreamChunk::ResponseId { id } => {
+                                ditto_core::contracts::StreamChunk::ResponseId { id } => {
                                     let id = id.trim();
                                     if !id.is_empty() {
                                         state.response_id = id.to_string();
                                     }
                                 }
-                                crate::contracts::StreamChunk::Warnings { .. } => {}
-                                crate::contracts::StreamChunk::TextDelta { text } => {
+                                ditto_core::contracts::StreamChunk::Warnings { .. } => {}
+                                ditto_core::contracts::StreamChunk::TextDelta { text } => {
                                     if !text.is_empty() {
                                         buffer.push_back(Ok(chat_chunk_bytes(
                                             &state.response_id,
@@ -1879,7 +1900,7 @@ pub fn stream_to_chat_completions_sse(
                                         )));
                                     }
                                 }
-                                crate::contracts::StreamChunk::ToolCallStart { id, name } => {
+                                ditto_core::contracts::StreamChunk::ToolCallStart { id, name } => {
                                     let idx = if let Some(idx) =
                                         state.tool_call_index.get(&id).copied()
                                     {
@@ -1905,7 +1926,7 @@ pub fn stream_to_chat_completions_sse(
                                         None,
                                     )));
                                 }
-                                crate::contracts::StreamChunk::ToolCallDelta {
+                                ditto_core::contracts::StreamChunk::ToolCallDelta {
                                     id,
                                     arguments_delta,
                                 } => {
@@ -1936,7 +1957,7 @@ pub fn stream_to_chat_completions_sse(
                                         )));
                                     }
                                 }
-                                crate::contracts::StreamChunk::ReasoningDelta { text } => {
+                                ditto_core::contracts::StreamChunk::ReasoningDelta { text } => {
                                     if !text.is_empty() {
                                         buffer.push_back(Ok(chat_chunk_bytes(
                                             &state.response_id,
@@ -1948,10 +1969,10 @@ pub fn stream_to_chat_completions_sse(
                                         )));
                                     }
                                 }
-                                crate::contracts::StreamChunk::FinishReason(reason) => {
+                                ditto_core::contracts::StreamChunk::FinishReason(reason) => {
                                     state.finish_reason = Some(reason);
                                 }
-                                crate::contracts::StreamChunk::Usage(usage) => {
+                                ditto_core::contracts::StreamChunk::Usage(usage) => {
                                     state.usage = Some(usage);
                                 }
                             }
@@ -2032,14 +2053,14 @@ pub fn stream_to_completions_sse(
                     match inner.next().await {
                         Some(Ok(chunk)) => {
                             match chunk {
-                                crate::contracts::StreamChunk::ResponseId { id } => {
+                                ditto_core::contracts::StreamChunk::ResponseId { id } => {
                                     let id = id.trim();
                                     if !id.is_empty() {
                                         state.response_id = id.to_string();
                                     }
                                 }
-                                crate::contracts::StreamChunk::Warnings { .. } => {}
-                                crate::contracts::StreamChunk::TextDelta { text } => {
+                                ditto_core::contracts::StreamChunk::Warnings { .. } => {}
+                                ditto_core::contracts::StreamChunk::TextDelta { text } => {
                                     if !text.is_empty() {
                                         buffer.push_back(Ok(completion_chunk_bytes(
                                             &state.response_id,
@@ -2050,13 +2071,13 @@ pub fn stream_to_completions_sse(
                                         )));
                                     }
                                 }
-                                crate::contracts::StreamChunk::ToolCallStart { .. } => {}
-                                crate::contracts::StreamChunk::ToolCallDelta { .. } => {}
-                                crate::contracts::StreamChunk::ReasoningDelta { .. } => {}
-                                crate::contracts::StreamChunk::FinishReason(reason) => {
+                                ditto_core::contracts::StreamChunk::ToolCallStart { .. } => {}
+                                ditto_core::contracts::StreamChunk::ToolCallDelta { .. } => {}
+                                ditto_core::contracts::StreamChunk::ReasoningDelta { .. } => {}
+                                ditto_core::contracts::StreamChunk::FinishReason(reason) => {
                                     state.finish_reason = Some(reason);
                                 }
-                                crate::contracts::StreamChunk::Usage(_) => {}
+                                ditto_core::contracts::StreamChunk::Usage(_) => {}
                             }
                             continue;
                         }
@@ -2128,7 +2149,7 @@ pub fn stream_to_responses_sse(
 
                 match inner.next().await {
                     Some(Ok(chunk)) => {
-                        if let crate::contracts::StreamChunk::ResponseId { id } = &chunk {
+                        if let ditto_core::contracts::StreamChunk::ResponseId { id } = &chunk {
                             let id = id.trim();
                             if !id.is_empty() {
                                 state.response_id = id.to_string();
@@ -2145,9 +2166,9 @@ pub fn stream_to_responses_sse(
                         }
 
                         match chunk {
-                            crate::contracts::StreamChunk::Warnings { .. } => {}
-                            crate::contracts::StreamChunk::ResponseId { .. } => {}
-                            crate::contracts::StreamChunk::TextDelta { text } => {
+                            ditto_core::contracts::StreamChunk::Warnings { .. } => {}
+                            ditto_core::contracts::StreamChunk::ResponseId { .. } => {}
+                            ditto_core::contracts::StreamChunk::TextDelta { text } => {
                                 if !text.is_empty() {
                                     buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
                                         "type": "response.output_text.delta",
@@ -2155,7 +2176,7 @@ pub fn stream_to_responses_sse(
                                     }))));
                                 }
                             }
-                            crate::contracts::StreamChunk::ToolCallStart { id, name } => {
+                            ditto_core::contracts::StreamChunk::ToolCallStart { id, name } => {
                                 let idx = state
                                     .tool_call_index
                                     .entry(id.clone())
@@ -2170,7 +2191,7 @@ pub fn stream_to_responses_sse(
                                 slot.id = id;
                                 slot.name = name;
                             }
-                            crate::contracts::StreamChunk::ToolCallDelta {
+                            ditto_core::contracts::StreamChunk::ToolCallDelta {
                                 id,
                                 arguments_delta,
                             } => {
@@ -2190,7 +2211,7 @@ pub fn stream_to_responses_sse(
                                 }
                                 slot.pending_arguments.push_str(&arguments_delta);
                             }
-                            crate::contracts::StreamChunk::ReasoningDelta { text } => {
+                            ditto_core::contracts::StreamChunk::ReasoningDelta { text } => {
                                 if !text.is_empty() {
                                     buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
                                         "type": "response.reasoning_text.delta",
@@ -2198,10 +2219,10 @@ pub fn stream_to_responses_sse(
                                     }))));
                                 }
                             }
-                            crate::contracts::StreamChunk::FinishReason(reason) => {
+                            ditto_core::contracts::StreamChunk::FinishReason(reason) => {
                                 state.finish_reason = Some(reason);
                             }
-                            crate::contracts::StreamChunk::Usage(usage) => {
+                            ditto_core::contracts::StreamChunk::Usage(usage) => {
                                 state.usage = Some(usage);
                             }
                         }
@@ -2294,16 +2315,16 @@ mod openai_protocol_reasoning_tests {
     async fn chat_completions_sse_emits_reasoning_content_delta()
     -> Result<(), Box<dyn std::error::Error>> {
         let inner: StreamResult = Box::pin(futures_util::stream::iter(vec![
-            Ok(crate::contracts::StreamChunk::ResponseId {
+            Ok(ditto_core::contracts::StreamChunk::ResponseId {
                 id: "resp_1".to_string(),
             }),
-            Ok(crate::contracts::StreamChunk::ReasoningDelta {
+            Ok(ditto_core::contracts::StreamChunk::ReasoningDelta {
                 text: "thinking...".to_string(),
             }),
-            Ok(crate::contracts::StreamChunk::TextDelta {
+            Ok(ditto_core::contracts::StreamChunk::TextDelta {
                 text: "OK".to_string(),
             }),
-            Ok(crate::contracts::StreamChunk::FinishReason(
+            Ok(ditto_core::contracts::StreamChunk::FinishReason(
                 FinishReason::Stop,
             )),
         ]));
@@ -2328,13 +2349,13 @@ mod openai_protocol_reasoning_tests {
     async fn responses_sse_emits_reasoning_text_delta_event()
     -> Result<(), Box<dyn std::error::Error>> {
         let inner: StreamResult = Box::pin(futures_util::stream::iter(vec![
-            Ok(crate::contracts::StreamChunk::ResponseId {
+            Ok(ditto_core::contracts::StreamChunk::ResponseId {
                 id: "resp_1".to_string(),
             }),
-            Ok(crate::contracts::StreamChunk::ReasoningDelta {
+            Ok(ditto_core::contracts::StreamChunk::ReasoningDelta {
                 text: "thinking...".to_string(),
             }),
-            Ok(crate::contracts::StreamChunk::FinishReason(
+            Ok(ditto_core::contracts::StreamChunk::FinishReason(
                 FinishReason::Stop,
             )),
         ]));
@@ -2363,9 +2384,11 @@ pub fn provider_response_id(response: &GenerateResponse, fallback: &str) -> Stri
         .unwrap_or_else(|| fallback.to_string())
 }
 
-pub fn provider_response_id_from_chunk(chunk: &crate::contracts::StreamChunk) -> Option<String> {
+pub fn provider_response_id_from_chunk(
+    chunk: &ditto_core::contracts::StreamChunk,
+) -> Option<String> {
     match chunk {
-        crate::contracts::StreamChunk::ResponseId { id } => {
+        ditto_core::contracts::StreamChunk::ResponseId { id } => {
             let id = id.trim();
             if id.is_empty() {
                 None
@@ -2378,15 +2401,17 @@ pub fn provider_response_id_from_chunk(chunk: &crate::contracts::StreamChunk) ->
 }
 
 pub fn map_provider_error_to_openai(
-    err: crate::error::DittoError,
+    err: ditto_core::error::DittoError,
 ) -> (StatusCode, &'static str, Option<&'static str>, String) {
     match err {
-        crate::error::DittoError::Api { status, body } => {
+        ditto_core::error::DittoError::Api { status, body } => {
             let status = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
             (status, "api_error", Some("provider_error"), body)
         }
-        crate::error::DittoError::InvalidResponse(message)
-            if message.code() == "error_detail.provider.model_missing" =>
+        ditto_core::error::DittoError::InvalidResponse(message)
+            if message
+                .as_catalog()
+                .is_some_and(|catalog| catalog.code() == "error_detail.provider.model_missing") =>
         {
             (
                 StatusCode::BAD_REQUEST,
@@ -2395,7 +2420,7 @@ pub fn map_provider_error_to_openai(
                 message.to_string(),
             )
         }
-        crate::error::DittoError::InvalidResponse(message) => (
+        ditto_core::error::DittoError::InvalidResponse(message) => (
             StatusCode::NOT_IMPLEMENTED,
             "invalid_request_error",
             Some("unsupported_feature"),
@@ -2420,7 +2445,7 @@ mod error_mapping_tests {
     #[test]
     fn maps_provider_model_missing_as_bad_request() {
         let (status, kind, code, message) =
-            map_provider_error_to_openai(crate::error::DittoError::provider_model_missing(
+            map_provider_error_to_openai(ditto_core::error::DittoError::provider_model_missing(
                 "openai",
                 "set request.model or OpenAI::with_model",
             ));
@@ -2433,8 +2458,9 @@ mod error_mapping_tests {
 
     #[test]
     fn maps_provider_config_errors_as_provider_errors() {
-        let (status, kind, code, message) =
-            map_provider_error_to_openai(crate::error::DittoError::provider_auth_missing("vertex"));
+        let (status, kind, code, message) = map_provider_error_to_openai(
+            ditto_core::error::DittoError::provider_auth_missing("vertex"),
+        );
 
         assert_eq!(status, StatusCode::BAD_GATEWAY);
         assert_eq!(kind, "api_error");

@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,7 +58,10 @@ pub struct ProviderOptions {
 impl ProviderOptions {
     pub fn from_value(value: Value) -> Result<Self> {
         serde_json::from_value::<Self>(value).map_err(|err| {
-            DittoError::invalid_response_text(format!("invalid provider_options: {err}"))
+            crate::invalid_response!(
+                "error_detail.provider_options.invalid",
+                "error" => err.to_string()
+            )
         })
     }
 

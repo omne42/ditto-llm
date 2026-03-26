@@ -8,7 +8,7 @@ use crate::gateway::{
 };
 use async_trait::async_trait;
 use bytes::BytesMut;
-use sha2::Digest as _;
+use omne_integrity_primitives::{Sha256Hasher, hash_sha256};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, sleep};
 
@@ -477,7 +477,7 @@ fn request_dedup_fingerprint(
     virtual_key_id: Option<&str>,
     body: &Bytes,
 ) -> (ProxyRequestFingerprint, String) {
-    let body_sha256 = hex_lower(&sha2::Sha256::digest(body));
+    let body_sha256 = hash_sha256(body).to_string();
     let fingerprint = ProxyRequestFingerprint {
         method: method.as_str().to_string(),
         path: path_and_query.to_string(),
@@ -486,7 +486,7 @@ fn request_dedup_fingerprint(
     };
 
     let fingerprint_key = {
-        let mut hasher = sha2::Sha256::new();
+        let mut hasher = Sha256Hasher::new();
         hasher.update(b"ditto-proxy-request-dedup-v1|");
         hasher.update(fingerprint.method.as_bytes());
         hasher.update(b"|");
@@ -501,7 +501,7 @@ fn request_dedup_fingerprint(
         );
         hasher.update(b"|");
         hasher.update(fingerprint.body_sha256.as_bytes());
-        hex_lower(&hasher.finalize())
+        hasher.finalize().to_string()
     };
 
     (fingerprint, fingerprint_key)
@@ -776,16 +776,6 @@ fn new_local_proxy_request_idempotency_record(
         expires_at_ms: lease_until_ms,
         outcome: None,
     }
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for &byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
 }
 
 fn now_epoch_millis() -> u64 {

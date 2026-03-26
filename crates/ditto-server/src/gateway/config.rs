@@ -1,95 +1,17 @@
 use std::collections::BTreeMap;
 
+use omne_integrity_primitives::hash_sha256;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::Digest as _;
 
-use crate::config::{Env, ProviderConfig};
-use secret::resolve_secret_string;
+use ditto_core::config::{Env, ProviderConfig};
+use secret_kit::resolve_secret;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
 };
 
 pub(crate) const VIRTUAL_KEY_TOKEN_HASH_PREFIX: &str = "sha256:";
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct GatewayI18nConfig {
-    /// i18n mode: "static" (default), "dynamic", or "composed"
-    #[serde(default = "default_i18n_mode")]
-    pub mode: String,
-    /// For "dynamic" mode: source type ("file" or "env")
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
-    /// For "file" source: path to translation directory
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
-    /// For "env" source: environment variable name
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env_var: Option<String>,
-    /// Default locale (e.g., "en_US")
-    #[serde(default = "default_i18n_locale")]
-    pub default_locale: String,
-    /// Fallback strategy: "key", "default_locale", or "both"
-    #[serde(default = "default_i18n_fallback")]
-    pub fallback_strategy: String,
-    /// Enable file watching for hot reload (file source only)
-    #[serde(default)]
-    pub watch: bool,
-}
-
-fn default_i18n_mode() -> String {
-    "static".to_string()
-}
-
-fn default_i18n_locale() -> String {
-    "en_US".to_string()
-}
-
-fn default_i18n_fallback() -> String {
-    "both".to_string()
-}
-
-impl GatewayI18nConfig {
-    pub fn validate(&self) -> Result<(), super::GatewayError> {
-        match self.mode.as_str() {
-            "static" => Ok(()),
-            "dynamic" => {
-                let source =
-                    self.source
-                        .as_ref()
-                        .ok_or_else(|| super::GatewayError::InvalidRequest {
-                            reason: "i18n.source required for dynamic mode".to_string(),
-                        })?;
-                match source.as_str() {
-                    "file" => {
-                        if self.path.is_none() {
-                            return Err(super::GatewayError::InvalidRequest {
-                                reason: "i18n.path required for file source".to_string(),
-                            });
-                        }
-                        Ok(())
-                    }
-                    "env" => {
-                        if self.env_var.is_none() {
-                            return Err(super::GatewayError::InvalidRequest {
-                                reason: "i18n.env_var required for env source".to_string(),
-                            });
-                        }
-                        Ok(())
-                    }
-                    _ => Err(super::GatewayError::InvalidRequest {
-                        reason: format!("unknown i18n source: {}", source),
-                    }),
-                }
-            }
-            "composed" => Ok(()),
-            _ => Err(super::GatewayError::InvalidRequest {
-                reason: format!("unknown i18n mode: {}", self.mode),
-            }),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GatewayObservabilityConfig {
@@ -237,7 +159,7 @@ fn default_redact_regexes() -> Vec<String> {
     ]
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GatewayConfig {
     #[serde(default)]
     pub backends: Vec<BackendConfig>,
@@ -249,8 +171,6 @@ pub struct GatewayConfig {
     pub mcp_servers: Vec<McpServerConfig>,
     #[serde(default)]
     pub observability: GatewayObservabilityConfig,
-    #[serde(default)]
-    pub i18n: GatewayI18nConfig,
 }
 
 impl GatewayConfig {
@@ -289,7 +209,6 @@ impl GatewayConfig {
     pub fn validate(&self) -> Result<(), super::GatewayError> {
         self.observability.redaction.validate()?;
         self.observability.sampling.validate()?;
-        self.i18n.validate()?;
         validate_virtual_key_configs(&self.virtual_keys)?;
         Ok(())
     }
@@ -732,9 +651,7 @@ pub(crate) fn normalize_virtual_key_token_key(token: &str) -> Option<String> {
         return Some(hash.to_string());
     }
 
-    let mut hasher = sha2::Sha256::new();
-    hasher.update(trimmed.as_bytes());
-    Some(format!("{:x}", hasher.finalize()))
+    Some(hash_sha256(trimmed.as_bytes()).to_string())
 }
 
 pub(crate) fn validate_virtual_key_configs(
@@ -785,11 +702,12 @@ async fn resolve_secret_in_string(
         return Ok(());
     }
 
-    let resolved = resolve_secret_string(trimmed, env).await.map_err(|err| {
-        super::GatewayError::InvalidRequest {
+    let resolved = resolve_secret(trimmed, env)
+        .await
+        .map(|secret| secret.into_owned())
+        .map_err(|err| super::GatewayError::InvalidRequest {
             reason: format!("failed to resolve secret for {label}: {err}"),
-        }
-    })?;
+        })?;
     *value = resolved;
     Ok(())
 }
@@ -998,7 +916,6 @@ mod tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
-            i18n: Default::default(),
         };
 
         config.resolve_secrets(&env).await.expect("resolve secrets");

@@ -1,6 +1,6 @@
 use axum::http::Method;
 
-use crate::contracts::{CapabilityKind, OperationKind};
+use ditto_core::contracts::{CapabilityKind, OperationKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TranslationEndpointKind {

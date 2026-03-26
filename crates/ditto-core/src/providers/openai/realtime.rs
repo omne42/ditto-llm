@@ -92,10 +92,11 @@ impl RealtimeSessionModel for OpenAIRealtime {
             match auth {
                 RequestAuth::Http(http) => {
                     let value = http.value.to_str().map_err(|err| {
-                        DittoError::invalid_response_text(format!(
-                            "invalid realtime auth header value for {}: {err}",
-                            http.header.as_str()
-                        ))
+                        crate::invalid_response!(
+                            "error_detail.auth.header_value_invalid",
+                            "header" => http.header.as_str(),
+                            "error" => err.to_string()
+                        )
                     })?;
                     headers.insert(http.header.as_str().to_string(), value.to_string());
                 }
@@ -108,9 +109,12 @@ impl RealtimeSessionModel for OpenAIRealtime {
         let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
         let mut url = reqwest::Url::parse(&openai_like::join_endpoint(&base_url, "realtime"))
             .map_err(|err| {
-                DittoError::invalid_response_text(format!(
-                    "invalid realtime websocket url {base_url:?}: {err}"
-                ))
+                crate::invalid_response!(
+                    "error_detail.provider.base_url_invalid",
+                    "subject" => "openai realtime websocket",
+                    "base_url" => base_url.as_str(),
+                    "error" => err.to_string()
+                )
             })?;
         {
             let mut pairs = url.query_pairs_mut();

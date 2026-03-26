@@ -69,7 +69,8 @@ impl LanguageModel for Anthropic {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+        let selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
             .map(crate::provider_options::ProviderOptions::from_value_ref)
@@ -243,7 +244,11 @@ impl LanguageModel for Anthropic {
         #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+            let selected_provider_options =
+                crate::provider_options::request_provider_options_value_for(
+                    &request,
+                    self.provider(),
+                )?;
             let provider_options = selected_provider_options
                 .as_ref()
                 .map(crate::provider_options::ProviderOptions::from_value_ref)
@@ -374,7 +379,8 @@ impl LanguageModel for Anthropic {
                 request_builder = request_builder.header("anthropic-beta", betas.join(","));
             }
 
-            let response = crate::provider_transport::send_checked(request_builder.json(&body)).await?;
+            let response =
+                crate::provider_transport::send_checked(request_builder.json(&body)).await?;
 
             let (data_stream, buffer) =
                 crate::session_transport::init_sse_stream(response, warnings);
@@ -557,7 +563,10 @@ impl LanguageModel for Anthropic {
                                     }
                                     "error" => {
                                         done = true;
-                                        buffer.push_back(Err(DittoError::invalid_response_text(data)));
+                                        buffer.push_back(Err(crate::invalid_response!(
+                                            "error_detail.anthropic.stream_error_event",
+                                            "payload" => data
+                                        )));
                                     }
                                     _ => {}
                                 },

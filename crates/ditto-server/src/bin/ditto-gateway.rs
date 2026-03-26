@@ -8,19 +8,28 @@ use ditto_gateway::attach::{
     attach_proxy_max_body_bytes, attach_proxy_routing, attach_proxy_usage_max_body_bytes,
 };
 
-use ditto_core::MESSAGE_CATALOG;
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+#[cfg(feature = "gateway")]
+use config_kit::{ConfigDocument, ConfigFormat, ConfigLoadOptions, load_config_document};
+use ditto_core::resources::MESSAGE_CATALOG;
 #[cfg(feature = "gateway")]
 use ditto_gateway::cli::{
     GatewayCliArgs, gateway_cli_usage, parse_gateway_cli_args_with_locale, resolve_cli_secret,
 };
 #[cfg(feature = "gateway")]
 use ditto_gateway::config_cli::maybe_run_config_cli;
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(feature = "gateway")]
 #[tokio::main]
 async fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
+    let data_root = match ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
+        Ok(data_root) => data_root,
+        Err(err) => {
+            eprintln!("{err:?}");
+            std::process::exit(2);
+        }
+    };
     let (locale, raw_args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -28,6 +37,8 @@ async fn main() {
             std::process::exit(2);
         }
     };
+    let raw_args =
+        ditto_server::data_root::inject_default_gateway_config_path(raw_args, &data_root);
 
     if let Err(err) = run_gateway(locale, raw_args).await {
         if let Some(localized) = err
@@ -322,80 +333,7 @@ async fn run_gateway(
         return Err(cli_requires(locale, "--redis-prefix", "--redis or --redis-env").into());
     }
 
-    let config_path = std::path::Path::new(&path);
-    let raw = std::fs::read_to_string(config_path)?;
-    let config_ext = config_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.to_ascii_lowercase());
-    let mut config: ditto_server::gateway::GatewayConfig = match config_ext.as_deref() {
-        Some("yaml") | Some("yml") => {
-            #[cfg(feature = "gateway-config-yaml")]
-            {
-                match serde_yaml::from_str::<ditto_server::gateway::GatewayConfig>(&raw) {
-                    Ok(config) => config,
-                    Err(gateway_yaml_err) => {
-                        let litellm_config = serde_yaml::from_str::<
-                            ditto_server::gateway::litellm_config::LitellmProxyConfig,
-                        >(&raw)
-                        .map_err(|litellm_err| {
-                            cli_parse_config_failed(
-                                locale,
-                                &format!("ditto gateway yaml ({gateway_yaml_err})"),
-                                &format!("litellm proxy yaml ({litellm_err})"),
-                            )
-                        })?;
-                        litellm_config
-                            .try_into_gateway_config()
-                            .map_err(|err| cli_import_litellm_failed(locale, &err.to_string()))?
-                    }
-                }
-            }
-            #[cfg(not(feature = "gateway-config-yaml"))]
-            {
-                return Err(cli_feature_disabled(
-                    locale,
-                    "yaml config",
-                    "--features gateway-config-yaml",
-                )
-                .into());
-            }
-        }
-        _ => match serde_json::from_str(&raw) {
-            Ok(config) => config,
-            Err(json_err) => {
-                #[cfg(feature = "gateway-config-yaml")]
-                {
-                    match serde_yaml::from_str::<ditto_server::gateway::GatewayConfig>(&raw) {
-                        Ok(config) => config,
-                        Err(gateway_yaml_err) => {
-                            let litellm_config = serde_yaml::from_str::<
-                                ditto_server::gateway::litellm_config::LitellmProxyConfig,
-                            >(&raw)
-                            .map_err(|litellm_err| {
-                                cli_parse_config_failed(
-                                    locale,
-                                    &format!("json ({json_err})"),
-                                    &format!(
-                                        "ditto gateway yaml ({gateway_yaml_err}), or litellm proxy yaml ({litellm_err})"
-                                    ),
-                                )
-                            })?;
-                            litellm_config.try_into_gateway_config().map_err(|err| {
-                                cli_import_litellm_failed(locale, &err.to_string())
-                            })?
-                        }
-                    }
-                }
-                #[cfg(not(feature = "gateway-config-yaml"))]
-                {
-                    return Err(
-                        cli_json_parse_then_yaml_disabled(locale, &json_err.to_string()).into(),
-                    );
-                }
-            }
-        },
-    };
+    let mut config = load_gateway_config(locale, &path)?;
 
     if let Some(_sqlite_path_ref) = _sqlite_path.as_ref() {
         #[cfg(feature = "gateway-store-sqlite")]
@@ -869,13 +807,114 @@ async fn run_gateway(
 }
 
 #[cfg(feature = "gateway")]
+fn load_gateway_config(
+    locale: Locale,
+    path: &str,
+) -> Result<ditto_server::gateway::GatewayConfig, Box<dyn std::error::Error>> {
+    let path = std::path::Path::new(path);
+    let document = load_gateway_config_document(locale, path)?;
+    parse_gateway_config_document(locale, &document)
+}
+
+#[cfg(feature = "gateway")]
+fn load_gateway_config_document(
+    _locale: Locale,
+    path: &std::path::Path,
+) -> Result<ConfigDocument, Box<dyn std::error::Error>> {
+    let options = match path.extension().and_then(|ext| ext.to_str()) {
+        Some(ext) if ext.eq_ignore_ascii_case("json") => {
+            ConfigLoadOptions::new().with_format(ConfigFormat::Json)
+        }
+        Some(ext) if ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml") => {
+            #[cfg(feature = "gateway-config-yaml")]
+            {
+                ConfigLoadOptions::new().with_format(ConfigFormat::Yaml)
+            }
+            #[cfg(not(feature = "gateway-config-yaml"))]
+            {
+                return Err(cli_feature_disabled(
+                    _locale,
+                    "yaml config",
+                    "--features gateway-config-yaml",
+                )
+                .into());
+            }
+        }
+        Some(ext) => {
+            let expected = if cfg!(feature = "gateway-config-yaml") {
+                ".json, .yaml, or .yml"
+            } else {
+                ".json"
+            };
+            return Err(format!(
+                "unsupported gateway config extension .{ext} for {}: expected {expected} or no extension",
+                path.display()
+            )
+            .into());
+        }
+        None => ConfigLoadOptions::new().with_default_format(ConfigFormat::Json),
+    };
+
+    load_config_document(path, options).map_err(|err| err.to_string().into())
+}
+
+#[cfg(feature = "gateway")]
+fn parse_gateway_config_document(
+    locale: Locale,
+    document: &ConfigDocument,
+) -> Result<ditto_server::gateway::GatewayConfig, Box<dyn std::error::Error>> {
+    match document.format() {
+        ConfigFormat::Json => document
+            .parse::<ditto_server::gateway::GatewayConfig>()
+            .map_err(|err| err.to_string().into()),
+        ConfigFormat::Yaml => {
+            #[cfg(feature = "gateway-config-yaml")]
+            {
+                match document.parse::<ditto_server::gateway::GatewayConfig>() {
+                    Ok(config) => Ok(config),
+                    Err(gateway_yaml_err) => {
+                        let litellm_config = ConfigFormat::Yaml
+                            .parse_with_path::<ditto_server::gateway::litellm_config::LitellmProxyConfig>(
+                                document.contents(),
+                                Some(document.path()),
+                            )
+                            .map_err(|litellm_err| {
+                                cli_parse_config_failed(
+                                    locale,
+                                    &format!("ditto gateway yaml ({gateway_yaml_err})"),
+                                    &format!("litellm proxy yaml ({litellm_err})"),
+                                )
+                            })?;
+                        litellm_config.try_into_gateway_config().map_err(|err| {
+                            cli_import_litellm_failed(locale, &err.to_string()).into()
+                        })
+                    }
+                }
+            }
+            #[cfg(not(feature = "gateway-config-yaml"))]
+            {
+                Err(
+                    cli_feature_disabled(locale, "yaml config", "--features gateway-config-yaml")
+                        .into(),
+                )
+            }
+        }
+        other => Err(format!(
+            "unsupported gateway config format {other} for {}",
+            document.path().display()
+        )
+        .into()),
+    }
+}
+
+#[cfg(feature = "gateway")]
 fn cli_cannot_combine(locale: Locale, left: &str, right: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.cannot_combine",
         &[
-            MessageArg::new("left", left),
-            MessageArg::new("right", right),
+            TemplateArg::new("left", left),
+            TemplateArg::new("right", right),
         ],
     )
 }
@@ -886,8 +925,8 @@ fn cli_requires(locale: Locale, flag: &str, requirement: &str) -> String {
         locale,
         "cli.requires",
         &[
-            MessageArg::new("flag", flag),
-            MessageArg::new("requirement", requirement),
+            TemplateArg::new("flag", flag),
+            TemplateArg::new("requirement", requirement),
         ],
     )
 }
@@ -897,7 +936,7 @@ fn cli_missing_env(locale: Locale, flag: &str, key: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.missing_env",
-        &[MessageArg::new("flag", flag), MessageArg::new("key", key)],
+        &[TemplateArg::new("flag", flag), TemplateArg::new("key", key)],
     )
 }
 
@@ -906,7 +945,10 @@ fn cli_env_empty(locale: Locale, label: &str, key: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.env_empty",
-        &[MessageArg::new("label", label), MessageArg::new("key", key)],
+        &[
+            TemplateArg::new("label", label),
+            TemplateArg::new("key", key),
+        ],
     )
 }
 
@@ -915,7 +957,7 @@ fn cli_empty_value(locale: Locale, label: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.empty_value",
-        &[MessageArg::new("label", label)],
+        &[TemplateArg::new("label", label)],
     )
 }
 
@@ -925,8 +967,8 @@ fn cli_duplicate_value(locale: Locale, label: &str, value: &str) -> String {
         locale,
         "cli.duplicate_value",
         &[
-            MessageArg::new("label", label),
-            MessageArg::new("value", value),
+            TemplateArg::new("label", label),
+            TemplateArg::new("value", value),
         ],
     )
 }
@@ -937,7 +979,7 @@ fn cli_json_parse_then_yaml_disabled(locale: Locale, json_error: &str) -> String
     MESSAGE_CATALOG.render(
         locale,
         "cli.json_parse_then_yaml_disabled",
-        &[MessageArg::new("json_error", json_error)],
+        &[TemplateArg::new("json_error", json_error)],
     )
 }
 
@@ -948,8 +990,8 @@ fn cli_parse_config_failed(locale: Locale, primary: &str, secondary: &str) -> St
         locale,
         "cli.parse_config_failed",
         &[
-            MessageArg::new("primary", primary),
-            MessageArg::new("secondary", secondary),
+            TemplateArg::new("primary", primary),
+            TemplateArg::new("secondary", secondary),
         ],
     )
 }
@@ -960,7 +1002,7 @@ fn cli_import_litellm_failed(locale: Locale, error: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.import_litellm_failed",
-        &[MessageArg::new("error", error)],
+        &[TemplateArg::new("error", error)],
     )
 }
 
@@ -970,9 +1012,9 @@ fn cli_invalid_guardrails(locale: Locale, scope: &str, name: &str, error: &str) 
         locale,
         "cli.invalid_guardrails",
         &[
-            MessageArg::new("scope", scope),
-            MessageArg::new("name", name),
-            MessageArg::new("error", error),
+            TemplateArg::new("scope", scope),
+            TemplateArg::new("name", name),
+            TemplateArg::new("error", error),
         ],
     )
 }
@@ -983,9 +1025,9 @@ fn cli_missing_field(locale: Locale, scope: &str, name: &str, field: &str) -> St
         locale,
         "cli.missing_field",
         &[
-            MessageArg::new("scope", scope),
-            MessageArg::new("name", name),
-            MessageArg::new("field", field),
+            TemplateArg::new("scope", scope),
+            TemplateArg::new("name", name),
+            TemplateArg::new("field", field),
         ],
     )
 }
@@ -996,10 +1038,10 @@ fn cli_cannot_set_both(locale: Locale, scope: &str, name: &str, left: &str, righ
         locale,
         "cli.cannot_set_both",
         &[
-            MessageArg::new("scope", scope),
-            MessageArg::new("name", name),
-            MessageArg::new("left", left),
-            MessageArg::new("right", right),
+            TemplateArg::new("scope", scope),
+            TemplateArg::new("name", name),
+            TemplateArg::new("left", left),
+            TemplateArg::new("right", right),
         ],
     )
 }
@@ -1010,8 +1052,8 @@ fn cli_invalid_spec(locale: Locale, label: &str, expected: &str) -> String {
         locale,
         "cli.invalid_spec",
         &[
-            MessageArg::new("label", label),
-            MessageArg::new("expected", expected),
+            TemplateArg::new("label", label),
+            TemplateArg::new("expected", expected),
         ],
     )
 }
@@ -1023,8 +1065,8 @@ fn cli_feature_disabled(locale: Locale, feature: &str, rebuild_hint: &str) -> St
         locale,
         "cli.feature_disabled",
         &[
-            MessageArg::new("feature", feature),
-            MessageArg::new("rebuild_hint", rebuild_hint),
+            TemplateArg::new("feature", feature),
+            TemplateArg::new("rebuild_hint", rebuild_hint),
         ],
     )
 }
@@ -1039,7 +1081,7 @@ fn cli_listening_on(locale: Locale, listen: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.listening_on",
-        &[MessageArg::new("listen", listen)],
+        &[TemplateArg::new("listen", listen)],
     )
 }
 
@@ -1054,8 +1096,71 @@ fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> St
     MESSAGE_CATALOG.render(
         locale,
         "error.generic",
-        &[MessageArg::new("error", error.to_string())],
+        &[TemplateArg::new("error", error.to_string())],
     )
+}
+
+#[cfg(all(feature = "gateway", test))]
+mod tests {
+    use super::*;
+
+    fn test_locale() -> Locale {
+        MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US)
+    }
+
+    fn write_temp_file(name: &str, contents: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(name);
+        std::fs::write(&path, contents).expect("write config");
+        (dir, path)
+    }
+
+    #[test]
+    fn load_gateway_config_accepts_strict_json() {
+        let raw = serde_json::to_string(&ditto_server::gateway::GatewayConfig::default())
+            .expect("serialize json");
+        let (_dir, path) = write_temp_file("gateway.json", &raw);
+        let config = load_gateway_config(test_locale(), path.to_str().expect("utf8 path"))
+            .expect("load json config");
+        assert!(config.backends.is_empty());
+        assert!(config.virtual_keys.is_empty());
+        assert!(config.router.default_backends.is_empty());
+    }
+
+    #[test]
+    fn load_gateway_config_rejects_yaml_payload_in_json_file() {
+        let raw = r#"
+virtual_keys: []
+router:
+  default_backends: []
+  rules: []
+"#;
+        let (_dir, path) = write_temp_file("gateway.json", raw);
+        let err = load_gateway_config(test_locale(), path.to_str().expect("utf8 path"))
+            .expect_err("json path must not accept yaml payload");
+        assert!(err.to_string().contains("failed to parse json config"));
+    }
+
+    #[cfg(feature = "gateway-config-yaml")]
+    #[test]
+    fn load_gateway_config_imports_litellm_yaml() {
+        let raw = r#"
+model_list:
+  - model_name: "*"
+    litellm_params:
+      model: "*"
+
+general_settings:
+  master_key: sk-1234
+"#;
+        let (_dir, path) = write_temp_file("gateway.yaml", raw);
+        let config = load_gateway_config(test_locale(), path.to_str().expect("utf8 path"))
+            .expect("load litellm yaml");
+        assert_eq!(config.virtual_keys.len(), 1);
+        assert_eq!(config.virtual_keys[0].token, "sk-1234");
+        assert!(!config.backends.is_empty());
+        assert!(!config.router.default_backends.is_empty());
+    }
 }
 
 #[cfg(not(feature = "gateway"))]
@@ -1063,7 +1168,7 @@ fn main() {
     eprintln!(
         "{}",
         cli_feature_disabled(
-            MESSAGE_CATALOG.default_locale(),
+            MESSAGE_CATALOG.default_locale().unwrap_or(Locale::EN_US),
             "gateway",
             "--features gateway",
         )

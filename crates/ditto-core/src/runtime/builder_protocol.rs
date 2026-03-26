@@ -137,9 +137,29 @@ pub(super) fn resolve_builder_assembly(
     };
 
     if let Some(model) = requested_model {
+        let Some(probe_operations) = invocation_operations_for_capability(request.capability)
+        else {
+            if !runtime.registry().provider_supports_capability(
+                request.provider,
+                request.config,
+                Some(model),
+                request.capability,
+            ) {
+                return Err(
+                    crate::error::ProviderResolutionError::RuntimeRouteCapabilityUnsupported {
+                        provider: plugin.catalog_provider.to_string(),
+                        model: model.to_string(),
+                        capability: request.capability.to_string(),
+                    }
+                    .into(),
+                );
+            }
+            return Ok(fallback);
+        };
+
         let mut first_error = None;
         let mut error_count = 0usize;
-        for &operation in invocation_operations_for_capability(request.capability) {
+        for &operation in probe_operations {
             match resolve_runtime_route(
                 &runtime.catalog(),
                 RuntimeRouteRequest::new(plugin.catalog_provider, Some(model), operation)

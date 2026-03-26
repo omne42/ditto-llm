@@ -43,12 +43,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 需要 features：`provider-openai + cap-llm`。
 
 ```rust
-use ditto_core::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY")
-        .map_err(|_| ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
+        .map_err(|_| ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
 
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 
@@ -76,10 +78,11 @@ OpenAI-compatible 适配器的关键在于：
 示例（从 `ProviderConfig` 构建）：
 
 ```rust
-use ditto_core::{Env, OpenAICompatible, ProviderAuth, ProviderConfig};
+use ditto_core::config::{Env, ProviderAuth, ProviderConfig};
+use ditto_core::providers::OpenAICompatible;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let env = Env::default();
     let config = ProviderConfig {
         base_url: Some("http://127.0.0.1:4000/v1".to_string()),
@@ -92,7 +95,7 @@ async fn main() -> ditto_core::Result<()> {
 
     let llm = OpenAICompatible::from_config(&config, &env).await?;
     let out = llm
-        .generate(vec![ditto_core::Message::user("Say hi.")].into())
+        .generate(vec![ditto_core::contracts::Message::user("Say hi.")].into())
         .await?;
     println!("{}", out.text());
     Ok(())

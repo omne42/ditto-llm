@@ -38,12 +38,14 @@ AI SDK（示意）：
 Ditto（Rust）：
 
 ```rust
-use ditto_core::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 
@@ -72,12 +74,14 @@ Ditto 的 `stream_text` 返回两个 stream：
 
 ```rust
 use futures_util::StreamExt;
-use ditto_core::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
     let req = vec![Message::user("Stream one sentence.")].into();

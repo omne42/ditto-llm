@@ -49,7 +49,7 @@ impl Backend for HttpBackend {
 
         let status = response.status();
         if !status.is_success() {
-            let body = crate::provider_transport::response_text_truncated(
+            let body = ditto_core::provider_transport::response_text_truncated(
                 response,
                 MAX_BACKEND_ERROR_BODY_BYTES,
             )

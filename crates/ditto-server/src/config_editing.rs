@@ -10,12 +10,16 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use text_assets_kit::DataRootScope;
 use toml_edit::{Array, DocumentMut, Item, Table, Value as TomlValue, value};
 
-use crate::config::{ProviderApi, ProviderCapabilities, ProviderConfig, normalize_string_list};
-use crate::contracts::{AuthMethodKind, CapabilityKind};
-use crate::error::{DittoError, Result};
-use crate::runtime_registry::{
+use crate::data_root::{bootstrap_server_data_root_with_options, data_root_options};
+use ditto_core::config::{
+    ProviderApi, ProviderCapabilities, ProviderConfig, normalize_string_list,
+};
+use ditto_core::contracts::{AuthMethodKind, CapabilityKind};
+use ditto_core::error::{DittoError, Result};
+use ditto_core::runtime_registry::{
     BuiltinProviderPreset, ResolvedProviderConfigSemantics, builtin_runtime_registry_catalog,
 };
 
@@ -268,8 +272,12 @@ struct ConfigTarget {
 pub async fn upsert_provider_config(
     mut req: ProviderUpsertRequest,
 ) -> Result<ProviderUpsertReport> {
-    let provider_name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("provider name must not be empty"))?;
+    let provider_name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "provider name"
+        )
+    })?;
 
     let target =
         resolve_config_target(req.config_path.clone(), req.root.clone(), req.scope).await?;
@@ -344,8 +352,8 @@ pub async fn upsert_provider_config(
     // Model discovery is resolved outside `config_editing`; this layer only
     // applies the caller-provided whitelist as a deterministic document edit.
     if req.discover_models && discovered_models.is_empty() {
-        return Err(DittoError::config_text(
-            "discover_models must be resolved by the caller; pass model_whitelist to upsert_provider_config",
+        return Err(ditto_core::config_error!(
+            "error_detail.config.discover_models_whitelist_required"
         ));
     }
     if !discovered_models.is_empty() {
@@ -379,8 +387,12 @@ pub async fn upsert_provider_config(
 }
 
 pub async fn upsert_model_config(req: ModelUpsertRequest) -> Result<ModelUpsertReport> {
-    let model_name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("model name must not be empty"))?;
+    let model_name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "model name"
+        )
+    })?;
 
     let target =
         resolve_config_target(req.config_path.clone(), req.root.clone(), req.scope).await?;
@@ -477,8 +489,12 @@ pub async fn list_provider_configs(req: ProviderListRequest) -> Result<ProviderL
 }
 
 pub async fn show_provider_config(req: ProviderShowRequest) -> Result<ProviderShowReport> {
-    let name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("provider name must not be empty"))?;
+    let name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "provider name"
+        )
+    })?;
 
     let target =
         resolve_config_target_for_read(req.config_path.clone(), req.root.clone(), req.scope)
@@ -501,8 +517,12 @@ pub async fn show_provider_config(req: ProviderShowRequest) -> Result<ProviderSh
 }
 
 pub async fn delete_provider_config(req: ProviderDeleteRequest) -> Result<ProviderDeleteReport> {
-    let provider_name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("provider name must not be empty"))?;
+    let provider_name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "provider name"
+        )
+    })?;
 
     let target =
         resolve_config_target(req.config_path.clone(), req.root.clone(), req.scope).await?;
@@ -599,8 +619,12 @@ pub async fn list_model_configs(req: ModelListRequest) -> Result<ModelListReport
 }
 
 pub async fn show_model_config(req: ModelShowRequest) -> Result<ModelShowReport> {
-    let model_name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("model name must not be empty"))?;
+    let model_name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "model name"
+        )
+    })?;
 
     let target =
         resolve_config_target_for_read(req.config_path.clone(), req.root.clone(), req.scope)
@@ -625,8 +649,12 @@ pub async fn show_model_config(req: ModelShowRequest) -> Result<ModelShowReport>
 }
 
 pub async fn delete_model_config(req: ModelDeleteRequest) -> Result<ModelDeleteReport> {
-    let model_name = non_empty_trimmed(&req.name)
-        .ok_or_else(|| DittoError::config_text("model name must not be empty"))?;
+    let model_name = non_empty_trimmed(&req.name).ok_or_else(|| {
+        ditto_core::config_error!(
+            "error_detail.config.field_must_not_be_empty",
+            "field" => "model name"
+        )
+    })?;
 
     let target =
         resolve_config_target(req.config_path.clone(), req.root.clone(), req.scope).await?;
@@ -851,7 +879,9 @@ fn parse_bool_token(raw: &str) -> Option<bool> {
 fn ensure_interactive_stdio() -> Result<()> {
     use std::io::IsTerminal;
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        return Err(DittoError::config_text("interactive mode requires a TTY"));
+        return Err(ditto_core::config_error!(
+            "error_detail.config.interactive_tty_required"
+        ));
     }
     Ok(())
 }
@@ -1370,8 +1400,8 @@ fn apply_provider_auth_table(
         ProviderAuthType::Command => {
             let command = clean_string_list(req.auth_command.clone());
             if command.is_empty() {
-                return Err(DittoError::config_text(
-                    "auth_type=command requires auth_command",
+                return Err(ditto_core::config_error!(
+                    "error_detail.config.auth_command_required"
                 ));
             }
             auth_table["type"] = value("command");
@@ -1436,23 +1466,9 @@ async fn resolve_config_target_for_read(
         });
     }
 
-    let root = match (scope, root) {
-        (_, Some(root)) => root,
-        (ConfigScope::Workspace, None) => std::env::current_dir()
-            .map_err(DittoError::Io)?
-            .join(".omne_data"),
-        (ConfigScope::Global, None) => resolve_global_omne_root()?,
-        (ConfigScope::Auto, None) => {
-            let cwd_root = std::env::current_dir()
-                .map_err(DittoError::Io)?
-                .join(".omne_data");
-            if cwd_root.exists() {
-                cwd_root
-            } else {
-                resolve_global_omne_root()?
-            }
-        }
-    };
+    let root =
+        bootstrap_server_data_root_with_options(&data_root_options(root, data_root_scope(scope)))?
+            .data_root;
 
     let local_path = root.join("config_local.toml");
     let shared_path = root.join("config.toml");
@@ -1507,27 +1523,9 @@ async fn resolve_config_target(
         });
     }
 
-    let root = match (scope, root) {
-        (_, Some(root)) => root,
-        (ConfigScope::Workspace, None) => std::env::current_dir()
-            .map_err(DittoError::Io)?
-            .join(".omne_data"),
-        (ConfigScope::Global, None) => resolve_global_omne_root()?,
-        (ConfigScope::Auto, None) => {
-            let cwd_root = std::env::current_dir()
-                .map_err(DittoError::Io)?
-                .join(".omne_data");
-            if cwd_root.exists() {
-                cwd_root
-            } else {
-                resolve_global_omne_root()?
-            }
-        }
-    };
-
-    tokio::fs::create_dir_all(&root)
-        .await
-        .map_err(DittoError::Io)?;
+    let root =
+        bootstrap_server_data_root_with_options(&data_root_options(root, data_root_scope(scope)))?
+            .data_root;
 
     let local_path = root.join("config_local.toml");
     let shared_path = root.join("config.toml");
@@ -1565,20 +1563,16 @@ async fn resolve_config_target(
     Ok(ConfigTarget { config_path, scope })
 }
 
-fn resolve_global_omne_root() -> Result<PathBuf> {
-    if let Some(root) = std::env::var_os("OMNE_GLOBAL_ROOT").map(PathBuf::from) {
-        return Ok(root);
-    }
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
-        return Err(DittoError::config_text(
-            "cannot resolve global config root: HOME is not set",
-        ));
-    };
-    Ok(home.join(".omne_data"))
-}
-
 async fn try_exists(path: &Path) -> bool {
     tokio::fs::try_exists(path).await.unwrap_or(false)
+}
+
+fn data_root_scope(scope: ConfigScope) -> DataRootScope {
+    match scope {
+        ConfigScope::Auto => DataRootScope::Auto,
+        ConfigScope::Workspace => DataRootScope::Workspace,
+        ConfigScope::Global => DataRootScope::Global,
+    }
 }
 
 async fn load_or_create_document(path: &PathBuf) -> Result<DocumentMut> {
@@ -1586,9 +1580,13 @@ async fn load_or_create_document(path: &PathBuf) -> Result<DocumentMut> {
         let raw = tokio::fs::read_to_string(path)
             .await
             .map_err(DittoError::Io)?;
-        return raw
-            .parse::<DocumentMut>()
-            .map_err(|err| DittoError::config_text(format!("parse {}: {err}", path.display())));
+        return raw.parse::<DocumentMut>().map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => path.display().to_string(),
+                "error" => err.to_string()
+            )
+        });
     }
 
     Ok(DocumentMut::new())
@@ -1599,9 +1597,13 @@ async fn load_or_create_document_readonly(path: &PathBuf) -> Result<DocumentMut>
         let raw = tokio::fs::read_to_string(path)
             .await
             .map_err(DittoError::Io)?;
-        return raw
-            .parse::<DocumentMut>()
-            .map_err(|err| DittoError::config_text(format!("parse {}: {err}", path.display())));
+        return raw.parse::<DocumentMut>().map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => path.display().to_string(),
+                "error" => err.to_string()
+            )
+        });
     }
     Ok(DocumentMut::new())
 }
@@ -1692,13 +1694,23 @@ fn get_item_path<'a>(table: &'a Table, path: &[&str]) -> Option<&'a Item> {
 
 fn item_to_json(item: &Item) -> Result<JsonValue> {
     if !item.is_table() {
-        return Err(DittoError::config_text("item_to_json requires table item"));
+        return Err(ditto_core::config_error!(
+            "error_detail.config.item_to_json_requires_table"
+        ));
     }
     let raw = item.to_string();
-    let parsed = toml::from_str::<toml::Value>(&raw)
-        .map_err(|err| DittoError::config_text(format!("parse table item for json: {err}")))?;
-    serde_json::to_value(parsed)
-        .map_err(|err| DittoError::config_text(format!("serialize table item to json: {err}")))
+    let parsed = toml::from_str::<toml::Value>(&raw).map_err(|err| {
+        ditto_core::config_error!(
+            "error_detail.config.parse_table_item_for_json",
+            "error" => err.to_string()
+        )
+    })?;
+    serde_json::to_value(parsed).map_err(|err| {
+        ditto_core::config_error!(
+            "error_detail.config.serialize_table_item_to_json",
+            "error" => err.to_string()
+        )
+    })
 }
 
 fn item_as_string(item: &Item) -> Option<String> {
@@ -2029,7 +2041,13 @@ mod tests {
                 .await
                 .map_err(DittoError::Io)?,
         )
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+        .map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => "test toml",
+                "error" => err.to_string()
+            )
+        })?;
         assert_eq!(
             parsed
                 .get("ui")
@@ -2086,7 +2104,13 @@ mod tests {
                 .await
                 .map_err(DittoError::Io)?,
         )
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+        .map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => "test toml",
+                "error" => err.to_string()
+            )
+        })?;
         assert_eq!(
             parsed
                 .get("openai")
@@ -2177,7 +2201,13 @@ keys = ["OPENROUTER_API_KEY"]
                 .await
                 .map_err(DittoError::Io)?,
         )
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+        .map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => "test toml",
+                "error" => err.to_string()
+            )
+        })?;
         assert!(
             parsed
                 .get("google")
@@ -2257,7 +2287,13 @@ prompt_cache = true
                 .await
                 .map_err(DittoError::Io)?,
         )
-        .map_err(|err| DittoError::config_text(format!("parse test toml: {err}")))?;
+        .map_err(|err| {
+            ditto_core::config_error!(
+                "error_detail.config.parse_toml",
+                "path" => "test toml",
+                "error" => err.to_string()
+            )
+        })?;
         assert!(
             parsed
                 .get("openai")

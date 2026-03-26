@@ -8,8 +8,8 @@ use ditto_core::catalog::{
     ReferenceProviderModelCatalog, builtin_registry, core_provider_reference_catalog_expectations,
 };
 use ditto_core::contracts::CapabilityKind;
-use ditto_core::i18n::{MessageArg, MessageCatalogExt as _};
-use ditto_core::MESSAGE_CATALOG;
+use ditto_core::resources::MESSAGE_CATALOG;
+use i18n_kit::TemplateArg;
 
 const DEFAULT_OUT: &str = "CATALOG_COMPLETENESS.md";
 const MAX_MODEL_LIST: usize = 12;
@@ -30,14 +30,16 @@ fn main() {
     }
 }
 
-fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), String> {
+fn run(locale: i18n_kit::Locale, raw_args: Vec<String>) -> Result<(), String> {
+    let repo_root = repo_root_dir();
     let mut out_path = PathBuf::from(DEFAULT_OUT);
+    let mut has_custom_out = false;
     let mut check = false;
 
     let usage = MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new(
+        &[TemplateArg::new(
             "command_and_syntax",
             "ditto-catalog-dashboard [--out PATH] [--check]",
         )],
@@ -46,16 +48,15 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--out" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| {
-                        MESSAGE_CATALOG.render(
-                            locale,
-                            "cli.missing_value",
-                            &[MessageArg::new("flag", "--out")],
-                        )
-                    })?;
+                let value = args.next().ok_or_else(|| {
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.missing_value",
+                        &[TemplateArg::new("flag", "--out")],
+                    )
+                })?;
                 out_path = PathBuf::from(value);
+                has_custom_out = true;
             }
             "--help" | "-h" => {
                 println!("{usage}");
@@ -66,7 +67,7 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
                 let message = MESSAGE_CATALOG.render(
                     locale,
                     "cli.unknown_arg",
-                    &[MessageArg::new("arg", other)],
+                    &[TemplateArg::new("arg", other)],
                 );
                 return Err(format!("{message}\n{usage}"));
             }
@@ -74,7 +75,8 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
     }
 
     let generated = render_dashboard(locale)?;
-    let existing = fs::read_to_string(&out_path).unwrap_or_default();
+    let resolved_out_path = resolve_output_path(&out_path, &repo_root, has_custom_out);
+    let existing = fs::read_to_string(&resolved_out_path).unwrap_or_default();
 
     if check {
         if normalize_newlines(&existing) != normalize_newlines(&generated) {
@@ -82,8 +84,8 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
                 locale,
                 "cli.out_of_date",
                 &[
-                    MessageArg::new("path", out_path.display().to_string()),
-                    MessageArg::new(
+                    TemplateArg::new("path", out_path.display().to_string()),
+                    TemplateArg::new(
                         "command",
                         "cargo run -p ditto-core --all-features --bin ditto-catalog-dashboard",
                     ),
@@ -94,13 +96,13 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
     }
 
     if normalize_newlines(&existing) != normalize_newlines(&generated) {
-        fs::write(&out_path, generated).map_err(|err| {
+        fs::write(&resolved_out_path, generated).map_err(|err| {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.write_failed",
                 &[
-                    MessageArg::new("path", out_path.display().to_string()),
-                    MessageArg::new("error", err.to_string()),
+                    TemplateArg::new("path", out_path.display().to_string()),
+                    TemplateArg::new("error", err.to_string()),
                 ],
             )
         })?;
@@ -130,7 +132,7 @@ struct ProviderSummary {
     reference_display_name: Option<String>,
 }
 
-fn render_dashboard(locale: ditto_core::i18n::Locale) -> Result<String, String> {
+fn render_dashboard(locale: i18n_kit::Locale) -> Result<String, String> {
     let registry = builtin_registry();
     let reference_catalogs = load_reference_catalogs(locale)?;
     let expectations = expectation_map();
@@ -423,19 +425,17 @@ fn summarize_provider(
 }
 
 fn load_reference_catalogs(
-    locale: ditto_core::i18n::Locale,
+    locale: i18n_kit::Locale,
 ) -> Result<BTreeMap<String, ReferenceProviderModelCatalog>, String> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("catalog")
-        .join("provider_models");
+    let dir = reference_catalog_dir();
     let mut stems = BTreeSet::<String>::new();
     for entry in fs::read_dir(&dir).map_err(|err| {
         MESSAGE_CATALOG.render(
             locale,
             "cli.read_dir_failed",
             &[
-                MessageArg::new("path", dir.display().to_string()),
-                MessageArg::new("error", err.to_string()),
+                TemplateArg::new("path", dir.display().to_string()),
+                TemplateArg::new("error", err.to_string()),
             ],
         )
     })? {
@@ -443,7 +443,7 @@ fn load_reference_catalogs(
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.read_dir_entry_failed",
-                &[MessageArg::new("error", err.to_string())],
+                &[TemplateArg::new("error", err.to_string())],
             )
         })?;
         let path = entry.path();
@@ -470,14 +470,30 @@ fn load_reference_catalogs(
                 locale,
                 "cli.load_failed",
                 &[
-                    MessageArg::new("path", path.display().to_string()),
-                    MessageArg::new("error", err.to_string()),
+                    TemplateArg::new("path", path.display().to_string()),
+                    TemplateArg::new("error", err.to_string()),
                 ],
             )
         })?;
         out.insert(catalog.provider.id.clone(), catalog);
     }
     Ok(out)
+}
+
+fn reference_catalog_dir() -> PathBuf {
+    repo_root_dir().join("catalog").join("provider_models")
+}
+
+fn repo_root_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+}
+
+fn resolve_output_path(path: &Path, repo_root: &Path, has_custom_out: bool) -> PathBuf {
+    if has_custom_out || path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        repo_root.join(path)
+    }
 }
 
 fn expectation_map() -> BTreeMap<String, ReferenceCatalogExpectation> {
@@ -523,4 +539,29 @@ fn format_items_truncated(items: &[String], max_items: usize) -> String {
 
 fn normalize_newlines(input: &str) -> String {
     input.replace("\r\n", "\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{reference_catalog_dir, repo_root_dir};
+
+    #[test]
+    fn reference_catalog_dir_points_to_repo_catalog() {
+        let dir = reference_catalog_dir();
+        assert!(dir.exists(), "expected {} to exist", dir.display());
+        assert_eq!(
+            dir.file_name().and_then(|value| value.to_str()),
+            Some("provider_models")
+        );
+    }
+
+    #[test]
+    fn repo_root_dir_points_to_repo_root() {
+        let root = repo_root_dir();
+        assert!(
+            root.join("CATALOG_COMPLETENESS.md").exists(),
+            "expected {} to exist",
+            root.display()
+        );
+    }
 }

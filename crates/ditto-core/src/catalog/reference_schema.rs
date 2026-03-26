@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::Path;
 
+use config_kit::{ConfigFormat, ConfigFormatSet, ConfigLoadOptions, load_typed_config_file};
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -17,28 +17,20 @@ pub struct ReferenceProviderModelCatalog {
 
 impl ReferenceProviderModelCatalog {
     pub fn from_json_str(input: &str) -> Result<Self, ReferenceCatalogLoadError> {
-        serde_json::from_str(input).map_err(ReferenceCatalogLoadError::Json)
+        ConfigFormat::Json
+            .parse(input)
+            .map_err(ReferenceCatalogLoadError::from)
     }
 
     pub fn from_toml_str(input: &str) -> Result<Self, ReferenceCatalogLoadError> {
-        toml::from_str(input).map_err(ReferenceCatalogLoadError::Toml)
+        ConfigFormat::Toml
+            .parse(input)
+            .map_err(ReferenceCatalogLoadError::from)
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ReferenceCatalogLoadError> {
-        let path = path.as_ref();
-        let contents =
-            fs::read_to_string(path).map_err(|source| ReferenceCatalogLoadError::Io {
-                path: path.display().to_string(),
-                source,
-            })?;
-
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("json") => Self::from_json_str(&contents),
-            Some("toml") => Self::from_toml_str(&contents),
-            _ => Err(ReferenceCatalogLoadError::UnsupportedExtension(
-                path.display().to_string(),
-            )),
-        }
+        load_typed_config_file(path, ConfigLoadOptions::new(), ConfigFormatSet::JSON_TOML)
+            .map_err(ReferenceCatalogLoadError::from)
     }
 
     pub fn validate(&self, expected_provider_id: Option<&str>) -> ReferenceCatalogValidationReport {
@@ -826,5 +818,25 @@ mod tests {
                 toml_report.issues
             );
         }
+    }
+
+    #[test]
+    fn provider_model_reference_rejects_yaml_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("provider.yaml");
+        fs::write(
+            &path,
+            r#"
+provider:
+  id: example
+models: {}
+"#,
+        )
+        .expect("write yaml");
+
+        let err =
+            ReferenceProviderModelCatalog::from_path(&path).expect_err("yaml should be rejected");
+        assert!(err.to_string().contains("reference catalog load failed"));
+        assert!(err.to_string().contains("expected json or toml"));
     }
 }

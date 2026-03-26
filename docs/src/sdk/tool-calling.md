@@ -31,7 +31,8 @@ let tools = vec![Tool {
 ## 发起带 tools 的请求
 
 ```rust
-use ditto_core::{ContentPart, GenerateRequest, LanguageModel, Message, ToolChoice};
+use ditto_core::contracts::{ContentPart, GenerateRequest, Message, ToolChoice};
+use ditto_core::llm_core::model::LanguageModel;
 
 let request = GenerateRequest {
     messages: vec![
@@ -73,7 +74,8 @@ for part in &response.content {
 参考 `examples/tool_calling.rs`，一个最小可跑的两轮 loop 形如：
 
 ```rust
-use ditto_core::{ContentPart, GenerateRequest, LanguageModel, Message};
+use ditto_core::contracts::{ContentPart, GenerateRequest, Message};
+use ditto_core::llm_core::model::LanguageModel;
 use serde_json::json;
 
 fn add(arguments: &serde_json::Value) -> serde_json::Value {

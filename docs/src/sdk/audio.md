@@ -18,12 +18,13 @@ Ditto 提供两类音频能力（feature `audio`）：
 ## Transcriptions：最小示例
 
 ```rust
-use ditto_core::{AudioTranscriptionRequest, OpenAIAudioTranscription, TranscriptionResponseFormat};
+use ditto_core::providers::OpenAIAudioTranscription;
+use ditto_core::types::{AudioTranscriptionRequest, TranscriptionResponseFormat};
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let model = OpenAIAudioTranscription::new(api_key).with_model("whisper-1");
 
@@ -49,12 +50,13 @@ async fn main() -> ditto_core::Result<()> {
 ## Speech：最小示例
 
 ```rust
-use ditto_core::{OpenAISpeech, SpeechRequest, SpeechResponseFormat};
+use ditto_core::providers::OpenAISpeech;
+use ditto_core::types::{SpeechRequest, SpeechResponseFormat};
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let tts = OpenAISpeech::new(api_key).with_model("gpt-4o-mini-tts");
 

@@ -8,13 +8,13 @@ For a full repo snapshot, regenerate with `cargo run -p ditto-core --all-feature
 | Provider | Runtime | Reference | Models (match/ref/runtime) | Capabilities (done/planned/blocked/missing) | Validation |
 | --- | --- | --- | --- | --- | --- |
 | `anthropic` | yes | yes | 24/24/24 | 1/0/0/0 | ref:0 / exp:0 |
-| `bailian` | yes | yes | 409/409/409 | 10/0/0/0 | ref:0 / exp:n/a |
-| `deepseek` | yes | yes | 2/2/2 | 1/0/0/1 | ref:0 / exp:0 |
+| `bailian` | yes | yes | 409/409/409 | 9/0/0/0 | ref:0 / exp:n/a |
+| `deepseek` | yes | yes | 2/2/2 | 2/0/0/0 | ref:0 / exp:0 |
 | `doubao` | yes | yes | 54/54/54 | 7/0/0/0 | ref:0 / exp:n/a |
 | `google` | yes | yes | 21/21/21 | 5/0/0/0 | ref:0 / exp:0 |
 | `hunyuan` | yes | yes | 27/27/27 | 4/0/0/0 | ref:0 / exp:n/a |
 | `kimi` | yes | yes | 13/13/13 | 1/0/0/0 | ref:0 / exp:n/a |
-| `minimax` | yes | yes | 20/20/20 | 7/0/0/1 | ref:0 / exp:n/a |
+| `minimax` | yes | yes | 20/20/20 | 8/0/0/0 | ref:0 / exp:n/a |
 | `openai` | yes | yes | 79/79/79 | 9/0/0/0 | ref:0 / exp:0 |
 | `openai-compatible` | yes | no | 0/0/0 | 0/0/0/0 | ref:0 / exp:n/a |
 | `openrouter` | yes | yes | 300/300/300 | 1/0/0/0 | ref:0 / exp:n/a |
@@ -49,17 +49,17 @@ For a full repo snapshot, regenerate with `cargo run -p ditto-core --all-feature
 - runtime plugin: present (Alibaba Cloud Model Studio (Bailian))
 - reference catalog: present (Alibaba Cloud Model Studio (Bailian))
 - models: matched 409 / reference 409 / runtime 409
-- capability coverage (reference scope): done 10 / planned 0 / blocked 0 / missing 0
+- capability coverage (reference scope): done 9 / planned 0 / blocked 0 / missing 0
 - reference validation issues: 0
 - expectation issues: n/a
 
 | Capability bucket | Entries |
 | --- | --- |
-| Implemented | audio.speech, audio.transcription, classification_or_extraction, embedding, image.edit, image.generation, image.translation, llm, rerank, video.generation |
+| Implemented | audio.speech, audio.transcription, embedding, image.edit, image.generation, image.translation, llm, rerank, video.generation |
 | Planned | - |
 | Blocked | - |
 | Missing runtime coverage | - |
-| Runtime-only capability entries | - |
+| Runtime-only capability entries | classification_or_extraction (implemented) |
 
 - missing reference models: -
 - runtime-only models: -
@@ -69,16 +69,16 @@ For a full repo snapshot, regenerate with `cargo run -p ditto-core --all-feature
 - runtime plugin: present (DeepSeek API)
 - reference catalog: present (DeepSeek API)
 - models: matched 2 / reference 2 / runtime 2
-- capability coverage (reference scope): done 1 / planned 0 / blocked 0 / missing 1
+- capability coverage (reference scope): done 2 / planned 0 / blocked 0 / missing 0
 - reference validation issues: 0
 - expectation issues: 0
 
 | Capability bucket | Entries |
 | --- | --- |
-| Implemented | llm |
+| Implemented | context.cache, llm |
 | Planned | - |
 | Blocked | - |
-| Missing runtime coverage | context.cache |
+| Missing runtime coverage | - |
 | Runtime-only capability entries | - |
 
 - missing reference models: -
@@ -169,16 +169,16 @@ For a full repo snapshot, regenerate with `cargo run -p ditto-core --all-feature
 - runtime plugin: present (MiniMax)
 - reference catalog: present (MiniMax)
 - models: matched 20 / reference 20 / runtime 20
-- capability coverage (reference scope): done 7 / planned 0 / blocked 0 / missing 1
+- capability coverage (reference scope): done 8 / planned 0 / blocked 0 / missing 0
 - reference validation issues: 0
 - expectation issues: n/a
 
 | Capability bucket | Entries |
 | --- | --- |
-| Implemented | audio.speech, audio.voice_clone, audio.voice_design, image.generation, llm, music.generation, video.generation |
+| Implemented | audio.speech, audio.voice_clone, audio.voice_design, context.cache, image.generation, llm, music.generation, video.generation |
 | Planned | - |
 | Blocked | - |
-| Missing runtime coverage | context.cache |
+| Missing runtime coverage | - |
 | Runtime-only capability entries | - |
 
 - missing reference models: -

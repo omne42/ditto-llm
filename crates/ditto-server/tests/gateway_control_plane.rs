@@ -127,7 +127,6 @@ fn base_config(key: VirtualKeyConfig) -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     }
 }
 
@@ -382,7 +381,6 @@ async fn project_budget_is_shared_across_virtual_keys() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let clock = Box::new(FixedClock { now: 360 });
     let mut gateway = Gateway::with_clock(config, clock);

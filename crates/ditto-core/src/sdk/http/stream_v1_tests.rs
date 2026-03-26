@@ -3,10 +3,9 @@ mod tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
-    use crate::error::DittoError;
+    use crate::contracts::StreamChunk;
     use crate::llm_core::model::StreamResult;
     use crate::sdk::protocol::{StreamEventV1, decode_v1};
-    use crate::contracts::StreamChunk;
 
     async fn collect_ndjson_events(stream: StreamResult) -> Vec<StreamEventV1> {
         let mut out = super::stream_v1_ndjson(stream);
@@ -67,7 +66,10 @@ mod tests {
             Ok(StreamChunk::TextDelta {
                 text: "hello".to_string(),
             }),
-            Err(DittoError::invalid_response_text("boom".to_string())),
+            Err(crate::invalid_response!(
+                "error_detail.freeform",
+                "message" => "boom"
+            )),
         ];
         let stream: StreamResult = stream::iter(chunks).boxed();
 
@@ -119,7 +121,10 @@ mod tests {
             Ok(StreamChunk::TextDelta {
                 text: "hello".to_string(),
             }),
-            Err(DittoError::invalid_response_text("boom".to_string())),
+            Err(crate::invalid_response!(
+                "error_detail.freeform",
+                "message" => "boom"
+            )),
         ];
         let stream: StreamResult = stream::iter(chunks).boxed();
 

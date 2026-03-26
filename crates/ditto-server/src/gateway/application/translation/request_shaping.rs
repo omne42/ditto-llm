@@ -1,15 +1,15 @@
 use bytes::Bytes;
 use serde_json::{Map, Value};
 
-use crate::contracts::{
-    ContentPart, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice,
-};
 use crate::gateway::multipart::{MultipartPart, parse_multipart_form};
 use crate::types::{
     AudioTranscriptionRequest, ImageEditRequest, ImageEditUpload, ImageGenerationRequest,
     ImageResponseFormat, ModerationInput, ModerationRequest, SpeechRequest, SpeechResponseFormat,
     TranscriptionResponseFormat, VideoContentVariant, VideoGenerationRequest, VideoListOrder,
     VideoListRequest, VideoReferenceUpload, VideoRemixRequest,
+};
+use ditto_core::contracts::{
+    ContentPart, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice,
 };
 
 use super::ParseResult;

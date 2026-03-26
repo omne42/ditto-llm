@@ -108,6 +108,8 @@ use self::request_extractors::{
 pub use self::router::router;
 #[cfg(feature = "gateway-translation")]
 use self::translation_backend::attempt_translation_backend;
+#[cfg(feature = "gateway-proxy-cache")]
+use omne_integrity_primitives::Sha256Hasher;
 
 // inlined from ../../http/core.rs
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -1199,6 +1201,20 @@ fn gateway_uses_virtual_keys(state: &GatewayHttpState) -> bool {
     state.uses_virtual_keys()
 }
 
+#[derive(Clone, Copy, Debug)]
+struct InternalUpstreamAuthPassthrough;
+
+fn enable_internal_upstream_auth_passthrough(req: &mut axum::http::Request<Body>) {
+    req.extensions_mut().insert(InternalUpstreamAuthPassthrough);
+}
+
+fn internal_upstream_auth_passthrough_enabled(parts: &axum::http::request::Parts) -> bool {
+    parts
+        .extensions
+        .get::<InternalUpstreamAuthPassthrough>()
+        .is_some()
+}
+
 fn synthesize_bearer_header(token: &str) -> Option<axum::http::HeaderValue> {
     let token = token.trim();
     if token.is_empty() {
@@ -2026,7 +2042,7 @@ async fn responses_shim_response(
         .to_ascii_lowercase();
 
     if content_type.starts_with("text/event-stream") {
-        let data_stream = crate::session_transport::sse_data_stream_from_response(upstream);
+        let data_stream = ditto_core::session_transport::sse_data_stream_from_response(upstream);
         let stream =
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, request_id.clone());
         let upstream_stream: ProxyBodyStream = stream.boxed();
@@ -2552,8 +2568,6 @@ fn proxy_cache_key(
     scope: &str,
     headers: &HeaderMap,
 ) -> String {
-    use sha2::Digest as _;
-
     let mut header_names: Vec<&str> = headers
         .keys()
         .map(|name| name.as_str())
@@ -2562,7 +2576,7 @@ fn proxy_cache_key(
     header_names.sort_unstable();
     header_names.dedup();
 
-    let mut hasher = sha2::Sha256::new();
+    let mut hasher = Sha256Hasher::new();
     hasher.update(b"ditto-proxy-cache-v2|");
     hasher.update(method.as_str().as_bytes());
     hasher.update(b"|");
@@ -2581,21 +2595,7 @@ fn proxy_cache_key(
     }
     hasher.update(b"|");
     hasher.update(body.as_ref());
-    format!(
-        "ditto-proxy-cache-v2-{}",
-        proxy_cache_hex_lower(&hasher.finalize())
-    )
-}
-
-#[cfg(feature = "gateway-proxy-cache")]
-fn proxy_cache_hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for &byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
+    format!("ditto-proxy-cache-v2-{}", hasher.finalize())
 }
 
 #[cfg(feature = "gateway-proxy-cache")]
@@ -2610,7 +2610,6 @@ fn hash64_fnv1a(bytes: &[u8]) -> u64 {
 // end inline: core/response.rs
 // end inline: proxy/core.rs
 
-#[cfg(test)]
 // inlined from proxy/sanitize_proxy_headers_tests.rs
 #[cfg(test)]
 mod sanitize_proxy_headers_tests {
@@ -2720,7 +2719,6 @@ mod sanitize_proxy_headers_tests {
     }
 }
 // end inline: proxy/sanitize_proxy_headers_tests.rs
-#[cfg(test)]
 // inlined from proxy/usage_parsing_tests.rs
 #[cfg(test)]
 mod usage_parsing_tests {

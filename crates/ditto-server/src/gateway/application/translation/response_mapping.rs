@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use serde_json::{Map, Value};
 
-use crate::contracts::{FinishReason, Usage};
+use ditto_core::contracts::{FinishReason, Usage};
 
 pub(super) fn usage_to_chat_usage(usage: &Usage) -> Option<Value> {
     let prompt = usage.input_tokens?;

@@ -4,9 +4,7 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 #[cfg(feature = "gateway")]
 use ditto_core::config::ProviderApi;
 #[cfg(feature = "gateway")]
-use ditto_core::error::{DittoError, StructuredMessage};
-#[cfg(feature = "gateway")]
-use ditto_core::i18n::{Locale, MessageArg};
+use ditto_core::error::{DittoError, try_structured_text_from_text_args};
 #[cfg(feature = "gateway")]
 use ditto_server::config_editing::{
     ConfigScope, ModelDeleteRequest, ModelListRequest, ModelShowRequest, ModelUpsertRequest,
@@ -19,6 +17,8 @@ use ditto_server::config_editing::{
 use ditto_server::config_editing::{
     complete_model_upsert_request_interactive, complete_provider_upsert_request_interactive,
 };
+#[cfg(feature = "gateway")]
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(feature = "gateway")]
 use serde_json::Value;
@@ -29,12 +29,9 @@ use crate::ditto_gateway::clap_i18n::{
 };
 
 #[cfg(feature = "gateway")]
-fn config_error(_locale: Locale, key: &'static str, args: &[MessageArg<'_>]) -> DittoError {
-    let message = args
-        .iter()
-        .fold(StructuredMessage::new(key), |message, arg| {
-            message.arg(arg.name(), arg.value())
-        });
+fn config_error(_locale: Locale, key: &'static str, args: &[TemplateArg<'_>]) -> DittoError {
+    let message =
+        try_structured_text_from_text_args(key, args).expect("config error args must remain valid");
     DittoError::Config(message)
 }
 

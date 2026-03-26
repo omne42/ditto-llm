@@ -241,17 +241,15 @@ mod tests {
         let result = super::send_checked_bytes(client.get(format!("http://{addr}/"))).await;
         match result {
             Err(DittoError::InvalidResponse(message)) => {
+                let catalog = message
+                    .as_catalog()
+                    .expect("http invalid response should be catalog-backed");
                 assert_eq!(
-                    message.code(),
+                    catalog.code(),
                     "error_detail.http.content_length_exceeds_max_bytes"
                 );
                 assert_eq!(
-                    message
-                        .args()
-                        .iter()
-                        .find(|arg| arg.name() == "content_length")
-                        .and_then(|arg| arg.text())
-                        .map(str::to_owned),
+                    catalog.text_arg("content_length").map(str::to_owned),
                     Some(oversized.to_string())
                 );
             }

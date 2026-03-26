@@ -2413,7 +2413,7 @@ pub(crate) const QIANFAN_BINDINGS: &[ModelBinding] = &[
             "qwen3-embedding-8b",
             "tao-8k",
         ]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::QIANFAN_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -2467,7 +2467,7 @@ pub(crate) const QIANFAN_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Exact(&["flux.1-schnell", "musesteamer-air-image", "qwen-image"]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::QIANFAN_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -2539,7 +2539,7 @@ pub(crate) const QIANFAN_BINDINGS: &[ModelBinding] = &[
             "musesteamer-2.0-turbo-i2v-audio",
             "musesteamer-2.0-turbo-i2v-effect",
         ]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::QIANFAN_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

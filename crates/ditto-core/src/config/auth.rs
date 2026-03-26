@@ -7,7 +7,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
 use crate::error::{DittoError, Result};
-use ::secret::{DefaultSecretResolver, SecretResolver};
+use ::secret_kit::{DefaultSecretResolver, SecretResolutionContext, SecretResolver};
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};
@@ -125,15 +125,6 @@ fn command_failed_status(program: &str, status: &str) -> DittoError {
         "error_detail.auth.command_failed_status",
         "program" => program,
         "status" => status
-    )
-}
-
-fn command_failed_status_with_stderr(program: &str, status: &str, stderr: &str) -> DittoError {
-    crate::auth_command_error!(
-        "error_detail.auth.command_failed_status_with_stderr",
-        "program" => program,
-        "status" => status,
-        "stderr" => stderr
     )
 }
 
@@ -350,12 +341,15 @@ pub async fn resolve_auth_token(auth: &ProviderAuth, env: &Env) -> Result<String
     resolve_auth_token_with_default_keys(auth, env, DEFAULT_KEYS).await
 }
 
-pub async fn resolve_auth_token_with_default_keys_and_resolver(
+pub async fn resolve_auth_token_with_default_keys_and_resolver<R>(
     auth: &ProviderAuth,
     env: &Env,
     default_keys: &[&str],
-    resolver: &dyn SecretResolver,
-) -> Result<String> {
+    resolver: &R,
+) -> Result<String>
+where
+    R: SecretResolver + ?Sized,
+{
     match auth {
         ProviderAuth::ApiKeyEnv { keys }
         | ProviderAuth::HttpHeaderEnv { keys, .. }
@@ -402,16 +396,20 @@ pub async fn resolve_auth_token_with_default_keys(
     .await
 }
 
-async fn resolve_secret_if_needed_with_resolver(
+async fn resolve_secret_if_needed_with_resolver<R>(
     raw: String,
     env: &Env,
-    resolver: &dyn SecretResolver,
-) -> Result<String> {
+    resolver: &R,
+) -> Result<String>
+where
+    R: SecretResolver + ?Sized,
+{
     let raw = raw.trim().to_string();
     if raw.starts_with("secret://") {
         return resolver
-            .resolve_secret_string(raw.as_str(), env)
+            .resolve_secret(raw.as_str(), SecretResolutionContext::new(env, env))
             .await
+            .map(|secret| secret.into_owned())
             .map_err(Into::into);
     }
     Ok(raw)
@@ -492,7 +490,7 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
     let (stdout, stdout_truncated) = stdout_task
         .await
         .map_err(|err| command_reader_join_failed("stdout", err))??;
-    let (stderr, stderr_truncated) = stderr_task
+    let (_stderr, stderr_truncated) = stderr_task
         .await
         .map_err(|err| command_reader_join_failed("stderr", err))??;
 
@@ -510,23 +508,7 @@ async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
     }
 
     if !status.success() {
-        let stderr = String::from_utf8_lossy(&stderr);
-        let stderr = stderr.trim();
-        if stderr.is_empty() {
-            return Err(command_failed_status(program, &status.to_string()));
-        }
-
-        let preview = stderr
-            .chars()
-            .take(200)
-            .collect::<String>()
-            .trim()
-            .to_string();
-        return Err(command_failed_status_with_stderr(
-            program,
-            &status.to_string(),
-            &preview,
-        ));
+        return Err(command_failed_status(program, &status.to_string()));
     }
 
     let stdout = String::from_utf8_lossy(&stdout);
@@ -710,6 +692,35 @@ mod tests {
         };
         assert_eq!(resolved.param, "api_key");
         assert_eq!(resolved.value, "sk-test");
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn auth_command_runner_discards_stderr_from_errors() -> Result<()> {
+        let env = Env::default();
+        let err = run_auth_command(
+            &[
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo leaked-secret >&2; exit 1".to_string(),
+            ],
+            &env,
+        )
+        .await
+        .unwrap_err();
+
+        let rendered = err.to_string();
+        let DittoError::AuthCommand(message) = &err else {
+            panic!("expected auth command error");
+        };
+        let catalog = message
+            .as_catalog()
+            .expect("auth command should be catalog-backed");
+        assert_eq!(catalog.code(), "error_detail.auth.command_failed_status");
+        assert_eq!(catalog.arg("stderr"), None);
+        assert!(!rendered.contains("leaked-secret"));
+        assert!(!rendered.contains("stderr="));
         Ok(())
     }
 }

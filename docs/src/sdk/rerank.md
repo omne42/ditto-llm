@@ -7,12 +7,13 @@ Ditto 通过 `RerankModel` trait 统一接口，目前主要实现为 Cohere Rer
 ## 最小示例（Cohere）
 
 ```rust
-use ditto_core::{CohereRerank, RerankDocument, RerankRequest};
+use ditto_core::providers::CohereRerank;
+use ditto_core::types::{RerankDocument, RerankRequest};
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("COHERE_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing COHERE_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing COHERE_API_KEY".into())
     })?;
     let rerank = CohereRerank::new(api_key).with_model("rerank-english-v3.0");
 

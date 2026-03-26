@@ -22,7 +22,8 @@ impl LanguageModel for Bedrock {
 
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
-        let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+        let selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = selected_provider_options
             .as_ref()
             .map(crate::provider_options::ProviderOptions::from_value_ref)
@@ -78,7 +79,11 @@ impl LanguageModel for Bedrock {
         #[cfg(feature = "cap-llm-streaming")]
         {
             let model = self.resolve_model(&request)?;
-            let selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+            let selected_provider_options =
+                crate::provider_options::request_provider_options_value_for(
+                    &request,
+                    self.provider(),
+                )?;
             let provider_options = selected_provider_options
                 .as_ref()
                 .map(crate::provider_options::ProviderOptions::from_value_ref)
@@ -289,7 +294,10 @@ impl LanguageModel for Bedrock {
                                     }
                                     "error" => {
                                         done = true;
-                                        buffer.push_back(Err(DittoError::invalid_response_text(data)));
+                                        buffer.push_back(Err(crate::invalid_response!(
+                                            "error_detail.bedrock.stream_error_event",
+                                            "payload" => data
+                                        )));
                                     }
                                     _ => {}
                                 },

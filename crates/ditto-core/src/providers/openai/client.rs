@@ -626,8 +626,8 @@ impl OpenAI {
         #[cfg(feature = "cap-llm-streaming")]
         {
             if !request.stream {
-                return Err(DittoError::invalid_response_text(
-                    "stream=true is required for create_response_stream_raw".to_string(),
+                return Err(crate::invalid_response!(
+                    "error_detail.openai.responses_raw_stream_required"
                 ));
             }
 

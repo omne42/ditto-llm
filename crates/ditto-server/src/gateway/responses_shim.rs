@@ -327,7 +327,10 @@ pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<V
 }
 
 pub fn chat_completions_sse_to_responses_sse(
-    data_stream: impl futures_util::Stream<Item = crate::error::Result<String>> + Unpin + Send + 'static,
+    data_stream: impl futures_util::Stream<Item = ditto_core::error::Result<String>>
+    + Unpin
+    + Send
+    + 'static,
     fallback_response_id: String,
 ) -> impl futures_util::Stream<Item = Result<Bytes, std::io::Error>> + Send + 'static {
     let state = StreamState::default();

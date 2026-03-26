@@ -10,7 +10,7 @@ use crate::config::resolve_provider_request_auth_required;
 use crate::config::{
     Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_optional,
 };
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::provider_transport::{apply_http_query_params, resolve_http_provider_config};
 
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
@@ -224,7 +224,10 @@ pub(crate) async fn upload_file_with_purpose(
     let mut file_part = Part::bytes(request.bytes).file_name(request.filename);
     if let Some(media_type) = request.media_type.as_deref() {
         file_part = file_part.mime_str(media_type).map_err(|err| {
-            DittoError::invalid_response_text(format!("invalid file upload media type: {err}"))
+            crate::invalid_response!(
+                "error_detail.openai_like.file_upload_media_type_invalid",
+                "error" => err.to_string()
+            )
         })?;
     }
 
@@ -300,9 +303,11 @@ pub(crate) async fn download_file_content(
     )
     .await
     .map_err(|err| {
-        DittoError::invalid_response_text(format!(
-            "files download response too large (max={max_bytes}): {err}"
-        ))
+        crate::invalid_response!(
+            "error_detail.openai_like.files_download_response_too_large",
+            "max_bytes" => max_bytes.to_string(),
+            "error" => err.to_string()
+        )
     })?
     .to_vec();
 

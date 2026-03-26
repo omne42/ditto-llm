@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use crate::contracts::{ContentPart, GenerateRequest, Message, Role};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::LanguageModel;
 
 use super::types::{
@@ -64,8 +64,9 @@ where
 
     pub async fn run(&self, request: GenerateRequest) -> Result<ToolLoopOutcome> {
         if self.max_steps == 0 {
-            return Err(DittoError::invalid_response_text(
-                "tool loop max_steps must be greater than 0".to_string(),
+            return Err(crate::invalid_response!(
+                "error_detail.tool_loop.max_steps_must_be_positive",
+                "max_steps" => self.max_steps.to_string()
             ));
         }
 

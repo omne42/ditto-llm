@@ -700,50 +700,6 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
     Ok(Value::Object(out))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn extract_text_from_blocks_joins_text_parts_only() {
-        let value = json!([
-            {"type": "text", "text": "hello"},
-            {"type": "image", "source": {"type": "url", "url": "https://example.com/a.png"}},
-            {"type": "text", "text": " world"}
-        ]);
-        assert_eq!(extract_text_from_blocks(&value), "hello world");
-    }
-
-    #[test]
-    fn anthropic_response_assigns_unique_fallback_tool_use_ids() {
-        let response = json!({
-            "id": "chatcmpl_123",
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {"function": {"name": "tool_a", "arguments": "{\"a\":1}"}},
-                        {"function": {"name": "tool_b", "arguments": "{\"b\":2}"}}
-                    ]
-                },
-                "finish_reason": "tool_calls"
-            }],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 2}
-        });
-
-        let mapped =
-            openai_chat_completions_response_to_anthropic_message(&response).expect("map response");
-        let blocks = mapped
-            .get("content")
-            .and_then(Value::as_array)
-            .expect("content blocks");
-        assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].get("id").and_then(Value::as_str), Some("call_0"));
-        assert_eq!(blocks[1].get("id").and_then(Value::as_str), Some("call_1"));
-    }
-}
 // end inline: ../../interop/openai_usage.rs
 // inlined from ../../interop/openai_to_google.rs
 fn openai_finish_reason_to_google(reason: Option<&str>) -> &'static str {
@@ -1266,3 +1222,48 @@ impl GoogleSseEncoder {
     }
 }
 // end inline: ../../interop/openai_to_google.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extract_text_from_blocks_joins_text_parts_only() {
+        let value = json!([
+            {"type": "text", "text": "hello"},
+            {"type": "image", "source": {"type": "url", "url": "https://example.com/a.png"}},
+            {"type": "text", "text": " world"}
+        ]);
+        assert_eq!(extract_text_from_blocks(&value), "hello world");
+    }
+
+    #[test]
+    fn anthropic_response_assigns_unique_fallback_tool_use_ids() {
+        let response = json!({
+            "id": "chatcmpl_123",
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"function": {"name": "tool_a", "arguments": "{\"a\":1}"}},
+                        {"function": {"name": "tool_b", "arguments": "{\"b\":2}"}}
+                    ]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 2}
+        });
+
+        let mapped =
+            openai_chat_completions_response_to_anthropic_message(&response).expect("map response");
+        let blocks = mapped
+            .get("content")
+            .and_then(Value::as_array)
+            .expect("content blocks");
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[0].get("id").and_then(Value::as_str), Some("call_0"));
+        assert_eq!(blocks[1].get("id").and_then(Value::as_str), Some("call_1"));
+    }
+}

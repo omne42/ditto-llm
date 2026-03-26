@@ -26,7 +26,6 @@ fn base_config() -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     }
 }
 

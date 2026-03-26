@@ -86,7 +86,7 @@ fn write_restricted_file(path: &Path, payload: &[u8]) -> Result<(), std::io::Err
             .open(path)?;
         file.write_all(payload)?;
         file.sync_all()?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(unix))]

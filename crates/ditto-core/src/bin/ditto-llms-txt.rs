@@ -3,11 +3,12 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use ditto_core::i18n::{MessageArg, MessageCatalogExt as _};
-use ditto_core::MESSAGE_CATALOG;
+use ditto_core::resources::MESSAGE_CATALOG;
+use i18n_kit::TemplateArg;
 
 const BEGIN_MARKER: &str = "----- BEGIN AUTO-GENERATED DOCS (ditto-llms-txt) -----";
 const END_MARKER: &str = "----- END AUTO-GENERATED DOCS (ditto-llms-txt) -----";
+const LLMS_EXCLUDE_MARKER: &str = "<!-- llms-txt:exclude -->";
 
 fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -25,18 +26,16 @@ fn main() {
     }
 }
 
-fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), String> {
-    let mut out_paths = vec![
-        PathBuf::from("llms.txt"),
-        PathBuf::from("docs/src/llms.txt"),
-    ];
+fn run(locale: i18n_kit::Locale, raw_args: Vec<String>) -> Result<(), String> {
+    let repo_root = repo_root_dir();
+    let mut out_paths = default_out_paths();
     let mut has_custom_out = false;
     let mut check = false;
 
     let usage = MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new(
+        &[TemplateArg::new(
             "command_and_syntax",
             "ditto-llms-txt [--out PATH]... [--check]",
         )],
@@ -45,15 +44,13 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--out" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| {
-                        MESSAGE_CATALOG.render(
-                            locale,
-                            "cli.missing_value",
-                            &[MessageArg::new("flag", "--out")],
-                        )
-                    })?;
+                let value = args.next().ok_or_else(|| {
+                    MESSAGE_CATALOG.render(
+                        locale,
+                        "cli.missing_value",
+                        &[TemplateArg::new("flag", "--out")],
+                    )
+                })?;
                 let path = PathBuf::from(value);
                 if !has_custom_out {
                     out_paths.clear();
@@ -70,7 +67,7 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
                 let message = MESSAGE_CATALOG.render(
                     locale,
                     "cli.unknown_arg",
-                    &[MessageArg::new("arg", other)],
+                    &[TemplateArg::new("arg", other)],
                 );
                 return Err(format!("{message}\n{usage}"));
             }
@@ -85,25 +82,27 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
         "COMPARED_TO_LITELLM_AI_SDK.md",
     ] {
         let path = PathBuf::from(file);
-        if path.exists() {
+        if repo_root.join(&path).exists() {
             paths.push(path);
         }
     }
     paths.extend(collect_docs_paths_from_summary_with_locale(
         "docs/src/SUMMARY.md",
+        &repo_root,
         locale,
     )?);
     paths = dedup_keep_order(paths);
 
     let generated = format!(
         "{BEGIN_MARKER}\n{}\n{END_MARKER}\n",
-        render_files_with_locale(&paths, locale)?
+        render_files_with_locale(&paths, &repo_root, locale)?
     );
 
     let regen_hint = regen_hint(&out_paths);
 
     for out_path in out_paths {
-        let existing = fs::read_to_string(&out_path).unwrap_or_default();
+        let resolved_out_path = resolve_output_path(&out_path, &repo_root, has_custom_out);
+        let existing = fs::read_to_string(&resolved_out_path).unwrap_or_default();
         let prelude = split_prelude(&existing);
         let next = format!("{prelude}{generated}");
 
@@ -113,8 +112,8 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
                     locale,
                     "cli.out_of_date",
                     &[
-                        MessageArg::new("path", out_path.display().to_string()),
-                        MessageArg::new("command", regen_hint.as_str()),
+                        TemplateArg::new("path", out_path.display().to_string()),
+                        TemplateArg::new("command", regen_hint.as_str()),
                     ],
                 ));
             }
@@ -125,13 +124,13 @@ fn run(locale: ditto_core::i18n::Locale, raw_args: Vec<String>) -> Result<(), St
             continue;
         }
 
-        fs::write(&out_path, next).map_err(|err| {
+        fs::write(&resolved_out_path, next).map_err(|err| {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.write_failed",
                 &[
-                    MessageArg::new("path", out_path.display().to_string()),
-                    MessageArg::new("error", err.to_string()),
+                    TemplateArg::new("path", out_path.display().to_string()),
+                    TemplateArg::new("error", err.to_string()),
                 ],
             )
         })?;
@@ -158,28 +157,28 @@ fn split_prelude(existing: &str) -> String {
 
 fn collect_docs_paths_from_summary_with_locale(
     summary_path: impl AsRef<Path>,
-    locale: ditto_core::i18n::Locale,
+    repo_root: &Path,
+    locale: i18n_kit::Locale,
 ) -> Result<Vec<PathBuf>, String> {
     let summary_path = summary_path.as_ref();
-    let contents = fs::read_to_string(summary_path).map_err(|err| {
+    let resolved_summary_path = repo_root.join(summary_path);
+    let contents = fs::read_to_string(&resolved_summary_path).map_err(|err| {
         MESSAGE_CATALOG.render(
             locale,
             "cli.read_failed",
             &[
-                MessageArg::new("path", summary_path.display().to_string()),
-                MessageArg::new("error", err.to_string()),
+                TemplateArg::new("path", summary_path.display().to_string()),
+                TemplateArg::new("error", err.to_string()),
             ],
         )
     })?;
-    let base_dir = summary_path
-        .parent()
-        .ok_or_else(|| {
-            MESSAGE_CATALOG.render(
-                locale,
-                "llms_txt.invalid_summary_path",
-                &[MessageArg::new("path", summary_path.display().to_string())],
-            )
-        })?;
+    let base_dir = summary_path.parent().ok_or_else(|| {
+        MESSAGE_CATALOG.render(
+            locale,
+            "llms_txt.invalid_summary_path",
+            &[TemplateArg::new("path", summary_path.display().to_string())],
+        )
+    })?;
 
     let mut seen = BTreeSet::<PathBuf>::new();
     let mut out = Vec::<PathBuf>::new();
@@ -203,11 +202,11 @@ fn collect_docs_paths_from_summary_with_locale(
 
         let path = base_dir.join(target);
         let path = normalize_relative_path(&path);
-        if !path.exists() {
+        if !repo_root.join(&path).exists() {
             return Err(MESSAGE_CATALOG.render(
                 locale,
                 "llms_txt.summary_missing_file",
-                &[MessageArg::new("path", path.display().to_string())],
+                &[TemplateArg::new("path", path.display().to_string())],
             ));
         }
         if seen.insert(path.clone()) {
@@ -220,20 +219,24 @@ fn collect_docs_paths_from_summary_with_locale(
 
 fn render_files_with_locale(
     paths: &[PathBuf],
-    locale: ditto_core::i18n::Locale,
+    repo_root: &Path,
+    locale: i18n_kit::Locale,
 ) -> Result<String, String> {
     let mut out = String::new();
     for path in paths {
-        let content = fs::read_to_string(path).map_err(|err| {
+        let content = fs::read_to_string(repo_root.join(path)).map_err(|err| {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.read_failed",
                 &[
-                    MessageArg::new("path", path.display().to_string()),
-                    MessageArg::new("error", err.to_string()),
+                    TemplateArg::new("path", path.display().to_string()),
+                    TemplateArg::new("error", err.to_string()),
                 ],
             )
         })?;
+        if !include_in_llms_bundle(&content) {
+            continue;
+        }
         out.push_str(
             "================================================================================\n",
         );
@@ -248,6 +251,29 @@ fn render_files_with_locale(
         out.push('\n');
     }
     Ok(out)
+}
+
+fn include_in_llms_bundle(content: &str) -> bool {
+    !content.contains(LLMS_EXCLUDE_MARKER)
+}
+
+fn repo_root_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+}
+
+fn default_out_paths() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from("llms.txt"),
+        PathBuf::from("docs/src/llms.txt"),
+    ]
+}
+
+fn resolve_output_path(path: &Path, repo_root: &Path, has_custom_out: bool) -> PathBuf {
+    if has_custom_out || path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        repo_root.join(path)
+    }
 }
 
 fn dedup_keep_order(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -286,12 +312,7 @@ fn is_markdown_target(target: &str) -> bool {
 }
 
 fn regen_hint(out_paths: &[PathBuf]) -> String {
-    if out_paths
-        == [
-            PathBuf::from("llms.txt"),
-            PathBuf::from("docs/src/llms.txt"),
-        ]
-    {
+    if out_paths == default_out_paths() {
         "cargo run -p ditto-core --bin ditto-llms-txt".to_string()
     } else {
         let mut cmd = "cargo run -p ditto-core --bin ditto-llms-txt --".to_string();
@@ -304,7 +325,7 @@ fn regen_hint(out_paths: &[PathBuf]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::is_markdown_target;
+    use super::{include_in_llms_bundle, is_markdown_target, repo_root_dir};
 
     #[test]
     fn recognizes_markdown_extension_case_insensitively() {
@@ -313,5 +334,23 @@ mod tests {
         assert!(is_markdown_target("docs/src/Guide.Md"));
         assert!(!is_markdown_target("README.mdx"));
         assert!(!is_markdown_target("README"));
+    }
+
+    #[test]
+    fn excludes_files_marked_out_of_llms_bundle() {
+        assert!(include_in_llms_bundle("# Hello\n"));
+        assert!(!include_in_llms_bundle(
+            "<!-- llms-txt:exclude -->\n# Historical review\n"
+        ));
+    }
+
+    #[test]
+    fn repo_root_dir_points_to_docs_root() {
+        let root = repo_root_dir();
+        assert!(
+            root.join("docs/src/SUMMARY.md").exists(),
+            "expected {} to exist",
+            root.display()
+        );
     }
 }

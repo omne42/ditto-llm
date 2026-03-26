@@ -5,21 +5,21 @@ use ditto_core::providers::Anthropic;
 use httpmock::{Method::POST, MockServer};
 use serde_json::{Value, json};
 
-#[cfg(feature = "google")]
+#[cfg(feature = "provider-google")]
 use ditto_core::providers::Google;
 
 static PRINT_CLAUDE_REQ: std::sync::Once = std::sync::Once::new();
-#[cfg(feature = "google")]
+#[cfg(feature = "provider-google")]
 static PRINT_GEMINI_REQ: std::sync::Once = std::sync::Once::new();
 
 fn parse_json_body(req: &httpmock::prelude::HttpMockRequest) -> Option<Value> {
     serde_json::from_slice::<Value>(req.body_ref()).ok()
 }
 
-#[cfg(not(feature = "google"))]
+#[cfg(not(feature = "provider-google"))]
 fn google_disabled_note() {
     eprintln!(
-        "NOTE: google feature is disabled. Re-run with `--features google` to test Gemini format."
+        "NOTE: provider-google feature is disabled. Re-run with `--features provider-google` to test Gemini format."
     );
 }
 
@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
     );
 
     // --- Gemini (Google GenAI generateContent) ---
-    #[cfg(feature = "google")]
+    #[cfg(feature = "provider-google")]
     {
         let google_mock = server
             .mock_async(|when, then| {
@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
         google_mock.assert_async().await;
     }
 
-    #[cfg(not(feature = "google"))]
+    #[cfg(not(feature = "provider-google"))]
     {
         anthropic_mock.assert_async().await;
         google_disabled_note();

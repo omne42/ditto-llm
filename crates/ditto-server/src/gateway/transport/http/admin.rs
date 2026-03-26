@@ -436,42 +436,6 @@ pub(super) async fn list_audit_logs(
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
-fn hex_lower(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
-    for byte in bytes {
-        out.push(char::from(HEX[usize::from(byte >> 4)]));
-        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    out
-}
-
-#[cfg(any(
-    feature = "gateway-store-sqlite",
-    feature = "gateway-store-postgres",
-    feature = "gateway-store-mysql",
-    feature = "gateway-store-redis"
-))]
-fn audit_chain_hash(prev_hash: Option<&str>, record: &AuditLogRecord) -> String {
-    use sha2::Digest as _;
-
-    let mut hasher = sha2::Sha256::new();
-    if let Some(prev_hash) = prev_hash {
-        hasher.update(prev_hash.as_bytes());
-    }
-    hasher.update(b"\n");
-    if let Ok(serialized) = serde_json::to_vec(record) {
-        hasher.update(&serialized);
-    }
-    hex_lower(&hasher.finalize())
-}
-
-#[cfg(any(
-    feature = "gateway-store-sqlite",
-    feature = "gateway-store-postgres",
-    feature = "gateway-store-mysql",
-    feature = "gateway-store-redis"
-))]
 fn csv_escape(value: &str) -> String {
     if !value.contains([',', '"', '\n', '\r']) {
         return value.to_string();
@@ -650,7 +614,7 @@ fn render_audit_export(
     match format {
         "jsonl" | "ndjson" => {
             for log in logs {
-                let hash = audit_chain_hash(prev_hash.as_deref(), &log);
+                let hash = crate::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &log);
                 let record = AuditExportRecord {
                     id: log.id,
                     ts_ms: log.ts_ms,
@@ -686,7 +650,7 @@ fn render_audit_export(
         "csv" => {
             lines.push("id,ts_ms,kind,payload_json,prev_hash,hash\n".to_string());
             for log in logs {
-                let hash = audit_chain_hash(prev_hash.as_deref(), &log);
+                let hash = crate::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &log);
                 let payload_json = serde_json::to_string(&log.payload).unwrap_or_default();
                 let line = format!(
                     "{},{},{},{},{},{}\n",
@@ -2764,7 +2728,6 @@ mod admin_auth_tests {
             a2a_agents: Vec::new(),
             mcp_servers: Vec::new(),
             observability: Default::default(),
-            i18n: Default::default(),
         };
         GatewayHttpState::new(crate::gateway::Gateway::new(config))
     }

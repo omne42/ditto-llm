@@ -21,9 +21,10 @@ impl EventStreamDecoder {
             .gt(&MAX_EVENTSTREAM_BUFFER_BYTES)
         {
             self.buffer.clear();
-            return Err(DittoError::invalid_response_text(format!(
-                "eventstream buffer exceeded max bytes ({MAX_EVENTSTREAM_BUFFER_BYTES})"
-            )));
+            return Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_buffer_exceeded",
+                "max_bytes" => MAX_EVENTSTREAM_BUFFER_BYTES.to_string()
+            ));
         }
         self.buffer.extend_from_slice(chunk);
         Ok(())
@@ -36,15 +37,17 @@ impl EventStreamDecoder {
         let total_len = u32::from_be_bytes(self.buffer[0..4].try_into().ok()?) as usize;
         if total_len < 16 {
             self.buffer.clear();
-            return Some(Err(DittoError::invalid_response_text(
-                "eventstream total_len too small".to_string(),
+            return Some(Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_total_len_too_small"
             )));
         }
         if total_len > MAX_EVENTSTREAM_MESSAGE_BYTES {
             self.buffer.clear();
-            return Some(Err(DittoError::invalid_response_text(format!(
-                "eventstream total_len too large ({total_len}; max {MAX_EVENTSTREAM_MESSAGE_BYTES})"
-            ))));
+            return Some(Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_total_len_too_large",
+                "total_len" => total_len.to_string(),
+                "max_bytes" => MAX_EVENTSTREAM_MESSAGE_BYTES.to_string()
+            )));
         }
         if self.buffer.len() < total_len {
             return None;
@@ -54,15 +57,15 @@ impl EventStreamDecoder {
         let headers_end = headers_start.saturating_add(headers_len);
         if headers_end > total_len {
             self.buffer.clear();
-            return Some(Err(DittoError::invalid_response_text(
-                "eventstream invalid headers length".to_string(),
+            return Some(Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_invalid_headers_length"
             )));
         }
         let payload_end = total_len.saturating_sub(4);
         if headers_end > payload_end {
             self.buffer.clear();
-            return Some(Err(DittoError::invalid_response_text(
-                "eventstream invalid payload length".to_string(),
+            return Some(Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_invalid_payload_length"
             )));
         }
 
@@ -82,28 +85,38 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
     let mut out = HashMap::<String, String>::new();
     let mut idx = 0usize;
     while idx < bytes.len() {
-        let name_len = *bytes.get(idx).ok_or_else(|| {
-            DittoError::invalid_response_text("eventstream header missing name length".to_string())
-        })? as usize;
+        let name_len = *bytes
+            .get(idx)
+            .ok_or_else(|| {
+                crate::invalid_response!(
+                    "error_detail.bedrock.eventstream_header_missing_name_length"
+                )
+            })? as usize;
         idx += 1;
         if idx + name_len > bytes.len() {
-            return Err(DittoError::invalid_response_text(
-                "eventstream header name truncated".to_string(),
+            return Err(crate::invalid_response!(
+                "error_detail.bedrock.eventstream_header_name_truncated"
             ));
         }
         let name = std::str::from_utf8(&bytes[idx..idx + name_len]).map_err(|err| {
-            DittoError::invalid_response_text(format!("eventstream bad header name: {err}"))
+            crate::invalid_response!(
+                "error_detail.bedrock.eventstream_bad_header_name",
+                "error" => err.to_string()
+            )
         })?;
         idx += name_len;
-        let value_type = *bytes.get(idx).ok_or_else(|| {
-            DittoError::invalid_response_text("eventstream header missing type".to_string())
-        })?;
+        let value_type = *bytes
+            .get(idx)
+            .ok_or_else(|| {
+                crate::invalid_response!("error_detail.bedrock.eventstream_header_missing_type")
+            })?;
         idx += 1;
         let ensure_len = |idx: usize, needed: usize, label: &str| -> Result<()> {
             if idx + needed > bytes.len() {
-                return Err(DittoError::invalid_response_text(format!(
-                    "eventstream header value truncated ({label})"
-                )));
+                return Err(crate::invalid_response!(
+                    "error_detail.bedrock.eventstream_header_value_truncated",
+                    "label" => label
+                ));
             }
             Ok(())
         };
@@ -133,9 +146,10 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
                 ensure_len(idx, len, "bytes")?;
                 if value_type == 7 {
                     let value = std::str::from_utf8(&bytes[idx..idx + len]).map_err(|err| {
-                        DittoError::invalid_response_text(format!(
-                            "eventstream header value utf8 error: {err}"
-                        ))
+                        crate::invalid_response!(
+                            "error_detail.bedrock.eventstream_header_value_utf8_error",
+                            "error" => err.to_string()
+                        )
                     })?;
                     out.insert(name.to_string(), value.to_string());
                 }
@@ -150,9 +164,10 @@ fn parse_eventstream_headers(bytes: &[u8]) -> Result<HashMap<String, String>> {
                 idx += 16;
             }
             other => {
-                return Err(DittoError::invalid_response_text(format!(
-                    "eventstream unsupported header type {other}"
-                )));
+                return Err(crate::invalid_response!(
+                    "error_detail.bedrock.eventstream_unsupported_header_type",
+                    "header_type" => other.to_string()
+                ));
             }
         }
     }
@@ -211,21 +226,28 @@ fn parse_bedrock_event(message: &EventStreamMessage) -> Result<Option<String>> {
         .map(String::as_str)
         .unwrap_or("event");
     if message_type != "event" {
-        return Err(DittoError::invalid_response_text(format!(
-            "bedrock eventstream message-type={message_type}"
-        )));
+        return Err(crate::invalid_response!(
+            "error_detail.bedrock.eventstream_message_type_invalid",
+            "message_type" => message_type
+        ));
     }
 
     let outer: Value = serde_json::from_slice(&message.payload)?;
     let bytes = outer
         .get("bytes")
         .and_then(Value::as_str)
-        .ok_or_else(|| DittoError::invalid_response_text("bedrock event missing bytes".to_string()))?;
+        .ok_or_else(|| crate::invalid_response!("error_detail.bedrock.event_missing_bytes"))?;
     let decoded = BASE64.decode(bytes).map_err(|err| {
-        DittoError::invalid_response_text(format!("bedrock base64 decode failed: {err}"))
+        crate::invalid_response!(
+            "error_detail.bedrock.event_base64_decode_failed",
+            "error" => err.to_string()
+        )
     })?;
     let json = String::from_utf8(decoded).map_err(|err| {
-        DittoError::invalid_response_text(format!("bedrock event bytes not utf8: {err}"))
+        crate::invalid_response!(
+            "error_detail.bedrock.event_bytes_not_utf8",
+            "error" => err.to_string()
+        )
     })?;
     Ok(Some(json))
 }

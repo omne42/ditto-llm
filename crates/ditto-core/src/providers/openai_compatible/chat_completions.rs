@@ -409,7 +409,8 @@ impl LanguageModel for OpenAICompatible {
     async fn generate(&self, request: GenerateRequest) -> Result<GenerateResponse> {
         let model = self.resolve_model(&request)?;
         let request_quirks = self.request_quirks_for_model(model);
-        let raw_selected_provider_options = crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+        let raw_selected_provider_options =
+            crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
         let provider_options = raw_selected_provider_options
             .as_ref()
             .map(crate::provider_options::ProviderOptions::from_value_ref)
@@ -436,11 +437,12 @@ impl LanguageModel for OpenAICompatible {
         let url = self.chat_completions_url();
         let mut req = self.client.http.post(url);
         req = self.apply_auth(req);
-        let parsed =
-            crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
-                .await?;
+        let parsed = crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(
+            req.json(&body),
+        )
+        .await?;
         let choice = parsed.choices.first().ok_or_else(|| {
-            DittoError::invalid_response_text("chat/completions response has no choices".to_string())
+            crate::invalid_response!("error_detail.openai.chat_completions_response_no_choices")
         })?;
 
         let mut content = Vec::<ContentPart>::new();
@@ -553,7 +555,10 @@ impl LanguageModel for OpenAICompatible {
             let model = self.resolve_model(&request)?;
             let request_quirks = self.request_quirks_for_model(model);
             let raw_selected_provider_options =
-                crate::provider_options::request_provider_options_value_for(&request, self.provider())?;
+                crate::provider_options::request_provider_options_value_for(
+                    &request,
+                    self.provider(),
+                )?;
             let provider_options = raw_selected_provider_options
                 .as_ref()
                 .map(crate::provider_options::ProviderOptions::from_value_ref)

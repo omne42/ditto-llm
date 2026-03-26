@@ -1,20 +1,4 @@
-#![allow(unexpected_cfgs)]
-
-pub static MESSAGE_CATALOG: ::i18n::StaticJsonCatalog = ::i18n::static_json_catalog!(
-    default: ::i18n::Locale::EnUs,
-    ::i18n::Locale::EnUs => {
-        enabled: cfg!(feature = "i18n-en-us"),
-        json: include_str!("../i18n/en_US.json")
-    },
-    ::i18n::Locale::ZhCn => {
-        enabled: cfg!(feature = "i18n-zh-cn"),
-        json: include_str!("../i18n/zh_CN.json")
-    },
-    ::i18n::Locale::JaJp => {
-        enabled: cfg!(feature = "i18n-ja-jp"),
-        json: include_str!("../i18n/ja_JP.json")
-    },
-);
+pub mod resources;
 
 pub mod capabilities;
 pub mod catalog;
@@ -66,8 +50,6 @@ pub mod llm_core;
 pub mod providers;
 pub mod types;
 pub mod utils;
-
-pub use ::i18n;
 
 #[cfg(feature = "agent")]
 pub mod agent;

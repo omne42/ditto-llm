@@ -11,9 +11,10 @@ pub trait EmbeddingModel: Send + Sync {
 
     async fn embed_single(&self, text: String) -> Result<Vec<f32>> {
         let embeddings = self.embed(vec![text]).await?;
-        embeddings.into_iter().next().ok_or_else(|| {
-            crate::error::DittoError::invalid_response_text("embedding response is empty")
-        })
+        embeddings
+            .into_iter()
+            .next()
+            .ok_or_else(|| crate::invalid_response!("error_detail.embedding.response_empty"))
     }
 }
 

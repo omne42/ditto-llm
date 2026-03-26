@@ -57,16 +57,21 @@ pub(super) async fn handle_google_genai(
             axum::http::HeaderValue::from_static("text/event-stream"),
         );
     }
+    let forwarded_token = extract_header(&parts.headers, "x-ditto-virtual-key")
+        .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
+        .or_else(|| extract_query_param(&parts.uri, "key"))
+        .or_else(|| extract_litellm_api_key(&parts.headers))
+        .or_else(|| extract_bearer(&parts.headers));
+    let forwarded_auth_present =
+        parts.headers.contains_key("authorization") || forwarded_token.is_some();
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
     if !headers.contains_key("authorization") {
-        let token = extract_header(&parts.headers, "x-ditto-virtual-key")
-            .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
-            .or_else(|| extract_query_param(&parts.uri, "key"))
-            .or_else(|| extract_litellm_api_key(&parts.headers))
-            .or_else(|| extract_bearer(&parts.headers));
-        if let Some(token) = token.as_deref().and_then(synthesize_bearer_header) {
+        if let Some(token) = forwarded_token
+            .as_deref()
+            .and_then(synthesize_bearer_header)
+        {
             headers.insert("authorization", token);
         }
     }
@@ -80,6 +85,9 @@ pub(super) async fn handle_google_genai(
         .body(Body::from(openai_bytes))
         .map_err(|err| google_error(StatusCode::BAD_REQUEST, err.to_string()))?;
     *openai_req.headers_mut() = headers;
+    if !gateway_uses_virtual_keys(&state) && forwarded_auth_present {
+        enable_internal_upstream_auth_passthrough(&mut openai_req);
+    }
 
     let openai_resp = handle_openai_compat_proxy(
         State(state.clone()),
@@ -114,7 +122,7 @@ pub(super) async fn handle_google_genai(
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
             let reader = tokio::io::BufReader::new(reader);
-            let data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
+            let data_stream = ditto_core::session_transport::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -301,16 +309,21 @@ async fn handle_cloudcode_generate_content_inner(
             axum::http::HeaderValue::from_static("text/event-stream"),
         );
     }
+    let forwarded_token = extract_header(&parts.headers, "x-ditto-virtual-key")
+        .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
+        .or_else(|| extract_query_param(&parts.uri, "key"))
+        .or_else(|| extract_litellm_api_key(&parts.headers))
+        .or_else(|| extract_bearer(&parts.headers));
+    let forwarded_auth_present =
+        parts.headers.contains_key("authorization") || forwarded_token.is_some();
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
     if !headers.contains_key("authorization") {
-        let token = extract_header(&parts.headers, "x-ditto-virtual-key")
-            .or_else(|| extract_header(&parts.headers, "x-goog-api-key"))
-            .or_else(|| extract_query_param(&parts.uri, "key"))
-            .or_else(|| extract_litellm_api_key(&parts.headers))
-            .or_else(|| extract_bearer(&parts.headers));
-        if let Some(token) = token.as_deref().and_then(synthesize_bearer_header) {
+        if let Some(token) = forwarded_token
+            .as_deref()
+            .and_then(synthesize_bearer_header)
+        {
             headers.insert("authorization", token);
         }
     }
@@ -324,6 +337,9 @@ async fn handle_cloudcode_generate_content_inner(
         .body(Body::from(openai_bytes))
         .map_err(|err| google_error(StatusCode::BAD_REQUEST, err.to_string()))?;
     *openai_req.headers_mut() = headers;
+    if !gateway_uses_virtual_keys(&state) && forwarded_auth_present {
+        enable_internal_upstream_auth_passthrough(&mut openai_req);
+    }
 
     let openai_resp = handle_openai_compat_proxy(
         State(state.clone()),
@@ -358,7 +374,7 @@ async fn handle_cloudcode_generate_content_inner(
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
             let reader = tokio::io::BufReader::new(reader);
-            let data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
+            let data_stream = ditto_core::session_transport::sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);

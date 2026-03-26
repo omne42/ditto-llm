@@ -17,7 +17,7 @@ use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, ImageSource, Message, Role, Tool,
     ToolChoice, Usage, Warning,
 };
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 #[cfg(feature = "provider-openai")]
 use crate::llm_core::model::StreamResult;
 use crate::providers::openai_compat_profile::{
@@ -789,9 +789,10 @@ pub(crate) fn build_chat_completions_body(
             if matches!(tool_choice, ToolChoice::Required)
                 && matches!(tool_choice_required_supported(quirks), Some(false))
             {
-                return Err(DittoError::invalid_response_text(format!(
-                    "{model} does not support tool_choice=required over chat/completions"
-                )));
+                return Err(crate::invalid_response!(
+                    "error_detail.openai.chat_completions_tool_choice_required_unsupported",
+                    "model" => model
+                ));
             }
             body.insert(
                 "tool_choice".to_string(),
@@ -1385,7 +1386,7 @@ where
         crate::provider_transport::send_checked_json::<ChatCompletionsResponse>(req.json(&body))
             .await?;
     let choice = parsed.choices.first().ok_or_else(|| {
-        DittoError::invalid_response_text("chat/completions response has no choices".to_string())
+        crate::invalid_response!("error_detail.openai.chat_completions_response_no_choices")
     })?;
 
     let mut content = Vec::<ContentPart>::new();

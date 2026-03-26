@@ -26,7 +26,9 @@ AI SDK 的一个核心能力是“中间件/钩子”式的可组合扩展。Dit
 
 ```rust
 use async_trait::async_trait;
-use ditto_core::{LanguageModel, LanguageModelLayer, GenerateRequest, GenerateResponse, StreamResult};
+use ditto_core::contracts::{GenerateRequest, GenerateResponse};
+use ditto_core::llm_core::layer::LanguageModelLayer;
+use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 
 struct WarningLoggerLayer;
 
@@ -36,7 +38,7 @@ impl LanguageModelLayer for WarningLoggerLayer {
         &self,
         inner: &dyn LanguageModel,
         request: GenerateRequest,
-    ) -> ditto_core::Result<GenerateResponse> {
+    ) -> ditto_core::error::Result<GenerateResponse> {
         let resp = inner.generate(request).await?;
         if !resp.warnings.is_empty() {
             eprintln!("warnings: {:?}", resp.warnings);
@@ -48,7 +50,7 @@ impl LanguageModelLayer for WarningLoggerLayer {
         &self,
         inner: &dyn LanguageModel,
         request: GenerateRequest,
-    ) -> ditto_core::Result<StreamResult> {
+    ) -> ditto_core::error::Result<StreamResult> {
         inner.stream(request).await
     }
 }
@@ -57,10 +59,11 @@ impl LanguageModelLayer for WarningLoggerLayer {
 使用方式：
 
 ```rust
-use ditto_core::{LanguageModelLayerExt, OpenAI};
+use ditto_core::llm_core::layer::LanguageModelLayerExt;
+use ditto_core::providers::OpenAI;
 
 let api_key = std::env::var("OPENAI_API_KEY")
-    .map_err(|_| ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
+    .map_err(|_| ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into()))?;
 let llm = OpenAI::new(api_key)
     .with_model("gpt-4o-mini")
     .layer(WarningLoggerLayer);
@@ -91,7 +94,9 @@ Ditto 提供一个轻量的 `CacheLayer`（feature `sdk`）：用于缓存 `gene
 ```rust
 use std::time::Duration;
 
-use ditto_core::{CacheLayer, LanguageModelLayerExt, OpenAI};
+use ditto_core::llm_core::layer::LanguageModelLayerExt;
+use ditto_core::providers::OpenAI;
+use ditto_core::sdk::cache::CacheLayer;
 
 let llm = OpenAI::new(std::env::var("OPENAI_API_KEY")?)
     .with_model("gpt-4o-mini")

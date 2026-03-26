@@ -43,7 +43,6 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let mut gateway = Gateway::new(config);
     gateway.register_backend("primary", EchoBackend);
@@ -80,7 +79,6 @@ async fn admin_key_mutations_persist_virtual_keys_to_sqlite_store() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     assert!(persisted_config.virtual_key("vk-1").is_some());
 
@@ -117,7 +115,6 @@ async fn admin_router_mutation_persists_router_to_sqlite_store() {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     };
     let mut gateway = Gateway::new(config);
     gateway.register_backend("primary", EchoBackend);

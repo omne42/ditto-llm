@@ -63,7 +63,8 @@ mod google_realtime_impl {
         }
 
         fn websocket_root_and_version(&self) -> Result<(String, String)> {
-            let websocket_base = crate::session_transport::to_websocket_base_url(&self.client.base_url);
+            let websocket_base =
+                crate::session_transport::to_websocket_base_url(&self.client.base_url);
             let mut url = Url::parse(&websocket_base).map_err(|err| {
                 DittoError::provider_base_url_invalid(
                     "google realtime",
@@ -126,10 +127,11 @@ mod google_realtime_impl {
                 match auth {
                     RequestAuth::Http(http) => {
                         let value = http.value.to_str().map_err(|err| {
-                            DittoError::invalid_response_text(format!(
-                                "invalid google realtime auth header value for {}: {err}",
-                                http.header.as_str()
-                            ))
+                            crate::invalid_response!(
+                                "error_detail.auth.header_value_invalid",
+                                "header" => http.header.as_str(),
+                                "error" => err.to_string()
+                            )
                         })?;
                         headers.insert(http.header.as_str().to_string(), value.to_string());
                     }
@@ -143,9 +145,12 @@ mod google_realtime_impl {
                 "{root}/ws/google.ai.generativelanguage.{version}.GenerativeService.BidiGenerateContent"
             ))
             .map_err(|err| {
-                DittoError::invalid_response_text(format!(
-                    "invalid google realtime websocket url root={root:?} version={version:?}: {err}"
-                ))
+                crate::invalid_response!(
+                    "error_detail.provider.base_url_invalid",
+                    "subject" => "google realtime websocket",
+                    "base_url" => format!("{root} (version={version})"),
+                    "error" => err.to_string()
+                )
             })?;
             if !query_params.is_empty() {
                 let mut pairs = url.query_pairs_mut();

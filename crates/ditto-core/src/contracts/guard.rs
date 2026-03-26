@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use regex::Regex;
 use serde_yaml::Value;
 
-use crate::MESSAGE_CATALOG;
-use crate::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use crate::resources::MESSAGE_CATALOG;
+use i18n_kit::{Locale, TemplateArg};
 
 const DEFAULT_HEAD_OPENAPI: &str = "contracts/gateway-contract-v0.1.openapi.yaml";
 const DEFAULT_CONTRACT_LIB: &str = "crates/ditto-server/src/gateway/contracts/types.rs";
@@ -105,7 +105,7 @@ pub fn cli_main() {
                 MESSAGE_CATALOG.render(
                     locale,
                     "cli.contract_guard_failed",
-                    &[MessageArg::new("error", err)],
+                    &[TemplateArg::new("error", err)],
                 )
             );
             std::process::exit(1);
@@ -134,7 +134,7 @@ pub(crate) fn parse_args(
                             MESSAGE_CATALOG.render(
                                 locale,
                                 "cli.missing_value",
-                                &[MessageArg::new("flag", "--base")],
+                                &[TemplateArg::new("flag", "--base")],
                             )
                         })?
                         .into(),
@@ -147,7 +147,7 @@ pub(crate) fn parse_args(
                         MESSAGE_CATALOG.render(
                             locale,
                             "cli.missing_value",
-                            &[MessageArg::new("flag", "--head")],
+                            &[TemplateArg::new("flag", "--head")],
                         )
                     })?
                     .into();
@@ -159,7 +159,7 @@ pub(crate) fn parse_args(
                         MESSAGE_CATALOG.render(
                             locale,
                             "cli.missing_value",
-                            &[MessageArg::new("flag", "--contract-lib")],
+                            &[TemplateArg::new("flag", "--contract-lib")],
                         )
                     })?
                     .into();
@@ -171,7 +171,7 @@ pub(crate) fn parse_args(
                         MESSAGE_CATALOG.render(
                             locale,
                             "cli.missing_value",
-                            &[MessageArg::new("flag", "--contract-cargo")],
+                            &[TemplateArg::new("flag", "--contract-cargo")],
                         )
                     })?
                     .into();
@@ -188,7 +188,7 @@ pub(crate) fn parse_args(
                     MESSAGE_CATALOG.render(
                         locale,
                         "cli.unknown_arg",
-                        &[MessageArg::new("arg", other)],
+                        &[TemplateArg::new("arg", other)],
                     ),
                     usage(locale)
                 ));
@@ -203,7 +203,7 @@ fn usage(locale: Locale) -> String {
     MESSAGE_CATALOG.render(
         locale,
         "cli.usage",
-        &[MessageArg::new(
+        &[TemplateArg::new(
             "command_and_syntax",
             "ditto-gateway-contract-guard [--lang LOCALE] [--base PATH] [--head PATH] [--contract-lib PATH] [--contract-cargo PATH] [--allow-missing-base]",
         )],
@@ -260,8 +260,8 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
             locale,
             "cli.requires",
             &[
-                MessageArg::new("flag", "--base"),
-                MessageArg::new("requirement", "--allow-missing-base for bootstrap mode"),
+                TemplateArg::new("flag", "--base"),
+                TemplateArg::new("requirement", "--allow-missing-base for bootstrap mode"),
             ],
         ));
     }
@@ -274,7 +274,7 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
                 MESSAGE_CATALOG.render(
                     locale,
                     "cli.contract_guard_consistency_only_missing_base",
-                    &[MessageArg::new("path", base_path.display().to_string())],
+                    &[TemplateArg::new("path", base_path.display().to_string())],
                 )
             );
             return Ok(());
@@ -282,7 +282,7 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
         return Err(MESSAGE_CATALOG.render(
             locale,
             "cli.contract_guard_base_not_found",
-            &[MessageArg::new("path", base_path.display().to_string())],
+            &[TemplateArg::new("path", base_path.display().to_string())],
         ));
     }
 
@@ -314,9 +314,9 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
             locale,
             "cli.contract_guard_summary",
             &[
-                MessageArg::new("base_version", base_version.to_string()),
-                MessageArg::new("head_version", head_version.to_string()),
-                MessageArg::new("change_kind", change_kind.to_string()),
+                TemplateArg::new("base_version", base_version.to_string()),
+                TemplateArg::new("head_version", head_version.to_string()),
+                TemplateArg::new("change_kind", change_kind.to_string()),
             ],
         )
     );
@@ -326,7 +326,7 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.breaking",
-                &[MessageArg::new("reason", reason.as_str())],
+                &[TemplateArg::new("reason", reason.as_str())],
             )
         );
     }
@@ -336,7 +336,7 @@ pub(crate) fn run(args: Args, locale: Locale) -> Result<(), String> {
             MESSAGE_CATALOG.render(
                 locale,
                 "cli.non_breaking",
-                &[MessageArg::new("reason", reason.as_str())],
+                &[TemplateArg::new("reason", reason.as_str())],
             )
         );
     }

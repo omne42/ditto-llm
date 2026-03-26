@@ -119,8 +119,8 @@ mod google_images_impl {
             return Ok(GoogleImageProviderOptions::default());
         };
         let Some(mut obj) = value.as_object().cloned() else {
-            return Err(DittoError::invalid_response_text(
-                "google image provider_options must be a JSON object".to_string(),
+            return Err(crate::invalid_response!(
+                "error_detail.google.image.provider_options_not_object"
             ));
         };
 
@@ -141,7 +141,10 @@ mod google_images_impl {
         }
 
         serde_json::from_value(Value::Object(obj)).map_err(|err| {
-            DittoError::invalid_response_text(format!("invalid google image provider_options: {err}"))
+            crate::invalid_response!(
+                "error_detail.google.image.provider_options_invalid",
+                "error" => err.to_string()
+            )
         })
     }
 
@@ -178,9 +181,10 @@ mod google_images_impl {
 
     fn number_from_f32(value: f32, field: &str) -> Result<Number> {
         Number::from_f64(value as f64).ok_or_else(|| {
-            DittoError::invalid_response_text(format!(
-                "invalid google image provider_options.{field}: not a finite number"
-            ))
+            crate::invalid_response!(
+                "error_detail.google.image.provider_option_not_finite_number",
+                "field" => field
+            )
         })
     }
 
@@ -265,8 +269,8 @@ mod google_images_impl {
                     .entry("outputOptions".to_string())
                     .or_insert_with(|| Value::Object(Map::new()));
                 let Value::Object(output_options) = output_options else {
-                    return Err(DittoError::invalid_response_text(
-                        "google image outputOptions must be an object".to_string(),
+                    return Err(crate::invalid_response!(
+                        "error_detail.google.image.output_options_not_object"
                     ));
                 };
                 output_options.insert(

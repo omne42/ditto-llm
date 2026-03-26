@@ -185,9 +185,11 @@ fn image_part(upload: ImageEditUpload) -> Result<Part> {
     let mut part = Part::bytes(upload.data).file_name(upload.filename);
     if let Some(media_type) = upload.media_type.as_deref() {
         part = part.mime_str(media_type).map_err(|err| {
-            crate::error::DittoError::invalid_response_text(format!(
-                "invalid image edit media type {media_type:?}: {err}"
-            ))
+            crate::invalid_response!(
+                "error_detail.openai.image_edit_media_type_invalid",
+                "media_type" => format!("{media_type:?}"),
+                "error" => err.to_string()
+            )
         })?;
     }
     Ok(part)
@@ -262,8 +264,8 @@ pub(super) async fn edit_images(
     } = request;
 
     if images.is_empty() {
-        return Err(crate::error::DittoError::invalid_response_text(
-            "image edit requires at least one input image".to_string(),
+        return Err(crate::invalid_response!(
+            "error_detail.openai.image_edit_requires_input_image"
         ));
     }
 

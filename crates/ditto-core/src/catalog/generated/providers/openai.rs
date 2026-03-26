@@ -11,6 +11,18 @@ use crate::catalog::{
 #[cfg(feature = "provider-openai")]
 pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
     ProviderModelDescriptor {
+        id: "babbage-002",
+        display_name: "babbage-002",
+        aliases: &[],
+        brand: Some("openai"),
+        family: Some("openai"),
+        summary: Some(
+            "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4.",
+        ),
+        supported_operations: &[OperationKind::TEXT_COMPLETION],
+        capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
+    },
+    ProviderModelDescriptor {
         id: "chatgpt-4o-latest",
         display_name: "ChatGPT-4o",
         aliases: &[],
@@ -86,6 +98,18 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
         capability_statuses: &[CapabilityStatusDescriptor::implemented(
             CapabilityKind::IMAGE_GENERATION,
         )],
+    },
+    ProviderModelDescriptor {
+        id: "davinci-002",
+        display_name: "davinci-002",
+        aliases: &[],
+        brand: Some("openai"),
+        family: Some("openai"),
+        summary: Some(
+            "GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4.",
+        ),
+        supported_operations: &[OperationKind::TEXT_COMPLETION],
+        capability_statuses: &[CapabilityStatusDescriptor::implemented(CapabilityKind::LLM)],
     },
     ProviderModelDescriptor {
         id: "gpt-3.5-turbo",
@@ -993,6 +1017,21 @@ pub(crate) const OPENAI_MODELS: &[ProviderModelDescriptor] = &[
 #[cfg(feature = "provider-openai")]
 pub(crate) const OPENAI_BEHAVIORS: &[ModelBehaviorDescriptor] = &[
     ModelBehaviorDescriptor {
+        model: "babbage-002",
+        operation: OperationKind::TEXT_COMPLETION,
+        tool_calls: BehaviorSupport::Unsupported,
+        tool_choice_required: BehaviorSupport::Unsupported,
+        assistant_tool_followup: AssistantToolFollowupRequirement::None,
+        reasoning_output: ReasoningOutputMode::Unsupported,
+        reasoning_activation: ReasoningActivationKind::Unavailable,
+        context_cache_modes: &[],
+        context_cache_default_enabled: false,
+        cache_usage_reporting: CacheUsageReportingKind::Unknown,
+        notes: Some(
+            "Legacy OpenAI text completions models do not support tools, prompt caching, or reasoning controls.",
+        ),
+    },
+    ModelBehaviorDescriptor {
         model: "chatgpt-4o-latest",
         operation: OperationKind::CHAT_COMPLETION,
         tool_calls: BehaviorSupport::Unsupported,
@@ -1065,6 +1104,21 @@ pub(crate) const OPENAI_BEHAVIORS: &[ModelBehaviorDescriptor] = &[
         cache_usage_reporting: CacheUsageReportingKind::StandardUsage,
         notes: Some(
             "Model docs mark this family as Responses API only. Prompt caching applies automatically on recent OpenAI models and reports through standard cached_tokens usage details.",
+        ),
+    },
+    ModelBehaviorDescriptor {
+        model: "davinci-002",
+        operation: OperationKind::TEXT_COMPLETION,
+        tool_calls: BehaviorSupport::Unsupported,
+        tool_choice_required: BehaviorSupport::Unsupported,
+        assistant_tool_followup: AssistantToolFollowupRequirement::None,
+        reasoning_output: ReasoningOutputMode::Unsupported,
+        reasoning_activation: ReasoningActivationKind::Unavailable,
+        context_cache_modes: &[],
+        context_cache_default_enabled: false,
+        cache_usage_reporting: CacheUsageReportingKind::Unknown,
+        notes: Some(
+            "Legacy OpenAI text completions models do not support tools, prompt caching, or reasoning controls.",
         ),
     },
     ModelBehaviorDescriptor {

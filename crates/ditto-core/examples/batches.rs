@@ -1,25 +1,33 @@
-#[cfg(feature = "batches")]
+#[cfg(feature = "cap-batch")]
 use ditto_core::capabilities::BatchClient;
-#[cfg(feature = "batches")]
-use ditto_core::error::{DittoError, Result};
-#[cfg(feature = "batches")]
+#[cfg(feature = "cap-batch")]
+use ditto_core::error::Result;
+#[cfg(feature = "cap-batch")]
 use ditto_core::providers::{OpenAICompatible, OpenAICompatibleBatches};
-#[cfg(feature = "batches")]
+#[cfg(feature = "cap-batch")]
 use ditto_core::types::BatchCreateRequest;
 
-#[cfg(feature = "batches")]
+#[cfg(feature = "cap-batch")]
 #[tokio::main]
 async fn main() -> Result<()> {
     let api_key = std::env::var("OPENAI_COMPAT_API_KEY")
         .or_else(|_| std::env::var("OPENAI_API_KEY"))
-        .map_err(|_| DittoError::invalid_response_text("missing OPENAI_API_KEY".to_string()))?;
+        .map_err(|_| {
+            ditto_core::invalid_response!(
+                "error_detail.auth.missing_api_key_env",
+                "keys" => "OPENAI_COMPAT_API_KEY, OPENAI_API_KEY"
+            )
+        })?;
 
     let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))
         .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
 
     let input_path = std::env::args().nth(1).ok_or_else(|| {
-        DittoError::invalid_response_text("usage: batches <requests.jsonl>".to_string())
+        ditto_core::invalid_response!(
+            "error_detail.freeform",
+            "message" => "usage: batches <requests.jsonl>"
+        )
     })?;
 
     let bytes = std::fs::read(&input_path)?;
@@ -49,7 +57,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "batches"))]
+#[cfg(not(feature = "cap-batch"))]
 fn main() {
-    eprintln!("This example requires `--features batches`.");
+    eprintln!("This example requires `--features cap-batch`.");
 }

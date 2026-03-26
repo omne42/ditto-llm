@@ -31,7 +31,7 @@ Ditto 的 `DevtoolsLogger` 是一个非常轻量的 JSONL 记录器（feature `s
 use ditto_core::sdk::devtools::DevtoolsLogger;
 use serde_json::json;
 
-fn main() -> ditto_core::Result<()> {
+fn main() -> ditto_core::error::Result<()> {
     let logger = DevtoolsLogger::new("./logs/devtools.jsonl");
     logger.log_event("app.start", json!({ "ok": true }))?;
     Ok(())

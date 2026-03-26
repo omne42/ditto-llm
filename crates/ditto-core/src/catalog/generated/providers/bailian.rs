@@ -5009,7 +5009,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "tongyi-embedding-vision-flash",
             "tongyi-embedding-vision-plus",
         ]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -5034,7 +5034,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "text-embedding-v3",
             "text-embedding-v4",
         ]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -5142,7 +5142,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "wordart-texture",
             "z-image-turbo",
         ]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -5170,7 +5170,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "qwen-image-plus",
             "qwen-image-plus-2026-01-09",
         ]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -5228,7 +5228,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "wan2.2-kf2v-flash",
             "wanx2.1-kf2v-plus",
         ]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -5288,7 +5288,7 @@ pub(crate) const BAILIAN_BINDINGS: &[ModelBinding] = &[
             "wanx2.1-t2v-turbo",
             "wanx2.1-vace-plus",
         ]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::DASHSCOPE_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

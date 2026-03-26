@@ -189,7 +189,7 @@ pub(crate) const XAI_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Exact(&["grok-2-image-1212"]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::OPENAI_IMAGES,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -207,7 +207,7 @@ pub(crate) const XAI_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::VIDEO_GENERATION,
         selector: ModelSelector::Exact(&["grok-imagine-2"]),
-        surface: ApiSurfaceId::new("video.generation"),
+        surface: ApiSurfaceId::GOOGLE_PREDICT_LONG_RUNNING,
         wire_protocol: WireProtocol::OPENAI_IMAGES,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

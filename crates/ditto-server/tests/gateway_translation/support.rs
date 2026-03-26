@@ -9,13 +9,12 @@ use ditto_core::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_core::capabilities::embedding::EmbeddingModel;
 use ditto_core::capabilities::file::FileContent;
 use ditto_core::capabilities::video::VideoGenerationModel;
-use ditto_core::capabilities::{ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel};
+use ditto_core::capabilities::{
+    ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel,
+};
 use ditto_core::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     StreamChunk, Usage,
-};
-use ditto_server::gateway::{
-    Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_core::types::{
@@ -26,6 +25,9 @@ use ditto_core::types::{
     RerankResult, SpeechRequest, SpeechResponse, VideoContentVariant, VideoDeleteResponse,
     VideoGenerationRequest, VideoGenerationResponse, VideoGenerationStatus, VideoListOrder,
     VideoListRequest, VideoListResponse, VideoRemixRequest,
+};
+use ditto_server::gateway::{
+    Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
 };
 use futures_util::StreamExt;
 use serde_json::json;
@@ -44,7 +46,10 @@ impl LanguageModel for FakeModel {
         "fake-model"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_core::error::Result<GenerateResponse> {
+    async fn generate(
+        &self,
+        _request: GenerateRequest,
+    ) -> ditto_core::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::Text {
                 text: "hello".to_string(),
@@ -96,7 +101,10 @@ impl LanguageModel for FakeCompactionModel {
         "fake-compaction"
     }
 
-    async fn generate(&self, _request: GenerateRequest) -> ditto_core::error::Result<GenerateResponse> {
+    async fn generate(
+        &self,
+        _request: GenerateRequest,
+    ) -> ditto_core::error::Result<GenerateResponse> {
         Ok(GenerateResponse {
             content: vec![ContentPart::ToolCall {
                 id: "call_0".to_string(),
@@ -165,7 +173,10 @@ impl ModerationModel for FakeModerationModel {
         "fake-moderation"
     }
 
-    async fn moderate(&self, request: ModerationRequest) -> ditto_core::error::Result<ModerationResponse> {
+    async fn moderate(
+        &self,
+        request: ModerationRequest,
+    ) -> ditto_core::error::Result<ModerationResponse> {
         let flagged = matches!(request.input, ModerationInput::Text(ref text) if text == "bad");
         Ok(ModerationResponse {
             id: Some("modr_fake".to_string()),
@@ -233,7 +244,10 @@ impl ImageEditModel for FakeImageEditModel {
         "fake-image-edit"
     }
 
-    async fn edit(&self, request: ImageEditRequest) -> ditto_core::error::Result<ImageEditResponse> {
+    async fn edit(
+        &self,
+        request: ImageEditRequest,
+    ) -> ditto_core::error::Result<ImageEditResponse> {
         assert_eq!(request.prompt, "remove background");
         assert_eq!(request.model.as_deref(), Some("image-edit-v2"));
         assert_eq!(request.n, Some(2));
@@ -323,9 +337,10 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
                     ..Default::default()
                 })
             }
-            other => Err(ditto_core::error::DittoError::invalid_response_text(format!(
-                "unexpected video prompt: {other}"
-            ))),
+            other => Err(ditto_core::invalid_response!(
+                "error_detail.freeform",
+                "message" => format!("unexpected video prompt: {other}")
+            )),
         }
     }
 
@@ -343,7 +358,10 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         })
     }
 
-    async fn list(&self, request: VideoListRequest) -> ditto_core::error::Result<VideoListResponse> {
+    async fn list(
+        &self,
+        request: VideoListRequest,
+    ) -> ditto_core::error::Result<VideoListResponse> {
         assert_eq!(request.limit, Some(2));
         assert_eq!(request.after.as_deref(), Some("vid_111"));
         assert_eq!(request.order, Some(VideoListOrder::Desc));
@@ -463,7 +481,10 @@ impl BatchClient for FakeBatchClient {
         "fake"
     }
 
-    async fn create(&self, request: BatchCreateRequest) -> ditto_core::error::Result<BatchResponse> {
+    async fn create(
+        &self,
+        request: BatchCreateRequest,
+    ) -> ditto_core::error::Result<BatchResponse> {
         Ok(BatchResponse {
             batch: Batch {
                 id: "batch_created".to_string(),
@@ -579,7 +600,6 @@ fn base_gateway() -> Gateway {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     })
 }
 

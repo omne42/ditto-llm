@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{GatewayError, GatewayRequest, GuardrailsConfig, VirtualKeyConfig};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct RouterConfig {
     #[serde(default)]
     pub default_backends: Vec<RouteBackend>,

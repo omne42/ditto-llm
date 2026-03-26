@@ -143,8 +143,8 @@ mod google_videos_impl {
         fn operation_url(&self, operation_name: &str) -> Result<String> {
             let operation_name = operation_name.trim();
             if operation_name.is_empty() {
-                return Err(DittoError::invalid_response_text(
-                    "google video operation name is empty".to_string(),
+                return Err(crate::invalid_response!(
+                    "error_detail.google.video.operation_name_empty"
                 ));
             }
             if operation_name.starts_with("http://") || operation_name.starts_with("https://") {
@@ -167,8 +167,8 @@ mod google_videos_impl {
             return Ok(GoogleVideoProviderOptions::default());
         };
         let Some(mut obj) = value.as_object().cloned() else {
-            return Err(DittoError::invalid_response_text(
-                "google video provider_options must be a JSON object".to_string(),
+            return Err(crate::invalid_response!(
+                "error_detail.google.video.provider_options_not_object"
             ));
         };
 
@@ -189,7 +189,10 @@ mod google_videos_impl {
         }
 
         serde_json::from_value(Value::Object(obj)).map_err(|err| {
-            DittoError::invalid_response_text(format!("invalid google video provider_options: {err}"))
+            crate::invalid_response!(
+                "error_detail.google.video.provider_options_invalid",
+                "error" => err.to_string()
+            )
         })
     }
 
@@ -216,9 +219,10 @@ mod google_videos_impl {
         } else if media_type.starts_with("video/") {
             "video"
         } else {
-            return Err(DittoError::invalid_response_text(format!(
-                "google video generation input_reference requires image/* or video/* media type, got {media_type:?}"
-            )));
+            return Err(crate::invalid_response!(
+                "error_detail.google.video.input_reference_media_type_invalid",
+                "media_type" => format!("{media_type:?}")
+            ));
         };
 
         Ok((
@@ -515,30 +519,32 @@ mod google_videos_impl {
             match variant.unwrap_or(VideoContentVariant::Video) {
                 VideoContentVariant::Video => {}
                 other => {
-                    return Err(DittoError::invalid_response_text(format!(
-                        "google video generation does not support content variant {other:?}"
-                    )));
+                    return Err(crate::invalid_response!(
+                        "error_detail.google.video.content_variant_unsupported",
+                        "variant" => format!("{other:?}")
+                    ));
                 }
             }
 
             let response = self.retrieve(video_id).await?;
             let raw = response.provider_metadata.ok_or_else(|| {
-                DittoError::invalid_response_text(
-                    "google video generation response is missing provider_metadata".to_string(),
+                crate::invalid_response!(
+                    "error_detail.google.video.response_missing_provider_metadata"
                 )
             })?;
             let operation = serde_json::from_value::<GoogleVideoOperation>(raw)?;
             let video = first_generated_video_blob(&operation).ok_or_else(|| {
-                DittoError::invalid_response_text(
-                    "google video generation operation has no generated video content".to_string(),
+                crate::invalid_response!(
+                    "error_detail.google.video.operation_missing_generated_video_content"
                 )
             })?;
 
             if let Some(encoded_video) = video.encoded_video.as_ref() {
                 let bytes = BASE64.decode(encoded_video).map_err(|err| {
-                    DittoError::invalid_response_text(format!(
-                        "invalid google encodedVideo payload: {err}"
-                    ))
+                    crate::invalid_response!(
+                        "error_detail.google.video.encoded_video_invalid",
+                        "error" => err.to_string()
+                    )
                 })?;
                 return Ok(FileContent {
                     bytes,
@@ -547,15 +553,15 @@ mod google_videos_impl {
             }
 
             let uri = video.uri.ok_or_else(|| {
-                DittoError::invalid_response_text(
-                    "google video generation operation has neither uri nor encodedVideo"
-                        .to_string(),
+                crate::invalid_response!(
+                    "error_detail.google.video.operation_missing_uri_and_encoded_video"
                 )
             })?;
             if !(uri.starts_with("http://") || uri.starts_with("https://")) {
-                return Err(DittoError::invalid_response_text(format!(
-                    "google video generation returned non-http uri {uri:?}; direct download is not supported"
-                )));
+                return Err(crate::invalid_response!(
+                    "error_detail.google.video.download_uri_non_http",
+                    "uri" => format!("{uri:?}")
+                ));
             }
 
             let bytes =
@@ -568,15 +574,17 @@ mod google_videos_impl {
 
         async fn delete(&self, video_id: &str) -> Result<VideoDeleteResponse> {
             let _ = video_id;
-            Err(DittoError::invalid_response_text(
-                "google video generation does not expose a delete operation".to_string(),
+            Err(crate::invalid_response!(
+                "error_detail.google.video.operation_unsupported",
+                "operation" => "delete"
             ))
         }
 
         async fn list(&self, request: VideoListRequest) -> Result<VideoListResponse> {
             let _ = request;
-            Err(DittoError::invalid_response_text(
-                "google video generation does not expose a list operation".to_string(),
+            Err(crate::invalid_response!(
+                "error_detail.google.video.operation_unsupported",
+                "operation" => "list"
             ))
         }
 
@@ -587,8 +595,9 @@ mod google_videos_impl {
         ) -> Result<VideoGenerationResponse> {
             let _ = video_id;
             let _ = request;
-            Err(DittoError::invalid_response_text(
-                "google video generation does not expose a remix operation".to_string(),
+            Err(crate::invalid_response!(
+                "error_detail.google.video.operation_unsupported",
+                "operation" => "remix"
             ))
         }
     }

@@ -1,7 +1,7 @@
 #[cfg(feature = "gateway")]
-use ditto_core::MESSAGE_CATALOG;
+use ditto_core::resources::MESSAGE_CATALOG;
 #[cfg(feature = "gateway")]
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(all(feature = "gateway", feature = "gateway-routing-advanced"))]
 fn parse_proxy_failure_action(
@@ -394,7 +394,7 @@ fn invalid_value(locale: Locale, label: &str) -> Box<dyn std::error::Error> {
         .render(
             locale,
             "cli.invalid_value",
-            &[MessageArg::new("label", label)],
+            &[TemplateArg::new("label", label)],
         )
         .into()
 }
@@ -405,7 +405,7 @@ fn must_be_positive(locale: Locale, flag: &str) -> Box<dyn std::error::Error> {
         .render(
             locale,
             "cli.must_be_positive",
-            &[MessageArg::new("flag", flag)],
+            &[TemplateArg::new("flag", flag)],
         )
         .into()
 }
@@ -417,7 +417,7 @@ fn non_empty_required(locale: Locale, label: &str) -> Box<dyn std::error::Error>
         .render(
             locale,
             "cli.non_empty_required",
-            &[MessageArg::new("label", label)],
+            &[TemplateArg::new("label", label)],
         )
         .into()
 }
@@ -434,8 +434,8 @@ fn feature_disabled(
             locale,
             "cli.feature_disabled",
             &[
-                MessageArg::new("feature", feature),
-                MessageArg::new("rebuild_hint", rebuild_hint),
+                TemplateArg::new("feature", feature),
+                TemplateArg::new("rebuild_hint", rebuild_hint),
             ],
         )
         .into()

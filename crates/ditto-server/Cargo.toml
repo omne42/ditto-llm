@@ -7,16 +7,16 @@ autobins = false
 autotests = false
 
 [features]
-default = ["gateway", "provider-openai-compatible", "cap-llm", "i18n-en-us"]
+default = ["gateway", "provider-openai-compatible", "cap-llm"]
 
 config-editing = ["dep:toml_edit"]
 config-interactive = ["config-editing"]
 gateway = [
+  "ditto_core/gateway",
   "dep:axum",
   "dep:clap",
   "dep:getrandom",
   "dep:regex",
-  "dep:sha2",
   "config-editing",
 ]
 gateway-cli-interactive = ["gateway", "config-interactive"]
@@ -47,9 +47,6 @@ auth = ["ditto_core/auth"]
 sdk = ["ditto_core/sdk"]
 sdk-axum = ["ditto_core/sdk-axum"]
 base64 = ["ditto_core/base64"]
-i18n-en-us = ["ditto_core/i18n-en-us"]
-i18n-zh-cn = ["ditto_core/i18n-zh-cn"]
-i18n-ja-jp = ["ditto_core/i18n-ja-jp"]
 
 openai = ["ditto_core/provider-openai"]
 anthropic = ["ditto_core/provider-anthropic"]
@@ -106,8 +103,12 @@ all = ["ditto_core/all", "gateway", "gateway-translation"]
 integration = ["ditto_core/integration"]
 
 [dependencies]
+config-kit = { path = "../../../omne_foundation/crates/config-kit" }
 ditto_core = { package = "ditto-core", path = "../ditto-core", default-features = false }
-secret = { path = "../../../omne_foundation/crates/secret" }
+i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
+secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
+text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
+omne-integrity-primitives = { path = "../../../omne-runtime/crates/omne-integrity-primitives" }
 async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
 bytes = "1"
@@ -118,7 +119,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "mul
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = { version = "0.9", optional = true }
-sha2 = { version = "0.10", optional = true }
 thiserror = "1"
 toml = "0.8"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }

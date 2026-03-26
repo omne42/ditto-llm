@@ -4,9 +4,9 @@ use clap::Command;
 use clap::error::{ContextKind, Error, ErrorKind};
 
 #[cfg(feature = "gateway")]
-use ditto_core::MESSAGE_CATALOG;
+use ditto_core::resources::MESSAGE_CATALOG;
 #[cfg(feature = "gateway")]
-use ditto_core::i18n::{Locale, MessageArg, MessageCatalogExt as _};
+use i18n_kit::{Locale, TemplateArg};
 
 #[cfg(feature = "gateway")]
 #[derive(Debug)]
@@ -131,7 +131,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         ErrorKind::UnknownArgument => MESSAGE_CATALOG.render(
             locale,
             "clap.error.unknown_argument",
-            &[MessageArg::new(
+            &[TemplateArg::new(
                 "arg",
                 context_string(error, ContextKind::InvalidArg)
                     .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -140,7 +140,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         ErrorKind::InvalidSubcommand => MESSAGE_CATALOG.render(
             locale,
             "clap.error.invalid_subcommand",
-            &[MessageArg::new(
+            &[TemplateArg::new(
                 "subcommand",
                 context_string(error, ContextKind::InvalidSubcommand)
                     .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -150,12 +150,12 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
             locale,
             "clap.error.invalid_value",
             &[
-                MessageArg::new(
+                TemplateArg::new(
                     "value",
                     context_string(error, ContextKind::InvalidValue)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "arg",
                     context_string(error, ContextKind::InvalidArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -165,7 +165,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         ErrorKind::MissingRequiredArgument => MESSAGE_CATALOG.render(
             locale,
             "clap.error.missing_required_argument",
-            &[MessageArg::new(
+            &[TemplateArg::new(
                 "args",
                 context_string(error, ContextKind::InvalidArg)
                     .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -178,12 +178,12 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
             locale,
             "clap.error.argument_conflict",
             &[
-                MessageArg::new(
+                TemplateArg::new(
                     "arg",
                     context_string(error, ContextKind::InvalidArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "prior_arg",
                     context_string(error, ContextKind::PriorArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -194,17 +194,17 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
             locale,
             "clap.error.too_few_values",
             &[
-                MessageArg::new(
+                TemplateArg::new(
                     "arg",
                     context_string(error, ContextKind::InvalidArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "min_values",
                     context_string(error, ContextKind::MinValues)
                         .unwrap_or_else(|| clap_placeholder_unspecified(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "actual_num_values",
                     context_string(error, ContextKind::ActualNumValues)
                         .unwrap_or_else(|| clap_placeholder_unspecified(locale)),
@@ -214,7 +214,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         ErrorKind::TooManyValues => MESSAGE_CATALOG.render(
             locale,
             "clap.error.too_many_values",
-            &[MessageArg::new(
+            &[TemplateArg::new(
                 "arg",
                 context_string(error, ContextKind::InvalidArg)
                     .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -224,17 +224,17 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
             locale,
             "clap.error.wrong_number_of_values",
             &[
-                MessageArg::new(
+                TemplateArg::new(
                     "arg",
                     context_string(error, ContextKind::InvalidArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "expected_num_values",
                     context_string(error, ContextKind::ExpectedNumValues)
                         .unwrap_or_else(|| clap_placeholder_unspecified(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "actual_num_values",
                     context_string(error, ContextKind::ActualNumValues)
                         .unwrap_or_else(|| clap_placeholder_unspecified(locale)),
@@ -244,7 +244,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         ErrorKind::NoEquals => MESSAGE_CATALOG.render(
             locale,
             "clap.error.no_equals",
-            &[MessageArg::new(
+            &[TemplateArg::new(
                 "arg",
                 context_string(error, ContextKind::InvalidArg)
                     .unwrap_or_else(|| clap_placeholder_unknown(locale)),
@@ -254,12 +254,12 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
             locale,
             "clap.error.value_validation",
             &[
-                MessageArg::new(
+                TemplateArg::new(
                     "arg",
                     context_string(error, ContextKind::InvalidArg)
                         .unwrap_or_else(|| clap_placeholder_unknown(locale)),
                 ),
-                MessageArg::new(
+                TemplateArg::new(
                     "value",
                     context_string(error, ContextKind::InvalidValue)
                         .unwrap_or_else(|| error.to_string()),
@@ -269,7 +269,7 @@ fn localized_error_detail(error: &Error, locale: Locale) -> String {
         _ => MESSAGE_CATALOG.render(
             locale,
             "clap.error.generic",
-            &[MessageArg::new("message", error.to_string())],
+            &[TemplateArg::new("message", error.to_string())],
         ),
     }
 }
@@ -283,7 +283,7 @@ fn localized_tip(error: &Error, locale: Locale) -> Option<String> {
         return Some(MESSAGE_CATALOG.render(
             locale,
             "clap.tip.did_you_mean",
-            &[MessageArg::new("suggestion", suggestion)],
+            &[TemplateArg::new("suggestion", suggestion)],
         ));
     }
 
@@ -291,7 +291,7 @@ fn localized_tip(error: &Error, locale: Locale) -> Option<String> {
         return Some(MESSAGE_CATALOG.render(
             locale,
             "clap.tip.possible_values",
-            &[MessageArg::new("values", values)],
+            &[TemplateArg::new("values", values)],
         ));
     }
 
@@ -299,7 +299,7 @@ fn localized_tip(error: &Error, locale: Locale) -> Option<String> {
         MESSAGE_CATALOG.render(
             locale,
             "clap.tip.available_subcommands",
-            &[MessageArg::new("values", values)],
+            &[TemplateArg::new("values", values)],
         )
     })
 }
@@ -385,7 +385,7 @@ mod tests {
                 .arg(Arg::new("name").required(true))
                 .arg(Arg::new("json").long("json"))
                 .subcommand(Command::new("show")),
-            Locale::ZhCn,
+            Locale::ZH_CN,
         );
         let help = command.render_help().to_string();
         assert!(help.contains("用法："));

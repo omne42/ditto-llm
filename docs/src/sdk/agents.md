@@ -32,15 +32,14 @@
 示例（伪代码风格，展示结构）：
 
 ```rust
-use ditto_core::{
-    agent::{ToolLoopAgent, ToolboxExecutor},
-    Message, OpenAI,
-};
+use ditto_core::agent::{ToolLoopAgent, ToolboxExecutor};
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 

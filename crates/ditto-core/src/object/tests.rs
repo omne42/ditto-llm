@@ -19,7 +19,7 @@ use super::{
 use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Warning,
 };
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::provider_options::JsonSchemaFormat;
 
@@ -61,8 +61,8 @@ impl LanguageModel for FakeModel {
     }
 
     async fn stream(&self, _request: GenerateRequest) -> Result<StreamResult> {
-        Err(DittoError::invalid_response_text(
-            "not implemented".to_string(),
+        Err(crate::invalid_response!(
+            "error_detail.text.not_implemented"
         ))
     }
 }

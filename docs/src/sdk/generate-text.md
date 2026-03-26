@@ -9,12 +9,14 @@
 ## 最小示例
 
 ```rust
-use ditto_core::{GenerateRequest, LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::{GenerateRequest, Message};
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key).with_model("gpt-4o-mini");
 

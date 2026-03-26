@@ -1,3 +1,5 @@
+<!-- llms-txt:exclude -->
+
 # 代码审查：`crates/ditto-core/src/provider_transport/http.rs`（2026-03-10）
 
 ## 范围

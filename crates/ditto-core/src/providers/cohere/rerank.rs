@@ -118,9 +118,7 @@ struct CohereRerankOptions {
 impl CohereRerankOptions {
     fn from_value(value: &Value) -> Result<Self> {
         serde_json::from_value::<Self>(value.clone()).map_err(|err| {
-            DittoError::invalid_response_text(format!(
-                "invalid provider_options for cohere rerank: {err}"
-            ))
+            crate::invalid_response!("error_detail.provider_options.invalid", "error" => err.to_string())
         })
     }
 }
@@ -198,7 +196,8 @@ impl RerankModel for CohereRerank {
 
         let mut req = self.http.post(url);
         req = self.apply_auth(req);
-        let parsed = crate::provider_transport::send_checked_json::<WireResponse>(req.json(&body)).await?;
+        let parsed =
+            crate::provider_transport::send_checked_json::<WireResponse>(req.json(&body)).await?;
         Ok(RerankResponse {
             ranking: parsed
                 .results

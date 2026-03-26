@@ -1,3 +1,5 @@
+<!-- llms-txt:exclude -->
+
 # 代码审查：L0 架构边界（2026-03-11）
 
 2026-03-13 注：仓库随后已拆成 workspace，当前代码分别位于 `crates/ditto-core` 与

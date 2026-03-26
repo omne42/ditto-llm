@@ -3,7 +3,9 @@ use std::sync::Arc;
 use bytes::Bytes;
 use serde_json::{Map, Value};
 
-use crate::capabilities::file::{FileClient, FileDeleteResponse, FileObject, FileUploadRequest};
+use ditto_core::capabilities::file::{
+    FileClient, FileDeleteResponse, FileObject, FileUploadRequest,
+};
 
 use super::{ParseResult, TranslationBackend};
 
@@ -102,23 +104,28 @@ pub fn file_delete_response_to_openai(response: &FileDeleteResponse) -> Value {
 }
 
 impl TranslationBackend {
-    pub(super) async fn resolve_file_client(&self) -> crate::error::Result<Arc<dyn FileClient>> {
+    pub(super) async fn resolve_file_client(
+        &self,
+    ) -> ditto_core::error::Result<Arc<dyn FileClient>> {
         self.runtime
             .resolve_file_client(self.provider_name(), self.bindings.file_client.as_ref())
             .await
     }
 
-    pub async fn list_files(&self) -> crate::error::Result<Vec<FileObject>> {
+    pub async fn list_files(&self) -> ditto_core::error::Result<Vec<FileObject>> {
         let client = self.resolve_file_client().await?;
         client.list_files().await
     }
 
-    pub async fn retrieve_file(&self, file_id: &str) -> crate::error::Result<FileObject> {
+    pub async fn retrieve_file(&self, file_id: &str) -> ditto_core::error::Result<FileObject> {
         let client = self.resolve_file_client().await?;
         client.retrieve_file(file_id).await
     }
 
-    pub async fn delete_file(&self, file_id: &str) -> crate::error::Result<FileDeleteResponse> {
+    pub async fn delete_file(
+        &self,
+        file_id: &str,
+    ) -> ditto_core::error::Result<FileDeleteResponse> {
         let client = self.resolve_file_client().await?;
         client.delete_file(file_id).await
     }
@@ -126,7 +133,7 @@ impl TranslationBackend {
     pub async fn download_file_content(
         &self,
         file_id: &str,
-    ) -> crate::error::Result<crate::capabilities::file::FileContent> {
+    ) -> ditto_core::error::Result<ditto_core::capabilities::file::FileContent> {
         let client = self.resolve_file_client().await?;
         client.download_file_content(file_id).await
     }

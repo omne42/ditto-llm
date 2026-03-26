@@ -8,15 +8,17 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+DITTO_CORE_DIR = ROOT / 'crates' / 'ditto-core'
 SOURCE_DIR = ROOT / 'catalog' / 'provider_models'
-TARGET_DIR = ROOT / 'src' / 'catalog' / 'generated'
+TARGET_DIR = DITTO_CORE_DIR / 'src' / 'catalog' / 'generated'
 TARGET_MODULE_DIR = TARGET_DIR / 'providers'
 LEGACY_TARGET_FILE = TARGET_DIR / 'providers.rs'
+CONTRACT_IDS_TARGET_FILE = DITTO_CORE_DIR / 'src' / 'contracts' / 'ids.rs'
 
 SKIP_PROVIDERS: set[str] = set()
 
 PROVIDER_FEATURES = {
-    'openai': 'openai',
+    'openai': 'provider-openai',
     'anthropic': 'provider-anthropic',
     'google': 'provider-google',
     'bailian': 'provider-bailian',
@@ -39,6 +41,206 @@ PROVIDER_CLASS = {
     'kimi': 'ProviderClass::OpenAiCompatible',
     'openrouter': 'ProviderClass::OpenAiCompatible',
     'xai': 'ProviderClass::OpenAiCompatible',
+}
+
+OPERATION_SPECS = [
+    ('CHAT_COMPLETION', 'chat.completion', 'LLM', 'LLM'),
+    ('RESPONSE', 'response', 'LLM', 'LLM'),
+    ('TEXT_COMPLETION', 'text.completion', 'LLM', 'LLM'),
+    ('EMBEDDING', 'embedding', 'EMBEDDING', 'EMBEDDING'),
+    ('MULTIMODAL_EMBEDDING', 'embedding.multimodal', 'EMBEDDING', 'EMBEDDING'),
+    ('IMAGE_GENERATION', 'image.generation', 'IMAGE_GENERATION', 'IMAGE_GENERATION'),
+    ('IMAGE_EDIT', 'image.edit', 'IMAGE_EDIT', 'IMAGE_EDIT'),
+    ('IMAGE_TRANSLATION', 'image.translation', 'IMAGE_TRANSLATION', 'IMAGE_TRANSLATION'),
+    ('IMAGE_QUESTION', 'image.question', 'IMAGE_QUESTION', 'IMAGE_QUESTION'),
+    ('VIDEO_GENERATION', 'video.generation', 'VIDEO_GENERATION', 'VIDEO_GENERATION'),
+    ('AUDIO_SPEECH', 'audio.speech', 'AUDIO_SPEECH', 'AUDIO_SPEECH'),
+    ('AUDIO_TRANSCRIPTION', 'audio.transcription', 'AUDIO_TRANSCRIPTION', 'AUDIO_TRANSCRIPTION'),
+    ('AUDIO_TRANSLATION', 'audio.translation', 'AUDIO_TRANSLATION', 'AUDIO_TRANSLATION'),
+    ('AUDIO_VOICE_CLONE', 'audio.voice_clone', 'AUDIO_VOICE_CLONE', 'AUDIO_VOICE_CLONE'),
+    ('AUDIO_VOICE_DESIGN', 'audio.voice_design', 'AUDIO_VOICE_DESIGN', 'AUDIO_VOICE_DESIGN'),
+    ('REALTIME_SESSION', 'realtime.session', 'REALTIME', 'REALTIME'),
+    ('RERANK', 'rerank', 'RERANK', 'RERANK'),
+    (
+        'CLASSIFICATION_OR_EXTRACTION',
+        'classification_or_extraction',
+        'LLM',
+        'CLASSIFICATION_OR_EXTRACTION',
+    ),
+    ('MODERATION', 'moderation', 'MODERATION', 'MODERATION'),
+    ('BATCH', 'batch', 'BATCH', 'BATCH'),
+    ('OCR', 'ocr', 'OCR', 'OCR'),
+    ('MODEL_LIST', 'model.list', 'MODEL_LIST', 'MODEL_LIST'),
+    ('CONTEXT_CACHE', 'context.cache', 'CONTEXT_CACHE', 'CONTEXT_CACHE'),
+    ('THREAD_RUN', 'thread.run', 'LLM', 'LLM'),
+    ('GROUP_CHAT_COMPLETION', 'group.chat.completion', 'LLM', 'LLM'),
+    ('CHAT_TRANSLATION', 'chat.translation', 'LLM', 'LLM'),
+    ('MUSIC_GENERATION', 'music.generation', 'MUSIC_GENERATION', 'MUSIC_GENERATION'),
+    ('THREE_D_GENERATION', '3d.generation', 'THREE_D_GENERATION', 'THREE_D_GENERATION'),
+]
+
+CAPABILITY_SPECS = [
+    ('LLM', 'llm', ['llm'], ['chat.completion', 'response', 'text.completion']),
+    ('EMBEDDING', 'embedding', ['embedding', 'embeddings'], ['embedding']),
+    (
+        'IMAGE_GENERATION',
+        'image.generation',
+        ['image.generation', 'image_generation', 'image-generation'],
+        ['image.generation'],
+    ),
+    ('IMAGE_EDIT', 'image.edit', ['image.edit', 'image_edit', 'image-edit'], ['image.edit']),
+    (
+        'IMAGE_TRANSLATION',
+        'image.translation',
+        ['image.translation', 'image_translation', 'image-translation'],
+        [],
+    ),
+    (
+        'IMAGE_QUESTION',
+        'image.question',
+        ['image.question', 'image_question', 'image-question'],
+        [],
+    ),
+    (
+        'VIDEO_GENERATION',
+        'video.generation',
+        ['video.generation', 'video_generation', 'video-generation'],
+        ['video.generation'],
+    ),
+    ('AUDIO_SPEECH', 'audio.speech', ['audio.speech', 'audio_speech', 'audio-speech'], ['audio.speech']),
+    (
+        'AUDIO_TRANSCRIPTION',
+        'audio.transcription',
+        ['audio.transcription', 'audio_transcription', 'audio-transcription'],
+        ['audio.transcription'],
+    ),
+    (
+        'AUDIO_TRANSLATION',
+        'audio.translation',
+        ['audio.translation', 'audio_translation', 'audio-translation'],
+        [],
+    ),
+    (
+        'AUDIO_VOICE_CLONE',
+        'audio.voice_clone',
+        ['audio.voice_clone', 'audio_voice_clone', 'audio-voice-clone'],
+        [],
+    ),
+    (
+        'AUDIO_VOICE_DESIGN',
+        'audio.voice_design',
+        ['audio.voice_design', 'audio_voice_design', 'audio-voice-design'],
+        [],
+    ),
+    ('REALTIME', 'realtime', ['realtime'], ['realtime.session']),
+    ('RERANK', 'rerank', ['rerank'], ['rerank']),
+    (
+        'CLASSIFICATION_OR_EXTRACTION',
+        'classification_or_extraction',
+        ['classification_or_extraction', 'classification-or-extraction'],
+        [],
+    ),
+    ('MODERATION', 'moderation', ['moderation', 'moderations'], ['moderation']),
+    ('BATCH', 'batch', ['batch', 'batches'], ['batch']),
+    ('OCR', 'ocr', ['ocr'], []),
+    ('MODEL_LIST', 'model.list', ['model.list', 'model_list', 'model-list', 'models'], []),
+    (
+        'CONTEXT_CACHE',
+        'context.cache',
+        ['context.cache', 'context_cache', 'context-cache'],
+        [],
+    ),
+    (
+        'MUSIC_GENERATION',
+        'music.generation',
+        ['music.generation', 'music_generation', 'music-generation'],
+        [],
+    ),
+    (
+        'THREE_D_GENERATION',
+        '3d.generation',
+        ['3d.generation', '3d_generation', '3d-generation'],
+        [],
+    ),
+]
+
+SURFACE_SPECS = [
+    ('OPENAI_CHAT_COMPLETIONS', 'chat.completion'),
+    ('OPENAI_RESPONSES', 'responses'),
+    ('OPENAI_TEXT_COMPLETIONS', 'completion.legacy'),
+    ('OPENAI_EMBEDDINGS', 'embedding'),
+    ('OPENAI_IMAGES_GENERATIONS', 'image.generation'),
+    ('OPENAI_IMAGES_EDITS', 'image.edit'),
+    ('OPENAI_VIDEOS', 'video.generation.async'),
+    ('OPENAI_AUDIO_SPEECH', 'audio.speech'),
+    ('OPENAI_AUDIO_TRANSCRIPTIONS', 'audio.transcription'),
+    ('OPENAI_AUDIO_TRANSLATIONS', 'audio.translation'),
+    ('OPENAI_MODERATIONS', 'moderation'),
+    ('OPENAI_BATCHES', 'batch'),
+    ('OPENAI_REALTIME', 'realtime.websocket'),
+    ('ANTHROPIC_MESSAGES', 'anthropic.messages'),
+    ('GOOGLE_GENERATE_CONTENT', 'generate.content'),
+    ('GOOGLE_STREAM_GENERATE_CONTENT', 'generate.content.stream'),
+    ('GOOGLE_BATCH_GENERATE_CONTENT', 'generate.content.batch'),
+    ('GOOGLE_EMBED_CONTENT', 'embedding'),
+    ('GOOGLE_BATCH_EMBED_CONTENT', 'embedding.batch'),
+    ('GOOGLE_LIVE', 'realtime.websocket'),
+    ('GOOGLE_PREDICT', 'image.generation'),
+    ('GOOGLE_PREDICT_LONG_RUNNING', 'video.generation'),
+]
+
+WIRE_PROTOCOL_SPECS = [
+    ('OPENAI_CHAT_COMPLETIONS', 'openai.chat_completions'),
+    ('OPENAI_RESPONSES', 'openai.responses'),
+    ('OPENAI_TEXT_COMPLETIONS', 'openai.text_completions'),
+    ('OPENAI_EMBEDDINGS', 'openai.embeddings'),
+    ('OPENAI_IMAGES', 'openai.images'),
+    ('OPENAI_VIDEOS', 'openai.videos'),
+    ('OPENAI_AUDIO', 'openai.audio'),
+    ('OPENAI_MODERATIONS', 'openai.moderations'),
+    ('OPENAI_BATCHES', 'openai.batches'),
+    ('OPENAI_REALTIME', 'openai.realtime'),
+    ('ANTHROPIC_MESSAGES', 'anthropic.messages'),
+    ('GOOGLE_GENERATE_CONTENT', 'google.generate_content'),
+    ('GOOGLE_EMBED_CONTENT', 'google.embed_content'),
+    ('GOOGLE_LIVE', 'google.live'),
+    ('GOOGLE_PREDICT', 'google.predict'),
+    ('GOOGLE_PREDICT_LONG_RUNNING', 'google.predict_long_running'),
+    ('DASHSCOPE_NATIVE', 'dashscope.native'),
+    ('DASHSCOPE_INFERENCE_WS', 'dashscope.inference_ws'),
+    ('DASHSCOPE_REALTIME_WS', 'dashscope.realtime_ws'),
+    ('QIANFAN_NATIVE', 'qianfan.native'),
+    ('ARK_NATIVE', 'ark.native'),
+    ('HUNYUAN_NATIVE', 'hunyuan.native'),
+    ('MINIMAX_NATIVE', 'minimax.native'),
+    ('ZHIPU_NATIVE', 'zhipu.native'),
+]
+
+CONTEXT_CACHE_MODE_SPECS = [
+    ('PASSIVE', 'passive'),
+    ('PROMPT_CACHE_KEY', 'prompt_cache_key'),
+    ('ANTHROPIC_COMPATIBLE', 'anthropic_compatible'),
+]
+
+OPERATION_CONSTS = {
+    operation_id: f'OperationKind::{const_name}'
+    for const_name, operation_id, _, _ in OPERATION_SPECS
+}
+CAPABILITY_STATUS_CONSTS = {
+    operation_id: f'CapabilityKind::{status_capability_const}'
+    for _, operation_id, _, status_capability_const in OPERATION_SPECS
+}
+SURFACE_CONSTS = {
+    surface_id: f'ApiSurfaceId::{const_name}'
+    for const_name, surface_id in SURFACE_SPECS
+}
+WIRE_PROTOCOL_CONSTS = {
+    protocol_id: f'WireProtocol::{const_name}'
+    for const_name, protocol_id in WIRE_PROTOCOL_SPECS
+}
+CONTEXT_CACHE_MODE_CONSTS = {
+    mode_id: f'ContextCacheModeId::{const_name}'
+    for const_name, mode_id in CONTEXT_CACHE_MODE_SPECS
 }
 
 OPERATION_BY_SURFACE = {
@@ -81,113 +283,6 @@ OPERATION_BY_SURFACE = {
     '3d.generation': '3d.generation',
 }
 
-OPERATION_CONSTS = {
-    'response': 'OperationKind::RESPONSE',
-    'chat.completion': 'OperationKind::CHAT_COMPLETION',
-    'group.chat.completion': 'OperationKind::GROUP_CHAT_COMPLETION',
-    'text.completion': 'OperationKind::TEXT_COMPLETION',
-    'embedding': 'OperationKind::EMBEDDING',
-    'embedding.multimodal': 'OperationKind::MULTIMODAL_EMBEDDING',
-    'image.generation': 'OperationKind::IMAGE_GENERATION',
-    'image.edit': 'OperationKind::IMAGE_EDIT',
-    'image.translation': 'OperationKind::IMAGE_TRANSLATION',
-    'image.question': 'OperationKind::IMAGE_QUESTION',
-    'video.generation': 'OperationKind::VIDEO_GENERATION',
-    'audio.speech': 'OperationKind::AUDIO_SPEECH',
-    'audio.transcription': 'OperationKind::AUDIO_TRANSCRIPTION',
-    'audio.translation': 'OperationKind::AUDIO_TRANSLATION',
-    'audio.voice_clone': 'OperationKind::AUDIO_VOICE_CLONE',
-    'audio.voice_design': 'OperationKind::AUDIO_VOICE_DESIGN',
-    'music.generation': 'OperationKind::MUSIC_GENERATION',
-    'rerank': 'OperationKind::RERANK',
-    'classification_or_extraction': 'OperationKind::CLASSIFICATION_OR_EXTRACTION',
-    'moderation': 'OperationKind::MODERATION',
-    'batch': 'OperationKind::BATCH',
-    'ocr': 'OperationKind::OCR',
-    'realtime.session': 'OperationKind::REALTIME_SESSION',
-    'thread.run': 'OperationKind::THREAD_RUN',
-    'chat.translation': 'OperationKind::CHAT_TRANSLATION',
-    'context.cache': 'OperationKind::CONTEXT_CACHE',
-    'model.list': 'OperationKind::MODEL_LIST',
-    '3d.generation': 'OperationKind::THREE_D_GENERATION',
-}
-
-CAPABILITY_CONSTS = {
-    'response': 'CapabilityKind::LLM',
-    'chat.completion': 'CapabilityKind::LLM',
-    'group.chat.completion': 'CapabilityKind::LLM',
-    'text.completion': 'CapabilityKind::LLM',
-    'thread.run': 'CapabilityKind::LLM',
-    'chat.translation': 'CapabilityKind::LLM',
-    'embedding': 'CapabilityKind::EMBEDDING',
-    'embedding.multimodal': 'CapabilityKind::EMBEDDING',
-    'image.generation': 'CapabilityKind::IMAGE_GENERATION',
-    'image.edit': 'CapabilityKind::IMAGE_EDIT',
-    'image.translation': 'CapabilityKind::IMAGE_TRANSLATION',
-    'image.question': 'CapabilityKind::IMAGE_QUESTION',
-    'video.generation': 'CapabilityKind::VIDEO_GENERATION',
-    'audio.speech': 'CapabilityKind::AUDIO_SPEECH',
-    'audio.transcription': 'CapabilityKind::AUDIO_TRANSCRIPTION',
-    'audio.translation': 'CapabilityKind::AUDIO_TRANSLATION',
-    'audio.voice_clone': 'CapabilityKind::AUDIO_VOICE_CLONE',
-    'audio.voice_design': 'CapabilityKind::AUDIO_VOICE_DESIGN',
-    'music.generation': 'CapabilityKind::MUSIC_GENERATION',
-    'rerank': 'CapabilityKind::RERANK',
-    'classification_or_extraction': 'CapabilityKind::CLASSIFICATION_OR_EXTRACTION',
-    'moderation': 'CapabilityKind::MODERATION',
-    'batch': 'CapabilityKind::BATCH',
-    'ocr': 'CapabilityKind::OCR',
-    'realtime.session': 'CapabilityKind::REALTIME',
-    'context.cache': 'CapabilityKind::CONTEXT_CACHE',
-    'model.list': 'CapabilityKind::MODEL_LIST',
-    '3d.generation': 'CapabilityKind::THREE_D_GENERATION',
-}
-
-SURFACE_CONSTS = {
-    'chat.completion': 'ApiSurfaceId::OPENAI_CHAT_COMPLETIONS',
-    'responses': 'ApiSurfaceId::OPENAI_RESPONSES',
-    'completion.legacy': 'ApiSurfaceId::OPENAI_TEXT_COMPLETIONS',
-    'embedding': 'ApiSurfaceId::OPENAI_EMBEDDINGS',
-    'image.generation': 'ApiSurfaceId::OPENAI_IMAGES_GENERATIONS',
-    'image.edit': 'ApiSurfaceId::OPENAI_IMAGES_EDITS',
-    'audio.speech': 'ApiSurfaceId::OPENAI_AUDIO_SPEECH',
-    'audio.transcription': 'ApiSurfaceId::OPENAI_AUDIO_TRANSCRIPTIONS',
-    'audio.translation': 'ApiSurfaceId::OPENAI_AUDIO_TRANSLATIONS',
-    'moderation': 'ApiSurfaceId::OPENAI_MODERATIONS',
-    'batch': 'ApiSurfaceId::OPENAI_BATCHES',
-    'realtime.websocket': 'ApiSurfaceId::OPENAI_REALTIME',
-    'anthropic.messages': 'ApiSurfaceId::ANTHROPIC_MESSAGES',
-    'generate.content': 'ApiSurfaceId::GOOGLE_GENERATE_CONTENT',
-    'generate.content.stream': 'ApiSurfaceId::GOOGLE_STREAM_GENERATE_CONTENT',
-    'generate.content.batch': 'ApiSurfaceId::GOOGLE_BATCH_GENERATE_CONTENT',
-}
-
-WIRE_PROTOCOL_CONSTS = {
-    'openai.chat_completions': 'WireProtocol::OPENAI_CHAT_COMPLETIONS',
-    'openai.responses': 'WireProtocol::OPENAI_RESPONSES',
-    'openai.text_completions': 'WireProtocol::OPENAI_TEXT_COMPLETIONS',
-    'openai.embeddings': 'WireProtocol::OPENAI_EMBEDDINGS',
-    'openai.images': 'WireProtocol::OPENAI_IMAGES',
-    'openai.audio': 'WireProtocol::OPENAI_AUDIO',
-    'openai.moderations': 'WireProtocol::OPENAI_MODERATIONS',
-    'openai.batches': 'WireProtocol::OPENAI_BATCHES',
-    'openai.realtime': 'WireProtocol::OPENAI_REALTIME',
-    'anthropic.messages': 'WireProtocol::ANTHROPIC_MESSAGES',
-    'google.generate_content': 'WireProtocol::GOOGLE_GENERATE_CONTENT',
-    'google.embed_content': 'WireProtocol::GOOGLE_EMBED_CONTENT',
-    'google.live': 'WireProtocol::GOOGLE_LIVE',
-    'google.predict': 'WireProtocol::GOOGLE_PREDICT',
-    'google.predict_long_running': 'WireProtocol::GOOGLE_PREDICT_LONG_RUNNING',
-    'dashscope.native': 'WireProtocol::DASHSCOPE_NATIVE',
-    'dashscope.inference_ws': 'WireProtocol::DASHSCOPE_INFERENCE_WS',
-    'dashscope.realtime_ws': 'WireProtocol::DASHSCOPE_REALTIME_WS',
-    'qianfan.native': 'WireProtocol::QIANFAN_NATIVE',
-    'ark.native': 'WireProtocol::ARK_NATIVE',
-    'hunyuan.native': 'WireProtocol::HUNYUAN_NATIVE',
-    'minimax.native': 'WireProtocol::MINIMAX_NATIVE',
-    'zhipu.native': 'WireProtocol::ZHIPU_NATIVE',
-}
-
 BEHAVIOR_SUPPORT_CONSTS = {
     'unknown': 'BehaviorSupport::Unknown',
     'unsupported': 'BehaviorSupport::Unsupported',
@@ -217,12 +312,6 @@ CACHE_USAGE_REPORTING_CONSTS = {
     'unknown': 'CacheUsageReportingKind::Unknown',
     'standard_usage': 'CacheUsageReportingKind::StandardUsage',
     'deepseek_prompt_cache_hit_miss': 'CacheUsageReportingKind::DeepSeekPromptCacheHitMiss',
-}
-
-CONTEXT_CACHE_MODE_CONSTS = {
-    'passive': 'ContextCacheModeId::PASSIVE',
-    'prompt_cache_key': 'ContextCacheModeId::PROMPT_CACHE_KEY',
-    'anthropic_compatible': 'ContextCacheModeId::ANTHROPIC_COMPATIBLE',
 }
 
 AUTH_KIND_MAP = {
@@ -786,7 +875,7 @@ def render_operation_slice(values: list[str]) -> str:
 
 
 def capability_expr(operation_id: str) -> str | None:
-    return CAPABILITY_CONSTS.get(operation_id)
+    return CAPABILITY_STATUS_CONSTS.get(operation_id)
 
 
 def render_capability_status_slice(operation_ids: list[str]) -> str:
@@ -957,6 +1046,290 @@ def render_prelude() -> str:
     ])
 
 
+def render_expr_slice(values: list[str], indent: str = '') -> str:
+    if not values:
+        return '&[]'
+    inner_indent = indent + '    '
+    return '&[\n' + ''.join(f'{inner_indent}{value},\n' for value in values) + indent + ']'
+
+
+def render_array_literal(values: list[str], indent: str = '') -> str:
+    if not values:
+        return '[]'
+    inner_indent = indent + '    '
+    return '[\n' + ''.join(f'{inner_indent}{value},\n' for value in values) + indent + ']'
+
+
+def render_static_id_impl(type_name: str, specs: list[tuple[str, str]]) -> str:
+    lines = [f'impl {type_name} {{']
+    for const_name, value in specs:
+        lines.append(f'    pub const {const_name}: Self = Self::new({rust_string(value)});')
+    lines.append('}')
+    return '\n'.join(lines)
+
+
+def render_capability_impl() -> str:
+    lines = [
+        'impl CapabilityKind {',
+        "    pub const fn new(id: &'static str) -> Self {",
+        '        Self(id)',
+        '    }',
+        '',
+        "    pub const fn as_str(self) -> &'static str {",
+        '        self.0',
+        '    }',
+        '',
+        '    pub fn parse_config_token(value: &str) -> Option<Self> {',
+        '        match value.trim().to_ascii_lowercase().as_str() {',
+    ]
+    for const_name, _, aliases, _ in CAPABILITY_SPECS:
+        patterns = ' | '.join(rust_string(alias) for alias in aliases)
+        lines.append(f'            {patterns} => Some(Self::{const_name}),')
+    lines.extend([
+        '            _ => None,',
+        '        }',
+        '    }',
+        '',
+    ])
+    for const_name, value, _, _ in CAPABILITY_SPECS:
+        lines.append(f'    pub const {const_name}: Self = Self::new({rust_string(value)});')
+    lines.append('}')
+    return '\n'.join(lines)
+
+
+def render_capability_for_operation() -> str:
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for const_name, _, routing_capability_const, _ in OPERATION_SPECS:
+        grouped[routing_capability_const].append(f'OperationKind::{const_name}')
+
+    lines = [
+        'pub fn capability_for_operation(operation: OperationKind) -> Option<CapabilityKind> {',
+        '    match operation {',
+    ]
+    for capability_const, _, _, _ in CAPABILITY_SPECS:
+        operations = grouped.get(capability_const)
+        if not operations:
+            continue
+        lines.append(
+            f'        {" | ".join(operations)} => Some(CapabilityKind::{capability_const}),'
+        )
+    lines.extend([
+        '        _ => None,',
+        '    }',
+        '}',
+    ])
+    return '\n'.join(lines)
+
+
+def render_invocation_probe_consts() -> str:
+    lines: list[str] = []
+    for capability_const, _, _, probe_operations in CAPABILITY_SPECS:
+        if not probe_operations:
+            continue
+        probe_exprs = [operation_expr(operation_id) for operation_id in probe_operations]
+        lines.append(
+            f'const {capability_const}_INVOCATION_OPERATIONS: &[OperationKind] = '
+            f'{render_expr_slice(probe_exprs)};'
+        )
+    return '\n'.join(lines)
+
+
+def render_invocation_operations_for_capability() -> str:
+    lines = [
+        '/// CONTRACT-CAPABILITY-INVOCATION-OPS: ordered generic invocation operations',
+        '/// probed by runtime builders for a capability adapter.',
+        '///',
+        '/// This is intentionally not the exhaustive inverse of `capability_for_operation`.',
+        '/// It only describes the stable invocation surfaces that the generic runtime',
+        '/// builders can assemble today.',
+        '///',
+        '/// `None` means the capability is known to the contracts layer, but generic',
+        '/// runtime builders do not probe invocation routes for it.',
+        'pub fn invocation_operations_for_capability(',
+        '    capability: CapabilityKind,',
+        ") -> Option<&'static [OperationKind]> {",
+        '    match capability {',
+    ]
+    for capability_const, _, _, probe_operations in CAPABILITY_SPECS:
+        if not probe_operations:
+            continue
+        lines.append(
+            f'        CapabilityKind::{capability_const} => Some({capability_const}_INVOCATION_OPERATIONS),'
+        )
+    lines.extend([
+        '        _ => None,',
+        '    }',
+        '}',
+    ])
+    return '\n'.join(lines)
+
+
+def render_ids_tests() -> str:
+    llm_probe_operations = next(
+        probe_operations
+        for const_name, _, _, probe_operations in CAPABILITY_SPECS
+        if const_name == 'LLM'
+    )
+    llm_probe_exprs = [operation_expr(operation_id) for operation_id in llm_probe_operations]
+    operation_mappings = [
+        (f'OperationKind::{const_name}', f'CapabilityKind::{routing_capability_const}')
+        for const_name, _, routing_capability_const, _ in OPERATION_SPECS
+    ]
+    no_probe_capabilities = [
+        f'CapabilityKind::{const_name}'
+        for const_name, _, _, probe_operations in CAPABILITY_SPECS
+        if not probe_operations
+    ]
+    lines = [
+        '#[cfg(test)]',
+        'mod tests {',
+        '    use super::{',
+        '        CapabilityKind, OperationKind, capability_for_operation,',
+        '        invocation_operations_for_capability,',
+        '    };',
+        '',
+        '    #[test]',
+        '    fn named_operations_map_to_expected_capabilities() {',
+        '        for (operation, capability) in [',
+    ]
+    for operation, capability in operation_mappings:
+        lines.append(f'            ({operation}, {capability}),')
+    lines.extend([
+        '        ] {',
+        '            assert_eq!(capability_for_operation(operation), Some(capability));',
+        '        }',
+        '    }',
+        '',
+        '    #[test]',
+        '    fn llm_invocation_operations_cover_generic_text_surfaces() {',
+        '        assert_eq!(',
+        '            invocation_operations_for_capability(CapabilityKind::LLM),',
+        f'            Some(&{render_array_literal(llm_probe_exprs, "            ")}[..])',
+        '        );',
+        '    }',
+        '',
+        '    #[test]',
+        '    fn batch_and_rerank_invocation_operations_are_single_surface() {',
+        '        assert_eq!(',
+        '            invocation_operations_for_capability(CapabilityKind::BATCH),',
+        f'            Some(&{render_array_literal([operation_expr("batch")], "            ")}[..])',
+        '        );',
+        '        assert_eq!(',
+        '            invocation_operations_for_capability(CapabilityKind::RERANK),',
+        f'            Some(&{render_array_literal([operation_expr("rerank")], "            ")}[..])',
+        '        );',
+        '    }',
+        '',
+        '    #[test]',
+        '    fn non_generic_builder_capabilities_have_no_probe_operations() {',
+        '        for capability in [',
+    ])
+    for capability in no_probe_capabilities:
+        lines.append(f'            {capability},')
+    lines.extend([
+        '        ] {',
+        '            assert_eq!(invocation_operations_for_capability(capability), None);',
+        '        }',
+        '    }',
+        '}',
+    ])
+    return '\n'.join(lines)
+
+
+def render_ids_file() -> str:
+    operation_impl = render_static_id_impl(
+        'OperationKind', [(const_name, operation_id) for const_name, operation_id, _, _ in OPERATION_SPECS]
+    )
+    surface_impl = render_static_id_impl('ApiSurfaceId', SURFACE_SPECS)
+    wire_protocol_impl = render_static_id_impl('WireProtocol', WIRE_PROTOCOL_SPECS)
+    context_cache_mode_impl = render_static_id_impl('ContextCacheModeId', CONTEXT_CACHE_MODE_SPECS)
+    return '\n'.join([
+        '// Generated by scripts/generate_rust_provider_catalog.py. Do not edit by hand.',
+        'use core::fmt;',
+        '',
+        'macro_rules! static_id_type {',
+        '    ($name:ident) => {',
+        '        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]',
+        "        pub struct $name(&'static str);",
+        '',
+        '        impl $name {',
+        "            pub const fn new(id: &'static str) -> Self {",
+        '                Self(id)',
+        '            }',
+        '',
+        "            pub const fn as_str(self) -> &'static str {",
+        '                self.0',
+        '            }',
+        '        }',
+        '',
+        '        impl fmt::Display for $name {',
+        "            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+        '                f.write_str(self.0)',
+        '            }',
+        '        }',
+        '    };',
+        '}',
+        '',
+        'static_id_type!(OperationKind);',
+        'static_id_type!(ApiSurfaceId);',
+        'static_id_type!(WireProtocol);',
+        'static_id_type!(ContextCacheModeId);',
+        '',
+        operation_impl,
+        '',
+        surface_impl,
+        '',
+        wire_protocol_impl,
+        '',
+        context_cache_mode_impl,
+        '',
+        '#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]',
+        "pub struct ProviderId<'a>(&'a str);",
+        '',
+        "impl<'a> ProviderId<'a> {",
+        "    pub const fn new(id: &'a str) -> Self {",
+        '        Self(id)',
+        '    }',
+        '',
+        "    pub const fn as_str(self) -> &'a str {",
+        '        self.0',
+        '    }',
+        '}',
+        '',
+        "impl fmt::Display for ProviderId<'_> {",
+        "    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+        '        f.write_str(self.0)',
+        '    }',
+        '}',
+        '',
+        "impl<'a> From<&'a str> for ProviderId<'a> {",
+        "    fn from(value: &'a str) -> Self {",
+        '        Self::new(value)',
+        '    }',
+        '}',
+        '',
+        '#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]',
+        "pub struct CapabilityKind(&'static str);",
+        '',
+        render_capability_impl(),
+        '',
+        'impl fmt::Display for CapabilityKind {',
+        "    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {",
+        '        f.write_str(self.0)',
+        '    }',
+        '}',
+        '',
+        render_capability_for_operation(),
+        '',
+        render_invocation_probe_consts(),
+        '',
+        render_invocation_operations_for_capability(),
+        '',
+        render_ids_tests(),
+        '',
+    ])
+
+
 def provider_cfg_attr(provider_id: str) -> str:
     return f'#[cfg(feature = {rust_string(PROVIDER_FEATURES[provider_id])})]'
 
@@ -1084,6 +1457,9 @@ def remove_stale_provider_files(active_module_names: set[str]) -> None:
 def main() -> int:
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
     TARGET_MODULE_DIR.mkdir(parents=True, exist_ok=True)
+
+    write_text(CONTRACT_IDS_TARGET_FILE, render_ids_file())
+    print(CONTRACT_IDS_TARGET_FILE.relative_to(ROOT))
 
     catalogs = rendered_provider_catalogs()
     active_module_names: set[str] = set()

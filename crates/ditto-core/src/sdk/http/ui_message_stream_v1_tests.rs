@@ -5,10 +5,9 @@ mod ui_message_stream_v1_tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
-    use crate::error::DittoError;
-    use crate::llm_core::model::StreamResult;
     use crate::contracts::FinishReason;
-use crate::contracts::StreamChunk;
+    use crate::contracts::StreamChunk;
+    use crate::llm_core::model::StreamResult;
 
     #[derive(Debug, PartialEq)]
     enum Frame {
@@ -155,7 +154,10 @@ use crate::contracts::StreamChunk;
             Ok(StreamChunk::TextDelta {
                 text: "hello".to_string(),
             }),
-            Err(DittoError::invalid_response_text("boom".to_string())),
+            Err(crate::invalid_response!(
+                "error_detail.freeform",
+                "message" => "boom"
+            )),
         ];
         let stream: StreamResult = stream::iter(chunks).boxed();
 

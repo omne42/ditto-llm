@@ -7,18 +7,15 @@ autoexamples = false
 autobins = false
 
 [features]
-default = ["provider-openai-compatible", "cap-llm", "i18n-en-us"]
+default = ["provider-openai-compatible", "cap-llm"]
 
-agent = ["dep:regex", "dep:safe-fs-tools"]
+agent = ["dep:regex", "dep:omne-fs"]
 contract-guard = ["dep:regex", "dep:serde_yaml"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
 sdk-axum = ["sdk", "dep:axum"]
 base64 = ["dep:base64"]
-i18n-en-us = []
-i18n-zh-cn = []
-i18n-ja-jp = []
-i18n-dynamic = []
+gateway = []
 
 # Providers.
 provider-openai-compatible = []
@@ -66,14 +63,19 @@ async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
 base64 = { version = "0.22", optional = true }
 bytes = "1"
+config-kit = { path = "../../../omne_foundation/crates/config-kit" }
 futures-util = "0.3"
 hmac = { version = "0.12", optional = true }
-error = { path = "../../../omne_foundation/crates/error" }
-i18n = { path = "../../../omne_foundation/crates/i18n" }
-secret = { path = "../../../omne_foundation/crates/secret" }
+error-kit = { path = "../../../omne_foundation/crates/error-kit" }
+i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
+i18n-runtime-kit = { path = "../../../omne_foundation/crates/i18n-runtime-kit" }
+policy-meta = { path = "../../../omne_foundation/crates/policy-meta" }
+secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
+structured-text-kit = { path = "../../../omne_foundation/crates/structured-text-kit" }
+text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 regex = { version = "1", optional = true }
-safe-fs-tools = { path = "../../../safe-fs-tools", optional = true }
+omne-fs = { path = "../../../omne-runtime/crates/omne-fs", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = { version = "0.9", optional = true }
@@ -90,9 +92,17 @@ tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
 
 [[bin]]
+name = "ditto-catalog-dashboard"
+path = "src/bin/ditto-catalog-dashboard.rs"
+
+[[bin]]
 name = "ditto-gateway-contract-guard"
 path = "src/bin/ditto-gateway-contract-guard.rs"
 required-features = ["contract-guard"]
+
+[[bin]]
+name = "ditto-llms-txt"
+path = "src/bin/ditto-llms-txt.rs"
 
 [[example]]
 name = "anthropic_messages"

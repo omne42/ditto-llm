@@ -51,6 +51,8 @@ gateway coverage).
 ## Docs
 
 This repo includes an `mdBook` under `docs/`.
+For the stable docs entrypoints, start with `docs/README.md` and `docs/docs-system-map.md`.
+Use `./scripts/check-docs-system.sh` to verify the repository-level docs skeleton.
 
 ```bash
 cargo install mdbook
@@ -330,7 +332,9 @@ If you want to consume a streaming response but still produce a final unified `G
 use `collect_stream`:
 
 ```rust
-use ditto_core::{collect_stream, GenerateRequest, LanguageModel};
+use ditto_core::contracts::GenerateRequest;
+use ditto_core::llm_core::model::LanguageModel;
+use ditto_core::llm_core::stream::collect_stream;
 
 let stream = llm.stream(GenerateRequest::from(messages)).await?;
 let collected = collect_stream(stream).await?;
@@ -342,7 +346,8 @@ println!("{}", collected.response.text());
 Single-step text helpers (no tool execution loop):
 
 ```rust
-use ditto_core::{GenerateRequest, LanguageModelTextExt};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::GenerateRequest;
 
 let out = llm.generate_text(GenerateRequest::from(messages)).await?;
 println!("{}", out.text);
@@ -352,7 +357,8 @@ Streaming:
 
 ```rust
 use futures_util::StreamExt;
-use ditto_core::{GenerateRequest, LanguageModelTextExt};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::GenerateRequest;
 
 let (handle, mut text_stream) = llm
     .stream_text(GenerateRequest::from(messages))
@@ -378,7 +384,9 @@ Defaults (`ObjectOptions::default()`):
 - `output = Object` (top-level object)
 
 ```rust
-use ditto_core::{GenerateRequest, JsonSchemaFormat, LanguageModelObjectExt, Message};
+use ditto_core::capabilities::object::LanguageModelObjectExt;
+use ditto_core::contracts::{GenerateRequest, Message};
+use ditto_core::provider_options::JsonSchemaFormat;
 use serde_json::json;
 
 let schema = JsonSchemaFormat {
@@ -413,7 +421,7 @@ println!("{final_obj}");
 Streaming arrays (AI SDK `elementStream`):
 
 ```rust
-use ditto_core::{ObjectOptions, ObjectOutput};
+use ditto_core::capabilities::object::{ObjectOptions, ObjectOutput};
 use futures_util::StreamExt;
 
 let mut result = llm
@@ -437,7 +445,9 @@ while let Some(element) = result.element_stream.next().await {
 If you need an explicit abort handle (instead of relying on drop semantics), wrap the stream:
 
 ```rust
-use ditto_core::{abortable_stream, GenerateRequest, LanguageModel};
+use ditto_core::contracts::GenerateRequest;
+use ditto_core::llm_core::model::LanguageModel;
+use ditto_core::llm_core::stream::abortable_stream;
 
 let stream = llm.stream(GenerateRequest::from(messages)).await?;
 let abortable = abortable_stream(stream);
@@ -449,7 +459,7 @@ abortable.handle.abort();
 `EmbeddingModelExt` provides AI SDK-style aliases:
 
 ```rust
-use ditto_core::EmbeddingModelExt;
+use ditto_core::capabilities::EmbeddingModelExt;
 
 let vectors = embeddings.embed_many(vec!["hello".to_string(), "world".to_string()]).await?;
 let one = embeddings.embed_one("hi".to_string()).await?;
@@ -462,7 +472,7 @@ headers (e.g. enterprise gateways):
 
 ```rust
 let http = reqwest::Client::builder().build()?;
-let llm = ditto_core::OpenAI::new(api_key).with_http_client(http);
+let llm = ditto_core::providers::OpenAI::new(api_key).with_http_client(http);
 ```
 
 When building providers from config, you can also set per-node default headers via

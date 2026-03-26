@@ -15,7 +15,7 @@ use super::client::{
 use crate::contracts::StreamChunk;
 use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
 use crate::contracts::{FinishReason, Warning};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 
 #[derive(Debug, Deserialize)]
@@ -374,16 +374,13 @@ impl LanguageModel for OpenAI {
                                         }
                                         "response.failed" => {
                                             done = true;
-                                            buffer.push_back(Err(
-                                                DittoError::invalid_response_text(
-                                                    event
-                                                        .response
-                                                        .map(|v| v.to_string())
-                                                        .unwrap_or_else(|| {
-                                                            "openai response.failed".to_string()
-                                                        }),
-                                                ),
-                                            ));
+                                            buffer.push_back(Err(crate::invalid_response!(
+                                                "error_detail.openai.responses_failed",
+                                                "payload" => event
+                                                    .response
+                                                    .map(|value| value.to_string())
+                                                    .unwrap_or_else(|| "null".to_string())
+                                            )));
                                         }
                                         "response.completed"
                                         | "response.done"

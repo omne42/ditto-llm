@@ -19,12 +19,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 最小用法（以 OpenAI 为例）：
 
 ```rust
-use ditto_core::{LanguageModelTextExt, Message, OpenAI};
+use ditto_core::capabilities::text::LanguageModelTextExt;
+use ditto_core::contracts::Message;
+use ditto_core::providers::OpenAI;
 
 #[tokio::main]
-async fn main() -> ditto_core::Result<()> {
+async fn main() -> ditto_core::error::Result<()> {
     let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ditto_core::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
+        ditto_core::error::DittoError::InvalidResponse("missing OPENAI_API_KEY".into())
     })?;
     let llm = OpenAI::new(api_key);
     let req = vec![

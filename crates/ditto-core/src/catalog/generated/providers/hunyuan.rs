@@ -440,7 +440,7 @@ pub(crate) const HUNYUAN_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::EMBEDDING,
         selector: ModelSelector::Exact(&["hunyuan-embedding"]),
-        surface: ApiSurfaceId::OPENAI_EMBEDDINGS,
+        surface: ApiSurfaceId::GOOGLE_EMBED_CONTENT,
         wire_protocol: WireProtocol::HUNYUAN_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,
@@ -476,7 +476,7 @@ pub(crate) const HUNYUAN_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
         operation: OperationKind::IMAGE_GENERATION,
         selector: ModelSelector::Exact(&["hunyuan-image-lite"]),
-        surface: ApiSurfaceId::OPENAI_IMAGES_GENERATIONS,
+        surface: ApiSurfaceId::GOOGLE_PREDICT,
         wire_protocol: WireProtocol::HUNYUAN_NATIVE,
         endpoint: EndpointTemplate {
             transport: TransportKind::Http,

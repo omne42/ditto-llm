@@ -67,7 +67,6 @@ fn base_config() -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
-        i18n: Default::default(),
     }
 }
 
@@ -202,7 +201,7 @@ async fn gateway_http_ready_reports_sqlite_store_failures() -> ditto_core::error
 async fn gateway_http_a2a_remains_fail_closed_without_provisioned_keys()
 -> ditto_core::error::Result<()> {
     let upstream = MockServer::start();
-    let backend = ProxyBackend::new(&upstream.base_url()).expect("a2a backend");
+    let backend = ProxyBackend::new(upstream.base_url()).expect("a2a backend");
     let mut agents = HashMap::new();
     agents.insert(
         "helper".to_string(),
@@ -255,7 +254,7 @@ async fn gateway_http_a2a_agent_card_and_invoke_require_valid_key() -> ditto_cor
             );
     });
 
-    let backend = ProxyBackend::new(&upstream.base_url()).expect("a2a backend");
+    let backend = ProxyBackend::new(upstream.base_url()).expect("a2a backend");
     let mut agents = HashMap::new();
     agents.insert(
         "helper".to_string(),
