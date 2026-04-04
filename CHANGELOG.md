@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build: restore workspace `--all-features` compatibility after `omne-fs`/`secret-kit`/`i18n-runtime-kit` API drift by updating runtime resource bootstrapping, secret resolution call sites, and gateway-translation imports to the current crate boundaries.
 - Gateway: fix proxy backend `/v1` base-url joining for exact `/v1` and `v1` paths (no longer produces duplicated `/v1/v1`).
 - Gateway MCP: tighten `server_url` parsing so only exact `litellm_proxy` / `litellm_proxy/...` forms trigger LiteLLM shortcut parsing (prevents accidental matches like `litellm_proxyabc/...`).
 - Gateway: avoid abort-path panics in proxy stream finalizers by using a runtime-safe fallback when `tokio::spawn` is unavailable during shutdown/drop.
