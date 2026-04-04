@@ -363,7 +363,7 @@ jobs:
           set -euo pipefail
           while IFS='|' read -r label features; do
             echo "::group::${label}"
-            cargo test -p ditto-core --lib --no-default-features --features "${features}" -q
+            cargo test -p ditto-server --lib --no-default-features --features "${features}" -q
             echo "::endgroup::"
           done <<'EOF'
           openai|openai
@@ -376,33 +376,33 @@ jobs:
         working-directory: ditto-llm
         run: cargo check -p ditto-server --lib --no-default-features --features "gateway gateway-translation provider-openai-compatible cap-llm"
 
-      - name: cargo clippy (no default features + openai)
+      - name: cargo clippy (no default features + provider-openai)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features openai --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-openai --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + openai-compatible)
+      - name: cargo clippy (no default features + provider-openai-compatible)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features openai-compatible --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-openai-compatible --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + anthropic)
+      - name: cargo clippy (no default features + provider-anthropic)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features anthropic --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-anthropic --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + google)
+      - name: cargo clippy (no default features + provider-google)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features google --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-google --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + cohere)
+      - name: cargo clippy (no default features + provider-cohere)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features cohere --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-cohere --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + bedrock)
+      - name: cargo clippy (no default features + provider-bedrock)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features bedrock --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-bedrock --all-targets -- -D warnings
 
-      - name: cargo clippy (no default features + vertex)
+      - name: cargo clippy (no default features + provider-vertex)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features vertex --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features provider-vertex --all-targets -- -D warnings
 
   gateway-store-matrix:
     runs-on: ubuntu-latest

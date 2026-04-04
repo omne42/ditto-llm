@@ -176,6 +176,7 @@ mod tests {
     };
     use crate::config::ProviderConfig;
 
+    #[allow(dead_code)]
     fn resolve_builtin_route(request: RuntimeRouteRequest<'_>) -> Result<RuntimeRoute> {
         resolve_runtime_route(&crate::catalog::builtin_registry(), request)
     }

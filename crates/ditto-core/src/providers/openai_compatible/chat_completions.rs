@@ -538,10 +538,10 @@ impl LanguageModel for OpenAICompatible {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            return Err(DittoError::builder_capability_feature_missing(
+            Err(DittoError::builder_capability_feature_missing(
                 "openai-compatible",
                 "streaming",
-            ));
+            ))
         }
 
         #[cfg(feature = "cap-llm-streaming")]

@@ -702,7 +702,9 @@ fn resolve_catalog_context_cache_profile(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
     use crate::runtime_registry::builtin_runtime_registry_catalog;
 
     #[cfg(feature = "provider-openai-compatible")]

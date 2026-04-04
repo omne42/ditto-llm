@@ -12,6 +12,8 @@ use serde_json::{Map, Value};
 use super::genai;
 use crate::auth::oauth::{OAuthClientCredentials, resolve_oauth_client_credentials};
 use crate::config::{Env, HttpAuth, ProviderConfig};
+#[cfg(feature = "cap-llm-streaming")]
+#[allow(unused_imports)]
 use crate::contracts::StreamChunk;
 #[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::Usage;

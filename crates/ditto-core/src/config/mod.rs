@@ -39,7 +39,9 @@ pub(crate) use auth::HttpAuth;
     feature = "provider-openai",
     feature = "provider-openai-compatible",
 ))]
-pub(crate) use auth::resolve_provider_request_auth_required;
+pub(crate) use auth::RequestAuth;
+#[cfg(feature = "provider-openai-compatible")]
+pub(crate) use auth::resolve_provider_request_auth_optional;
 #[cfg(any(
     feature = "provider-anthropic",
     feature = "provider-cohere",
@@ -47,4 +49,4 @@ pub(crate) use auth::resolve_provider_request_auth_required;
     feature = "provider-openai",
     feature = "provider-openai-compatible",
 ))]
-pub(crate) use auth::{RequestAuth, resolve_provider_request_auth_optional};
+pub(crate) use auth::resolve_provider_request_auth_required;

@@ -120,6 +120,11 @@ mod tests {
     use crate::contracts::AuthMethodKind;
     #[cfg(feature = "provider-openai-compatible")]
     use crate::contracts::CapabilityKind;
+    #[cfg(any(
+        feature = "provider-google",
+        feature = "provider-openai-compatible",
+        feature = "provider-openrouter"
+    ))]
     use crate::runtime_registry::builtin_runtime_registry_catalog;
 
     #[cfg(feature = "provider-openai-compatible")]

@@ -273,6 +273,7 @@ pub(super) fn resolve_context_cache_assembly(
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     #[cfg(feature = "provider-openai")]

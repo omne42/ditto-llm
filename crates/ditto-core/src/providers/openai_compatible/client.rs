@@ -15,7 +15,9 @@ use crate::contracts::ContentPart;
 #[cfg(feature = "cap-llm-streaming")]
 use crate::contracts::StreamChunk;
 #[cfg(test)]
-use crate::contracts::{FileSource, Message, Role, Tool, ToolChoice};
+use crate::contracts::{FileSource, Message, Role, ToolChoice};
+#[cfg(all(test, feature = "cap-llm-tools"))]
+use crate::contracts::Tool;
 use crate::contracts::{FinishReason, GenerateRequest, GenerateResponse, Usage, Warning};
 use crate::error::{DittoError, Result};
 use crate::llm_core::model::{LanguageModel, StreamResult};

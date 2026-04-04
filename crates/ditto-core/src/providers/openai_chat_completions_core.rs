@@ -17,6 +17,8 @@ use crate::contracts::{
     ContentPart, FileSource, FinishReason, GenerateRequest, ImageSource, Message, Role, Tool,
     ToolChoice, Usage, Warning,
 };
+#[cfg(all(feature = "provider-openai", not(feature = "cap-llm-streaming")))]
+use crate::error::DittoError;
 use crate::error::Result;
 #[cfg(feature = "provider-openai")]
 use crate::llm_core::model::StreamResult;
@@ -1490,10 +1492,10 @@ where
     {
         let _ = adapter;
         let _ = request;
-        return Err(DittoError::builder_capability_feature_missing(
+        Err(DittoError::builder_capability_feature_missing(
             adapter.provider_name(),
             "streaming",
-        ));
+        ))
     }
 
     #[cfg(feature = "cap-llm-streaming")]
