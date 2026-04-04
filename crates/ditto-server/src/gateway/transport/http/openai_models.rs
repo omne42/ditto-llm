@@ -146,13 +146,31 @@ pub(super) async fn handle_openai_models_list(
 
     #[cfg(feature = "gateway-translation")]
     if has_translation_backends {
-        let models = super::translation::collect_models_from_translation_backends(
-            state.backends.translation_backends.as_ref(),
-        );
-        for (id, owned_by) in models {
-            models_by_id
-                .entry(id.to_string())
-                .or_insert_with(|| super::translation::model_to_openai(&id, &owned_by, created));
+        let mut translation_backend_names = state
+            .backends
+            .translation_backends
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        translation_backend_names.sort();
+
+        for backend_name in translation_backend_names {
+            if key_route
+                .as_deref()
+                .is_some_and(|route| route != backend_name.as_str())
+            {
+                continue;
+            }
+            let Some(backend) = state.backends.translation_backends.get(&backend_name) else {
+                continue;
+            };
+            let models =
+                super::translation::collect_models_from_translation_backend(&backend_name, backend);
+            for (id, owned_by) in models {
+                models_by_id.entry(id.to_string()).or_insert_with(|| {
+                    super::translation::model_to_openai(&id, &owned_by, created)
+                });
+            }
         }
     }
 
@@ -190,7 +208,10 @@ pub(super) async fn handle_openai_models_list(
     if has_translation_backends {
         response.headers_mut().insert(
             "x-ditto-translation",
-            axum::http::HeaderValue::from_static("multi"),
+            key_route
+                .as_deref()
+                .and_then(|route| axum::http::HeaderValue::from_str(route).ok())
+                .unwrap_or_else(|| axum::http::HeaderValue::from_static("multi")),
         );
     }
     if let Ok(value) = axum::http::HeaderValue::from_str(&request_id) {

@@ -58,7 +58,7 @@ use response_mapping::{
 use response_store::TranslationResponseStore;
 pub(crate) use response_store::{
     delete_stored_response_from_translation_backends,
-    find_stored_response_from_translation_backends,
+    find_stored_response_from_translation_backends, gateway_scoped_response_id,
 };
 
 type ParseResult<T> = std::result::Result<T, String>;
@@ -772,7 +772,7 @@ impl TranslationBackend {
         })
     }
 
-    pub fn map_model(&self, requested: &str) -> String {
+    pub fn map_model(&self, backend_name: &str, requested: &str) -> String {
         if let Some(mapped) = self.model_map.get(requested) {
             return mapped.clone();
         }
@@ -782,9 +782,18 @@ impl TranslationBackend {
             return String::new();
         }
 
-        let prefix = format!("{}/", self.provider_name());
-        if prefix != "/" && requested.starts_with(&prefix) {
-            return requested.trim_start_matches(&prefix).to_string();
+        for scope in [backend_name.trim(), self.provider_name()] {
+            if scope.is_empty() {
+                continue;
+            }
+
+            let prefix = format!("{scope}/");
+            if let Some(stripped) = requested.strip_prefix(&prefix) {
+                if let Some(mapped) = self.model_map.get(stripped) {
+                    return mapped.clone();
+                }
+                return stripped.to_string();
+            }
         }
 
         requested.to_string()
@@ -1149,50 +1158,38 @@ impl TranslationBackend {
     }
 }
 // end inline: ../../translation/backend.rs
-pub fn collect_models_from_translation_backends(
-    backends: &HashMap<String, TranslationBackend>,
+pub fn collect_models_from_translation_backend(
+    backend_name: &str,
+    backend: &TranslationBackend,
 ) -> BTreeMap<String, String> {
     let mut out = BTreeMap::<String, String>::new();
+    let owned_by = backend_name.trim();
+    if owned_by.is_empty() {
+        return out;
+    }
 
-    let mut backend_names = backends.keys().collect::<Vec<_>>();
-    backend_names.sort();
-
-    for backend_name in backend_names {
-        let backend = match backends.get(backend_name) {
-            Some(backend) => backend,
-            None => continue,
-        };
-
-        let provider = backend.provider_name();
-        let owned_by = if provider.is_empty() {
-            backend_name.as_str()
-        } else {
-            provider
-        };
-
-        for key in backend.model_map.keys() {
-            let key = key.trim();
-            if key.is_empty() {
-                continue;
-            }
-            out.entry(key.to_string())
-                .or_insert_with(|| owned_by.to_string());
+    for key in backend.model_map.keys() {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
         }
+        out.entry(key.to_string())
+            .or_insert_with(|| owned_by.to_string());
+    }
 
-        let default_model = backend.default_model_id();
-        if !default_model.is_empty() {
-            out.entry(format!("{owned_by}/{default_model}"))
-                .or_insert_with(|| owned_by.to_string());
-        }
+    let default_model = backend.default_model_id();
+    if !default_model.is_empty() {
+        out.entry(format!("{owned_by}/{default_model}"))
+            .or_insert_with(|| owned_by.to_string());
+    }
 
-        for value in backend.model_map.values() {
-            let value = value.trim();
-            if value.is_empty() {
-                continue;
-            }
-            out.entry(format!("{owned_by}/{value}"))
-                .or_insert_with(|| owned_by.to_string());
+    for value in backend.model_map.values() {
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
         }
+        out.entry(format!("{owned_by}/{value}"))
+            .or_insert_with(|| owned_by.to_string());
     }
 
     out
