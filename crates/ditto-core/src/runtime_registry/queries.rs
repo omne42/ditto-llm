@@ -151,15 +151,11 @@ mod tests {
             preset.default_base_url,
             Some("https://generativelanguage.googleapis.com/v1beta")
         );
-        assert!(
-            preset
-                .supported_auth
-                .contains(&AuthMethodKind::ApiKeyHeader)
-        );
         assert!(preset.supported_auth.contains(&AuthMethodKind::ApiKeyQuery));
-        assert_eq!(auth_hint.method, AuthMethodKind::ApiKeyHeader);
-        assert_eq!(auth_hint.header_name, Some("x-goog-api-key"));
-        assert_eq!(auth_hint.env_keys, &["GOOGLE_API_KEY", "GEMINI_API_KEY"]);
+        assert_eq!(auth_hint.method, AuthMethodKind::ApiKeyQuery);
+        assert_eq!(auth_hint.query_param, Some("key"));
+        assert_eq!(auth_hint.header_name, None);
+        assert_eq!(auth_hint.env_keys, &["GOOGLE_API_KEY"]);
     }
 
     #[cfg(feature = "provider-openai-compatible")]

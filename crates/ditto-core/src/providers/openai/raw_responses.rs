@@ -308,10 +308,7 @@ mod tests {
             DittoError::InvalidResponse(message) => {
                 assert!(matches!(
                     message.as_catalog().map(|message| message.code()),
-                    Some(
-                        "error_detail.http.content_length_exceeds_max_bytes"
-                            | "error_detail.http.response_exceeded_max_bytes"
-                    )
+                    Some("error_detail.openai_like.files_download_response_too_large")
                 ));
             }
             other => panic!("unexpected error: {other:?}"),

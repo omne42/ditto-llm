@@ -782,9 +782,9 @@ mod tests {
     use crate::config::{OpenAiCompatibleConfig, ProviderAuth};
 
     #[test]
-    fn thought_signature_passthrough_defaults_to_explicit_input_heuristics() {
+    fn native_openai_profile_does_not_enable_thought_signature_passthrough_from_base_url() {
         let litellm = OpenAI::new("sk-test").with_base_url("https://litellm.example/v1");
-        assert!(litellm.should_send_function_call_thought_signature("gemini-2.5-pro"));
+        assert!(!litellm.should_send_function_call_thought_signature("gemini-2.5-pro"));
         assert!(!litellm.should_send_function_call_thought_signature("gpt-5"));
 
         let plain = OpenAI::new("sk-test").with_base_url("https://api.openai.com/v1");
