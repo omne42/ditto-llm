@@ -712,7 +712,7 @@ impl MySqlStore {
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
-            "SELECT key_id, tokens
+            "SELECT CAST(key_id AS CHAR) AS key_id, tokens
              FROM budget_reservations
              WHERE request_id=?
              FOR UPDATE",
@@ -777,7 +777,7 @@ impl MySqlStore {
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
-            "SELECT key_id, usd_micros
+            "SELECT CAST(key_id AS CHAR) AS key_id, usd_micros
              FROM cost_reservations
              WHERE request_id=?
              FOR UPDATE",
@@ -840,7 +840,7 @@ impl MySqlStore {
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
-            "SELECT key_id, tokens
+            "SELECT CAST(key_id AS CHAR) AS key_id, tokens
              FROM budget_reservations
              WHERE request_id=?
              FOR UPDATE",
@@ -891,7 +891,7 @@ impl MySqlStore {
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
-            "SELECT key_id, usd_micros
+            "SELECT CAST(key_id AS CHAR) AS key_id, usd_micros
              FROM cost_reservations
              WHERE request_id=?
              FOR UPDATE",
@@ -1009,7 +1009,10 @@ impl MySqlStore {
 
     pub async fn list_budget_ledgers(&self) -> Result<Vec<BudgetLedgerRecord>, MySqlStoreError> {
         let rows = sqlx::query(
-            "SELECT key_id, spent_tokens, reserved_tokens, updated_at_ms
+            "SELECT CAST(key_id AS CHAR) AS key_id,
+                    spent_tokens,
+                    reserved_tokens,
+                    updated_at_ms
              FROM budget_ledger
              ORDER BY key_id",
         )
@@ -1035,7 +1038,10 @@ impl MySqlStore {
 
     pub async fn list_cost_ledgers(&self) -> Result<Vec<CostLedgerRecord>, MySqlStoreError> {
         let rows = sqlx::query(
-            "SELECT key_id, spent_usd_micros, reserved_usd_micros, updated_at_ms
+            "SELECT CAST(key_id AS CHAR) AS key_id,
+                    spent_usd_micros,
+                    reserved_usd_micros,
+                    updated_at_ms
              FROM cost_ledger
              ORDER BY key_id",
         )
