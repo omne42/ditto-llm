@@ -423,7 +423,7 @@ dependencies = [
 name = "config-kit"
 version = "0.1.0"
 dependencies = [
- "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
+ "omne-fs-primitives",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1667,7 +1667,7 @@ dependencies = [
  "globset",
  "libc",
  "memchr",
- "omne-fs-primitives 0.1.0",
+ "omne-fs-primitives",
  "policy-meta",
  "regex",
  "same-file",
@@ -1691,19 +1691,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "omne-fs-primitives"
-version = "0.1.0"
-source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
-dependencies = [
- "cap-fs-ext",
- "cap-std",
- "fs2",
- "libc",
- "tempfile",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "omne-integrity-primitives"
 version = "0.1.0"
 dependencies = [
@@ -1713,7 +1700,6 @@ dependencies = [
 [[package]]
 name = "omne-process-primitives"
 version = "0.1.0"
-source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 dependencies = [
  "omne-system-package-primitives",
  "rustix",
@@ -1727,7 +1713,6 @@ dependencies = [
 [[package]]
 name = "omne-system-package-primitives"
 version = "0.1.0"
-source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 
 [[package]]
 name = "once_cell"
@@ -2451,7 +2436,7 @@ name = "secret-kit"
 version = "0.1.0"
 dependencies = [
  "error-kit",
- "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
+ "omne-fs-primitives",
  "omne-process-primitives",
  "serde_json",
  "structured-text-kit",
@@ -2993,7 +2978,7 @@ dependencies = [
 name = "text-assets-kit"
 version = "0.1.0"
 dependencies = [
- "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
+ "omne-fs-primitives",
  "rustix",
 ]
 
