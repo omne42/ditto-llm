@@ -20,6 +20,8 @@
 
 ## Gateway And Service
 
+- `crates/ditto-gateway-contract-types/src/`
+  - 冻结的 gateway Rust 契约类型包；与 `contracts/gateway-contract-v0.1.openapi.yaml` 一起构成对外 L1 artifact。
 - `crates/ditto-server/src/gateway/`
   - HTTP gateway 的 domain / application / transport 与控制面模块。
 - `crates/ditto-server/src/bin/`

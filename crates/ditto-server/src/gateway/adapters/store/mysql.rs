@@ -1684,7 +1684,7 @@ async fn require_mysql_column_data_type(
     expected_data_type: &str,
 ) -> Result<(), MySqlStoreError> {
     let row = sqlx::query(
-        "SELECT DATA_TYPE
+        "SELECT CAST(DATA_TYPE AS CHAR) AS DATA_TYPE
          FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE()
            AND TABLE_NAME = ?
@@ -1718,7 +1718,7 @@ async fn require_mysql_column_collation(
     expected_collation: &str,
 ) -> Result<(), MySqlStoreError> {
     let row = sqlx::query(
-        "SELECT COLLATION_NAME
+        "SELECT CAST(COLLATION_NAME AS CHAR) AS COLLATION_NAME
          FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE()
            AND TABLE_NAME = ?

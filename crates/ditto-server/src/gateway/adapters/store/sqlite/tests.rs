@@ -17,7 +17,7 @@ async fn sqlite_store_round_trips_virtual_keys() {
     let loaded = store.load_virtual_keys().await.expect("load");
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].id, "key-1");
-    assert_eq!(loaded[0].token, "vk-1");
+    assert_eq!(loaded[0].token, key.sanitized_for_persistence().token);
 
     store
         .replace_virtual_keys(&[])

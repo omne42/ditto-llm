@@ -590,6 +590,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ditto-gateway-contract-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ditto-server"
 version = "1.0.0"
 dependencies = [
@@ -599,6 +607,7 @@ dependencies = [
  "clap",
  "config-kit",
  "ditto-core",
+ "ditto-gateway-contract-types",
  "futures-util",
  "getrandom 0.4.0",
  "httpmock",

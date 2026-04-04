@@ -1,10 +1,12 @@
 [workspace]
 members = [
   "crates/ditto-core",
+  "crates/ditto-gateway-contract-types",
   "crates/ditto-server",
 ]
 default-members = [
   "crates/ditto-core",
+  "crates/ditto-gateway-contract-types",
   "crates/ditto-server",
 ]
 resolver = "2"
