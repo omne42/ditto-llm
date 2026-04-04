@@ -1,7 +1,8 @@
-use omne_fs::{
-    CopyFileRequest, DeleteRequest, GlobRequest, GrepRequest, ListDirRequest, MkdirRequest,
-    MovePathRequest, ReadRequest, SandboxPolicy, StatRequest, WriteFileRequest,
+use omne_fs::ops::{
+    Context, CopyFileRequest, DeleteRequest, GlobRequest, GrepRequest, ListDirRequest,
+    MkdirRequest, MovePathRequest, ReadRequest, StatRequest, WriteFileRequest,
 };
+use omne_fs::policy::SandboxPolicy;
 use policy_meta::WriteScope;
 
 const SAFE_FS_ROOT_ID: &str = "root";
@@ -16,7 +17,7 @@ fn safe_fs_ctx(
     max_read_bytes: u64,
     max_write_bytes: u64,
     max_results: usize,
-) -> std::result::Result<omne_fs::Context, omne_fs::Error> {
+) -> std::result::Result<Context, omne_fs::Error> {
     // Keep the toolbox policy local, but route execution through omne-fs.
     let mut policy = SandboxPolicy::single_root(SAFE_FS_ROOT_ID, root, WriteScope::WorkspaceWrite);
     policy.paths.allow_absolute = false;
@@ -33,7 +34,7 @@ fn safe_fs_ctx(
     policy.limits.max_read_bytes = max_read_bytes;
     policy.limits.max_write_bytes = max_write_bytes;
     policy.limits.max_results = max_results.max(1);
-    omne_fs::Context::new(policy)
+    Context::new(policy)
 }
 
 fn path_depth_under(base: &Path, path: &Path) -> usize {

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use ::secret_kit::{SecretCommandRuntime, SecretEnvironment, SecretString};
+use ::secret_kit::SecretString;
+use ::secret_kit::runtime::{SecretCommandRuntime, SecretEnvironment};
 
 #[derive(Clone, Default)]
 pub struct Env {
