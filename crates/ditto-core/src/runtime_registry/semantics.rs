@@ -338,13 +338,16 @@ fn resolve_builder_catalog_plugin(
     provider_name_hint: &str,
     provider_config: &ProviderConfig,
 ) -> Option<&'static ProviderPluginDescriptor> {
+    if let Some(plugin) = resolve_configured_catalog_plugin_hint(registry, provider_config) {
+        return Some(plugin);
+    }
+
     let provider = provider_name_hint.trim();
     if provider.is_empty() {
         return builder_plugin_from_upstream_api(registry, provider_config);
     }
 
     resolve_explicit_catalog_plugin(registry, provider)
-        .or_else(|| resolve_configured_catalog_plugin_hint(registry, provider_config))
 }
 
 fn resolve_configured_catalog_plugin(
@@ -662,22 +665,27 @@ fn resolve_catalog_context_cache_profile(
     }
 
     let mut has_context_cache_binding = false;
+    let mut has_chat_completion_binding = false;
     let mut has_anthropic_context_cache_binding = false;
-    for binding in plugin.bindings {
-        if !binding.matches(
-            canonical_model,
-            OperationKind::CONTEXT_CACHE,
-            InvocationHints::default(),
-        ) {
-            continue;
-        }
-        has_context_cache_binding = true;
-        if binding.wire_protocol == WireProtocol::ANTHROPIC_MESSAGES {
-            has_anthropic_context_cache_binding = true;
+    for operation in [OperationKind::CONTEXT_CACHE, OperationKind::CHAT_COMPLETION] {
+        for binding in plugin.bindings {
+            if !binding.matches(canonical_model, operation, InvocationHints::default()) {
+                continue;
+            }
+            if operation == OperationKind::CONTEXT_CACHE {
+                has_context_cache_binding = true;
+            } else {
+                has_chat_completion_binding = true;
+            }
+            if binding.wire_protocol == WireProtocol::ANTHROPIC_MESSAGES {
+                has_anthropic_context_cache_binding = true;
+            }
         }
     }
 
     if has_context_cache_binding {
+        push_context_cache_mode(&mut modes, ContextCacheMode::Passive);
+    } else if modes.is_empty() && has_chat_completion_binding {
         push_context_cache_mode(&mut modes, ContextCacheMode::Passive);
     }
     if has_anthropic_context_cache_binding {
@@ -832,10 +840,19 @@ mod tests {
     fn rejects_non_openai_compatible_catalog_plugin() {
         let err = builtin_runtime_registry_catalog()
             .resolve_openai_compatible_provider_capability_profile(
-                "google-native",
+                "google",
                 &ProviderConfig::default(),
             )
             .expect_err("google should not resolve as openai-compatible provider");
-        assert!(err.to_string().contains("non-openai-compatible"));
+        assert!(matches!(
+            err,
+            crate::error::DittoError::ProviderResolution(
+                crate::error::ProviderResolutionError::UnsupportedProviderClass {
+                    provider_hint,
+                    resolved_provider,
+                    ..
+                }
+            ) if provider_hint == "google" && resolved_provider == "google"
+        ));
     }
 }
