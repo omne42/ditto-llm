@@ -108,8 +108,8 @@ jobs:
           cargo run -p ditto-core --features contract-guard --bin ditto-gateway-contract-guard -- \
             --base "${{ steps.base_contract.outputs.base_path }}" \
             --head ./contracts/gateway-contract-v0.1.openapi.yaml \
-            --contract-lib ./crates/ditto-server/src/gateway/contracts/types.rs \
-            --contract-cargo ./crates/ditto-server/Cargo.toml
+            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
+            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml
 
       - name: Contract guard (bootstrap mode)
         if: steps.base_contract.outputs.has_base != '1'
@@ -117,8 +117,8 @@ jobs:
         run: |
           cargo run -p ditto-core --features contract-guard --bin ditto-gateway-contract-guard -- \
             --head ./contracts/gateway-contract-v0.1.openapi.yaml \
-            --contract-lib ./crates/ditto-server/src/gateway/contracts/types.rs \
-            --contract-cargo ./crates/ditto-server/Cargo.toml \
+            --contract-lib ./crates/ditto-gateway-contract-types/src/lib.rs \
+            --contract-cargo ./crates/ditto-gateway-contract-types/Cargo.toml \
             --allow-missing-base
 
   rust-security:

@@ -14,8 +14,8 @@ use crate::resources::MESSAGE_CATALOG;
 use i18n_kit::{Locale, TemplateArg};
 
 const DEFAULT_HEAD_OPENAPI: &str = "contracts/gateway-contract-v0.1.openapi.yaml";
-const DEFAULT_CONTRACT_LIB: &str = "crates/ditto-server/src/gateway/contracts/types.rs";
-const DEFAULT_CONTRACT_CARGO: &str = "crates/ditto-server/Cargo.toml";
+const DEFAULT_CONTRACT_LIB: &str = "crates/ditto-gateway-contract-types/src/lib.rs";
+const DEFAULT_CONTRACT_CARGO: &str = "crates/ditto-gateway-contract-types/Cargo.toml";
 
 const METHODS: [&str; 8] = [
     "get", "put", "post", "delete", "patch", "options", "head", "trace",
