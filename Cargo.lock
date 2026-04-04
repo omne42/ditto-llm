@@ -1701,11 +1701,18 @@ dependencies = [
 name = "omne-process-primitives"
 version = "0.1.0"
 dependencies = [
+ "omne-system-package-primitives",
  "rustix",
+ "same-file",
  "sysinfo",
+ "tempfile",
  "tokio",
  "win32job",
 ]
+
+[[package]]
+name = "omne-system-package-primitives"
+version = "0.1.0"
 
 [[package]]
 name = "once_cell"
@@ -1922,6 +1929,8 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
  "ts-rs",
 ]
 
@@ -2970,6 +2979,7 @@ name = "text-assets-kit"
 version = "0.1.0"
 dependencies = [
  "omne-fs-primitives",
+ "rustix",
 ]
 
 [[package]]
