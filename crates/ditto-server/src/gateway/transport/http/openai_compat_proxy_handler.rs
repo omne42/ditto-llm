@@ -267,56 +267,46 @@ pub(super) async fn handle_openai_compat_proxy(
         state.stores.redis.as_ref(),
         virtual_key_id.as_deref(),
         limits.as_ref(),
-    ) {
-        if let Err(err) = store
-            .check_and_consume_rate_limits(
-                virtual_key_id,
-                &rate_limit_route,
-                limits,
-                charge_tokens,
-                _now_epoch_seconds,
-            )
-            .await
-        {
-            let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
-            if is_rate_limited {
-                state.record_rate_limited();
-            }
-            let mapped = map_openai_gateway_error(err);
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if is_rate_limited {
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(
-                        Some(virtual_key_id),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_rate_limited(
-                        Some(virtual_key_id),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    if let Some(model) = model.as_deref() {
-                        metrics.record_proxy_response_status_by_model(model, status);
-                        metrics.observe_proxy_request_duration_by_model(model, duration);
-                    }
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-            }
-            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
-                .await;
+    ) && let Err(err) = store
+        .check_and_consume_rate_limits(
+            virtual_key_id,
+            &rate_limit_route,
+            limits,
+            charge_tokens,
+            _now_epoch_seconds,
+        )
+        .await
+    {
+        let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
+        if is_rate_limited {
+            state.record_rate_limited();
         }
+        let mapped = map_openai_gateway_error(err);
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if is_rate_limited && let Some(metrics) = state.proxy.metrics.as_ref() {
+            let duration = metrics_timer_start.elapsed();
+            let status = mapped.0.as_u16();
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_request(Some(virtual_key_id), model.as_deref(), &metrics_path);
+            metrics.record_proxy_rate_limited(
+                Some(virtual_key_id),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status);
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(&metrics_path, duration);
+        }
+        return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped)).await;
     }
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
         (state.stores.redis.as_ref(), tenant_limits_scope.as_ref())
-    {
-        if let Err(err) = store
+        && let Err(err) = store
             .check_and_consume_rate_limits(
                 scope,
                 &rate_limit_route,
@@ -325,46 +315,41 @@ pub(super) async fn handle_openai_compat_proxy(
                 _now_epoch_seconds,
             )
             .await
-        {
-            let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
-            if is_rate_limited {
-                state.record_rate_limited();
-            }
-            let mapped = map_openai_gateway_error(err);
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if is_rate_limited {
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_rate_limited(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    if let Some(model) = model.as_deref() {
-                        metrics.record_proxy_response_status_by_model(model, status);
-                        metrics.observe_proxy_request_duration_by_model(model, duration);
-                    }
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-            }
-            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
-                .await;
+    {
+        let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
+        if is_rate_limited {
+            state.record_rate_limited();
         }
+        let mapped = map_openai_gateway_error(err);
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if is_rate_limited && let Some(metrics) = state.proxy.metrics.as_ref() {
+            let duration = metrics_timer_start.elapsed();
+            let status = mapped.0.as_u16();
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_request(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_rate_limited(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status);
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(&metrics_path, duration);
+        }
+        return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped)).await;
     }
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
         (state.stores.redis.as_ref(), project_limits_scope.as_ref())
-    {
-        if let Err(err) = store
+        && let Err(err) = store
             .check_and_consume_rate_limits(
                 scope,
                 &rate_limit_route,
@@ -373,46 +358,41 @@ pub(super) async fn handle_openai_compat_proxy(
                 _now_epoch_seconds,
             )
             .await
-        {
-            let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
-            if is_rate_limited {
-                state.record_rate_limited();
-            }
-            let mapped = map_openai_gateway_error(err);
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if is_rate_limited {
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_rate_limited(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    if let Some(model) = model.as_deref() {
-                        metrics.record_proxy_response_status_by_model(model, status);
-                        metrics.observe_proxy_request_duration_by_model(model, duration);
-                    }
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-            }
-            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
-                .await;
+    {
+        let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
+        if is_rate_limited {
+            state.record_rate_limited();
         }
+        let mapped = map_openai_gateway_error(err);
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if is_rate_limited && let Some(metrics) = state.proxy.metrics.as_ref() {
+            let duration = metrics_timer_start.elapsed();
+            let status = mapped.0.as_u16();
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_request(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_rate_limited(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status);
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(&metrics_path, duration);
+        }
+        return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped)).await;
     }
 
     #[cfg(feature = "gateway-store-redis")]
     if let (Some(store), Some((scope, limits))) =
         (state.stores.redis.as_ref(), user_limits_scope.as_ref())
-    {
-        if let Err(err) = store
+        && let Err(err) = store
             .check_and_consume_rate_limits(
                 scope,
                 &rate_limit_route,
@@ -421,39 +401,35 @@ pub(super) async fn handle_openai_compat_proxy(
                 _now_epoch_seconds,
             )
             .await
-        {
-            let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
-            if is_rate_limited {
-                state.record_rate_limited();
-            }
-            let mapped = map_openai_gateway_error(err);
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if is_rate_limited {
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_rate_limited(
-                        virtual_key_id.as_deref(),
-                        model.as_deref(),
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    if let Some(model) = model.as_deref() {
-                        metrics.record_proxy_response_status_by_model(model, status);
-                        metrics.observe_proxy_request_duration_by_model(model, duration);
-                    }
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-            }
-            return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped))
-                .await;
+    {
+        let is_rate_limited = matches!(err, GatewayError::RateLimited { .. });
+        if is_rate_limited {
+            state.record_rate_limited();
         }
+        let mapped = map_openai_gateway_error(err);
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if is_rate_limited && let Some(metrics) = state.proxy.metrics.as_ref() {
+            let duration = metrics_timer_start.elapsed();
+            let status = mapped.0.as_u16();
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_request(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_rate_limited(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_response_status_by_path(&metrics_path, status);
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status);
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(&metrics_path, duration);
+        }
+        return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped)).await;
     }
 
     #[cfg(feature = "gateway-otel")]

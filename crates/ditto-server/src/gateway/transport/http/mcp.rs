@@ -152,10 +152,10 @@ impl McpServerState {
         cursor: Option<&str>,
     ) -> Result<McpToolsListResult, GatewayError> {
         let mut params = serde_json::json!({});
-        if let Some(cursor) = cursor {
-            if let Some(obj) = params.as_object_mut() {
-                obj.insert("cursor".to_string(), Value::String(cursor.to_string()));
-            }
+        if let Some(cursor) = cursor
+            && let Some(obj) = params.as_object_mut()
+        {
+            obj.insert("cursor".to_string(), Value::String(cursor.to_string()));
         }
         let req = serde_json::json!({
             "jsonrpc": "2.0",
@@ -233,13 +233,13 @@ impl McpServerState {
 
         {
             let cache = self.tools_list_cache.lock().await;
-            if let Some(entry) = cache.entries.get(&cursor) {
-                if entry.expires_at > now {
-                    return Ok(McpToolsListResult {
-                        tools: entry.tools.clone(),
-                        next_cursor: entry.next_cursor.clone(),
-                    });
-                }
+            if let Some(entry) = cache.entries.get(&cursor)
+                && entry.expires_at > now
+            {
+                return Ok(McpToolsListResult {
+                    tools: entry.tools.clone(),
+                    next_cursor: entry.next_cursor.clone(),
+                });
             }
         }
 
@@ -837,15 +837,14 @@ pub(super) async fn mcp_list_tools(
         }
         for tool in result.tools {
             let mut tool = tool;
-            if prefix_names {
-                if let Some(obj) = tool.as_object_mut() {
-                    if let Some(Value::String(name)) = obj.get("name").cloned() {
-                        obj.insert(
-                            "name".to_string(),
-                            Value::String(format!("{server_id}-{name}")),
-                        );
-                    }
-                }
+            if prefix_names
+                && let Some(obj) = tool.as_object_mut()
+                && let Some(Value::String(name)) = obj.get("name").cloned()
+            {
+                obj.insert(
+                    "name".to_string(),
+                    Value::String(format!("{server_id}-{name}")),
+                );
             }
             tools_out.push(tool);
         }

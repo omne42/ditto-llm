@@ -254,477 +254,501 @@ pub(super) async fn attempt_proxy_backend(
 
     let status = upstream_response.status();
 
-    if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status) {
-        if let Some(parsed_json) = parsed_json.as_ref() {
-            let _ = proxy_permits.take();
-            let Some(mut chat_body) =
-                responses_shim::responses_request_to_chat_completions(parsed_json)
-            else {
+    if responses_shim::should_attempt_responses_shim(&parts.method, path_and_query, status)
+        && let Some(parsed_json) = parsed_json.as_ref()
+    {
+        let _ = proxy_permits.take();
+        let Some(mut chat_body) =
+            responses_shim::responses_request_to_chat_completions(parsed_json)
+        else {
+            return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("invalid_responses_request"),
+                "responses request cannot be mapped to chat/completions",
+            ))));
+        };
+
+        if let Some(mapped_model) = chat_body
+            .get("model")
+            .and_then(|value| value.as_str())
+            .and_then(|model| {
+                backend_model_map
+                    .get(model)
+                    .or_else(|| backend_model_map.get("*"))
+            })
+            .cloned()
+            && let Some(obj) = chat_body.as_object_mut()
+        {
+            obj.insert("model".to_string(), serde_json::Value::String(mapped_model));
+        }
+
+        emit_json_log(
+            state,
+            "proxy.responses_shim",
+            serde_json::json!({
+                "request_id": &request_id,
+                "backend": &backend_name,
+                "path": path_and_query,
+                "shim": "responses_via_chat_completions",
+            }),
+        );
+
+        #[cfg(feature = "sdk")]
+        emit_devtools_log(
+            state,
+            "proxy.responses_shim",
+            serde_json::json!({
+                "request_id": &request_id,
+                "backend": &backend_name,
+                "path": path_and_query,
+            }),
+        );
+
+        let chat_body_bytes = match serde_json::to_vec(&chat_body) {
+            Ok(bytes) => Bytes::from(bytes),
+            Err(err) => {
                 return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
                     StatusCode::BAD_GATEWAY,
                     "api_error",
                     Some("invalid_responses_request"),
-                    "responses request cannot be mapped to chat/completions",
+                    format!("failed to serialize shim chat/completions request: {err}"),
                 ))));
-            };
-
-            if let Some(mapped_model) = chat_body
-                .get("model")
-                .and_then(|value| value.as_str())
-                .and_then(|model| {
-                    backend_model_map
-                        .get(model)
-                        .or_else(|| backend_model_map.get("*"))
-                })
-                .cloned()
-            {
-                if let Some(obj) = chat_body.as_object_mut() {
-                    obj.insert("model".to_string(), serde_json::Value::String(mapped_model));
-                }
             }
+        };
 
-            emit_json_log(
-                state,
-                "proxy.responses_shim",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "backend": &backend_name,
-                    "path": path_and_query,
-                    "shim": "responses_via_chat_completions",
-                }),
+        let mut shim_headers = parts.headers.clone();
+        sanitize_proxy_headers(&mut shim_headers, strip_authorization);
+        apply_backend_headers(&mut shim_headers, backend.headers());
+        insert_request_id(&mut shim_headers, &request_id);
+        if _stream_requested {
+            shim_headers.insert(
+                axum::http::header::ACCEPT,
+                axum::http::HeaderValue::from_static("text/event-stream"),
             );
+        }
 
-            #[cfg(feature = "sdk")]
-            emit_devtools_log(
-                state,
-                "proxy.responses_shim",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "backend": &backend_name,
-                    "path": path_and_query,
-                }),
-            );
-
-            let chat_body_bytes = match serde_json::to_vec(&chat_body) {
-                Ok(bytes) => Bytes::from(bytes),
-                Err(err) => {
-                    return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                        StatusCode::BAD_GATEWAY,
-                        "api_error",
-                        Some("invalid_responses_request"),
-                        format!("failed to serialize shim chat/completions request: {err}"),
-                    ))));
-                }
-            };
-
-            let mut shim_headers = parts.headers.clone();
-            sanitize_proxy_headers(&mut shim_headers, strip_authorization);
-            apply_backend_headers(&mut shim_headers, backend.headers());
-            insert_request_id(&mut shim_headers, &request_id);
-            if _stream_requested {
-                shim_headers.insert(
-                    axum::http::header::ACCEPT,
-                    axum::http::HeaderValue::from_static("text/event-stream"),
-                );
+        let shim_permits = match try_acquire_proxy_permits(state, &backend_name)? {
+            ProxyPermitOutcome::Acquired(permits) => permits,
+            ProxyPermitOutcome::BackendRateLimited(err) => {
+                return Ok(BackendAttemptOutcome::Continue(Some(err)));
             }
+        };
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        let shim_timer_start = Instant::now();
 
-            let shim_permits = match try_acquire_proxy_permits(state, &backend_name)? {
-                ProxyPermitOutcome::Acquired(permits) => permits,
-                ProxyPermitOutcome::BackendRateLimited(err) => {
-                    return Ok(BackendAttemptOutcome::Continue(Some(err)));
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.proxy.metrics.as_ref() {
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_backend_attempt(&backend_name);
+            metrics.record_proxy_backend_in_flight_inc(&backend_name);
+        }
+
+        let shim_response = match backend
+            .request(
+                parts.method.clone(),
+                "/v1/chat/completions",
+                shim_headers,
+                Some(chat_body_bytes),
+            )
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_backend_in_flight_dec(&backend_name);
+                    metrics.observe_proxy_backend_request_duration(
+                        &backend_name,
+                        shim_timer_start.elapsed(),
+                    );
+                    metrics.record_proxy_backend_failure(&backend_name);
                 }
-            };
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            let shim_timer_start = Instant::now();
-
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.proxy.metrics.as_ref() {
-                let mut metrics = metrics.lock().await;
-                metrics.record_proxy_backend_attempt(&backend_name);
-                metrics.record_proxy_backend_in_flight_inc(&backend_name);
-            }
-
-            let shim_response = match backend
-                .request(
-                    parts.method.clone(),
-                    "/v1/chat/completions",
-                    shim_headers,
-                    Some(chat_body_bytes),
-                )
-                .await
-            {
-                Ok(response) => response,
-                Err(err) => {
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_backend_in_flight_dec(&backend_name);
-                        metrics.observe_proxy_backend_request_duration(
-                            &backend_name,
-                            shim_timer_start.elapsed(),
-                        );
-                        metrics.record_proxy_backend_failure(&backend_name);
-                    }
-                    #[cfg(feature = "gateway-routing-advanced")]
-                    let failure_kind = classify_proxy_backend_transport_failure(&err);
-                    #[cfg(feature = "gateway-routing-advanced")]
-                    let failure_message = err.to_string();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-routing-advanced")]
-                    {
-                        let base_decision = retry_config.decision_for_failure(failure_kind);
-                        let decision_ctx = ProxyDecisionLogContext {
-                            request_id: &request_id,
-                            backend_name: &backend_name,
-                            path_and_query,
-                            attempted_backends,
-                            idx,
-                            max_attempts,
-                            status_code: None,
-                        };
-                        let (decision, safety_guard) = apply_proxy_request_safety_guard(
-                            base_decision,
-                            &parts.method,
-                            client_supplied_request_id,
-                        );
-                        record_proxy_backend_failure(
-                            state,
-                            &backend_name,
-                            _now_epoch_seconds,
-                            failure_kind,
-                            failure_message,
-                        )
-                        .await;
-                        if let Some(safety_guard) = safety_guard {
-                            emit_proxy_request_safety_guard_log(
-                                state,
-                                decision_ctx,
-                                &parts.method,
-                                base_decision.action,
-                                safety_guard,
-                                client_supplied_request_id,
-                            )
-                            .await;
-                        }
-                        emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
-                        return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
-                            BackendAttemptOutcome::Continue(Some(mapped))
-                        } else {
-                            BackendAttemptOutcome::Stop(mapped)
-                        });
-                    }
-                    #[cfg(not(feature = "gateway-routing-advanced"))]
-                    return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
-                }
-            };
-
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.proxy.metrics.as_ref() {
-                let mut metrics = metrics.lock().await;
-                metrics.record_proxy_backend_in_flight_dec(&backend_name);
-                metrics.observe_proxy_backend_request_duration(
-                    &backend_name,
-                    shim_timer_start.elapsed(),
-                );
-            }
-
-            let status = shim_response.status();
-
-            #[cfg(feature = "gateway-routing-advanced")]
-            let status_code = status.as_u16();
-            #[cfg(feature = "gateway-routing-advanced")]
-            let failure_kind = FailureKind::Status(status_code);
-            #[cfg(feature = "gateway-routing-advanced")]
-            let base_decision = retry_config.decision_for_failure(failure_kind);
-            #[cfg(feature = "gateway-routing-advanced")]
-            let decision_ctx = ProxyDecisionLogContext {
-                request_id: &request_id,
-                backend_name: &backend_name,
-                path_and_query,
-                attempted_backends,
-                idx,
-                max_attempts,
-                status_code: Some(status_code),
-            };
-            #[cfg(feature = "gateway-routing-advanced")]
-            let (decision, safety_guard) = apply_proxy_request_safety_guard(
-                base_decision,
-                &parts.method,
-                client_supplied_request_id,
-            );
-            #[cfg(feature = "gateway-routing-advanced")]
-            let should_record_status_failure =
-                should_record_proxy_status_failure(state, retry_config, failure_kind, status);
-
-            #[cfg(feature = "gateway-routing-advanced")]
-            if should_record_status_failure {
-                record_proxy_backend_failure(
-                    state,
-                    &backend_name,
-                    _now_epoch_seconds,
-                    failure_kind,
-                    format!("status {}", status_code),
-                )
-                .await;
-                if let Some(safety_guard) = safety_guard {
-                    emit_proxy_request_safety_guard_log(
-                        state,
-                        decision_ctx,
+                #[cfg(feature = "gateway-routing-advanced")]
+                let failure_kind = classify_proxy_backend_transport_failure(&err);
+                #[cfg(feature = "gateway-routing-advanced")]
+                let failure_message = err.to_string();
+                let mapped = map_openai_gateway_error(err);
+                #[cfg(feature = "gateway-routing-advanced")]
+                {
+                    let base_decision = retry_config.decision_for_failure(failure_kind);
+                    let decision_ctx = ProxyDecisionLogContext {
+                        request_id: &request_id,
+                        backend_name: &backend_name,
+                        path_and_query,
+                        attempted_backends,
+                        idx,
+                        max_attempts,
+                        status_code: None,
+                    };
+                    let (decision, safety_guard) = apply_proxy_request_safety_guard(
+                        base_decision,
                         &parts.method,
-                        base_decision.action,
-                        safety_guard,
                         client_supplied_request_id,
+                    );
+                    record_proxy_backend_failure(
+                        state,
+                        &backend_name,
+                        _now_epoch_seconds,
+                        failure_kind,
+                        failure_message,
                     )
                     .await;
-                }
-                emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
-            } else {
-                record_proxy_backend_success(state, &backend_name).await;
-            }
-
-            #[cfg(feature = "gateway-routing-advanced")]
-            if decision.should_attempt_next_backend(idx, max_attempts) {
-                return Ok(BackendAttemptOutcome::Continue(Some(
-                    openai_status_routing_error(status, decision),
-                )));
-            }
-
-            let spend_tokens = status.is_success();
-
-            #[cfg(feature = "gateway-metrics-prometheus")]
-            if let Some(metrics) = state.proxy.metrics.as_ref() {
-                let is_failure_status = {
-                    #[cfg(feature = "gateway-routing-advanced")]
-                    {
-                        should_record_status_failure
+                    if let Some(safety_guard) = safety_guard {
+                        emit_proxy_request_safety_guard_log(
+                            state,
+                            decision_ctx,
+                            &parts.method,
+                            base_decision.action,
+                            safety_guard,
+                            client_supplied_request_id,
+                        )
+                        .await;
                     }
-                    #[cfg(not(feature = "gateway-routing-advanced"))]
-                    {
-                        status.is_server_error()
-                    }
-                };
-                let duration = metrics_timer_start.elapsed();
-                let mut metrics = metrics.lock().await;
-                if is_failure_status {
-                    metrics.record_proxy_backend_failure(&backend_name);
-                } else {
-                    metrics.record_proxy_backend_success(&backend_name);
+                    emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
+                    return Ok(if decision.should_attempt_next_backend(idx, max_attempts) {
+                        BackendAttemptOutcome::Continue(Some(mapped))
+                    } else {
+                        BackendAttemptOutcome::Stop(mapped)
+                    });
                 }
-                metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
-                metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
-                if let Some(model) = model.as_deref() {
-                    metrics.record_proxy_response_status_by_model(model, status.as_u16());
-                    metrics.observe_proxy_request_duration_by_model(model, duration);
-                }
-                metrics.observe_proxy_request_duration(metrics_path, duration);
+                #[cfg(not(feature = "gateway-routing-advanced"))]
+                return Ok(BackendAttemptOutcome::Continue(Some(mapped)));
             }
+        };
 
-            #[cfg(any(
-                feature = "gateway-store-sqlite",
-                feature = "gateway-store-postgres",
-                feature = "gateway-store-mysql",
-                feature = "gateway-store-redis"
-            ))]
-            if !token_budget_reservation_ids.is_empty() {
-                settle_proxy_token_budget_reservations(
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.proxy.metrics.as_ref() {
+            let mut metrics = metrics.lock().await;
+            metrics.record_proxy_backend_in_flight_dec(&backend_name);
+            metrics
+                .observe_proxy_backend_request_duration(&backend_name, shim_timer_start.elapsed());
+        }
+
+        let status = shim_response.status();
+
+        #[cfg(feature = "gateway-routing-advanced")]
+        let status_code = status.as_u16();
+        #[cfg(feature = "gateway-routing-advanced")]
+        let failure_kind = FailureKind::Status(status_code);
+        #[cfg(feature = "gateway-routing-advanced")]
+        let base_decision = retry_config.decision_for_failure(failure_kind);
+        #[cfg(feature = "gateway-routing-advanced")]
+        let decision_ctx = ProxyDecisionLogContext {
+            request_id: &request_id,
+            backend_name: &backend_name,
+            path_and_query,
+            attempted_backends,
+            idx,
+            max_attempts,
+            status_code: Some(status_code),
+        };
+        #[cfg(feature = "gateway-routing-advanced")]
+        let (decision, safety_guard) = apply_proxy_request_safety_guard(
+            base_decision,
+            &parts.method,
+            client_supplied_request_id,
+        );
+        #[cfg(feature = "gateway-routing-advanced")]
+        let should_record_status_failure =
+            should_record_proxy_status_failure(state, retry_config, failure_kind, status);
+
+        #[cfg(feature = "gateway-routing-advanced")]
+        if should_record_status_failure {
+            record_proxy_backend_failure(
+                state,
+                &backend_name,
+                _now_epoch_seconds,
+                failure_kind,
+                format!("status {}", status_code),
+            )
+            .await;
+            if let Some(safety_guard) = safety_guard {
+                emit_proxy_request_safety_guard_log(
                     state,
-                    token_budget_reservation_ids,
-                    spend_tokens,
-                    u64::MAX,
-                )
-                .await;
-            } else if let (Some(virtual_key_id), Some(budget)) =
-                (virtual_key_id.clone(), budget.clone())
-            {
-                if spend_tokens {
-                    state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-
-                    #[cfg(feature = "gateway-costing")]
-                    if !use_persistent_budget {
-                        if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                            state.spend_budget_cost(
-                                &virtual_key_id,
-                                &budget,
-                                charge_cost_usd_micros,
-                            );
-                            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                            }
-                            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                            }
-                            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                                state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                            }
-                        }
-                    }
-                }
-            }
-            #[cfg(not(any(
-                feature = "gateway-store-sqlite",
-                feature = "gateway-store-postgres",
-                feature = "gateway-store-mysql",
-                feature = "gateway-store-redis"
-            )))]
-            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-                if spend_tokens {
-                    state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                    }
-
-                    #[cfg(feature = "gateway-costing")]
-                    if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                        state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
-                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                        }
-                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                        }
-                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                        }
-                    }
-                }
-            }
-
-            #[cfg(all(
-                feature = "gateway-costing",
-                any(
-                    feature = "gateway-store-sqlite",
-                    feature = "gateway-store-postgres",
-                    feature = "gateway-store-mysql",
-                    feature = "gateway-store-redis"
-                )
-            ))]
-            if !cost_budget_reservation_ids.is_empty() {
-                settle_proxy_cost_budget_reservations(
-                    state,
-                    cost_budget_reservation_ids,
-                    spend_tokens,
-                    u64::MAX,
+                    decision_ctx,
+                    &parts.method,
+                    base_decision.action,
+                    safety_guard,
+                    client_supplied_request_id,
                 )
                 .await;
             }
+            emit_proxy_backend_decision_logs(state, decision, decision_ctx).await;
+        } else {
+            record_proxy_backend_success(state, &backend_name).await;
+        }
 
-            #[cfg(all(
-                feature = "gateway-costing",
-                any(
-                    feature = "gateway-store-sqlite",
-                    feature = "gateway-store-postgres",
-                    feature = "gateway-store-mysql",
-                    feature = "gateway-store-redis"
-                )
-            ))]
-            if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
-                if let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
-                    (virtual_key_id.as_deref(), charge_cost_usd_micros)
+        #[cfg(feature = "gateway-routing-advanced")]
+        if decision.should_attempt_next_backend(idx, max_attempts) {
+            return Ok(BackendAttemptOutcome::Continue(Some(
+                openai_status_routing_error(status, decision),
+            )));
+        }
+
+        let spend_tokens = status.is_success();
+
+        #[cfg(feature = "gateway-metrics-prometheus")]
+        if let Some(metrics) = state.proxy.metrics.as_ref() {
+            let is_failure_status = {
+                #[cfg(feature = "gateway-routing-advanced")]
                 {
-                    #[cfg(feature = "gateway-store-sqlite")]
-                    if let Some(store) = state.stores.sqlite.as_ref() {
-                        let _ = store
-                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                            .await;
+                    should_record_status_failure
+                }
+                #[cfg(not(feature = "gateway-routing-advanced"))]
+                {
+                    status.is_server_error()
+                }
+            };
+            let duration = metrics_timer_start.elapsed();
+            let mut metrics = metrics.lock().await;
+            if is_failure_status {
+                metrics.record_proxy_backend_failure(&backend_name);
+            } else {
+                metrics.record_proxy_backend_success(&backend_name);
+            }
+            metrics.record_proxy_response_status_by_path(metrics_path, status.as_u16());
+            metrics.record_proxy_response_status_by_backend(&backend_name, status.as_u16());
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status.as_u16());
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
+            metrics.observe_proxy_request_duration(metrics_path, duration);
+        }
+
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
+        if !token_budget_reservation_ids.is_empty() {
+            settle_proxy_token_budget_reservations(
+                state,
+                token_budget_reservation_ids,
+                spend_tokens,
+                u64::MAX,
+            )
+            .await;
+        } else if let (Some(virtual_key_id), Some(budget)) =
+            (virtual_key_id.clone(), budget.clone())
+            && spend_tokens
+        {
+            state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if !use_persistent_budget && let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+                state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
+                }
+            }
+        }
+        #[cfg(not(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        )))]
+        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
+            if spend_tokens {
+                state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                }
+                if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                }
+                if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                }
+
+                #[cfg(feature = "gateway-costing")]
+                if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+                    state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                     }
-                    #[cfg(feature = "gateway-store-postgres")]
-                    if let Some(store) = state.stores.postgres.as_ref() {
-                        let _ = store
-                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                            .await;
+                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                     }
-                    #[cfg(feature = "gateway-store-mysql")]
-                    if let Some(store) = state.stores.mysql.as_ref() {
-                        let _ = store
-                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                            .await;
-                    }
-                    #[cfg(feature = "gateway-store-redis")]
-                    if let Some(store) = state.stores.redis.as_ref() {
-                        let _ = store
-                            .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                            .await;
+                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                     }
                 }
             }
+        }
 
-            #[cfg(any(
+        #[cfg(all(
+            feature = "gateway-costing",
+            any(
                 feature = "gateway-store-sqlite",
                 feature = "gateway-store-postgres",
                 feature = "gateway-store-mysql",
                 feature = "gateway-store-redis"
-            ))]
-            {
-                let payload = serde_json::json!({
-                    "request_id": &request_id,
-                    "provider": &protocol,
-                    "virtual_key_id": virtual_key_id.as_deref(),
-                    "backend": &backend_name,
-                    "attempted_backends": &attempted_backends,
-                    "method": parts.method.as_str(),
-                    "path": path_and_query,
-                    "model": &model,
-                    "upstream_model": upstream_model.as_deref(),
-                    "status": status.as_u16(),
-                    "charge_tokens": charge_tokens,
-                    "charge_cost_usd_micros": charge_cost_usd_micros,
-                    "body_len": body.len(),
-                    "shim": "responses_via_chat_completions",
-                });
-
-                append_audit_log(state, "proxy", payload).await;
-            }
-
-            emit_json_log(
+            )
+        ))]
+        if !cost_budget_reservation_ids.is_empty() {
+            settle_proxy_cost_budget_reservations(
                 state,
-                "proxy.response",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "provider": &protocol,
-                    "backend": &backend_name,
-                    "status": status.as_u16(),
-                    "attempted_backends": &attempted_backends,
-                    "model": &model,
-                    "upstream_model": upstream_model.as_deref(),
-                }),
-            );
+                cost_budget_reservation_ids,
+                spend_tokens,
+                u64::MAX,
+            )
+            .await;
+        }
 
-            #[cfg(feature = "sdk")]
-            emit_devtools_log(
-                state,
-                "proxy.response",
-                serde_json::json!({
-                    "request_id": &request_id,
-                    "status": status.as_u16(),
-                    "path": path_and_query,
-                    "backend": &backend_name,
-                }),
-            );
-
-            #[cfg(feature = "gateway-otel")]
-            {
-                tracing::Span::current().record("cache", tracing::field::display("miss"));
-                tracing::Span::current().record("backend", tracing::field::display(&backend_name));
-                tracing::Span::current().record("status", tracing::field::display(status.as_u16()));
+        #[cfg(all(
+            feature = "gateway-costing",
+            any(
+                feature = "gateway-store-sqlite",
+                feature = "gateway-store-postgres",
+                feature = "gateway-store-mysql",
+                feature = "gateway-store-redis"
+            )
+        ))]
+        if !_cost_budget_reserved
+            && use_persistent_budget
+            && spend_tokens
+            && let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
+                (virtual_key_id.as_deref(), charge_cost_usd_micros)
+        {
+            #[cfg(feature = "gateway-store-sqlite")]
+            if let Some(store) = state.stores.sqlite.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                    .await;
             }
+            #[cfg(feature = "gateway-store-postgres")]
+            if let Some(store) = state.stores.postgres.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-mysql")]
+            if let Some(store) = state.stores.mysql.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-redis")]
+            if let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
+                    .await;
+            }
+        }
 
-            if status.is_success() {
-                match responses_shim_response(
+        #[cfg(any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ))]
+        {
+            let payload = serde_json::json!({
+                "request_id": &request_id,
+                "provider": &protocol,
+                "virtual_key_id": virtual_key_id.as_deref(),
+                "backend": &backend_name,
+                "attempted_backends": &attempted_backends,
+                "method": parts.method.as_str(),
+                "path": path_and_query,
+                "model": &model,
+                "upstream_model": upstream_model.as_deref(),
+                "status": status.as_u16(),
+                "charge_tokens": charge_tokens,
+                "charge_cost_usd_micros": charge_cost_usd_micros,
+                "body_len": body.len(),
+                "shim": "responses_via_chat_completions",
+            });
+
+            append_audit_log(state, "proxy", payload).await;
+        }
+
+        emit_json_log(
+            state,
+            "proxy.response",
+            serde_json::json!({
+                "request_id": &request_id,
+                "provider": &protocol,
+                "backend": &backend_name,
+                "status": status.as_u16(),
+                "attempted_backends": &attempted_backends,
+                "model": &model,
+                "upstream_model": upstream_model.as_deref(),
+            }),
+        );
+
+        #[cfg(feature = "sdk")]
+        emit_devtools_log(
+            state,
+            "proxy.response",
+            serde_json::json!({
+                "request_id": &request_id,
+                "status": status.as_u16(),
+                "path": path_and_query,
+                "backend": &backend_name,
+            }),
+        );
+
+        #[cfg(feature = "gateway-otel")]
+        {
+            tracing::Span::current().record("cache", tracing::field::display("miss"));
+            tracing::Span::current().record("backend", tracing::field::display(&backend_name));
+            tracing::Span::current().record("status", tracing::field::display(status.as_u16()));
+        }
+
+        if status.is_success() {
+            match responses_shim_response(
+                ProxyResponseContext {
+                    state,
+                    backend: &backend_name,
+                    request_id: &request_id,
+                    #[cfg(feature = "gateway-metrics-prometheus")]
+                    metrics_path,
+                    cache_key: {
+                        #[cfg(feature = "gateway-proxy-cache")]
+                        {
+                            proxy_cache_key.as_deref()
+                        }
+                        #[cfg(not(feature = "gateway-proxy-cache"))]
+                        {
+                            None
+                        }
+                    },
+                    #[cfg(feature = "gateway-proxy-cache")]
+                    cache_metadata: proxy_cache_metadata.as_ref(),
+                },
+                shim_response,
+                shim_permits,
+            )
+            .await
+            {
+                Ok(response) => return Ok(BackendAttemptOutcome::Response(response)),
+                Err(err) => {
+                    return Ok(BackendAttemptOutcome::Continue(Some(err)));
+                }
+            }
+        } else {
+            return Ok(BackendAttemptOutcome::Response(
+                proxy_response(
                     ProxyResponseContext {
                         state,
                         backend: &backend_name,
@@ -747,41 +771,8 @@ pub(super) async fn attempt_proxy_backend(
                     shim_response,
                     shim_permits,
                 )
-                .await
-                {
-                    Ok(response) => return Ok(BackendAttemptOutcome::Response(response)),
-                    Err(err) => {
-                        return Ok(BackendAttemptOutcome::Continue(Some(err)));
-                    }
-                }
-            } else {
-                return Ok(BackendAttemptOutcome::Response(
-                    proxy_response(
-                        ProxyResponseContext {
-                            state,
-                            backend: &backend_name,
-                            request_id: &request_id,
-                            #[cfg(feature = "gateway-metrics-prometheus")]
-                            metrics_path,
-                            cache_key: {
-                                #[cfg(feature = "gateway-proxy-cache")]
-                                {
-                                    proxy_cache_key.as_deref()
-                                }
-                                #[cfg(not(feature = "gateway-proxy-cache"))]
-                                {
-                                    None
-                                }
-                            },
-                            #[cfg(feature = "gateway-proxy-cache")]
-                            cache_metadata: proxy_cache_metadata.as_ref(),
-                        },
-                        shim_response,
-                        shim_permits,
-                    )
-                    .await,
-                ));
-            }
+                .await,
+            ));
         }
     }
 
@@ -914,10 +905,10 @@ pub(super) async fn attempt_proxy_backend(
                             continue;
                         }
 
-                        if trimmed.starts_with(b"{") {
-                            if let Some(usage) = extract_openai_usage_from_slice(trimmed) {
-                                self.observed_usage = Some(usage);
-                            }
+                        if trimmed.starts_with(b"{")
+                            && let Some(usage) = extract_openai_usage_from_slice(trimmed)
+                        {
+                            self.observed_usage = Some(usage);
                         }
                     }
 
@@ -1218,53 +1209,40 @@ pub(super) async fn attempt_proxy_backend(
                         .await;
                     } else if let (Some(virtual_key_id), Some(budget)) =
                         (self.virtual_key_id.clone(), self.budget.clone())
+                        && self.spend_tokens
                     {
-                        if self.spend_tokens {
-                            self.state
-                                .spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                        self.state
+                            .spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                        if let Some((scope, budget)) = self.tenant_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+                        if let Some((scope, budget)) = self.project_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+                        if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+
+                        #[cfg(feature = "gateway-costing")]
+                        if !self.use_persistent_budget
+                            && let Some(spent_cost_usd_micros) = spent_cost_usd_micros
+                        {
+                            self.state.spend_budget_cost(
+                                &virtual_key_id,
+                                &budget,
+                                spent_cost_usd_micros,
+                            );
                             if let Some((scope, budget)) = self.tenant_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = self.project_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
-                            }
-
-                            #[cfg(feature = "gateway-costing")]
-                            if !self.use_persistent_budget {
-                                if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                                    self.state.spend_budget_cost(
-                                        &virtual_key_id,
-                                        &budget,
-                                        spent_cost_usd_micros,
-                                    );
-                                    if let Some((scope, budget)) = self.tenant_budget_scope.as_ref()
-                                    {
-                                        self.state.spend_budget_cost(
-                                            scope,
-                                            budget,
-                                            spent_cost_usd_micros,
-                                        );
-                                    }
-                                    if let Some((scope, budget)) =
-                                        self.project_budget_scope.as_ref()
-                                    {
-                                        self.state.spend_budget_cost(
-                                            scope,
-                                            budget,
-                                            spent_cost_usd_micros,
-                                        );
-                                    }
-                                    if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
-                                        self.state.spend_budget_cost(
-                                            scope,
-                                            budget,
-                                            spent_cost_usd_micros,
-                                        );
-                                    }
-                                }
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                         }
                     }
@@ -1351,47 +1329,35 @@ pub(super) async fn attempt_proxy_backend(
                             feature = "gateway-store-redis"
                         ),
                     ))]
-                    if !self.cost_budget_reserved && self.use_persistent_budget && self.spend_tokens
-                    {
-                        if let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
+                    if !self.cost_budget_reserved
+                        && self.use_persistent_budget
+                        && self.spend_tokens
+                        && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                             (self.virtual_key_id.as_deref(), spent_cost_usd_micros)
-                        {
-                            #[cfg(feature = "gateway-store-sqlite")]
-                            if let Some(store) = self.state.stores.sqlite.as_ref() {
-                                let _ = store
-                                    .record_spent_cost_usd_micros(
-                                        virtual_key_id,
-                                        spent_cost_usd_micros,
-                                    )
-                                    .await;
-                            }
-                            #[cfg(feature = "gateway-store-postgres")]
-                            if let Some(store) = self.state.stores.postgres.as_ref() {
-                                let _ = store
-                                    .record_spent_cost_usd_micros(
-                                        virtual_key_id,
-                                        spent_cost_usd_micros,
-                                    )
-                                    .await;
-                            }
-                            #[cfg(feature = "gateway-store-mysql")]
-                            if let Some(store) = self.state.stores.mysql.as_ref() {
-                                let _ = store
-                                    .record_spent_cost_usd_micros(
-                                        virtual_key_id,
-                                        spent_cost_usd_micros,
-                                    )
-                                    .await;
-                            }
-                            #[cfg(feature = "gateway-store-redis")]
-                            if let Some(store) = self.state.stores.redis.as_ref() {
-                                let _ = store
-                                    .record_spent_cost_usd_micros(
-                                        virtual_key_id,
-                                        spent_cost_usd_micros,
-                                    )
-                                    .await;
-                            }
+                    {
+                        #[cfg(feature = "gateway-store-sqlite")]
+                        if let Some(store) = self.state.stores.sqlite.as_ref() {
+                            let _ = store
+                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                                .await;
+                        }
+                        #[cfg(feature = "gateway-store-postgres")]
+                        if let Some(store) = self.state.stores.postgres.as_ref() {
+                            let _ = store
+                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                                .await;
+                        }
+                        #[cfg(feature = "gateway-store-mysql")]
+                        if let Some(store) = self.state.stores.mysql.as_ref() {
+                            let _ = store
+                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                                .await;
+                        }
+                        #[cfg(feature = "gateway-store-redis")]
+                        if let Some(store) = self.state.stores.redis.as_ref() {
+                            let _ = store
+                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                                .await;
                         }
                     }
 
@@ -1607,10 +1573,10 @@ pub(super) async fn attempt_proxy_backend(
             impl ProxySseStreamState {
                 async fn finalize(&mut self, end: StreamEnd) {
                     #[cfg(feature = "gateway-proxy-cache")]
-                    if matches!(end, StreamEnd::Completed) {
-                        if let Some(cache_completion) = self.cache_completion.take() {
-                            cache_completion.finish().await;
-                        }
+                    if matches!(end, StreamEnd::Completed)
+                        && let Some(cache_completion) = self.cache_completion.take()
+                    {
+                        cache_completion.finish().await;
                     }
 
                     let Some(finalizer) = self.finalizer.take() else {
@@ -1625,10 +1591,10 @@ pub(super) async fn attempt_proxy_backend(
             let mut headers = upstream_headers;
             apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
             #[cfg(feature = "gateway-proxy-cache")]
-            if let Some(cache_key) = proxy_cache_key.as_ref() {
-                if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                    headers.insert("x-ditto-cache-key", value);
-                }
+            if let Some(cache_key) = proxy_cache_key.as_ref()
+                && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+            {
+                headers.insert("x-ditto-cache-key", value);
             }
 
             #[cfg(feature = "gateway-otel")]
@@ -1991,33 +1957,30 @@ pub(super) async fn attempt_proxy_backend(
             .await;
         } else if let (Some(virtual_key_id), Some(budget)) =
             (virtual_key_id.clone(), budget.clone())
+            && spend_tokens
         {
-            if spend_tokens {
-                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if !use_persistent_budget && let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
-                }
-
-                #[cfg(feature = "gateway-costing")]
-                if !use_persistent_budget {
-                    if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                        state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                        }
-                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                        }
-                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                        }
-                    }
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
             }
         }
@@ -2084,34 +2047,35 @@ pub(super) async fn attempt_proxy_backend(
                 feature = "gateway-store-redis"
             ),
         ))]
-        if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
-            if let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
+        if !_cost_budget_reserved
+            && use_persistent_budget
+            && spend_tokens
+            && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                 (virtual_key_id.as_deref(), spent_cost_usd_micros)
-            {
-                #[cfg(feature = "gateway-store-sqlite")]
-                if let Some(store) = state.stores.sqlite.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-postgres")]
-                if let Some(store) = state.stores.postgres.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-mysql")]
-                if let Some(store) = state.stores.mysql.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-redis")]
-                if let Some(store) = state.stores.redis.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
+        {
+            #[cfg(feature = "gateway-store-sqlite")]
+            if let Some(store) = state.stores.sqlite.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-postgres")]
+            if let Some(store) = state.stores.postgres.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-mysql")]
+            if let Some(store) = state.stores.mysql.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-redis")]
+            if let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
             }
         }
 
@@ -2190,36 +2154,35 @@ pub(super) async fn attempt_proxy_backend(
         }
 
         #[cfg(feature = "gateway-proxy-cache")]
-        if should_attempt_buffer_for_cache && status.is_success() {
-            if let (Some(cache_key), Some(cache_metadata)) =
+        if should_attempt_buffer_for_cache
+            && status.is_success()
+            && let (Some(cache_key), Some(cache_metadata)) =
                 (proxy_cache_key.as_deref(), proxy_cache_metadata.as_ref())
-            {
-                if let ProxyResponseBody::Bytes(bytes) = &response_body {
-                    let cached = CachedProxyResponse {
-                        status: status.as_u16(),
-                        headers: upstream_headers.clone(),
-                        body: bytes.clone(),
-                        backend: backend_name.clone(),
-                    };
-                    store_proxy_cache_response(
-                        state,
-                        cache_key,
-                        cached,
-                        cache_metadata,
-                        now_epoch_seconds(),
-                    )
-                    .await;
-                }
-            }
+            && let ProxyResponseBody::Bytes(bytes) = &response_body
+        {
+            let cached = CachedProxyResponse {
+                status: status.as_u16(),
+                headers: upstream_headers.clone(),
+                body: bytes.clone(),
+                backend: backend_name.clone(),
+            };
+            store_proxy_cache_response(
+                state,
+                cache_key,
+                cached,
+                cache_metadata,
+                now_epoch_seconds(),
+            )
+            .await;
         }
 
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend_name, &request_id, false);
         #[cfg(feature = "gateway-proxy-cache")]
-        if let Some(cache_key) = proxy_cache_key.as_deref() {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
+        if let Some(cache_key) = proxy_cache_key.as_deref()
+            && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+        {
+            headers.insert("x-ditto-cache-key", value);
         }
         match response_body {
             ProxyResponseBody::Bytes(bytes) => {

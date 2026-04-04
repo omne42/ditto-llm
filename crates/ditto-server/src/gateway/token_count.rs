@@ -181,10 +181,10 @@ fn count_responses_input_value_tokens(bpe: &CoreBPE, value: &Value) -> usize {
 fn count_responses_input_item_tokens(bpe: &CoreBPE, item: &Value) -> usize {
     if let Value::Object(obj) = item {
         let item_type = obj.get("type").and_then(|value| value.as_str());
-        if matches!(item_type, Some("input_text") | Some("text")) {
-            if let Some(text) = obj.get("text").and_then(|value| value.as_str()) {
-                return bpe.encode_with_special_tokens(text).len();
-            }
+        if matches!(item_type, Some("input_text") | Some("text"))
+            && let Some(text) = obj.get("text").and_then(|value| value.as_str())
+        {
+            return bpe.encode_with_special_tokens(text).len();
         }
         if let Some(content) = obj.get("content") {
             return count_responses_content_tokens(bpe, content);

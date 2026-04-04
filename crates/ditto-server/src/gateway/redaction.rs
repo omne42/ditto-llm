@@ -316,10 +316,10 @@ fn redact_json_pointer_in_place(value: &mut Value, pointer: &[String], replaceme
             }
         }
         Value::Array(items) => {
-            if let Ok(idx) = last.parse::<usize>() {
-                if idx < items.len() {
-                    items[idx] = Value::String(replacement.to_string());
-                }
+            if let Ok(idx) = last.parse::<usize>()
+                && idx < items.len()
+            {
+                items[idx] = Value::String(replacement.to_string());
             }
         }
         _ => {}

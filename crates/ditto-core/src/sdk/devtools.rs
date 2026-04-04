@@ -49,10 +49,10 @@ impl DevtoolsLogger {
     }
 
     fn write_json_line<T: Serialize>(&self, value: &T) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            if !parent.as_os_str().is_empty() {
-                create_dir_all(parent)?;
-            }
+        if let Some(parent) = self.path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            create_dir_all(parent)?;
         }
         let file = OpenOptions::new()
             .create(true)

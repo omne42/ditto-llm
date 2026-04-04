@@ -2321,27 +2321,24 @@ pub(super) async fn attempt_translation_backend(
             .await;
         } else if let (Some(virtual_key_id), Some(budget)) =
             (virtual_key_id.clone(), budget.clone())
+            && spend_tokens
         {
-            if spend_tokens {
-                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if !use_persistent_budget && let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
-                }
-
-                #[cfg(feature = "gateway-costing")]
-                if !use_persistent_budget {
-                    if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                        state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                        }
-                        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                        }
-                    }
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
             }
         }
@@ -2402,34 +2399,35 @@ pub(super) async fn attempt_translation_backend(
                 feature = "gateway-store-redis"
             ),
         ))]
-        if !_cost_budget_reserved && use_persistent_budget && spend_tokens {
-            if let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
+        if !_cost_budget_reserved
+            && use_persistent_budget
+            && spend_tokens
+            && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                 (virtual_key_id.as_deref(), spent_cost_usd_micros)
-            {
-                #[cfg(feature = "gateway-store-sqlite")]
-                if let Some(store) = state.stores.sqlite.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-postgres")]
-                if let Some(store) = state.stores.postgres.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-mysql")]
-                if let Some(store) = state.stores.mysql.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
-                #[cfg(feature = "gateway-store-redis")]
-                if let Some(store) = state.stores.redis.as_ref() {
-                    let _ = store
-                        .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                        .await;
-                }
+        {
+            #[cfg(feature = "gateway-store-sqlite")]
+            if let Some(store) = state.stores.sqlite.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-postgres")]
+            if let Some(store) = state.stores.postgres.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-mysql")]
+            if let Some(store) = state.stores.mysql.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
+            }
+            #[cfg(feature = "gateway-store-redis")]
+            if let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+                    .await;
             }
         }
 

@@ -36,15 +36,15 @@ impl ReferenceProviderModelCatalog {
     pub fn validate(&self, expected_provider_id: Option<&str>) -> ReferenceCatalogValidationReport {
         let mut report = ReferenceCatalogValidationReport::default();
 
-        if let Some(expected) = expected_provider_id {
-            if self.provider.id != expected {
-                report
-                    .issues
-                    .push(ReferenceCatalogValidationIssue::ProviderIdMismatch {
-                        expected: expected.to_string(),
-                        actual: self.provider.id.clone(),
-                    });
-            }
+        if let Some(expected) = expected_provider_id
+            && self.provider.id != expected
+        {
+            report
+                .issues
+                .push(ReferenceCatalogValidationIssue::ProviderIdMismatch {
+                    expected: expected.to_string(),
+                    actual: self.provider.id.clone(),
+                });
         }
 
         for (model_id, model) in &self.models {

@@ -179,30 +179,30 @@ impl ProxyCachePurgeSelector {
     }
 
     pub fn matches(&self, cache_key: &str, metadata: &ProxyCacheEntryMetadata) -> bool {
-        if let Some(expected) = self.cache_key.as_deref() {
-            if expected != cache_key {
-                return false;
-            }
+        if let Some(expected) = self.cache_key.as_deref()
+            && expected != cache_key
+        {
+            return false;
         }
-        if let Some(expected) = self.scope.as_deref() {
-            if expected != metadata.scope {
-                return false;
-            }
+        if let Some(expected) = self.scope.as_deref()
+            && expected != metadata.scope
+        {
+            return false;
         }
-        if let Some(expected) = self.method.as_deref() {
-            if expected != metadata.method {
-                return false;
-            }
+        if let Some(expected) = self.method.as_deref()
+            && expected != metadata.method
+        {
+            return false;
         }
-        if let Some(expected) = self.path.as_deref() {
-            if expected != metadata.path {
-                return false;
-            }
+        if let Some(expected) = self.path.as_deref()
+            && expected != metadata.path
+        {
+            return false;
         }
-        if let Some(expected) = self.model.as_deref() {
-            if metadata.model.as_deref() != Some(expected) {
-                return false;
-            }
+        if let Some(expected) = self.model.as_deref()
+            && metadata.model.as_deref() != Some(expected)
+        {
+            return false;
         }
         true
     }

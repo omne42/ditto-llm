@@ -524,16 +524,16 @@ impl OpenAI {
         body.insert("stream".to_string(), Value::Bool(stream));
         body.insert("store".to_string(), Value::Bool(false));
 
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(temperature) = request.temperature
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "temperature",
                 temperature,
                 0.0,
                 2.0,
                 &mut warnings,
-            ) {
-                body.insert("temperature".to_string(), Value::Number(value));
-            }
+            )
+        {
+            body.insert("temperature".to_string(), Value::Number(value));
         }
         if let Some(max_tokens) = request.max_tokens {
             body.insert(
@@ -541,16 +541,16 @@ impl OpenAI {
                 Value::Number(max_tokens.into()),
             );
         }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(top_p) = request.top_p
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "top_p",
                 top_p,
                 0.0,
                 1.0,
                 &mut warnings,
-            ) {
-                body.insert("top_p".to_string(), Value::Number(value));
-            }
+            )
+        {
+            body.insert("top_p".to_string(), Value::Number(value));
         }
 
         if let Some(tools) = request.tools.as_ref() {

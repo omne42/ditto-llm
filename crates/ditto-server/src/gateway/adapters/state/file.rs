@@ -35,12 +35,11 @@ impl GatewayStateFile {
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), GatewayStateFileError> {
         let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                if let Err(err) = fs::create_dir_all(parent) {
-                    return Err(GatewayStateFileError::Write(err));
-                }
-            }
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+            && let Err(err) = fs::create_dir_all(parent)
+        {
+            return Err(GatewayStateFileError::Write(err));
         }
 
         let payload = serde_json::to_vec_pretty(&GatewayStateFile {

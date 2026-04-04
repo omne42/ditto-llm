@@ -67,13 +67,12 @@ pub(super) async fn handle_google_genai(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if !headers.contains_key("authorization") {
-        if let Some(token) = forwarded_token
+    if !headers.contains_key("authorization")
+        && let Some(token) = forwarded_token
             .as_deref()
             .and_then(synthesize_bearer_header)
-        {
-            headers.insert("authorization", token);
-        }
+    {
+        headers.insert("authorization", token);
     }
     if let Some(value) = parts.headers.get("x-request-id") {
         headers.insert("x-request-id", value.clone());
@@ -319,13 +318,12 @@ async fn handle_cloudcode_generate_content_inner(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if !headers.contains_key("authorization") {
-        if let Some(token) = forwarded_token
+    if !headers.contains_key("authorization")
+        && let Some(token) = forwarded_token
             .as_deref()
             .and_then(synthesize_bearer_header)
-        {
-            headers.insert("authorization", token);
-        }
+    {
+        headers.insert("authorization", token);
     }
     if let Some(value) = parts.headers.get("x-request-id") {
         headers.insert("x-request-id", value.clone());

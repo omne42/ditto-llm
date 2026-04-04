@@ -231,27 +231,27 @@ impl LanguageModel for Vertex {
                 Value::Number(max_tokens.into()),
             );
         }
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(temperature) = request.temperature
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "temperature",
                 temperature,
                 0.0,
                 2.0,
                 &mut warnings,
-            ) {
-                generation_config.insert("temperature".to_string(), Value::Number(value));
-            }
+            )
+        {
+            generation_config.insert("temperature".to_string(), Value::Number(value));
         }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(top_p) = request.top_p
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "top_p",
                 top_p,
                 0.0,
                 1.0,
                 &mut warnings,
-            ) {
-                generation_config.insert("topP".to_string(), Value::Number(value));
-            }
+            )
+        {
+            generation_config.insert("topP".to_string(), Value::Number(value));
         }
         if let Some(stop_sequences) = request.stop_sequences {
             let stop_sequences =
@@ -288,12 +288,11 @@ impl LanguageModel for Vertex {
             }
         }
 
-        if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "cap-llm-tools") {
-                if let Some(tool_config) = genai::tool_config(Some(tool_choice)) {
-                    body.insert("toolConfig".to_string(), tool_config);
-                }
-            }
+        if let Some(tool_choice) = request.tool_choice.as_ref()
+            && cfg!(feature = "cap-llm-tools")
+            && let Some(tool_config) = genai::tool_config(Some(tool_choice))
+        {
+            body.insert("toolConfig".to_string(), tool_config);
         }
 
         crate::provider_options::merge_provider_options_into_body(
@@ -402,27 +401,27 @@ impl LanguageModel for Vertex {
                     Value::Number(max_tokens.into()),
                 );
             }
-            if let Some(temperature) = request.temperature {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+            if let Some(temperature) = request.temperature
+                && let Some(value) = crate::utils::params::clamped_number_from_f32(
                     "temperature",
                     temperature,
                     0.0,
                     2.0,
                     &mut warnings,
-                ) {
-                    generation_config.insert("temperature".to_string(), Value::Number(value));
-                }
+                )
+            {
+                generation_config.insert("temperature".to_string(), Value::Number(value));
             }
-            if let Some(top_p) = request.top_p {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+            if let Some(top_p) = request.top_p
+                && let Some(value) = crate::utils::params::clamped_number_from_f32(
                     "top_p",
                     top_p,
                     0.0,
                     1.0,
                     &mut warnings,
-                ) {
-                    generation_config.insert("topP".to_string(), Value::Number(value));
-                }
+                )
+            {
+                generation_config.insert("topP".to_string(), Value::Number(value));
             }
             if let Some(stop_sequences) = request.stop_sequences {
                 let stop_sequences = crate::utils::params::sanitize_stop_sequences(
@@ -444,25 +443,24 @@ impl LanguageModel for Vertex {
                 );
             }
 
-            if let Some(tools) = request.tools {
-                if cfg!(feature = "cap-llm-tools") {
-                    let decls = tools
-                        .into_iter()
-                        .map(|tool| genai::tool_to_google(tool, &mut warnings))
-                        .collect::<Vec<_>>();
-                    body.insert(
-                        "tools".to_string(),
-                        Value::Array(vec![serde_json::json!({ "functionDeclarations": decls })]),
-                    );
-                }
+            if let Some(tools) = request.tools
+                && cfg!(feature = "cap-llm-tools")
+            {
+                let decls = tools
+                    .into_iter()
+                    .map(|tool| genai::tool_to_google(tool, &mut warnings))
+                    .collect::<Vec<_>>();
+                body.insert(
+                    "tools".to_string(),
+                    Value::Array(vec![serde_json::json!({ "functionDeclarations": decls })]),
+                );
             }
 
-            if let Some(tool_choice) = request.tool_choice.as_ref() {
-                if cfg!(feature = "cap-llm-tools") {
-                    if let Some(tool_config) = genai::tool_config(Some(tool_choice)) {
-                        body.insert("toolConfig".to_string(), tool_config);
-                    }
-                }
+            if let Some(tool_choice) = request.tool_choice.as_ref()
+                && cfg!(feature = "cap-llm-tools")
+                && let Some(tool_config) = genai::tool_config(Some(tool_choice))
+            {
+                body.insert("toolConfig".to_string(), tool_config);
             }
 
             crate::provider_options::merge_provider_options_into_body(

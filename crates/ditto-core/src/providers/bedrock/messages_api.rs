@@ -262,8 +262,7 @@ impl LanguageModel for Bedrock {
                                         }
                                         if let Some(message) =
                                             event.message.as_ref().or(event.delta.as_ref())
-                                        {
-                                            if let Some(stop_reason) =
+                                            && let Some(stop_reason) =
                                                 message.get("stop_reason").and_then(Value::as_str)
                                             {
                                                 pending_finish =
@@ -271,9 +270,8 @@ impl LanguageModel for Bedrock {
                                                         stop_reason,
                                                     )));
                                             }
-                                        }
-                                        if let Some(delta) = event.delta.as_ref() {
-                                            if let Some(stop_reason) =
+                                        if let Some(delta) = event.delta.as_ref()
+                                            && let Some(stop_reason) =
                                                 delta.get("stop_reason").and_then(Value::as_str)
                                             {
                                                 pending_finish =
@@ -281,7 +279,6 @@ impl LanguageModel for Bedrock {
                                                         stop_reason,
                                                     )));
                                             }
-                                        }
                                     }
                                     "message_stop" => {
                                         done = true;

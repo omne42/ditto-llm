@@ -248,11 +248,10 @@ impl Anthropic {
                             };
 
                             let mut doc = serde_json::json!({ "type": "document", "source": src });
-                            if let Some(title) = filename.clone().filter(|s| !s.trim().is_empty()) {
-                                if let Some(obj) = doc.as_object_mut() {
+                            if let Some(title) = filename.clone().filter(|s| !s.trim().is_empty())
+                                && let Some(obj) = doc.as_object_mut() {
                                     obj.insert("title".to_string(), Value::String(title));
                                 }
-                            }
                             blocks.push(doc);
                         }
                         other => warnings.push(Warning::Unsupported {

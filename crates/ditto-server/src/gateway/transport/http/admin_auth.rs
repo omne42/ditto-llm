@@ -68,13 +68,13 @@ fn ensure_admin(
         });
     }
 
-    if let AdminPermission::Read = permission {
-        if read_token.is_some_and(|expected| provided == expected) {
-            return Ok(AdminContext {
-                tenant_id: None,
-                can_manage_secrets: false,
-            });
-        }
+    if let AdminPermission::Read = permission
+        && read_token.is_some_and(|expected| provided == expected)
+    {
+        return Ok(AdminContext {
+            tenant_id: None,
+            can_manage_secrets: false,
+        });
     }
 
     if has_tenant_tokens {
@@ -82,10 +82,10 @@ fn ensure_admin(
             if provided != binding.token {
                 continue;
             }
-            if let AdminPermission::Write = permission {
-                if binding.read_only {
-                    break;
-                }
+            if let AdminPermission::Write = permission
+                && binding.read_only
+            {
+                break;
             }
             return Ok(AdminContext {
                 tenant_id: Some(binding.tenant_id.clone()),

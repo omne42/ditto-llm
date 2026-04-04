@@ -29,12 +29,12 @@ impl GuardrailsConfig {
             return Err(GatewayError::GuardrailRejected { reason });
         }
 
-        if let Some(limit) = self.max_input_tokens {
-            if request.input_tokens > limit {
-                return Err(GatewayError::GuardrailRejected {
-                    reason: format!("input_tokens>{limit}"),
-                });
-            }
+        if let Some(limit) = self.max_input_tokens
+            && request.input_tokens > limit
+        {
+            return Err(GatewayError::GuardrailRejected {
+                reason: format!("input_tokens>{limit}"),
+            });
         }
 
         if let Some(reason) = self.check_text(&request.prompt) {

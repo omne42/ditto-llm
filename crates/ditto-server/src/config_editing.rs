@@ -338,11 +338,11 @@ pub async fn upsert_provider_config(
         let openai_table = ensure_table_path(&mut doc, &["openai"]);
         openai_table["provider"] = value(canonical_provider_ref.clone());
     }
-    if req.set_default_model {
-        if let Some(default_model) = clean_option_string(req.default_model.clone()) {
-            let openai_table = ensure_table_path(&mut doc, &["openai"]);
-            openai_table["model"] = value(default_model);
-        }
+    if req.set_default_model
+        && let Some(default_model) = clean_option_string(req.default_model.clone())
+    {
+        let openai_table = ensure_table_path(&mut doc, &["openai"]);
+        openai_table["model"] = value(default_model);
     }
 
     let mut discovered_models = normalize_string_list(req.model_whitelist.clone());
@@ -666,14 +666,12 @@ pub async fn delete_model_config(req: ModelDeleteRequest) -> Result<ModelDeleteR
     }
 
     let mut cleared_default = false;
-    if deleted {
-        if let Some(openai_table) = get_table_path_mut(doc.as_table_mut(), &["openai"]) {
-            let is_default = existing_string_value(openai_table.get("model"))
-                .is_some_and(|value| value == model_name);
-            if is_default {
-                openai_table.remove("model");
-                cleared_default = true;
-            }
+    if deleted && let Some(openai_table) = get_table_path_mut(doc.as_table_mut(), &["openai"]) {
+        let is_default = existing_string_value(openai_table.get("model"))
+            .is_some_and(|value| value == model_name);
+        if is_default {
+            openai_table.remove("model");
+            cleared_default = true;
         }
     }
 

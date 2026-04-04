@@ -308,15 +308,14 @@ impl Cohere {
             .get("type")
             .and_then(Value::as_str)
             .map(str::to_string);
-        if raw.is_none() {
-            if let Some(types) = schema.get("type").and_then(Value::as_array) {
+        if raw.is_none()
+            && let Some(types) = schema.get("type").and_then(Value::as_array) {
                 raw = types
                     .iter()
                     .filter_map(Value::as_str)
                     .find(|t| *t != "null")
                     .map(str::to_string);
             }
-        }
 
         match raw.as_deref().unwrap_or("") {
             "string" => "str".to_string(),
@@ -358,11 +357,10 @@ impl Cohere {
             for (name, schema) in props {
                 let ty = Self::cohere_param_type_from_schema(schema, &tool.name, name, warnings);
                 let mut def = serde_json::Map::<String, Value>::new();
-                if let Some(desc) = schema.get("description").and_then(Value::as_str) {
-                    if !desc.trim().is_empty() {
+                if let Some(desc) = schema.get("description").and_then(Value::as_str)
+                    && !desc.trim().is_empty() {
                         def.insert("description".to_string(), Value::String(desc.to_string()));
                     }
-                }
                 def.insert("type".to_string(), Value::String(ty));
                 def.insert("required".to_string(), Value::Bool(required.contains(name)));
                 defs.insert(name.to_string(), Value::Object(def));

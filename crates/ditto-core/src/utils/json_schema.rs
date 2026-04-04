@@ -72,11 +72,11 @@ fn collect_unsupported_keywords_impl(schema: &Value, out: &mut BTreeSet<String>)
         Value::Object(obj) => {
             for (key, value) in obj {
                 if key.starts_with('$') {
-                    if key == "$defs" {
-                        if let Value::Object(map) = value {
-                            for schema in map.values() {
-                                collect_unsupported_keywords_impl(schema, out);
-                            }
+                    if key == "$defs"
+                        && let Value::Object(map) = value
+                    {
+                        for schema in map.values() {
+                            collect_unsupported_keywords_impl(schema, out);
                         }
                     }
                     continue;
@@ -153,40 +153,35 @@ fn convert_json_schema_to_openapi_schema_impl(
         return Some(Value::Object(Map::new()));
     }
 
-    if let Value::Object(input) = schema {
-        if let Some(Value::String(reference)) = input.get("$ref") {
-            if let Some(resolved) = resolve_json_schema_ref(root, reference) {
-                if visited_refs.iter().any(|r| r == reference) {
-                    if is_root {
-                        return None;
-                    }
-                    return Some(Value::Object(Map::new()));
-                }
+    if let Value::Object(input) = schema
+        && let Some(Value::String(reference)) = input.get("$ref")
+        && let Some(resolved) = resolve_json_schema_ref(root, reference)
+    {
+        if visited_refs.iter().any(|r| r == reference) {
+            if is_root {
+                return None;
+            }
+            return Some(Value::Object(Map::new()));
+        }
 
-                visited_refs.push(reference.clone());
-                let mut converted = convert_json_schema_to_openapi_schema_impl(
-                    resolved,
-                    root,
-                    is_root,
-                    visited_refs,
+        visited_refs.push(reference.clone());
+        let mut converted =
+            convert_json_schema_to_openapi_schema_impl(resolved, root, is_root, visited_refs);
+        visited_refs.pop();
+
+        if let Some(Value::Object(obj)) = converted.as_mut() {
+            if let Some(description) = input.get("description").and_then(Value::as_str) {
+                obj.insert(
+                    "description".to_string(),
+                    Value::String(description.to_string()),
                 );
-                visited_refs.pop();
-
-                if let Some(Value::Object(obj)) = converted.as_mut() {
-                    if let Some(description) = input.get("description").and_then(Value::as_str) {
-                        obj.insert(
-                            "description".to_string(),
-                            Value::String(description.to_string()),
-                        );
-                    }
-                    if let Some(title) = input.get("title").and_then(Value::as_str) {
-                        obj.insert("title".to_string(), Value::String(title.to_string()));
-                    }
-                }
-
-                return converted;
+            }
+            if let Some(title) = input.get("title").and_then(Value::as_str) {
+                obj.insert("title".to_string(), Value::String(title.to_string()));
             }
         }
+
+        return converted;
     }
 
     if is_empty_object_schema(schema) {

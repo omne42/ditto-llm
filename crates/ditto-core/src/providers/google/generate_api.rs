@@ -178,8 +178,8 @@ impl Google {
                 Value::Number(max_tokens.into()),
             );
         }
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(temperature) = request.temperature
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "temperature",
                 temperature,
                 0.0,
@@ -188,9 +188,8 @@ impl Google {
             ) {
                 generation_config.insert("temperature".to_string(), Value::Number(value));
             }
-        }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(top_p) = request.top_p
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "top_p",
                 top_p,
                 0.0,
@@ -199,7 +198,6 @@ impl Google {
             ) {
                 generation_config.insert("topP".to_string(), Value::Number(value));
             }
-        }
         if let Some(stop_sequences) = request.stop_sequences.as_ref() {
             let stop_sequences =
                 crate::utils::params::sanitize_stop_sequences(stop_sequences, None, &mut warnings);
@@ -236,13 +234,11 @@ impl Google {
             }
         }
 
-        if let Some(tool_choice) = request.tool_choice.as_ref() {
-            if cfg!(feature = "cap-llm-tools") {
-                if let Some(tool_config) = Self::tool_config(Some(tool_choice)) {
+        if let Some(tool_choice) = request.tool_choice.as_ref()
+            && cfg!(feature = "cap-llm-tools")
+                && let Some(tool_config) = Self::tool_config(Some(tool_choice)) {
                     body.insert("toolConfig".to_string(), tool_config);
                 }
-            }
-        }
 
         crate::provider_options::merge_provider_options_into_body(
             &mut body,

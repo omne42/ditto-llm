@@ -915,15 +915,15 @@ impl Gateway {
         let bypass_cache = key.passthrough.bypass_cache(request);
         let cache_key =
             (key.cache.enabled && !bypass_cache).then(|| control_plane_cache_key(&key.id, request));
-        if let Some(cache_key) = cache_key.as_deref() {
-            if let Some(mut cached) = lock_unpoisoned(&self.cache).get(&key.id, cache_key, now) {
-                cached.cached = true;
-                lock_unpoisoned(&self.observability).record_cache_hit();
-                return Ok(GatewayPreparedRequest::Cached {
-                    key_id: key.id.clone(),
-                    response: cached,
-                });
-            }
+        if let Some(cache_key) = cache_key.as_deref()
+            && let Some(mut cached) = lock_unpoisoned(&self.cache).get(&key.id, cache_key, now)
+        {
+            cached.cached = true;
+            lock_unpoisoned(&self.observability).record_cache_hit();
+            return Ok(GatewayPreparedRequest::Cached {
+                key_id: key.id.clone(),
+                response: cached,
+            });
         }
 
         if let Err(err) =

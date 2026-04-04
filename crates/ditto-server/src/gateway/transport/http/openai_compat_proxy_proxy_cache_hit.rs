@@ -30,20 +30,19 @@ pub(super) async fn maybe_handle_proxy_cache_hit(
     let cached = { cache.lock().await.get(cache_key, now_epoch_seconds) };
 
     #[cfg(feature = "gateway-store-redis")]
-    if cached.is_none() {
-        if let Some(store) = state.stores.redis.as_ref() {
-            if let Ok(Some(redis_cached)) = store.get_proxy_cache_response(cache_key).await {
-                cache_source = "redis";
-                let mut cache = cache.lock().await;
-                cache.insert_with_metadata(
-                    cache_key.to_string(),
-                    redis_cached.response.clone(),
-                    redis_cached.metadata,
-                    now_epoch_seconds,
-                );
-                cached = Some(redis_cached.response);
-            }
-        }
+    if cached.is_none()
+        && let Some(store) = state.stores.redis.as_ref()
+        && let Ok(Some(redis_cached)) = store.get_proxy_cache_response(cache_key).await
+    {
+        cache_source = "redis";
+        let mut cache = cache.lock().await;
+        cache.insert_with_metadata(
+            cache_key.to_string(),
+            redis_cached.response.clone(),
+            redis_cached.metadata,
+            now_epoch_seconds,
+        );
+        cached = Some(redis_cached.response);
     }
 
     let Some(cached) = cached else {

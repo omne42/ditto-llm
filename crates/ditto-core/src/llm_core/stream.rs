@@ -165,10 +165,10 @@ impl StreamCollector {
                 }
                 let can_merge = matches!(self.parts.last(), Some(CollectedPart::Text(_)));
                 if can_merge {
-                    if self.try_add_bytes(text.len()) {
-                        if let Some(CollectedPart::Text(existing)) = self.parts.last_mut() {
-                            existing.push_str(text);
-                        }
+                    if self.try_add_bytes(text.len())
+                        && let Some(CollectedPart::Text(existing)) = self.parts.last_mut()
+                    {
+                        existing.push_str(text);
                     }
                     return;
                 }
@@ -186,10 +186,10 @@ impl StreamCollector {
                 }
                 let can_merge = matches!(self.parts.last(), Some(CollectedPart::Reasoning(_)));
                 if can_merge {
-                    if self.try_add_bytes(text.len()) {
-                        if let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut() {
-                            existing.push_str(text);
-                        }
+                    if self.try_add_bytes(text.len())
+                        && let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut()
+                    {
+                        existing.push_str(text);
                     }
                     return;
                 }
@@ -277,10 +277,10 @@ impl StreamCollector {
                     }
                 }
 
-                if self.try_add_bytes(arguments_delta.len()) {
-                    if let Some(slot) = self.tool_calls.get_mut(id) {
-                        slot.arguments.push_str(arguments_delta);
-                    }
+                if self.try_add_bytes(arguments_delta.len())
+                    && let Some(slot) = self.tool_calls.get_mut(id)
+                {
+                    slot.arguments.push_str(arguments_delta);
                 }
                 if should_push_part && self.can_push_part() {
                     if let Some(slot) = self.tool_calls.get_mut(id) {
@@ -308,10 +308,10 @@ impl StreamCollector {
                 }
                 let can_merge = matches!(self.parts.last(), Some(CollectedPart::Text(_)));
                 if can_merge {
-                    if self.try_add_bytes(text.len()) {
-                        if let Some(CollectedPart::Text(existing)) = self.parts.last_mut() {
-                            existing.push_str(&text);
-                        }
+                    if self.try_add_bytes(text.len())
+                        && let Some(CollectedPart::Text(existing)) = self.parts.last_mut()
+                    {
+                        existing.push_str(&text);
                     }
                     return;
                 }
@@ -329,10 +329,10 @@ impl StreamCollector {
                 }
                 let can_merge = matches!(self.parts.last(), Some(CollectedPart::Reasoning(_)));
                 if can_merge {
-                    if self.try_add_bytes(text.len()) {
-                        if let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut() {
-                            existing.push_str(&text);
-                        }
+                    if self.try_add_bytes(text.len())
+                        && let Some(CollectedPart::Reasoning(existing)) = self.parts.last_mut()
+                    {
+                        existing.push_str(&text);
                     }
                     return;
                 }
@@ -420,10 +420,10 @@ impl StreamCollector {
                     }
                 }
 
-                if self.try_add_bytes(arguments_delta.len()) {
-                    if let Some(slot) = self.tool_calls.get_mut(&id) {
-                        slot.arguments.push_str(&arguments_delta);
-                    }
+                if self.try_add_bytes(arguments_delta.len())
+                    && let Some(slot) = self.tool_calls.get_mut(&id)
+                {
+                    slot.arguments.push_str(&arguments_delta);
                 }
                 if should_push_part && self.can_push_part() {
                     if let Some(slot) = self.tool_calls.get_mut(&id) {

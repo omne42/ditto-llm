@@ -125,8 +125,8 @@ impl LanguageModel for Anthropic {
             body.insert("system".to_string(), Value::String(system.join("\n\n")));
         }
 
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(temperature) = request.temperature
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "temperature",
                 temperature,
                 0.0,
@@ -135,9 +135,8 @@ impl LanguageModel for Anthropic {
             ) {
                 body.insert("temperature".to_string(), Value::Number(value));
             }
-        }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(top_p) = request.top_p
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "top_p",
                 top_p,
                 0.0,
@@ -146,7 +145,6 @@ impl LanguageModel for Anthropic {
             ) {
                 body.insert("top_p".to_string(), Value::Number(value));
             }
-        }
         if let Some(stop_sequences) = request.stop_sequences {
             let stop_sequences = crate::utils::params::sanitize_stop_sequences(
                 &stop_sequences,
@@ -303,8 +301,8 @@ impl LanguageModel for Anthropic {
                 body.insert("system".to_string(), Value::String(system.join("\n\n")));
             }
 
-            if let Some(temperature) = request.temperature {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+            if let Some(temperature) = request.temperature
+                && let Some(value) = crate::utils::params::clamped_number_from_f32(
                     "temperature",
                     temperature,
                     0.0,
@@ -313,9 +311,8 @@ impl LanguageModel for Anthropic {
                 ) {
                     body.insert("temperature".to_string(), Value::Number(value));
                 }
-            }
-            if let Some(top_p) = request.top_p {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+            if let Some(top_p) = request.top_p
+                && let Some(value) = crate::utils::params::clamped_number_from_f32(
                     "top_p",
                     top_p,
                     0.0,
@@ -324,7 +321,6 @@ impl LanguageModel for Anthropic {
                 ) {
                     body.insert("top_p".to_string(), Value::Number(value));
                 }
-            }
             if let Some(stop_sequences) = request.stop_sequences {
                 let stop_sequences = crate::utils::params::sanitize_stop_sequences(
                     &stop_sequences,
@@ -339,25 +335,23 @@ impl LanguageModel for Anthropic {
                 }
             }
 
-            if let Some(tools) = request.tools {
-                if cfg!(feature = "cap-llm-tools") {
+            if let Some(tools) = request.tools
+                && cfg!(feature = "cap-llm-tools") {
                     let mapped = tools
                         .into_iter()
                         .map(|tool| Self::tool_to_anthropic(&tool, &mut warnings))
                         .collect::<Vec<_>>();
                     body.insert("tools".to_string(), Value::Array(mapped));
                 }
-            }
 
-            if let Some(tool_choice) = request.tool_choice {
-                if cfg!(feature = "cap-llm-tools") {
+            if let Some(tool_choice) = request.tool_choice
+                && cfg!(feature = "cap-llm-tools") {
                     if tool_choice == ToolChoice::None {
                         body.remove("tools");
                     } else if let Some(mapped) = Self::tool_choice_to_anthropic(&tool_choice) {
                         body.insert("tool_choice".to_string(), mapped);
                     }
                 }
-            }
 
             crate::provider_options::merge_provider_options_into_body(
                 &mut body,
@@ -531,8 +525,7 @@ impl LanguageModel for Anthropic {
                                         }
                                         if let Some(message) =
                                             event.message.as_ref().or(event.delta.as_ref())
-                                        {
-                                            if let Some(stop_reason) =
+                                            && let Some(stop_reason) =
                                                 message.get("stop_reason").and_then(Value::as_str)
                                             {
                                                 pending_finish =
@@ -540,9 +533,8 @@ impl LanguageModel for Anthropic {
                                                         stop_reason,
                                                     )));
                                             }
-                                        }
-                                        if let Some(delta) = event.delta.as_ref() {
-                                            if let Some(stop_reason) =
+                                        if let Some(delta) = event.delta.as_ref()
+                                            && let Some(stop_reason) =
                                                 delta.get("stop_reason").and_then(Value::as_str)
                                             {
                                                 pending_finish =
@@ -550,7 +542,6 @@ impl LanguageModel for Anthropic {
                                                         stop_reason,
                                                     )));
                                             }
-                                        }
                                     }
                                     "message_stop" => {
                                         done = true;

@@ -297,20 +297,19 @@ impl LanguageModel for OpenAI {
                                 match serde_json::from_str::<ResponsesStreamEvent>(&data) {
                                     Ok(event) => match event.kind.as_str() {
                                         "response.created" => {
-                                            if response_id.is_none() {
-                                                if let Some(id) = event
+                                            if response_id.is_none()
+                                                && let Some(id) = event
                                                     .response
                                                     .as_ref()
                                                     .and_then(|resp| {
                                                         resp.get("id").and_then(Value::as_str)
                                                     })
                                                     .filter(|id| !id.trim().is_empty())
-                                                {
-                                                    response_id = Some(id.to_string());
-                                                    buffer.push_back(Ok(StreamChunk::ResponseId {
-                                                        id: id.to_string(),
-                                                    }));
-                                                }
+                                            {
+                                                response_id = Some(id.to_string());
+                                                buffer.push_back(Ok(StreamChunk::ResponseId {
+                                                    id: id.to_string(),
+                                                }));
                                             }
                                         }
                                         "response.output_text.delta" => {
@@ -387,19 +386,15 @@ impl LanguageModel for OpenAI {
                                         | "response.incomplete" => {
                                             done = true;
                                             if let Some(resp) = event.response {
-                                                if response_id.is_none() {
-                                                    if let Some(id) =
+                                                if response_id.is_none()
+                                                    && let Some(id) =
                                                         resp.get("id").and_then(Value::as_str)
-                                                    {
-                                                        if !id.trim().is_empty() {
-                                                            response_id = Some(id.to_string());
-                                                            buffer.push_back(Ok(
-                                                                StreamChunk::ResponseId {
-                                                                    id: id.to_string(),
-                                                                },
-                                                            ));
-                                                        }
-                                                    }
+                                                    && !id.trim().is_empty()
+                                                {
+                                                    response_id = Some(id.to_string());
+                                                    buffer.push_back(Ok(StreamChunk::ResponseId {
+                                                        id: id.to_string(),
+                                                    }));
                                                 }
                                                 if let Some(usage) = resp.get("usage") {
                                                     buffer.push_back(Ok(StreamChunk::Usage(

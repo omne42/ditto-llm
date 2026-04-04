@@ -26,13 +26,12 @@ pub(super) fn resolve_runtime_plugin_and_source(
         return Some((plugin, RuntimeResolvedProviderSource::RequestProvider));
     }
 
-    if let Some(configured_provider) = configured_provider_hint(provider_hints) {
-        if let Some(plugin) = registry
+    if let Some(configured_provider) = configured_provider_hint(provider_hints)
+        && let Some(plugin) = registry
             .plugin_by_id(ProviderId::new(configured_provider))
             .or_else(|| registry.plugin_by_hint(configured_provider))
-        {
-            return Some((plugin, RuntimeResolvedProviderSource::ConfiguredProvider));
-        }
+    {
+        return Some((plugin, RuntimeResolvedProviderSource::ConfiguredProvider));
     }
 
     fallback_runtime_plugin(registry, provider_hints)

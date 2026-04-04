@@ -97,10 +97,10 @@ pub(super) fn audio_transcriptions_request_to_request(
                 let value = String::from_utf8_lossy(part.data.as_ref())
                     .trim()
                     .to_string();
-                if let Ok(parsed) = value.parse::<f32>() {
-                    if parsed.is_finite() {
-                        temperature = Some(parsed);
-                    }
+                if let Ok(parsed) = value.parse::<f32>()
+                    && parsed.is_finite()
+                {
+                    temperature = Some(parsed);
                 }
             }
             _ => {}
@@ -188,28 +188,28 @@ pub(super) fn chat_completions_request_to_generate_request(
     let mut out: GenerateRequest = out_messages.into();
     out.model = Some(model.to_string());
 
-    if let Some(temperature) = obj.get("temperature").and_then(Value::as_f64) {
-        if temperature.is_finite() {
-            out.temperature = Some(temperature as f32);
-        }
+    if let Some(temperature) = obj.get("temperature").and_then(Value::as_f64)
+        && temperature.is_finite()
+    {
+        out.temperature = Some(temperature as f32);
     }
-    if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64) {
-        if top_p.is_finite() {
-            out.top_p = Some(top_p as f32);
-        }
+    if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64)
+        && top_p.is_finite()
+    {
+        out.top_p = Some(top_p as f32);
     }
     if let Some(seed) = obj.get("seed").and_then(Value::as_u64) {
         out.seed = Some(seed);
     }
-    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64) {
-        if presence_penalty.is_finite() {
-            out.presence_penalty = Some(presence_penalty as f32);
-        }
+    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64)
+        && presence_penalty.is_finite()
+    {
+        out.presence_penalty = Some(presence_penalty as f32);
     }
-    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64) {
-        if frequency_penalty.is_finite() {
-            out.frequency_penalty = Some(frequency_penalty as f32);
-        }
+    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64)
+        && frequency_penalty.is_finite()
+    {
+        out.frequency_penalty = Some(frequency_penalty as f32);
     }
     if let Some(user) = obj
         .get("user")
@@ -286,28 +286,28 @@ pub(super) fn completions_request_to_generate_request(
     let mut out: GenerateRequest = vec![Message::user(prompt)].into();
     out.model = Some(model.to_string());
 
-    if let Some(temperature) = obj.get("temperature").and_then(Value::as_f64) {
-        if temperature.is_finite() {
-            out.temperature = Some(temperature as f32);
-        }
+    if let Some(temperature) = obj.get("temperature").and_then(Value::as_f64)
+        && temperature.is_finite()
+    {
+        out.temperature = Some(temperature as f32);
     }
-    if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64) {
-        if top_p.is_finite() {
-            out.top_p = Some(top_p as f32);
-        }
+    if let Some(top_p) = obj.get("top_p").and_then(Value::as_f64)
+        && top_p.is_finite()
+    {
+        out.top_p = Some(top_p as f32);
     }
     if let Some(seed) = obj.get("seed").and_then(Value::as_u64) {
         out.seed = Some(seed);
     }
-    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64) {
-        if presence_penalty.is_finite() {
-            out.presence_penalty = Some(presence_penalty as f32);
-        }
+    if let Some(presence_penalty) = obj.get("presence_penalty").and_then(Value::as_f64)
+        && presence_penalty.is_finite()
+    {
+        out.presence_penalty = Some(presence_penalty as f32);
     }
-    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64) {
-        if frequency_penalty.is_finite() {
-            out.frequency_penalty = Some(frequency_penalty as f32);
-        }
+    if let Some(frequency_penalty) = obj.get("frequency_penalty").and_then(Value::as_f64)
+        && frequency_penalty.is_finite()
+    {
+        out.frequency_penalty = Some(frequency_penalty as f32);
     }
     if let Some(user) = obj
         .get("user")
@@ -317,11 +317,11 @@ pub(super) fn completions_request_to_generate_request(
     {
         out.user = Some(user.to_string());
     }
-    if let Some(logprobs) = obj.get("logprobs").and_then(Value::as_u64) {
-        if logprobs > 0 {
-            out.logprobs = Some(true);
-            out.top_logprobs = Some(logprobs.min(u64::from(u32::MAX)) as u32);
-        }
+    if let Some(logprobs) = obj.get("logprobs").and_then(Value::as_u64)
+        && logprobs > 0
+    {
+        out.logprobs = Some(true);
+        out.top_logprobs = Some(logprobs.min(u64::from(u32::MAX)) as u32);
     }
     if let Some(max_tokens) = obj.get("max_tokens").and_then(Value::as_u64) {
         out.max_tokens = Some(max_tokens.min(u64::from(u32::MAX)) as u32);
@@ -747,10 +747,10 @@ fn parse_openai_chat_message(message: &Value) -> ParseResult<Message> {
                     parts.push(part);
                 }
             }
-        } else if let Some(function_call) = obj.get("function_call").and_then(Value::as_object) {
-            if let Some(part) = parse_openai_function_call(function_call) {
-                parts.push(part);
-            }
+        } else if let Some(function_call) = obj.get("function_call").and_then(Value::as_object)
+            && let Some(part) = parse_openai_function_call(function_call)
+        {
+            parts.push(part);
         }
     }
 
@@ -784,24 +784,24 @@ fn parse_openai_content_parts(value: &Value) -> Vec<ContentPart> {
                         }
                     }
                     Value::Object(obj) => {
-                        if let Some(text) = obj.get("text").and_then(Value::as_str) {
-                            if !text.is_empty() {
-                                out.push(ContentPart::Text {
-                                    text: text.to_string(),
-                                });
-                                continue;
-                            }
+                        if let Some(text) = obj.get("text").and_then(Value::as_str)
+                            && !text.is_empty()
+                        {
+                            out.push(ContentPart::Text {
+                                text: text.to_string(),
+                            });
+                            continue;
                         }
 
                         let ty = obj.get("type").and_then(Value::as_str).unwrap_or_default();
                         match ty {
                             "text" | "input_text" | "output_text" => {
-                                if let Some(text) = obj.get("text").and_then(Value::as_str) {
-                                    if !text.is_empty() {
-                                        out.push(ContentPart::Text {
-                                            text: text.to_string(),
-                                        });
-                                    }
+                                if let Some(text) = obj.get("text").and_then(Value::as_str)
+                                    && !text.is_empty()
+                                {
+                                    out.push(ContentPart::Text {
+                                        text: text.to_string(),
+                                    });
                                 }
                             }
                             "image_url" => {

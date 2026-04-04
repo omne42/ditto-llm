@@ -203,10 +203,10 @@ fn backend_from_litellm_entry(
     }
 
     let mut query_params = BTreeMap::<String, String>::new();
-    if let Some(api_version) = params.api_version.as_ref().and_then(yaml_scalar_to_string) {
-        if !api_version.trim().is_empty() {
-            query_params.insert("api-version".to_string(), api_version);
-        }
+    if let Some(api_version) = params.api_version.as_ref().and_then(yaml_scalar_to_string)
+        && !api_version.trim().is_empty()
+    {
+        query_params.insert("api-version".to_string(), api_version);
     }
 
     let mut model_map = BTreeMap::<String, String>::new();
