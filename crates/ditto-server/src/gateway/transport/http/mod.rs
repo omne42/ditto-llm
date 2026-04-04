@@ -138,7 +138,7 @@ use serde_json::Value;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 #[cfg(feature = "gateway-routing-advanced")]
-use crate::utils::task::AbortOnDrop;
+use ditto_core::utils::task::AbortOnDrop;
 
 #[cfg(feature = "gateway-translation")]
 #[derive(Clone, Copy, Debug)]
@@ -148,7 +148,7 @@ struct ProxySpend {
 }
 
 #[cfg(feature = "sdk")]
-use crate::sdk::devtools::DevtoolsLogger;
+use ditto_core::sdk::devtools::DevtoolsLogger;
 
 #[cfg(feature = "gateway-costing")]
 use super::costing::PricingTable;
