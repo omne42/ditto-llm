@@ -1058,7 +1058,6 @@ fn cli_invalid_spec(locale: Locale, label: &str, expected: &str) -> String {
     )
 }
 
-#[cfg(feature = "gateway")]
 #[allow(dead_code)]
 fn cli_feature_disabled(locale: Locale, feature: &str, rebuild_hint: &str) -> String {
     MESSAGE_CATALOG.render(

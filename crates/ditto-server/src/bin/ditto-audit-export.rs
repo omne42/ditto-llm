@@ -550,6 +550,17 @@ fn main() {
     std::process::exit(2);
 }
 
+fn cli_feature_disabled(locale: Locale, feature: &str, rebuild_hint: &str) -> String {
+    MESSAGE_CATALOG.render(
+        locale,
+        "cli.feature_disabled",
+        &[
+            TemplateArg::new("feature", feature),
+            TemplateArg::new("rebuild_hint", rebuild_hint),
+        ],
+    )
+}
+
 #[cfg(feature = "gateway")]
 fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> String {
     if let Some(error) = error.downcast_ref::<ditto_core::error::DittoError>() {
@@ -565,6 +576,7 @@ fn render_error(error: &(dyn std::error::Error + 'static), locale: Locale) -> St
     )
 }
 
+#[cfg(feature = "gateway")]
 fn cli_missing_value(locale: Locale, flag: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -573,6 +585,7 @@ fn cli_missing_value(locale: Locale, flag: &str) -> String {
     )
 }
 
+#[cfg(feature = "gateway")]
 fn cli_invalid_value(locale: Locale, label: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -581,6 +594,7 @@ fn cli_invalid_value(locale: Locale, label: &str) -> String {
     )
 }
 
+#[cfg(feature = "gateway")]
 fn cli_unknown_arg(locale: Locale, arg: &str, usage: Option<&str>) -> String {
     let message =
         MESSAGE_CATALOG.render(locale, "cli.unknown_arg", &[TemplateArg::new("arg", arg)]);
@@ -590,6 +604,7 @@ fn cli_unknown_arg(locale: Locale, arg: &str, usage: Option<&str>) -> String {
     }
 }
 
+#[cfg(feature = "gateway")]
 fn cli_wrote_bytes_to_stdout(locale: Locale, bytes_written: u64) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -598,14 +613,17 @@ fn cli_wrote_bytes_to_stdout(locale: Locale, bytes_written: u64) -> String {
     )
 }
 
+#[cfg(feature = "gateway")]
 fn cli_ok(locale: Locale) -> String {
     MESSAGE_CATALOG.render(locale, "cli.ok", &[])
 }
 
+#[cfg(feature = "gateway")]
 fn cli_output_path(locale: Locale, path: &str) -> String {
     MESSAGE_CATALOG.render(locale, "cli.output_path", &[TemplateArg::new("path", path)])
 }
 
+#[cfg(feature = "gateway")]
 fn cli_manifest_path(locale: Locale, path: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -614,6 +632,7 @@ fn cli_manifest_path(locale: Locale, path: &str) -> String {
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -626,6 +645,7 @@ fn audit_hash_chain_mismatch(locale: Locale, line_no: usize, expected: &str, got
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -638,18 +658,22 @@ fn audit_hash_mismatch(locale: Locale, line_no: usize, expected: &str, got: &str
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_usage(locale: Locale) -> String {
     MESSAGE_CATALOG.render(locale, "audit_export.usage", &[])
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_cannot_combine_output_upload(locale: Locale) -> String {
     MESSAGE_CATALOG.render(locale, "audit_export.cannot_combine_output_upload", &[])
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_missing_admin_token(locale: Locale) -> String {
     MESSAGE_CATALOG.render(locale, "audit_export.missing_admin_token", &[])
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_failed_to_read_admin_token(locale: Locale, error: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -658,6 +682,7 @@ fn audit_export_failed_to_read_admin_token(locale: Locale, error: &str) -> Strin
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_unsupported_format(locale: Locale, format: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -666,6 +691,7 @@ fn audit_export_unsupported_format(locale: Locale, format: &str) -> String {
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_export_failed(locale: Locale, status: &str, body: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -677,6 +703,7 @@ fn audit_export_export_failed(locale: Locale, status: &str, body: &str) -> Strin
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_unsupported_upload_destination(locale: Locale, dest: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -685,6 +712,7 @@ fn audit_export_unsupported_upload_destination(locale: Locale, dest: &str) -> St
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_aws_put_object_failed(locale: Locale, exit_code: i32, stderr: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -696,6 +724,7 @@ fn audit_export_aws_put_object_failed(locale: Locale, exit_code: i32, stderr: &s
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_gsutil_cp_failed(locale: Locale, exit_code: i32, stderr: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
@@ -707,6 +736,7 @@ fn audit_export_gsutil_cp_failed(locale: Locale, exit_code: i32, stderr: &str) -
     )
 }
 
+#[cfg(feature = "gateway")]
 fn audit_export_http_upload_failed(locale: Locale, status: &str, body: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,
