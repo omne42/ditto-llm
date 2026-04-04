@@ -628,6 +628,21 @@ fn replay_error_outcome_from_tuple(
     }
 }
 
+fn replay_unavailable_outcome(
+    status: StatusCode,
+    code: &str,
+    message: &str,
+) -> ProxyRequestReplayOutcome {
+    ProxyRequestReplayOutcome::Error {
+        status: status.as_u16(),
+        error: ProxyRequestReplayError {
+            message: message.to_string(),
+            kind: "invalid_request_error".to_string(),
+            code: Some(code.to_string()),
+        },
+    }
+}
+
 fn wrap_response_for_request_dedup(
     response: axum::response::Response,
     leader: ProxyRequestDedupLeader,
@@ -704,16 +719,35 @@ fn wrap_response_for_request_dedup(
                 state.recorder.ingest(&chunk);
                 Ok(Some((chunk, state)))
             }
-            Some(Err(err)) => Err(std::io::Error::other(err.to_string())),
+            Some(Err(err)) => {
+                if let Some(mut leader) = state.leader.take() {
+                    let outcome = replay_unavailable_outcome(
+                        StatusCode::CONFLICT,
+                        "request_id_replay_unavailable",
+                        "x-request-id cannot be replayed because the gateway could not snapshot the full response body",
+                    );
+                    leader
+                        .complete_outcome(&outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
+                        .await;
+                }
+                Err(std::io::Error::other(err.to_string()))
+            }
             None => {
-                if let Some(bytes) = state.recorder.finish()
-                    && let Some(mut leader) = state.leader.take()
-                {
-                    let outcome = ProxyRequestReplayOutcome::Response(ProxyRequestReplayResponse {
-                        status: state.status.as_u16(),
-                        headers: header_map_to_record(&state.headers),
-                        body: bytes.to_vec(),
-                    });
+                if let Some(mut leader) = state.leader.take() {
+                    let outcome = match state.recorder.finish() {
+                        Some(bytes) => ProxyRequestReplayOutcome::Response(
+                            ProxyRequestReplayResponse {
+                                status: state.status.as_u16(),
+                                headers: header_map_to_record(&state.headers),
+                                body: bytes.to_vec(),
+                            },
+                        ),
+                        None => replay_unavailable_outcome(
+                            StatusCode::CONFLICT,
+                            "request_id_replay_unavailable",
+                            "x-request-id cannot be replayed because the gateway could not snapshot the full response body",
+                        ),
+                    };
                     leader
                         .complete_outcome(&outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
                         .await;

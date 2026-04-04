@@ -90,8 +90,14 @@ pub(super) async fn attempt_translation_backend(
 
     let mapped_request_model = model
         .as_deref()
-        .map(|requested_model| translation_backend.map_model(requested_model))
+        .map(|requested_model| translation_backend.map_model(backend_name, requested_model))
         .filter(|requested_model| !requested_model.trim().is_empty());
+
+    fn response_store_contract_message(response_id: &str) -> String {
+        format!(
+            "response {response_id} not found; translated response retrieval requires a gateway-scoped id from a non-streaming /v1/responses create on the same gateway instance"
+        )
+    }
     if !translation_backend.supports_endpoint(&endpoint_descriptor, mapped_request_model.as_deref())
     {
         return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
@@ -135,9 +141,8 @@ pub(super) async fn attempt_translation_backend(
     > = 'translation_backend_attempt: {
         #[allow(clippy::collapsible_else_if)]
         if models_root && parts.method == axum::http::Method::GET {
-            let models = translation::collect_models_from_translation_backends(
-                state.backends.translation_backends.as_ref(),
-            );
+            let models =
+                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
             let value = translation::models_list_to_openai(&models, _now_epoch_seconds);
             let bytes = serde_json::to_vec(&value)
                 .map(Bytes::from)
@@ -150,7 +155,8 @@ pub(super) async fn attempt_translation_backend(
             );
             headers.insert(
                 "x-ditto-translation",
-                axum::http::HeaderValue::from_static("multi"),
+                axum::http::HeaderValue::from_str(backend_name)
+                    .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
             );
             apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
 
@@ -162,9 +168,8 @@ pub(super) async fn attempt_translation_backend(
         } else if let Some(model_id) = models_retrieve_id.as_deref()
             && parts.method == axum::http::Method::GET
         {
-            let models = translation::collect_models_from_translation_backends(
-                state.backends.translation_backends.as_ref(),
-            );
+            let models =
+                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
             let Some(owned_by) = models.get(model_id) else {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::NOT_FOUND,
@@ -186,7 +191,7 @@ pub(super) async fn attempt_translation_backend(
             );
             headers.insert(
                 "x-ditto-translation",
-                axum::http::HeaderValue::from_str(owned_by)
+                axum::http::HeaderValue::from_str(backend_name)
                     .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
             );
             apply_proxy_response_headers(&mut headers, backend_name, request_id, false);
@@ -428,7 +433,7 @@ pub(super) async fn attempt_translation_backend(
                 ));
             };
 
-            let mapped_model = translation_backend.map_model(&original_model);
+            let mapped_model = translation_backend.map_model(backend_name, &original_model);
             if mapped_model.trim().is_empty() {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::BAD_REQUEST,
@@ -528,7 +533,7 @@ pub(super) async fn attempt_translation_backend(
                 ));
             };
 
-            let mapped_model = translation_backend.map_model(&original_model);
+            let mapped_model = translation_backend.map_model(backend_name, &original_model);
             if mapped_model.trim().is_empty() {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::BAD_REQUEST,
@@ -639,7 +644,7 @@ pub(super) async fn attempt_translation_backend(
                 ));
             };
 
-            let mapped_model = translation_backend.map_model(&original_model);
+            let mapped_model = translation_backend.map_model(backend_name, &original_model);
             if mapped_model.trim().is_empty() {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::BAD_REQUEST,
@@ -702,7 +707,7 @@ pub(super) async fn attempt_translation_backend(
             };
 
             let original_model = model.clone().unwrap_or_default();
-            let mapped_model = translation_backend.map_model(&original_model);
+            let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
             if mapped_model.trim().is_empty() {
                 break 'translation_backend_attempt Err(openai_error(
@@ -779,7 +784,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let original_model = model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
                 if _stream_requested {
                     break 'translation_backend_attempt Err(openai_error(
@@ -1176,7 +1181,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let original_model = request.model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
                 if !mapped_model.trim().is_empty() {
                     request.model = Some(mapped_model);
                 }
@@ -1497,7 +1502,7 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
                 #[cfg(feature = "gateway-tokenizer")]
                 let input_tokens = {
@@ -1573,7 +1578,7 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
-                let Some((stored_backend_name, stored_provider, stored_response)) =
+                let Some((stored_backend_name, stored_response)) =
                     translation::find_stored_response_from_translation_backends(
                         state.backends.translation_backends.as_ref(),
                         response_id,
@@ -1584,7 +1589,7 @@ pub(super) async fn attempt_translation_backend(
                         StatusCode::NOT_FOUND,
                         "invalid_request_error",
                         Some("response_not_found"),
-                        format!("response {response_id} not found"),
+                        response_store_contract_message(response_id),
                     ));
                 };
 
@@ -1601,7 +1606,7 @@ pub(super) async fn attempt_translation_backend(
                 );
                 headers.insert(
                     "x-ditto-translation",
-                    axum::http::HeaderValue::from_str(&stored_provider)
+                    axum::http::HeaderValue::from_str(&stored_backend_name)
                         .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                 );
                 apply_proxy_response_headers(&mut headers, &stored_backend_name, request_id, false);
@@ -1622,7 +1627,7 @@ pub(super) async fn attempt_translation_backend(
                 }
 
                 if parts.method == axum::http::Method::GET {
-                    let Some((stored_backend_name, stored_provider, stored_response)) =
+                    let Some((stored_backend_name, stored_response)) =
                         translation::find_stored_response_from_translation_backends(
                             state.backends.translation_backends.as_ref(),
                             response_id,
@@ -1633,7 +1638,7 @@ pub(super) async fn attempt_translation_backend(
                             StatusCode::NOT_FOUND,
                             "invalid_request_error",
                             Some("response_not_found"),
-                            format!("response {response_id} not found"),
+                            response_store_contract_message(response_id),
                         ));
                     };
 
@@ -1648,7 +1653,7 @@ pub(super) async fn attempt_translation_backend(
                     );
                     headers.insert(
                         "x-ditto-translation",
-                        axum::http::HeaderValue::from_str(&stored_provider)
+                        axum::http::HeaderValue::from_str(&stored_backend_name)
                             .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(
@@ -1664,7 +1669,7 @@ pub(super) async fn attempt_translation_backend(
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
                 } else if parts.method == axum::http::Method::DELETE {
-                    let Some((stored_backend_name, stored_provider)) =
+                    let Some(stored_backend_name) =
                         translation::delete_stored_response_from_translation_backends(
                             state.backends.translation_backends.as_ref(),
                             response_id,
@@ -1675,7 +1680,7 @@ pub(super) async fn attempt_translation_backend(
                             StatusCode::NOT_FOUND,
                             "invalid_request_error",
                             Some("response_not_found"),
-                            format!("response {response_id} not found"),
+                            response_store_contract_message(response_id),
                         ));
                     };
 
@@ -1691,7 +1696,7 @@ pub(super) async fn attempt_translation_backend(
                     );
                     headers.insert(
                         "x-ditto-translation",
-                        axum::http::HeaderValue::from_str(&stored_provider)
+                        axum::http::HeaderValue::from_str(&stored_backend_name)
                             .unwrap_or_else(|_| axum::http::HeaderValue::from_static("enabled")),
                     );
                     apply_proxy_response_headers(
@@ -1728,7 +1733,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let original_model = model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
                 if mapped_model.trim().is_empty() {
                     break 'translation_backend_attempt Err(openai_error(
@@ -1903,7 +1908,7 @@ pub(super) async fn attempt_translation_backend(
                     };
 
                 let original_model = request.model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
                 if !mapped_model.trim().is_empty() {
                     request.model = Some(mapped_model);
                 }
@@ -1953,7 +1958,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let original_model = model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
                 if _stream_requested {
                     break 'translation_backend_attempt Err(openai_error(
@@ -2028,7 +2033,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let original_model = model.clone().unwrap_or_default();
-                let mapped_model = translation_backend.map_model(&original_model);
+                let mapped_model = translation_backend.map_model(backend_name, &original_model);
 
                 if mapped_model.trim().is_empty() {
                     break 'translation_backend_attempt Err(openai_error(
@@ -2169,8 +2174,16 @@ pub(super) async fn attempt_translation_backend(
                         }
                     };
 
-                    let response_id =
+                    let provider_response_id =
                         translation::provider_response_id(&generated, &fallback_response_id);
+                    let response_id = if translation::is_responses_path(path_and_query) {
+                        translation::gateway_scoped_response_id(
+                            backend_name,
+                            &provider_response_id,
+                        )
+                    } else {
+                        provider_response_id
+                    };
                     let value = if translation::is_chat_completions_path(path_and_query) {
                         translation::generate_response_to_chat_completions(
                             &generated,

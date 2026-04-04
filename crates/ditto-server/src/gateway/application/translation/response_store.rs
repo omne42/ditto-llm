@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use crate::gateway::adapters::cache::LocalLruCache;
 
 const DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_ENTRIES: usize = 128;
+const TRANSLATION_RESPONSE_HANDLE_PREFIX: &str = "resp_ditto_";
 
 #[derive(Debug, Clone)]
 pub(crate) struct StoredTranslationResponse {
@@ -17,6 +18,40 @@ pub(crate) struct StoredTranslationResponse {
 #[derive(Clone, Default)]
 pub(super) struct TranslationResponseStore {
     entries: Arc<Mutex<LocalLruCache<StoredTranslationResponse>>>,
+}
+
+pub(crate) fn gateway_scoped_response_id(backend_name: &str, response_id: &str) -> String {
+    let backend_name = backend_name.trim();
+    let response_id = response_id.trim();
+    if backend_name.is_empty() || response_id.is_empty() {
+        return response_id.to_string();
+    }
+
+    format!(
+        "{TRANSLATION_RESPONSE_HANDLE_PREFIX}{}_{}_{}",
+        backend_name.len(),
+        backend_name,
+        response_id
+    )
+}
+
+fn parse_gateway_scoped_response_id(response_id: &str) -> Option<(&str, &str)> {
+    let rest = response_id
+        .trim()
+        .strip_prefix(TRANSLATION_RESPONSE_HANDLE_PREFIX)?;
+    let (backend_len, rest) = rest.split_once('_')?;
+    let backend_len = backend_len.parse::<usize>().ok()?;
+    if backend_len == 0 || rest.len() <= backend_len {
+        return None;
+    }
+
+    let (backend_name, suffix) = rest.split_at(backend_len);
+    let response_id = suffix.strip_prefix('_')?;
+    if backend_name.is_empty() || response_id.is_empty() {
+        return None;
+    }
+
+    Some((backend_name, response_id))
 }
 
 impl TranslationResponseStore {
@@ -58,63 +93,25 @@ impl TranslationResponseStore {
 pub(crate) async fn delete_stored_response_from_translation_backends(
     backends: &HashMap<String, super::TranslationBackend>,
     response_id: &str,
-) -> Option<(String, String)> {
-    let response_id = response_id.trim();
-    if response_id.is_empty() {
-        return None;
-    }
-
-    let mut backend_names = backends.keys().cloned().collect::<Vec<_>>();
-    backend_names.sort();
-
-    for backend_name in backend_names {
-        let Some(backend) = backends.get(&backend_name) else {
-            continue;
-        };
-        if !backend.delete_stored_response(response_id).await {
-            continue;
-        }
-        let provider = backend.provider_name().trim();
-        let provider = if provider.is_empty() {
-            backend_name.clone()
-        } else {
-            provider.to_string()
-        };
-        return Some((backend_name, provider));
-    }
-
-    None
+) -> Option<String> {
+    let (backend_name, _) = parse_gateway_scoped_response_id(response_id)?;
+    let backend = backends.get(backend_name)?;
+    backend
+        .delete_stored_response(response_id.trim())
+        .await
+        .then(|| backend_name.to_string())
 }
 
 pub(crate) async fn find_stored_response_from_translation_backends(
     backends: &HashMap<String, super::TranslationBackend>,
     response_id: &str,
-) -> Option<(String, String, StoredTranslationResponse)> {
-    let response_id = response_id.trim();
-    if response_id.is_empty() {
-        return None;
-    }
-
-    let mut backend_names = backends.keys().cloned().collect::<Vec<_>>();
-    backend_names.sort();
-
-    for backend_name in backend_names {
-        let Some(backend) = backends.get(&backend_name) else {
-            continue;
-        };
-        let Some(stored) = backend.stored_response(response_id).await else {
-            continue;
-        };
-        let provider = backend.provider_name().trim();
-        let provider = if provider.is_empty() {
-            backend_name.clone()
-        } else {
-            provider.to_string()
-        };
-        return Some((backend_name, provider, stored));
-    }
-
-    None
+) -> Option<(String, StoredTranslationResponse)> {
+    let (backend_name, _) = parse_gateway_scoped_response_id(response_id)?;
+    let backend = backends.get(backend_name)?;
+    backend
+        .stored_response(response_id.trim())
+        .await
+        .map(|stored| (backend_name.to_string(), stored))
 }
 
 impl super::TranslationBackend {
@@ -153,25 +150,36 @@ mod tests {
     #[tokio::test]
     async fn response_store_roundtrips_and_deletes_records() {
         let store = TranslationResponseStore::default();
+        let response_id = gateway_scoped_response_id("primary", "resp_123");
         store
             .store_response_record(
-                "resp_123",
-                json!({ "id": "resp_123" }),
+                &response_id,
+                json!({ "id": response_id }),
                 vec![json!({ "type": "message" })],
             )
             .await;
 
         let stored = store
-            .stored_response("resp_123")
+            .stored_response(&response_id)
             .await
             .expect("stored response");
         assert_eq!(
             stored.response.get("id"),
-            Some(&Value::String("resp_123".to_string()))
+            Some(&Value::String(response_id.clone()))
         );
         assert_eq!(stored.input_items.len(), 1);
 
-        assert!(store.delete_stored_response("resp_123").await);
-        assert!(store.stored_response("resp_123").await.is_none());
+        assert!(store.delete_stored_response(&response_id).await);
+        assert!(store.stored_response(&response_id).await.is_none());
+    }
+
+    #[test]
+    fn gateway_scoped_response_ids_roundtrip() {
+        let public_id = gateway_scoped_response_id("primary", "resp_123");
+        assert_eq!(
+            parse_gateway_scoped_response_id(&public_id),
+            Some(("primary", "resp_123"))
+        );
+        assert!(parse_gateway_scoped_response_id("resp_123").is_none());
     }
 }

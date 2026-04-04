@@ -117,10 +117,20 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
 
     let create_response = app.clone().oneshot(create_request).await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let create_parsed: serde_json::Value = serde_json::from_slice(&create_body)?;
+    let created_id = create_parsed
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("response id")
+        .to_string();
+    assert!(created_id.starts_with("resp_ditto_"));
 
     let retrieve_request = Request::builder()
         .method("GET")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{created_id}"))
         .body(Body::empty())
         .unwrap();
     let retrieve_response = app.clone().oneshot(retrieve_request).await.unwrap();
@@ -130,7 +140,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
             .headers()
             .get("x-ditto-translation")
             .and_then(|v| v.to_str().ok()),
-        Some("fake")
+        Some("primary")
     );
     let retrieve_body = to_bytes(retrieve_response.into_body(), usize::MAX)
         .await
@@ -138,7 +148,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
     let retrieve_parsed: serde_json::Value = serde_json::from_slice(&retrieve_body)?;
     assert_eq!(
         retrieve_parsed.get("id").and_then(|v| v.as_str()),
-        Some("resp_fake")
+        Some(created_id.as_str())
     );
     assert_eq!(
         retrieve_parsed.get("output_text").and_then(|v| v.as_str()),
@@ -147,7 +157,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
 
     let input_items_request = Request::builder()
         .method("GET")
-        .uri("/v1/responses/resp_fake/input_items")
+        .uri(format!("/v1/responses/{created_id}/input_items"))
         .body(Body::empty())
         .unwrap();
     let input_items_response = app.oneshot(input_items_request).await.unwrap();
@@ -214,21 +224,38 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
         .unwrap();
     let create_response = app.clone().oneshot(create_request).await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let create_parsed: serde_json::Value = serde_json::from_slice(&create_body)?;
+    let created_id = create_parsed
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("response id")
+        .to_string();
+    assert!(created_id.starts_with("resp_ditto_"));
 
     let delete_request = Request::builder()
         .method("DELETE")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{created_id}"))
         .body(Body::empty())
         .unwrap();
     let delete_response = app.clone().oneshot(delete_request).await.unwrap();
     assert_eq!(delete_response.status(), StatusCode::OK);
+    assert_eq!(
+        delete_response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("primary")
+    );
     let delete_body = to_bytes(delete_response.into_body(), usize::MAX)
         .await
         .unwrap();
     let delete_parsed: serde_json::Value = serde_json::from_slice(&delete_body)?;
     assert_eq!(
         delete_parsed.get("id").and_then(|v| v.as_str()),
-        Some("resp_fake")
+        Some(created_id.as_str())
     );
     assert_eq!(
         delete_parsed.get("deleted").and_then(|v| v.as_bool()),
@@ -241,11 +268,150 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
 
     let retrieve_request = Request::builder()
         .method("GET")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{created_id}"))
         .body(Body::empty())
         .unwrap();
     let retrieve_response = app.oneshot(retrieve_request).await.unwrap();
     assert_eq!(retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends()
+-> ditto_core::error::Result<()> {
+    let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");
+    primary_key.route = Some("primary".to_string());
+    let mut secondary_key =
+        ditto_server::gateway::VirtualKeyConfig::new("key-secondary", "vk-secondary");
+    secondary_key.route = Some("secondary".to_string());
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![primary_key, secondary_key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let create_request = |token: &str| {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/responses")
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "model": "gpt-4o-mini",
+                    "input": "hi"
+                })
+                .to_string(),
+            ))
+            .unwrap()
+    };
+
+    let primary_create = app.clone().oneshot(create_request("vk-primary")).await.unwrap();
+    let primary_body = to_bytes(primary_create.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let primary_id = serde_json::from_slice::<serde_json::Value>(&primary_body)?
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("primary response id")
+        .to_string();
+
+    let secondary_create = app
+        .clone()
+        .oneshot(create_request("vk-secondary"))
+        .await
+        .unwrap();
+    let secondary_body = to_bytes(secondary_create.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let secondary_id = serde_json::from_slice::<serde_json::Value>(&secondary_body)?
+        .get("id")
+        .and_then(|v| v.as_str())
+        .expect("secondary response id")
+        .to_string();
+
+    assert_ne!(primary_id, secondary_id);
+    assert!(primary_id.contains("_primary_"));
+    assert!(secondary_id.contains("_secondary_"));
+
+    let retrieve = |id: &str| {
+        Request::builder()
+            .method("GET")
+            .uri(format!("/v1/responses/{id}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+
+    let primary_retrieve = app.clone().oneshot(retrieve(&primary_id)).await.unwrap();
+    assert_eq!(
+        primary_retrieve
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("primary")
+    );
+
+    let secondary_retrieve = app.clone().oneshot(retrieve(&secondary_id)).await.unwrap();
+    assert_eq!(
+        secondary_retrieve
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("secondary")
+    );
+
+    let delete_primary = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{primary_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let delete_primary_response = app.clone().oneshot(delete_primary).await.unwrap();
+    assert_eq!(delete_primary_response.status(), StatusCode::OK);
+    assert_eq!(
+        delete_primary_response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("primary")
+    );
+
+    let primary_missing = app.clone().oneshot(retrieve(&primary_id)).await.unwrap();
+    assert_eq!(primary_missing.status(), StatusCode::NOT_FOUND);
+
+    let secondary_still_present = app.oneshot(retrieve(&secondary_id)).await.unwrap();
+    assert_eq!(secondary_still_present.status(), StatusCode::OK);
+    assert_eq!(
+        secondary_still_present
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("secondary")
+    );
 
     Ok(())
 }
