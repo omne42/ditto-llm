@@ -991,91 +991,83 @@ async fn handle_gateway(
             .map(|response| input_tokens.saturating_add(u64::from(response.output_tokens)));
         if let Some(spent_tokens) = spent_tokens {
             #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.stores.sqlite.as_ref() {
-                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store
-                        .record_spent_tokens(virtual_key_id, spent_tokens)
-                        .await
-                    {
-                        emit_json_log(
-                            &state,
-                            "gateway.warning",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "virtual_key_id": virtual_key_id,
-                                "warning": "store_record_spent_tokens_failed",
-                                "store": "sqlite",
-                                "error": err.to_string(),
-                            }),
-                        );
-                    }
-                }
+            if let Some(store) = state.stores.sqlite.as_ref()
+                && let Some(virtual_key_id) = _virtual_key_id.as_deref()
+                && let Err(err) = store
+                    .record_spent_tokens(virtual_key_id, spent_tokens)
+                    .await
+            {
+                emit_json_log(
+                    &state,
+                    "gateway.warning",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "warning": "store_record_spent_tokens_failed",
+                        "store": "sqlite",
+                        "error": err.to_string(),
+                    }),
+                );
             }
 
             #[cfg(feature = "gateway-store-postgres")]
-            if let Some(store) = state.stores.postgres.as_ref() {
-                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store
-                        .record_spent_tokens(virtual_key_id, spent_tokens)
-                        .await
-                    {
-                        emit_json_log(
-                            &state,
-                            "gateway.warning",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "virtual_key_id": virtual_key_id,
-                                "warning": "store_record_spent_tokens_failed",
-                                "store": "postgres",
-                                "error": err.to_string(),
-                            }),
-                        );
-                    }
-                }
+            if let Some(store) = state.stores.postgres.as_ref()
+                && let Some(virtual_key_id) = _virtual_key_id.as_deref()
+                && let Err(err) = store
+                    .record_spent_tokens(virtual_key_id, spent_tokens)
+                    .await
+            {
+                emit_json_log(
+                    &state,
+                    "gateway.warning",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "warning": "store_record_spent_tokens_failed",
+                        "store": "postgres",
+                        "error": err.to_string(),
+                    }),
+                );
             }
 
             #[cfg(feature = "gateway-store-mysql")]
-            if let Some(store) = state.stores.mysql.as_ref() {
-                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store
-                        .record_spent_tokens(virtual_key_id, spent_tokens)
-                        .await
-                    {
-                        emit_json_log(
-                            &state,
-                            "gateway.warning",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "virtual_key_id": virtual_key_id,
-                                "warning": "store_record_spent_tokens_failed",
-                                "store": "mysql",
-                                "error": err.to_string(),
-                            }),
-                        );
-                    }
-                }
+            if let Some(store) = state.stores.mysql.as_ref()
+                && let Some(virtual_key_id) = _virtual_key_id.as_deref()
+                && let Err(err) = store
+                    .record_spent_tokens(virtual_key_id, spent_tokens)
+                    .await
+            {
+                emit_json_log(
+                    &state,
+                    "gateway.warning",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "warning": "store_record_spent_tokens_failed",
+                        "store": "mysql",
+                        "error": err.to_string(),
+                    }),
+                );
             }
 
             #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.stores.redis.as_ref() {
-                if let Some(virtual_key_id) = _virtual_key_id.as_deref() {
-                    if let Err(err) = store
-                        .record_spent_tokens(virtual_key_id, spent_tokens)
-                        .await
-                    {
-                        emit_json_log(
-                            &state,
-                            "gateway.warning",
-                            serde_json::json!({
-                                "request_id": &request_id,
-                                "virtual_key_id": virtual_key_id,
-                                "warning": "store_record_spent_tokens_failed",
-                                "store": "redis",
-                                "error": err.to_string(),
-                            }),
-                        );
-                    }
-                }
+            if let Some(store) = state.stores.redis.as_ref()
+                && let Some(virtual_key_id) = _virtual_key_id.as_deref()
+                && let Err(err) = store
+                    .record_spent_tokens(virtual_key_id, spent_tokens)
+                    .await
+            {
+                emit_json_log(
+                    &state,
+                    "gateway.warning",
+                    serde_json::json!({
+                        "request_id": &request_id,
+                        "virtual_key_id": virtual_key_id,
+                        "warning": "store_record_spent_tokens_failed",
+                        "store": "redis",
+                        "error": err.to_string(),
+                    }),
+                );
             }
         }
     }
@@ -1796,10 +1788,10 @@ async fn proxy_response(
     if content_type.starts_with("text/event-stream") {
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        if let Some(cache_key) = _cache_key {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
+        if let Some(cache_key) = _cache_key
+            && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+        {
+            headers.insert("x-ditto-cache-key", value);
         }
 
         let upstream_stream: ProxyBodyStream = upstream
@@ -1839,10 +1831,10 @@ async fn proxy_response(
                 let _ = end;
 
                 #[cfg(feature = "gateway-proxy-cache")]
-                if matches!(end, ProxyStreamEnd::Completed) {
-                    if let Some(cache_completion) = self.cache_completion.take() {
-                        cache_completion.finish().await;
-                    }
+                if matches!(end, ProxyStreamEnd::Completed)
+                    && let Some(cache_completion) = self.cache_completion.take()
+                {
+                    cache_completion.finish().await;
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -1935,10 +1927,10 @@ async fn proxy_response(
         };
         let mut headers = upstream_headers;
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        if let Some(cache_key) = _cache_key {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
+        if let Some(cache_key) = _cache_key
+            && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+        {
+            headers.insert("x-ditto-cache-key", value);
         }
         if should_buffer {
             let max_body_bytes = {
@@ -1978,23 +1970,23 @@ async fn proxy_response(
             };
 
             #[cfg(feature = "gateway-proxy-cache")]
-            if status.is_success() {
-                if let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata) {
-                    let cached = CachedProxyResponse {
-                        status: status.as_u16(),
-                        headers: headers.clone(),
-                        body: bytes.clone(),
-                        backend: backend.clone(),
-                    };
-                    store_proxy_cache_response(
-                        _state,
-                        cache_key,
-                        cached,
-                        cache_metadata,
-                        now_epoch_seconds(),
-                    )
-                    .await;
-                }
+            if status.is_success()
+                && let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata)
+            {
+                let cached = CachedProxyResponse {
+                    status: status.as_u16(),
+                    headers: headers.clone(),
+                    body: bytes.clone(),
+                    backend: backend.clone(),
+                };
+                store_proxy_cache_response(
+                    _state,
+                    cache_key,
+                    cached,
+                    cache_metadata,
+                    now_epoch_seconds(),
+                )
+                .await;
             }
 
             let body = proxy_body_from_bytes_with_permit(bytes, proxy_permits);
@@ -2057,10 +2049,10 @@ async fn responses_shim_response(
         );
         headers.remove("content-length");
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        if let Some(cache_key) = _cache_key {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
+        if let Some(cache_key) = _cache_key
+            && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+        {
+            headers.insert("x-ditto-cache-key", value);
         }
 
         struct StreamState {
@@ -2095,10 +2087,10 @@ async fn responses_shim_response(
                 let _ = end;
 
                 #[cfg(feature = "gateway-proxy-cache")]
-                if matches!(end, ProxyStreamEnd::Completed) {
-                    if let Some(cache_completion) = self.cache_completion.take() {
-                        cache_completion.finish().await;
-                    }
+                if matches!(end, ProxyStreamEnd::Completed)
+                    && let Some(cache_completion) = self.cache_completion.take()
+                {
+                    cache_completion.finish().await;
                 }
 
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -2222,30 +2214,30 @@ async fn responses_shim_response(
         headers.remove("content-length");
 
         #[cfg(feature = "gateway-proxy-cache")]
-        if status.is_success() {
-            if let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata) {
-                let cached = CachedProxyResponse {
-                    status: status.as_u16(),
-                    headers: headers.clone(),
-                    body: mapped_bytes.clone(),
-                    backend: backend.clone(),
-                };
-                store_proxy_cache_response(
-                    _state,
-                    cache_key,
-                    cached,
-                    cache_metadata,
-                    now_epoch_seconds(),
-                )
-                .await;
-            }
+        if status.is_success()
+            && let (Some(cache_key), Some(cache_metadata)) = (_cache_key, _cache_metadata)
+        {
+            let cached = CachedProxyResponse {
+                status: status.as_u16(),
+                headers: headers.clone(),
+                body: mapped_bytes.clone(),
+                backend: backend.clone(),
+            };
+            store_proxy_cache_response(
+                _state,
+                cache_key,
+                cached,
+                cache_metadata,
+                now_epoch_seconds(),
+            )
+            .await;
         }
 
         apply_proxy_response_headers(&mut headers, &backend, &request_id, false);
-        if let Some(cache_key) = _cache_key {
-            if let Ok(value) = axum::http::HeaderValue::from_str(cache_key) {
-                headers.insert("x-ditto-cache-key", value);
-            }
+        if let Some(cache_key) = _cache_key
+            && let Ok(value) = axum::http::HeaderValue::from_str(cache_key)
+        {
+            headers.insert("x-ditto-cache-key", value);
         }
         let body = proxy_body_from_bytes_with_permit(mapped_bytes, proxy_permits);
         let mut response = axum::response::Response::new(body);

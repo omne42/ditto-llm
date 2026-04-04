@@ -187,10 +187,10 @@ impl ProviderPluginDescriptor {
         hints: InvocationHints,
     ) -> Option<ResolvedInvocation> {
         let model_descriptor = self.model(model);
-        if let Some(descriptor) = model_descriptor {
-            if !descriptor.supported_operations.contains(&operation) {
-                return None;
-            }
+        if let Some(descriptor) = model_descriptor
+            && !descriptor.supported_operations.contains(&operation)
+        {
+            return None;
         }
 
         let canonical_model = model_descriptor.map(|entry| entry.id);

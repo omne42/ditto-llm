@@ -75,17 +75,17 @@ pub(crate) fn sanitize_stop_sequences(
         }
     }
 
-    if let Some(max) = max {
-        if out.len() > max {
-            warnings.push(Warning::Compatibility {
-                feature: "stop_sequences".to_string(),
-                details: format!(
-                    "provider supports at most {max} stop sequences; truncating from {} to {max}",
-                    out.len()
-                ),
-            });
-            out.truncate(max);
-        }
+    if let Some(max) = max
+        && out.len() > max
+    {
+        warnings.push(Warning::Compatibility {
+            feature: "stop_sequences".to_string(),
+            details: format!(
+                "provider supports at most {max} stop sequences; truncating from {} to {max}",
+                out.len()
+            ),
+        });
+        out.truncate(max);
     }
 
     out

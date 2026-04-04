@@ -87,13 +87,13 @@ where
             );
             state.last_tool_results.clear();
 
-            if let Some(last_response) = state.last_response.as_ref() {
-                if !last_response.content.is_empty() {
-                    state.request.messages.push(Message {
-                        role: Role::Assistant,
-                        content: last_response.content.clone(),
-                    });
-                }
+            if let Some(last_response) = state.last_response.as_ref()
+                && !last_response.content.is_empty()
+            {
+                state.request.messages.push(Message {
+                    role: Role::Assistant,
+                    content: last_response.content.clone(),
+                });
             }
 
             if self.should_stop(&state) {

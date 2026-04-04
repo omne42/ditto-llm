@@ -69,10 +69,10 @@ fn apply_admin_list_window<T>(items: &mut Vec<T>, offset: usize, limit: Option<u
         }
     }
 
-    if let Some(limit) = limit.map(|limit| limit.min(max)) {
-        if items.len() > limit {
-            items.truncate(limit);
-        }
+    if let Some(limit) = limit.map(|limit| limit.min(max))
+        && items.len() > limit
+    {
+        items.truncate(limit);
     }
 }
 
@@ -1931,14 +1931,13 @@ pub(super) async fn list_keys(
             .as_deref()
             .map(str::trim)
             .filter(|v| !v.is_empty())
+            && query_tenant != admin_tenant
         {
-            if query_tenant != admin_tenant {
-                return Err(error_response(
-                    StatusCode::FORBIDDEN,
-                    "forbidden",
-                    "cross-tenant admin access is not allowed",
-                ));
-            }
+            return Err(error_response(
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "cross-tenant admin access is not allowed",
+            ));
         }
         Some(admin_tenant)
     } else {
@@ -1981,10 +1980,10 @@ pub(super) async fn list_keys(
         }
     }
 
-    if let Some(limit) = query.limit.map(|limit| limit.min(MAX_ADMIN_LIST_LIMIT)) {
-        if keys.len() > limit {
-            keys.truncate(limit);
-        }
+    if let Some(limit) = query.limit.map(|limit| limit.min(MAX_ADMIN_LIST_LIMIT))
+        && keys.len() > limit
+    {
+        keys.truncate(limit);
     }
 
     if !query.include_tokens {

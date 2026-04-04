@@ -73,79 +73,68 @@ pub(super) async fn reserve_proxy_token_budgets_for_request(
         token_budget_reservation_ids.push(request_id.to_string());
     }
 
-    if use_persistent_budget {
-        if let Some(virtual_key_id) = virtual_key_id {
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_tokens {
-                    let reservation_id = format!("{request_id}::budget::{scope}");
-                    let ctx = ProxyBudgetReservationContext {
-                        state,
-                        reservation_id: &reservation_id,
-                        budget_scope: scope,
-                        request_id,
-                        virtual_key_id,
-                        path_and_query,
-                        model,
-                    };
-                    if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
-                        rollback_proxy_token_budget_reservations(
-                            state,
-                            &token_budget_reservation_ids,
-                        )
-                        .await;
-                        return Err(err);
-                    }
-                    token_budget_reservation_ids.push(reservation_id);
-                }
+    if use_persistent_budget && let Some(virtual_key_id) = virtual_key_id {
+        if let Some((scope, budget)) = tenant_budget_scope.as_ref()
+            && let Some(limit) = budget.total_tokens
+        {
+            let reservation_id = format!("{request_id}::budget::{scope}");
+            let ctx = ProxyBudgetReservationContext {
+                state,
+                reservation_id: &reservation_id,
+                budget_scope: scope,
+                request_id,
+                virtual_key_id,
+                path_and_query,
+                model,
+            };
+            if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
+                rollback_proxy_token_budget_reservations(state, &token_budget_reservation_ids)
+                    .await;
+                return Err(err);
             }
+            token_budget_reservation_ids.push(reservation_id);
+        }
 
-            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_tokens {
-                    let reservation_id = format!("{request_id}::budget::{scope}");
-                    let ctx = ProxyBudgetReservationContext {
-                        state,
-                        reservation_id: &reservation_id,
-                        budget_scope: scope,
-                        request_id,
-                        virtual_key_id,
-                        path_and_query,
-                        model,
-                    };
-                    if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
-                        rollback_proxy_token_budget_reservations(
-                            state,
-                            &token_budget_reservation_ids,
-                        )
-                        .await;
-                        return Err(err);
-                    }
-                    token_budget_reservation_ids.push(reservation_id);
-                }
+        if let Some((scope, budget)) = project_budget_scope.as_ref()
+            && let Some(limit) = budget.total_tokens
+        {
+            let reservation_id = format!("{request_id}::budget::{scope}");
+            let ctx = ProxyBudgetReservationContext {
+                state,
+                reservation_id: &reservation_id,
+                budget_scope: scope,
+                request_id,
+                virtual_key_id,
+                path_and_query,
+                model,
+            };
+            if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
+                rollback_proxy_token_budget_reservations(state, &token_budget_reservation_ids)
+                    .await;
+                return Err(err);
             }
+            token_budget_reservation_ids.push(reservation_id);
+        }
 
-            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_tokens {
-                    let reservation_id = format!("{request_id}::budget::{scope}");
-                    let ctx = ProxyBudgetReservationContext {
-                        state,
-                        reservation_id: &reservation_id,
-                        budget_scope: scope,
-                        request_id,
-                        virtual_key_id,
-                        path_and_query,
-                        model,
-                    };
-                    if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
-                        rollback_proxy_token_budget_reservations(
-                            state,
-                            &token_budget_reservation_ids,
-                        )
-                        .await;
-                        return Err(err);
-                    }
-                    token_budget_reservation_ids.push(reservation_id);
-                }
+        if let Some((scope, budget)) = user_budget_scope.as_ref()
+            && let Some(limit) = budget.total_tokens
+        {
+            let reservation_id = format!("{request_id}::budget::{scope}");
+            let ctx = ProxyBudgetReservationContext {
+                state,
+                reservation_id: &reservation_id,
+                budget_scope: scope,
+                request_id,
+                virtual_key_id,
+                path_and_query,
+                model,
+            };
+            if let Err(err) = reserve_proxy_token_budget(ctx, limit, charge_tokens).await {
+                rollback_proxy_token_budget_reservations(state, &token_budget_reservation_ids)
+                    .await;
+                return Err(err);
             }
+            token_budget_reservation_ids.push(reservation_id);
         }
     }
 
@@ -226,68 +215,57 @@ pub(super) async fn reserve_proxy_cost_budgets_for_request(
         cost_budget_reservation_ids.push(request_id.to_string());
     }
 
-    if use_persistent_budget {
-        if let Some(virtual_key_id) = virtual_key_id {
-            let mut cost_scopes: Vec<(String, u64)> = Vec::new();
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_usd_micros {
-                    cost_scopes.push((scope.clone(), limit));
-                }
-            }
-            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_usd_micros {
-                    cost_scopes.push((scope.clone(), limit));
-                }
-            }
-            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                if let Some(limit) = budget.total_usd_micros {
-                    cost_scopes.push((scope.clone(), limit));
-                }
-            }
+    if use_persistent_budget && let Some(virtual_key_id) = virtual_key_id {
+        let mut cost_scopes: Vec<(String, u64)> = Vec::new();
+        if let Some((scope, budget)) = tenant_budget_scope.as_ref()
+            && let Some(limit) = budget.total_usd_micros
+        {
+            cost_scopes.push((scope.clone(), limit));
+        }
+        if let Some((scope, budget)) = project_budget_scope.as_ref()
+            && let Some(limit) = budget.total_usd_micros
+        {
+            cost_scopes.push((scope.clone(), limit));
+        }
+        if let Some((scope, budget)) = user_budget_scope.as_ref()
+            && let Some(limit) = budget.total_usd_micros
+        {
+            cost_scopes.push((scope.clone(), limit));
+        }
 
-            if !cost_scopes.is_empty() {
-                let Some(charge_cost_usd_micros) = charge_cost_usd_micros else {
+        if !cost_scopes.is_empty() {
+            let Some(charge_cost_usd_micros) = charge_cost_usd_micros else {
+                rollback_proxy_cost_budget_reservations(state, &cost_budget_reservation_ids).await;
+                rollback_proxy_token_budget_reservations(state, token_budget_reservation_ids).await;
+                return Err(openai_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    Some("pricing_not_configured"),
+                    "pricing not configured for cost budgets",
+                ));
+            };
+
+            for (scope, limit_usd_micros) in cost_scopes {
+                let reservation_id = format!("{request_id}::cost::{scope}");
+                let ctx = ProxyBudgetReservationContext {
+                    state,
+                    reservation_id: &reservation_id,
+                    budget_scope: &scope,
+                    request_id,
+                    virtual_key_id,
+                    path_and_query,
+                    model,
+                };
+                if let Err(err) =
+                    reserve_proxy_cost_budget(ctx, limit_usd_micros, charge_cost_usd_micros).await
+                {
                     rollback_proxy_cost_budget_reservations(state, &cost_budget_reservation_ids)
                         .await;
                     rollback_proxy_token_budget_reservations(state, token_budget_reservation_ids)
                         .await;
-                    return Err(openai_error(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "api_error",
-                        Some("pricing_not_configured"),
-                        "pricing not configured for cost budgets",
-                    ));
-                };
-
-                for (scope, limit_usd_micros) in cost_scopes {
-                    let reservation_id = format!("{request_id}::cost::{scope}");
-                    let ctx = ProxyBudgetReservationContext {
-                        state,
-                        reservation_id: &reservation_id,
-                        budget_scope: &scope,
-                        request_id,
-                        virtual_key_id,
-                        path_and_query,
-                        model,
-                    };
-                    if let Err(err) =
-                        reserve_proxy_cost_budget(ctx, limit_usd_micros, charge_cost_usd_micros)
-                            .await
-                    {
-                        rollback_proxy_cost_budget_reservations(
-                            state,
-                            &cost_budget_reservation_ids,
-                        )
-                        .await;
-                        rollback_proxy_token_budget_reservations(
-                            state,
-                            token_budget_reservation_ids,
-                        )
-                        .await;
-                        return Err(err);
-                    }
-                    cost_budget_reservation_ids.push(reservation_id);
+                    return Err(err);
                 }
+                cost_budget_reservation_ids.push(reservation_id);
             }
         }
     }

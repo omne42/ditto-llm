@@ -586,17 +586,16 @@ pub(super) async fn validate_config_payload(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        && expected != computed_virtual_keys_sha256
     {
-        if expected != computed_virtual_keys_sha256 {
-            push_validation_issue(
-                &mut issues,
-                "hash_mismatch",
-                format!(
-                    "virtual_keys_sha256 mismatch: expected={expected}, got={computed_virtual_keys_sha256}"
-                ),
-                None,
-            );
-        }
+        push_validation_issue(
+            &mut issues,
+            "hash_mismatch",
+            format!(
+                "virtual_keys_sha256 mismatch: expected={expected}, got={computed_virtual_keys_sha256}"
+            ),
+            None,
+        );
     }
 
     let mut router_default_backend_count = None;
@@ -622,15 +621,14 @@ pub(super) async fn validate_config_payload(
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
+            && expected != computed_router
         {
-            if expected != computed_router {
-                push_validation_issue(
-                    &mut issues,
-                    "router_hash_mismatch",
-                    format!("router_sha256 mismatch: expected={expected}, got={computed_router}"),
-                    None,
-                );
-            }
+            push_validation_issue(
+                &mut issues,
+                "router_hash_mismatch",
+                format!("router_sha256 mismatch: expected={expected}, got={computed_router}"),
+                None,
+            );
         }
         router_default_backend_count = Some(router.default_backends.len());
         router_rule_count = Some(router.rules.len());
@@ -883,10 +881,9 @@ pub(super) async fn list_config_versions(
     if let Some(limit) = query
         .limit
         .map(|value| value.min(MAX_CONFIG_VERSIONS_LIMIT))
+        && versions.len() > limit
     {
-        if versions.len() > limit {
-            versions.truncate(limit);
-        }
+        versions.truncate(limit);
     }
 
     Ok(Json(versions))

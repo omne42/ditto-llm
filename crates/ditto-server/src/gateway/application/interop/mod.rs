@@ -98,13 +98,13 @@ fn anthropic_tools_to_openai(value: &Value) -> Result<Vec<Value>, String> {
             .unwrap_or_else(|| serde_json::json!({ "type": "object" }));
         let mut function = Map::<String, Value>::new();
         function.insert("name".to_string(), Value::String(name.to_string()));
-        if let Some(description) = description {
-            if !description.trim().is_empty() {
-                function.insert(
-                    "description".to_string(),
-                    Value::String(description.to_string()),
-                );
-            }
+        if let Some(description) = description
+            && !description.trim().is_empty()
+        {
+            function.insert(
+                "description".to_string(),
+                Value::String(description.to_string()),
+            );
         }
         function.insert("parameters".to_string(), parameters);
         out.push(serde_json::json!({
@@ -210,13 +210,13 @@ pub(crate) fn anthropic_messages_request_to_openai_chat_completions(
                         .unwrap_or_default();
                     match kind {
                         "text" => {
-                            if let Some(text) = block.get("text").and_then(Value::as_str) {
-                                if !text.is_empty() {
-                                    parts.push(serde_json::json!({
-                                        "type": "text",
-                                        "text": text,
-                                    }));
-                                }
+                            if let Some(text) = block.get("text").and_then(Value::as_str)
+                                && !text.is_empty()
+                            {
+                                parts.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": text,
+                                }));
                             }
                         }
                         "image" => {
@@ -442,13 +442,13 @@ pub(crate) fn openai_chat_completions_response_to_anthropic_message(
         .ok_or_else(|| "openai response missing choices[0].message".to_string())?;
 
     let mut content_blocks = Vec::<Value>::new();
-    if let Some(text) = message.get("content").and_then(Value::as_str) {
-        if !text.is_empty() {
-            content_blocks.push(serde_json::json!({
-                "type": "text",
-                "text": text,
-            }));
-        }
+    if let Some(text) = message.get("content").and_then(Value::as_str)
+        && !text.is_empty()
+    {
+        content_blocks.push(serde_json::json!({
+            "type": "text",
+            "text": text,
+        }));
     }
 
     if let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) {
@@ -579,13 +579,13 @@ fn google_tools_to_openai(value: &Value) -> Result<Vec<Value>, String> {
 
             let mut function = Map::<String, Value>::new();
             function.insert("name".to_string(), Value::String(name.to_string()));
-            if let Some(description) = description {
-                if !description.trim().is_empty() {
-                    function.insert(
-                        "description".to_string(),
-                        Value::String(description.to_string()),
-                    );
-                }
+            if let Some(description) = description
+                && !description.trim().is_empty()
+            {
+                function.insert(
+                    "description".to_string(),
+                    Value::String(description.to_string()),
+                );
             }
             if let Some(parameters) = parameters {
                 function.insert("parameters".to_string(), parameters);
@@ -610,18 +610,18 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
         .ok_or_else(|| "request body must be a JSON object".to_string())?;
 
     let mut messages = Vec::<Value>::new();
-    if let Some(system) = obj.get("system_instruction").and_then(Value::as_object) {
-        if let Some(parts) = system.get("parts").and_then(Value::as_array) {
-            let text = parts
-                .iter()
-                .filter_map(|p| p.get("text").and_then(Value::as_str))
-                .collect::<String>();
-            if !text.trim().is_empty() {
-                messages.push(serde_json::json!({
-                    "role": "system",
-                    "content": text,
-                }));
-            }
+    if let Some(system) = obj.get("system_instruction").and_then(Value::as_object)
+        && let Some(parts) = system.get("parts").and_then(Value::as_array)
+    {
+        let text = parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(Value::as_str))
+            .collect::<String>();
+        if !text.trim().is_empty() {
+            messages.push(serde_json::json!({
+                "role": "system",
+                "content": text,
+            }));
         }
     }
 
@@ -665,15 +665,15 @@ pub(crate) fn google_generate_content_request_to_openai_chat_completions(
         if let Some(max_tokens) = cfg.get("maxOutputTokens").and_then(Value::as_u64) {
             out.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
         }
-        if let Some(temperature) = cfg.get("temperature").and_then(Value::as_f64) {
-            if let Some(value) = number_from_f64(temperature) {
-                out.insert("temperature".to_string(), value);
-            }
+        if let Some(temperature) = cfg.get("temperature").and_then(Value::as_f64)
+            && let Some(value) = number_from_f64(temperature)
+        {
+            out.insert("temperature".to_string(), value);
         }
-        if let Some(top_p) = cfg.get("topP").and_then(Value::as_f64) {
-            if let Some(value) = number_from_f64(top_p) {
-                out.insert("top_p".to_string(), value);
-            }
+        if let Some(top_p) = cfg.get("topP").and_then(Value::as_f64)
+            && let Some(value) = number_from_f64(top_p)
+        {
+            out.insert("top_p".to_string(), value);
         }
         if let Some(stop) = cfg.get("stopSequences").and_then(Value::as_array) {
             let stops = stop
@@ -739,10 +739,10 @@ pub(crate) fn openai_chat_completions_response_to_google_generate_content(
         .ok_or_else(|| "openai response missing choices[0].message".to_string())?;
 
     let mut parts = Vec::<Value>::new();
-    if let Some(text) = message.get("content").and_then(Value::as_str) {
-        if !text.is_empty() {
-            parts.push(serde_json::json!({ "text": text }));
-        }
+    if let Some(text) = message.get("content").and_then(Value::as_str)
+        && !text.is_empty()
+    {
+        parts.push(serde_json::json!({ "text": text }));
     }
 
     if let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) {
@@ -960,15 +960,15 @@ impl AnthropicSseEncoder {
         let value: Value =
             serde_json::from_str(data).map_err(|err| format!("invalid SSE JSON: {err}"))?;
 
-        if let Some(id) = value.get("id").and_then(Value::as_str).map(str::trim) {
-            if !id.is_empty() {
-                self.message_id = id.to_string();
-            }
+        if let Some(id) = value.get("id").and_then(Value::as_str).map(str::trim)
+            && !id.is_empty()
+        {
+            self.message_id = id.to_string();
         }
-        if let Some(model) = value.get("model").and_then(Value::as_str).map(str::trim) {
-            if !model.is_empty() {
-                self.model = model.to_string();
-            }
+        if let Some(model) = value.get("model").and_then(Value::as_str).map(str::trim)
+            && !model.is_empty()
+        {
+            self.model = model.to_string();
         }
 
         if let Some(usage) = value.get("usage") {
@@ -993,18 +993,18 @@ impl AnthropicSseEncoder {
         }
 
         if let Some(delta) = choice.get("delta").and_then(Value::as_object) {
-            if let Some(text) = delta.get("content").and_then(Value::as_str) {
-                if !text.is_empty() {
-                    self.ensure_text_start(&mut out);
-                    out.push(anthropic_sse_bytes(
-                        "content_block_delta",
-                        serde_json::json!({
-                            "type": "content_block_delta",
-                            "index": 0,
-                            "delta": { "type": "text_delta", "text": text }
-                        }),
-                    ));
-                }
+            if let Some(text) = delta.get("content").and_then(Value::as_str)
+                && !text.is_empty()
+            {
+                self.ensure_text_start(&mut out);
+                out.push(anthropic_sse_bytes(
+                    "content_block_delta",
+                    serde_json::json!({
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": { "type": "text_delta", "text": text }
+                    }),
+                ));
             }
 
             if let Some(tool_calls) = delta.get("tool_calls").and_then(Value::as_array) {
@@ -1018,18 +1018,17 @@ impl AnthropicSseEncoder {
                         .and_then(|value| usize::try_from(value).ok())
                         .unwrap_or(0);
                     let entry = self.tool_calls.entry(index).or_default();
-                    if let Some(id) = obj.get("id").and_then(Value::as_str).map(str::trim) {
-                        if !id.is_empty() {
-                            entry.id = Some(id.to_string());
-                        }
+                    if let Some(id) = obj.get("id").and_then(Value::as_str).map(str::trim)
+                        && !id.is_empty()
+                    {
+                        entry.id = Some(id.to_string());
                     }
                     if let Some(function) = obj.get("function").and_then(Value::as_object) {
                         if let Some(name) =
                             function.get("name").and_then(Value::as_str).map(str::trim)
+                            && !name.is_empty()
                         {
-                            if !name.is_empty() {
-                                entry.name = Some(name.to_string());
-                            }
+                            entry.name = Some(name.to_string());
                         }
                         if let Some(args) = function
                             .get("arguments")
@@ -1137,15 +1136,15 @@ impl GoogleSseEncoder {
         let value: Value =
             serde_json::from_str(data).map_err(|err| format!("invalid SSE JSON: {err}"))?;
 
-        if let Some(id) = value.get("id").and_then(Value::as_str).map(str::trim) {
-            if !id.is_empty() {
-                self.response_id = id.to_string();
-            }
+        if let Some(id) = value.get("id").and_then(Value::as_str).map(str::trim)
+            && !id.is_empty()
+        {
+            self.response_id = id.to_string();
         }
-        if let Some(model) = value.get("model").and_then(Value::as_str).map(str::trim) {
-            if !model.is_empty() {
-                self.model = model.to_string();
-            }
+        if let Some(model) = value.get("model").and_then(Value::as_str).map(str::trim)
+            && !model.is_empty()
+        {
+            self.model = model.to_string();
         }
         if let Some(usage) = value.get("usage") {
             self.usage = parse_openai_usage(usage);

@@ -676,51 +676,50 @@ pub(crate) fn build_chat_completions_body(
         );
     }
 
-    if let Some(temperature) = request.temperature {
-        if let Some(value) = crate::utils::params::clamped_number_from_f32(
+    if let Some(temperature) = request.temperature
+        && let Some(value) = crate::utils::params::clamped_number_from_f32(
             "temperature",
             temperature,
             0.0,
             2.0,
             &mut warnings,
-        ) {
-            body.insert("temperature".to_string(), Value::Number(value));
-        }
+        )
+    {
+        body.insert("temperature".to_string(), Value::Number(value));
     }
     if let Some(max_tokens) = request.max_tokens {
         body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
     }
-    if let Some(top_p) = request.top_p {
-        if let Some(value) =
+    if let Some(top_p) = request.top_p
+        && let Some(value) =
             crate::utils::params::clamped_number_from_f32("top_p", top_p, 0.0, 1.0, &mut warnings)
-        {
-            body.insert("top_p".to_string(), Value::Number(value));
-        }
+    {
+        body.insert("top_p".to_string(), Value::Number(value));
     }
     if let Some(seed) = request.seed {
         body.insert("seed".to_string(), Value::Number(seed.into()));
     }
-    if let Some(presence_penalty) = request.presence_penalty {
-        if let Some(value) = crate::utils::params::clamped_number_from_f32(
+    if let Some(presence_penalty) = request.presence_penalty
+        && let Some(value) = crate::utils::params::clamped_number_from_f32(
             "presence_penalty",
             presence_penalty,
             -2.0,
             2.0,
             &mut warnings,
-        ) {
-            body.insert("presence_penalty".to_string(), Value::Number(value));
-        }
+        )
+    {
+        body.insert("presence_penalty".to_string(), Value::Number(value));
     }
-    if let Some(frequency_penalty) = request.frequency_penalty {
-        if let Some(value) = crate::utils::params::clamped_number_from_f32(
+    if let Some(frequency_penalty) = request.frequency_penalty
+        && let Some(value) = crate::utils::params::clamped_number_from_f32(
             "frequency_penalty",
             frequency_penalty,
             -2.0,
             2.0,
             &mut warnings,
-        ) {
-            body.insert("frequency_penalty".to_string(), Value::Number(value));
-        }
+        )
+    {
+        body.insert("frequency_penalty".to_string(), Value::Number(value));
     }
     if let Some(user) = request
         .user
@@ -852,13 +851,12 @@ pub(crate) fn build_chat_completions_body(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        && quirks.should_send_prompt_cache_key()
     {
-        if quirks.should_send_prompt_cache_key() {
-            body.insert(
-                "prompt_cache_key".to_string(),
-                Value::String(prompt_cache_key.to_string()),
-            );
-        }
+        body.insert(
+            "prompt_cache_key".to_string(),
+            Value::String(prompt_cache_key.to_string()),
+        );
     }
 
     Ok((body, warnings))
@@ -1164,11 +1162,11 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     let mut out = Vec::<StreamChunk>::new();
     let mut done = false;
 
-    if state.response_id.is_none() {
-        if let Some(id) = chunk.id.as_deref().filter(|id| !id.trim().is_empty()) {
-            state.response_id = Some(id.to_string());
-            out.push(StreamChunk::ResponseId { id: id.to_string() });
-        }
+    if state.response_id.is_none()
+        && let Some(id) = chunk.id.as_deref().filter(|id| !id.trim().is_empty())
+    {
+        state.response_id = Some(id.to_string());
+        out.push(StreamChunk::ResponseId { id: id.to_string() });
     }
 
     if let Some(usage) = chunk.usage.as_ref() {
@@ -1184,20 +1182,19 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
         .reasoning_content
         .as_deref()
         .or(choice.delta.reasoning.as_deref())
+        && !reasoning.is_empty()
     {
-        if !reasoning.is_empty() {
-            out.push(StreamChunk::ReasoningDelta {
-                text: reasoning.to_string(),
-            });
-        }
+        out.push(StreamChunk::ReasoningDelta {
+            text: reasoning.to_string(),
+        });
     }
 
-    if let Some(content) = choice.delta.content.as_deref() {
-        if !content.is_empty() {
-            out.push(StreamChunk::TextDelta {
-                text: content.to_string(),
-            });
-        }
+    if let Some(content) = choice.delta.content.as_deref()
+        && !content.is_empty()
+    {
+        out.push(StreamChunk::TextDelta {
+            text: content.to_string(),
+        });
     }
 
     if let Some(tool_calls) = choice.delta.tool_calls.as_ref() {
@@ -1264,18 +1261,18 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
                 }
             }
 
-            if let Some(function) = tool_call.function.as_ref() {
-                if let Some(arguments) = function.arguments.as_deref() {
-                    if slot.started {
-                        if let Some(id) = slot.id.as_deref() {
-                            out.push(StreamChunk::ToolCallDelta {
-                                id: id.to_string(),
-                                arguments_delta: arguments.to_string(),
-                            });
-                        }
-                    } else {
-                        slot.pending_arguments.push_str(arguments);
+            if let Some(function) = tool_call.function.as_ref()
+                && let Some(arguments) = function.arguments.as_deref()
+            {
+                if slot.started {
+                    if let Some(id) = slot.id.as_deref() {
+                        out.push(StreamChunk::ToolCallDelta {
+                            id: id.to_string(),
+                            arguments_delta: arguments.to_string(),
+                        });
                     }
+                } else {
+                    slot.pending_arguments.push_str(arguments);
                 }
             }
         }
@@ -1296,25 +1293,24 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
             slot.name = Some(name.to_string());
         }
 
-        if !slot.started {
-            if let Some(name) = slot
+        if !slot.started
+            && let Some(name) = slot
                 .name
                 .as_deref()
                 .filter(|value| !value.trim().is_empty())
-            {
-                let id = slot.id.clone().unwrap_or_else(|| "call_0".to_string());
-                slot.id = Some(id.clone());
-                out.push(StreamChunk::ToolCallStart {
-                    id: id.clone(),
-                    name: name.to_string(),
+        {
+            let id = slot.id.clone().unwrap_or_else(|| "call_0".to_string());
+            slot.id = Some(id.clone());
+            out.push(StreamChunk::ToolCallStart {
+                id: id.clone(),
+                name: name.to_string(),
+            });
+            slot.started = true;
+            if !slot.pending_arguments.is_empty() {
+                out.push(StreamChunk::ToolCallDelta {
+                    id,
+                    arguments_delta: std::mem::take(&mut slot.pending_arguments),
                 });
-                slot.started = true;
-                if !slot.pending_arguments.is_empty() {
-                    out.push(StreamChunk::ToolCallDelta {
-                        id,
-                        arguments_delta: std::mem::take(&mut slot.pending_arguments),
-                    });
-                }
             }
         }
 

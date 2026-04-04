@@ -429,20 +429,18 @@ impl ToolExecutor for HttpToolExecutor {
             "truncated": truncated,
             "elapsed_ms": elapsed_ms,
         });
-        if parse_json {
-            if let Some(obj) = out.as_object_mut() {
+        if parse_json
+            && let Some(obj) = out.as_object_mut() {
                 obj.insert("body_json".to_string(), body_json.unwrap_or(Value::Null));
             }
-        }
         let is_error = !ok;
-        if let Some(read_error) = read_error {
-            if let Some(obj) = out.as_object_mut() {
+        if let Some(read_error) = read_error
+            && let Some(obj) = out.as_object_mut() {
                 obj.insert(
                     "read_error".to_string(),
                     serde_json::Value::String(read_error),
                 );
             }
-        }
 
         Ok(ToolResult {
             tool_call_id: call.id,
@@ -663,15 +661,14 @@ impl ToolExecutor for ShellToolExecutor {
         }
 
         let stdin = args.stdin.clone();
-        if let Some(stdin) = stdin.as_deref() {
-            if stdin.len() > self.max_stdin_bytes {
+        if let Some(stdin) = stdin.as_deref()
+            && stdin.len() > self.max_stdin_bytes {
                 return Ok(ToolResult {
                     tool_call_id: call.id,
                     content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
                     is_error: Some(true),
                 });
             }
-        }
 
         let cwd = match self.resolve_existing_dir(args.cwd.as_deref().unwrap_or("")) {
             Ok(dir) => dir,

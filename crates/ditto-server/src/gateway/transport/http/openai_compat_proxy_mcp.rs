@@ -729,16 +729,16 @@ fn parse_mcp_server_selector(server_url: &str) -> Option<Vec<String>> {
     }
 
     // URL/path forms: /mcp/<servers> or /<servers>/mcp
-    if let Ok(uri) = trimmed.parse::<axum::http::Uri>() {
-        if let Some(path) = uri.path_and_query().map(|pq| pq.path()) {
-            return parse_mcp_selector_from_path(path);
-        }
+    if let Ok(uri) = trimmed.parse::<axum::http::Uri>()
+        && let Some(path) = uri.path_and_query().map(|pq| pq.path())
+    {
+        return parse_mcp_selector_from_path(path);
     }
 
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        if let Ok(url) = reqwest::Url::parse(trimmed) {
-            return parse_mcp_selector_from_path(url.path());
-        }
+    if (trimmed.starts_with("http://") || trimmed.starts_with("https://"))
+        && let Ok(url) = reqwest::Url::parse(trimmed)
+    {
+        return parse_mcp_selector_from_path(url.path());
     }
 
     parse_mcp_selector_from_path(trimmed)
@@ -1474,16 +1474,16 @@ fn mcp_tool_result_to_text(result: &Value) -> String {
             MCP_AUTO_EXEC_MAX_TOOL_RESULT_TEXT_BYTES.saturating_add(TRUNCATE_SUFFIX.len());
         let mut has_text = false;
         for item in content {
-            if item.get("type").and_then(|v| v.as_str()) == Some("text") {
-                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                    has_text = true;
-                    if !assembled.is_empty() {
-                        append_with_utf8_limit(&mut assembled, "\n", raw_limit);
-                    }
-                    append_with_utf8_limit(&mut assembled, text, raw_limit);
-                    if assembled.len() >= raw_limit {
-                        break;
-                    }
+            if item.get("type").and_then(|v| v.as_str()) == Some("text")
+                && let Some(text) = item.get("text").and_then(|v| v.as_str())
+            {
+                has_text = true;
+                if !assembled.is_empty() {
+                    append_with_utf8_limit(&mut assembled, "\n", raw_limit);
+                }
+                append_with_utf8_limit(&mut assembled, text, raw_limit);
+                if assembled.len() >= raw_limit {
+                    break;
                 }
             }
         }

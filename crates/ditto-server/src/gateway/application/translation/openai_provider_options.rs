@@ -30,24 +30,23 @@ fn merge_openai_request_provider_options(
     provider_options: &mut ProviderOptions,
     obj: &Map<String, Value>,
 ) {
-    if let Some(reasoning) = obj.get("reasoning").and_then(Value::as_object) {
-        if let Some(effort) = reasoning
+    if let Some(reasoning) = obj.get("reasoning").and_then(Value::as_object)
+        && let Some(effort) = reasoning
             .get("effort")
             .and_then(Value::as_str)
             .and_then(parse_reasoning_effort)
-        {
-            provider_options.reasoning_effort = Some(effort);
-        }
+    {
+        provider_options.reasoning_effort = Some(effort);
     }
 
     if let Some(parallel) = obj.get("parallel_tool_calls").and_then(Value::as_bool) {
         provider_options.parallel_tool_calls = Some(parallel);
     }
 
-    if let Some(format_value) = obj.get("response_format").and_then(Value::as_object) {
-        if let Some(parsed) = parse_json_schema_response_format(format_value) {
-            provider_options.response_format = Some(parsed);
-        }
+    if let Some(format_value) = obj.get("response_format").and_then(Value::as_object)
+        && let Some(parsed) = parse_json_schema_response_format(format_value)
+    {
+        provider_options.response_format = Some(parsed);
     }
 }
 

@@ -229,10 +229,10 @@ pub struct A2aAgentConfig {
 
 impl A2aAgentConfig {
     pub fn resolve_env(&mut self, env: &Env) -> Result<(), super::GatewayError> {
-        if let Value::Object(obj) = &mut self.agent_card_params {
-            if let Some(Value::String(url)) = obj.get_mut("url") {
-                *url = expand_env_placeholders(url, env)?;
-            }
+        if let Value::Object(obj) = &mut self.agent_card_params
+            && let Some(Value::String(url)) = obj.get_mut("url")
+        {
+            *url = expand_env_placeholders(url, env)?;
         }
         for value in self.headers.values_mut() {
             *value = expand_env_placeholders(value, env)?;
@@ -244,10 +244,10 @@ impl A2aAgentConfig {
     }
 
     pub async fn resolve_secrets(&mut self, env: &Env) -> Result<(), super::GatewayError> {
-        if let Value::Object(obj) = &mut self.agent_card_params {
-            if let Some(Value::String(url)) = obj.get_mut("url") {
-                resolve_secret_in_string(url, env, "a2a_agents[].agent_card_params.url").await?;
-            }
+        if let Value::Object(obj) = &mut self.agent_card_params
+            && let Some(Value::String(url)) = obj.get_mut("url")
+        {
+            resolve_secret_in_string(url, env, "a2a_agents[].agent_card_params.url").await?;
         }
         for value in self.headers.values_mut() {
             resolve_secret_in_string(value, env, "a2a_agents[].headers").await?;

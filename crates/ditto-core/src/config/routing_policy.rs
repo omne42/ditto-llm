@@ -519,19 +519,19 @@ fn validate_stage(
                 "{stage_path}.targets[{idx}] references unknown profile={profile}"
             ));
         }
-        if let Some(model) = target.model.as_deref() {
-            if model.trim().is_empty() {
-                return Err(format!(
-                    "{stage_path}.targets[{idx}].model must not be empty when set"
-                ));
-            }
+        if let Some(model) = target.model.as_deref()
+            && model.trim().is_empty()
+        {
+            return Err(format!(
+                "{stage_path}.targets[{idx}].model must not be empty when set"
+            ));
         }
-        if let Some(weight) = target.weight {
-            if !weight_valid(weight) {
-                return Err(format!(
-                    "{stage_path}.targets[{idx}].weight must be finite and > 0"
-                ));
-            }
+        if let Some(weight) = target.weight
+            && !weight_valid(weight)
+        {
+            return Err(format!(
+                "{stage_path}.targets[{idx}].weight must be finite and > 0"
+            ));
         }
     }
     Ok(())
@@ -596,13 +596,13 @@ fn find_policy_for_selector<'a>(
     policies: &'a BTreeMap<String, RoutingPolicy>,
     selector: Option<&str>,
 ) -> Option<(&'a str, &'a RoutingPolicy)> {
-    if let Some(selector) = clean_opt_string(selector) {
-        if let Some((key, policy)) = policies.iter().find(|(key, _)| {
+    if let Some(selector) = clean_opt_string(selector)
+        && let Some((key, policy)) = policies.iter().find(|(key, _)| {
             clean_opt_string(Some(key.as_str()))
                 .is_some_and(|normalized| normalized.eq_ignore_ascii_case(&selector))
-        }) {
-            return Some((key.as_str(), policy));
-        }
+        })
+    {
+        return Some((key.as_str(), policy));
     }
     policies
         .iter()

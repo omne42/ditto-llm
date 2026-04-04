@@ -159,12 +159,11 @@ impl OpenAiCompatibilityProfile {
     }
 
     pub(crate) fn context_cache_profile(&self, model: Option<&str>) -> ContextCacheProfile {
-        if let (Some(catalog_provider), Some(model)) = (self.catalog_provider, model) {
-            if let Some(profile) = builtin_runtime_registry_catalog()
+        if let (Some(catalog_provider), Some(model)) = (self.catalog_provider, model)
+            && let Some(profile) = builtin_runtime_registry_catalog()
                 .resolve_catalog_context_cache_profile(catalog_provider, model)
-            {
-                return profile;
-            }
+        {
+            return profile;
         }
 
         match self.family {

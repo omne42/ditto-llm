@@ -24,28 +24,28 @@ pub(super) fn parse_json_from_response_text(text: &str) -> Result<(Value, Option
         return Ok((parsed, None));
     }
 
-    if let Some(block) = extract_code_fence(raw) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(block.trim()) {
-            return Ok((
-                parsed,
-                Some(Warning::Compatibility {
-                    feature: "object.json_extraction".to_string(),
-                    details: "extracted JSON from a fenced code block".to_string(),
-                }),
-            ));
-        }
+    if let Some(block) = extract_code_fence(raw)
+        && let Ok(parsed) = serde_json::from_str::<Value>(block.trim())
+    {
+        return Ok((
+            parsed,
+            Some(Warning::Compatibility {
+                feature: "object.json_extraction".to_string(),
+                details: "extracted JSON from a fenced code block".to_string(),
+            }),
+        ));
     }
 
-    if let Some(substring) = extract_balanced_json(raw) {
-        if let Ok(parsed) = serde_json::from_str::<Value>(substring.trim()) {
-            return Ok((
-                parsed,
-                Some(Warning::Compatibility {
-                    feature: "object.json_extraction".to_string(),
-                    details: "extracted JSON from a larger text response".to_string(),
-                }),
-            ));
-        }
+    if let Some(substring) = extract_balanced_json(raw)
+        && let Ok(parsed) = serde_json::from_str::<Value>(substring.trim())
+    {
+        return Ok((
+            parsed,
+            Some(Warning::Compatibility {
+                feature: "object.json_extraction".to_string(),
+                details: "extracted JSON from a larger text response".to_string(),
+            }),
+        ));
     }
 
     Err(object_json_parse_failed(

@@ -76,16 +76,15 @@ impl LanguageModel for Cohere {
         body.insert("model".to_string(), Value::String(model.to_string()));
         body.insert("messages".to_string(), Value::Array(messages));
 
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = Self::sanitize_temperature(temperature, &mut warnings) {
+        if let Some(temperature) = request.temperature
+            && let Some(value) = Self::sanitize_temperature(temperature, &mut warnings) {
                 body.insert("temperature".to_string(), Value::Number(value));
             }
-        }
         if let Some(max_tokens) = request.max_tokens {
             body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
         }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(top_p) = request.top_p
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "top_p",
                 top_p,
                 0.01,
@@ -94,7 +93,6 @@ impl LanguageModel for Cohere {
             ) {
                 body.insert("p".to_string(), Value::Number(value));
             }
-        }
         if let Some(stops) = request.stop_sequences.as_ref() {
             let stops = crate::utils::params::sanitize_stop_sequences(stops, None, &mut warnings);
             if !stops.is_empty() {
@@ -263,16 +261,15 @@ impl LanguageModel for Cohere {
             body.insert("messages".to_string(), Value::Array(messages));
             body.insert("stream".to_string(), Value::Bool(true));
 
-            if let Some(temperature) = request.temperature {
-                if let Some(value) = Self::sanitize_temperature(temperature, &mut warnings) {
+            if let Some(temperature) = request.temperature
+                && let Some(value) = Self::sanitize_temperature(temperature, &mut warnings) {
                     body.insert("temperature".to_string(), Value::Number(value));
                 }
-            }
             if let Some(max_tokens) = request.max_tokens {
                 body.insert("max_tokens".to_string(), Value::Number(max_tokens.into()));
             }
-            if let Some(top_p) = request.top_p {
-                if let Some(value) = crate::utils::params::clamped_number_from_f32(
+            if let Some(top_p) = request.top_p
+                && let Some(value) = crate::utils::params::clamped_number_from_f32(
                     "top_p",
                     top_p,
                     0.01,
@@ -281,7 +278,6 @@ impl LanguageModel for Cohere {
                 ) {
                     body.insert("p".to_string(), Value::Number(value));
                 }
-            }
             if let Some(stops) = request.stop_sequences.as_ref() {
                 let stops =
                     crate::utils::params::sanitize_stop_sequences(stops, None, &mut warnings);
@@ -402,8 +398,8 @@ impl LanguageModel for Cohere {
 
                                 match kind {
                                     "message-start" => {
-                                        if !id_sent {
-                                            if let Some(id) = event
+                                        if !id_sent
+                                            && let Some(id) = event
                                                 .get("delta")
                                                 .and_then(|v| v.get("message"))
                                                 .and_then(|v| v.get("id"))
@@ -415,7 +411,6 @@ impl LanguageModel for Cohere {
                                                     id: id.to_string(),
                                                 }));
                                             }
-                                        }
                                     }
                                     "content-delta" => {
                                         if let Some(text) = event
@@ -424,26 +419,22 @@ impl LanguageModel for Cohere {
                                             .and_then(|v| v.get("content"))
                                             .and_then(|v| v.get("text"))
                                             .and_then(Value::as_str)
-                                        {
-                                            if !text.is_empty() {
+                                            && !text.is_empty() {
                                                 buffer.push_back(Ok(StreamChunk::TextDelta {
                                                     text: text.to_string(),
                                                 }));
                                             }
-                                        }
                                     }
                                     "tool-plan-delta" => {
                                         if let Some(text) = event
                                             .get("delta")
                                             .and_then(|v| v.get("tool_plan"))
                                             .and_then(Value::as_str)
-                                        {
-                                            if !text.is_empty() {
+                                            && !text.is_empty() {
                                                 buffer.push_back(Ok(StreamChunk::ReasoningDelta {
                                                     text: text.to_string(),
                                                 }));
                                             }
-                                        }
                                     }
                                     "tool-call-start" => {
                                         has_tool_calls = true;

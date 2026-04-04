@@ -219,12 +219,11 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
     let mut out = Vec::<StreamChunk>::new();
     let mut done = false;
 
-    if state.response_id.is_none() {
-        if let Some(id) = chunk.id.as_deref().filter(|id| !id.trim().is_empty()) {
+    if state.response_id.is_none()
+        && let Some(id) = chunk.id.as_deref().filter(|id| !id.trim().is_empty()) {
             state.response_id = Some(id.to_string());
             out.push(StreamChunk::ResponseId { id: id.to_string() });
         }
-    }
 
     if let Some(usage) = chunk.usage.as_ref() {
         out.push(StreamChunk::Usage(OpenAICompatible::parse_usage(usage)));
@@ -239,21 +238,18 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
         .reasoning_content
         .as_deref()
         .or(choice.delta.reasoning.as_deref())
-    {
-        if !reasoning.is_empty() {
+        && !reasoning.is_empty() {
             out.push(StreamChunk::ReasoningDelta {
                 text: reasoning.to_string(),
             });
         }
-    }
 
-    if let Some(content) = choice.delta.content.as_deref() {
-        if !content.is_empty() {
+    if let Some(content) = choice.delta.content.as_deref()
+        && !content.is_empty() {
             out.push(StreamChunk::TextDelta {
                 text: content.to_string(),
             });
         }
-    }
 
     if let Some(tool_calls) = choice.delta.tool_calls.as_ref() {
         for tool_call in tool_calls {
@@ -302,8 +298,8 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
                 }
             }
 
-            if !slot.started {
-                if let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
+            if !slot.started
+                && let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
                     let id = encode_tool_call_id_with_thought_signature(
                         id,
                         slot.thought_signature.as_deref(),
@@ -321,7 +317,6 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
                         });
                     }
                 }
-            }
         }
     }
 
@@ -365,8 +360,8 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
             }
         }
 
-        if !slot.started {
-            if let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
+        if !slot.started
+            && let (Some(id), Some(name)) = (slot.id.as_deref(), slot.name.as_deref()) {
                 out.push(StreamChunk::ToolCallStart {
                     id: id.to_string(),
                     name: name.to_string(),
@@ -379,7 +374,6 @@ fn parse_stream_data(state: &mut StreamState, data: &str) -> Result<(Vec<StreamC
                     });
                 }
             }
-        }
     }
 
     if let Some(reason) = choice.finish_reason.as_deref() {

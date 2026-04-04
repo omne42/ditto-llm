@@ -69,20 +69,20 @@ impl RateLimiter {
         let next_requests = usage.requests.saturating_add(1);
         let next_tokens = usage.tokens.saturating_add(tokens);
 
-        if let Some(rpm) = limits.rpm {
-            if rpm == 0 || next_requests > rpm {
-                return Err(GatewayError::RateLimited {
-                    limit: format!("rpm>{rpm}"),
-                });
-            }
+        if let Some(rpm) = limits.rpm
+            && (rpm == 0 || next_requests > rpm)
+        {
+            return Err(GatewayError::RateLimited {
+                limit: format!("rpm>{rpm}"),
+            });
         }
 
-        if let Some(tpm) = limits.tpm {
-            if tpm == 0 || next_tokens > tpm {
-                return Err(GatewayError::RateLimited {
-                    limit: format!("tpm>{tpm}"),
-                });
-            }
+        if let Some(tpm) = limits.tpm
+            && (tpm == 0 || next_tokens > tpm)
+        {
+            return Err(GatewayError::RateLimited {
+                limit: format!("tpm>{tpm}"),
+            });
         }
 
         usage.requests = next_requests;

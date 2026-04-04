@@ -510,27 +510,28 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
 
                         let mut parsed = None;
                         let mut new_elements = Vec::<Value>::new();
-                        if buffer_changed && (partial_enabled_now || element_enabled_now) {
-                            if let Some(value) = parse_partial_object_value(&state, &config) {
-                                if partial_enabled_now {
-                                    if state.last_emitted.as_ref() == Some(&value) {
-                                        parsed = None;
-                                    } else {
-                                        state.last_emitted = Some(value.clone());
-                                        parsed = Some(value.clone());
-                                    }
+                        if buffer_changed
+                            && (partial_enabled_now || element_enabled_now)
+                            && let Some(value) = parse_partial_object_value(&state, &config)
+                        {
+                            if partial_enabled_now {
+                                if state.last_emitted.as_ref() == Some(&value) {
+                                    parsed = None;
+                                } else {
+                                    state.last_emitted = Some(value.clone());
+                                    parsed = Some(value.clone());
                                 }
+                            }
 
-                                if element_enabled_now && state.output == ObjectOutput::Array {
-                                    if let Some(arr) = value.as_array() {
-                                        let complete_len = arr.len().saturating_sub(1);
-                                        while state.last_emitted_element < complete_len {
-                                            new_elements
-                                                .push(arr[state.last_emitted_element].clone());
-                                            state.last_emitted_element =
-                                                state.last_emitted_element.saturating_add(1);
-                                        }
-                                    }
+                            if element_enabled_now
+                                && state.output == ObjectOutput::Array
+                                && let Some(arr) = value.as_array()
+                            {
+                                let complete_len = arr.len().saturating_sub(1);
+                                while state.last_emitted_element < complete_len {
+                                    new_elements.push(arr[state.last_emitted_element].clone());
+                                    state.last_emitted_element =
+                                        state.last_emitted_element.saturating_add(1);
                                 }
                             }
                         }
@@ -539,12 +540,11 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                         (parsed, new_elements)
                     };
 
-                    if partial_enabled_now {
-                        if let Some(value) = parsed {
-                            if partial_tx.send(Ok(value)).await.is_err() {
-                                partial_enabled_task.store(false, Ordering::Relaxed);
-                            }
-                        }
+                    if partial_enabled_now
+                        && let Some(value) = parsed
+                        && partial_tx.send(Ok(value)).await.is_err()
+                    {
+                        partial_enabled_task.store(false, Ordering::Relaxed);
                     }
                     if element_enabled_now {
                         for element in new_elements {
@@ -616,14 +616,14 @@ pub(super) fn stream_object_from_stream_with_config_and_limits(
                             should_emit_final = true;
                         }
 
-                        if element_enabled_now && output == ObjectOutput::Array {
-                            if let Some(arr) = value.as_array() {
-                                while state.last_emitted_element < arr.len() {
-                                    remaining_elements
-                                        .push(arr[state.last_emitted_element].clone());
-                                    state.last_emitted_element =
-                                        state.last_emitted_element.saturating_add(1);
-                                }
+                        if element_enabled_now
+                            && output == ObjectOutput::Array
+                            && let Some(arr) = value.as_array()
+                        {
+                            while state.last_emitted_element < arr.len() {
+                                remaining_elements.push(arr[state.last_emitted_element].clone());
+                                state.last_emitted_element =
+                                    state.last_emitted_element.saturating_add(1);
                             }
                         }
                     }

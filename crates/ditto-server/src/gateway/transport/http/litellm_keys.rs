@@ -429,14 +429,14 @@ async fn litellm_key_update(
                 ));
             };
 
-            if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if existing.tenant_id.as_deref() != Some(admin_tenant) {
-                    return Err(error_response(
-                        StatusCode::FORBIDDEN,
-                        "forbidden",
-                        "cannot update keys for a different tenant",
-                    ));
-                }
+            if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                && existing.tenant_id.as_deref() != Some(admin_tenant)
+            {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot update keys for a different tenant",
+                ));
             }
 
             let mut key = existing.clone();
@@ -451,14 +451,14 @@ async fn litellm_key_update(
             }
 
             if let Some(tenant_id) = tenant_id.as_deref() {
-                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                    if tenant_id != admin_tenant {
-                        return Err(error_response(
-                            StatusCode::FORBIDDEN,
-                            "forbidden",
-                            "cannot update keys for a different tenant",
-                        ));
-                    }
+                if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                    && tenant_id != admin_tenant
+                {
+                    return Err(error_response(
+                        StatusCode::FORBIDDEN,
+                        "forbidden",
+                        "cannot update keys for a different tenant",
+                    ));
                 }
                 key.tenant_id = Some(tenant_id.to_string());
             }
@@ -495,18 +495,18 @@ async fn litellm_key_update(
             }
 
             let old_id = &existing.id;
-            if let Some(new_id) = new_alias.as_deref() {
-                if new_id != old_id {
-                    if keys.iter().any(|candidate| candidate.id == new_id) {
-                        return Err(error_response(
-                            StatusCode::CONFLICT,
-                            "conflict",
-                            "key_alias already exists",
-                        ));
-                    }
-                    gateway.remove_virtual_key(old_id);
-                    key.id = new_id.to_string();
+            if let Some(new_id) = new_alias.as_deref()
+                && new_id != old_id
+            {
+                if keys.iter().any(|candidate| candidate.id == new_id) {
+                    return Err(error_response(
+                        StatusCode::CONFLICT,
+                        "conflict",
+                        "key_alias already exists",
+                    ));
                 }
+                gateway.remove_virtual_key(old_id);
+                key.id = new_id.to_string();
             }
 
             gateway.upsert_virtual_key(key.clone());
@@ -590,14 +590,14 @@ async fn litellm_key_delete(
                     missing.push(alias);
                     continue;
                 };
-                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                    if found_tenant.as_deref() != Some(admin_tenant) {
-                        return Err(error_response(
-                            StatusCode::FORBIDDEN,
-                            "forbidden",
-                            "cannot delete keys for a different tenant",
-                        ));
-                    }
+                if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                    && found_tenant.as_deref() != Some(admin_tenant)
+                {
+                    return Err(error_response(
+                        StatusCode::FORBIDDEN,
+                        "forbidden",
+                        "cannot delete keys for a different tenant",
+                    ));
                 }
                 if gateway.remove_virtual_key(&found_id).is_some() {
                     deleted_keys.push(alias);
@@ -621,14 +621,14 @@ async fn litellm_key_delete(
                     missing.push(token);
                     continue;
                 };
-                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                    if found_tenant.as_deref() != Some(admin_tenant) {
-                        return Err(error_response(
-                            StatusCode::FORBIDDEN,
-                            "forbidden",
-                            "cannot delete keys for a different tenant",
-                        ));
-                    }
+                if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                    && found_tenant.as_deref() != Some(admin_tenant)
+                {
+                    return Err(error_response(
+                        StatusCode::FORBIDDEN,
+                        "forbidden",
+                        "cannot delete keys for a different tenant",
+                    ));
                 }
                 if gateway.remove_virtual_key(&found_id).is_some() {
                     deleted_keys.push(token);
@@ -732,16 +732,15 @@ async fn litellm_key_info(
         .as_ref()
         .map(|admin| admin.can_manage_secrets)
         .unwrap_or(true);
-    if let Some(admin) = admin {
-        if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-            if key.tenant_id.as_deref() != Some(admin_tenant) {
-                return Err(error_response(
-                    StatusCode::FORBIDDEN,
-                    "forbidden",
-                    "cannot access keys for a different tenant",
-                ));
-            }
-        }
+    if let Some(admin) = admin
+        && let Some(admin_tenant) = admin.tenant_id.as_deref()
+        && key.tenant_id.as_deref() != Some(admin_tenant)
+    {
+        return Err(error_response(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "cannot access keys for a different tenant",
+        ));
     }
 
     Ok(Json(LitellmKeyInfoResponse {
@@ -988,14 +987,14 @@ async fn litellm_key_regenerate_inner(
                 ));
             };
 
-            if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                if existing.tenant_id.as_deref() != Some(admin_tenant) {
-                    return Err(error_response(
-                        StatusCode::FORBIDDEN,
-                        "forbidden",
-                        "cannot regenerate keys for a different tenant",
-                    ));
-                }
+            if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                && existing.tenant_id.as_deref() != Some(admin_tenant)
+            {
+                return Err(error_response(
+                    StatusCode::FORBIDDEN,
+                    "forbidden",
+                    "cannot regenerate keys for a different tenant",
+                ));
             }
 
             if keys
@@ -1022,14 +1021,14 @@ async fn litellm_key_regenerate_inner(
             }
 
             if let Some(tenant_id) = tenant_id.as_deref() {
-                if let Some(admin_tenant) = admin.tenant_id.as_deref() {
-                    if tenant_id != admin_tenant {
-                        return Err(error_response(
-                            StatusCode::FORBIDDEN,
-                            "forbidden",
-                            "cannot regenerate keys for a different tenant",
-                        ));
-                    }
+                if let Some(admin_tenant) = admin.tenant_id.as_deref()
+                    && tenant_id != admin_tenant
+                {
+                    return Err(error_response(
+                        StatusCode::FORBIDDEN,
+                        "forbidden",
+                        "cannot regenerate keys for a different tenant",
+                    ));
                 }
                 key.tenant_id = Some(tenant_id.to_string());
             }
@@ -1066,18 +1065,18 @@ async fn litellm_key_regenerate_inner(
             }
 
             let old_id = &existing.id;
-            if let Some(new_id) = new_alias.as_deref() {
-                if new_id != old_id {
-                    if keys.iter().any(|candidate| candidate.id == new_id) {
-                        return Err(error_response(
-                            StatusCode::CONFLICT,
-                            "conflict",
-                            "key_alias already exists",
-                        ));
-                    }
-                    gateway.remove_virtual_key(old_id);
-                    key.id = new_id.to_string();
+            if let Some(new_id) = new_alias.as_deref()
+                && new_id != old_id
+            {
+                if keys.iter().any(|candidate| candidate.id == new_id) {
+                    return Err(error_response(
+                        StatusCode::CONFLICT,
+                        "conflict",
+                        "key_alias already exists",
+                    ));
                 }
+                gateway.remove_virtual_key(old_id);
+                key.id = new_id.to_string();
             }
 
             gateway.upsert_virtual_key(key.clone());

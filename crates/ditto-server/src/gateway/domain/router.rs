@@ -38,13 +38,13 @@ impl<'de> Deserialize<'de> for RouterConfig {
             ));
         }
 
-        if compat.default_backends.is_empty() {
-            if let Some(default_backend) = legacy_default {
-                compat.default_backends.push(RouteBackend {
-                    backend: default_backend.to_string(),
-                    weight: default_weight(),
-                });
-            }
+        if compat.default_backends.is_empty()
+            && let Some(default_backend) = legacy_default
+        {
+            compat.default_backends.push(RouteBackend {
+                backend: default_backend.to_string(),
+                weight: default_weight(),
+            });
         }
 
         Ok(Self {
@@ -111,10 +111,10 @@ impl Router {
         model: &str,
         key: Option<&VirtualKeyConfig>,
     ) -> Option<&RouteRule> {
-        if let Some(key) = key {
-            if key.route.is_some() {
-                return None;
-            }
+        if let Some(key) = key
+            && key.route.is_some()
+        {
+            return None;
         }
         let exact = self
             .config
@@ -179,10 +179,10 @@ impl Router {
         key: Option<&VirtualKeyConfig>,
         seed_hash: Option<u64>,
     ) -> Result<Vec<String>, GatewayError> {
-        if let Some(key) = key {
-            if let Some(route) = &key.route {
-                return Ok(vec![route.clone()]);
-            }
+        if let Some(key) = key
+            && let Some(route) = &key.route
+        {
+            return Ok(vec![route.clone()]);
         }
 
         let seed_hash = seed_hash.unwrap_or_else(|| super::hash64_fnv1a(model.as_bytes()));

@@ -70,7 +70,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -146,7 +146,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
@@ -180,7 +180,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
           components: llvm-tools-preview
 
       - name: Rust cache
@@ -291,7 +291,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
           components: rustfmt, clippy
 
       - name: Rust cache
@@ -464,7 +464,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -563,7 +563,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2

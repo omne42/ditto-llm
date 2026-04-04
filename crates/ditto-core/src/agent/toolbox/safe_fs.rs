@@ -381,11 +381,10 @@ impl FsToolExecutor {
         let mut entries = Vec::<Value>::new();
 
         for path in resp.matches {
-            if let Some(substring) = substring.as_ref() {
-                if !path.to_string_lossy().contains(substring) {
+            if let Some(substring) = substring.as_ref()
+                && !path.to_string_lossy().contains(substring) {
                     continue;
                 }
-            }
             if path_depth_under(&base_path, &path) > max_depth {
                 continue;
             }

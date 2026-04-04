@@ -238,16 +238,15 @@ pub(crate) fn convert_messages(
         }
     }
 
-    if is_gemma && !system_parts.is_empty() {
-        if let Some(first) = contents.first_mut() {
-            if first.get("role").and_then(Value::as_str) == Some("user") {
-                if let Some(parts) = first.get_mut("parts").and_then(Value::as_array_mut) {
-                    let system_text = system_parts.join("\n\n") + "\n\n";
-                    parts.insert(0, serde_json::json!({ "text": system_text }));
-                    system_parts.clear();
-                }
-            }
-        }
+    if is_gemma
+        && !system_parts.is_empty()
+        && let Some(first) = contents.first_mut()
+        && first.get("role").and_then(Value::as_str) == Some("user")
+        && let Some(parts) = first.get_mut("parts").and_then(Value::as_array_mut)
+    {
+        let system_text = system_parts.join("\n\n") + "\n\n";
+        parts.insert(0, serde_json::json!({ "text": system_text }));
+        system_parts.clear();
     }
 
     let system_instruction = (!system_parts.is_empty() && !is_gemma).then(|| {
@@ -340,10 +339,10 @@ fn warn_on_unresolvable_json_schema_refs(
     fn collect_refs(value: &Value, out: &mut Vec<String>) {
         match value {
             Value::Object(obj) => {
-                if let Some(Value::String(r)) = obj.get("$ref") {
-                    if !r.trim().is_empty() {
-                        out.push(r.to_string());
-                    }
+                if let Some(Value::String(r)) = obj.get("$ref")
+                    && !r.trim().is_empty()
+                {
+                    out.push(r.to_string());
                 }
                 for v in obj.values() {
                     collect_refs(v, out);

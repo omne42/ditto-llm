@@ -370,11 +370,10 @@ impl Bedrock {
                                 "tool_use_id": tool_call_id,
                                 "content": content,
                             });
-                            if let Some(is_error) = is_error {
-                                if let Some(obj) = output.as_object_mut() {
+                            if let Some(is_error) = is_error
+                                && let Some(obj) = output.as_object_mut() {
                                     obj.insert("is_error".to_string(), Value::Bool(*is_error));
                                 }
-                            }
                             blocks.push(output);
                         }
                         other => warnings.push(Warning::Unsupported {
@@ -396,11 +395,10 @@ impl Bedrock {
         let mut out = Vec::new();
         for message in messages {
             for part in &message.content {
-                if let ContentPart::File { media_type, .. } = part {
-                    if media_type == "application/pdf" {
+                if let ContentPart::File { media_type, .. } = part
+                    && media_type == "application/pdf" {
                         out.push("pdfs-2024-09-25");
                     }
-                }
             }
         }
         out
@@ -516,8 +514,8 @@ impl Bedrock {
             body.insert("system".to_string(), Value::String(system.join("\n\n")));
         }
 
-        if let Some(temperature) = request.temperature {
-            if let Some(value) = crate::utils::params::clamped_number_from_f32(
+        if let Some(temperature) = request.temperature
+            && let Some(value) = crate::utils::params::clamped_number_from_f32(
                 "temperature",
                 temperature,
                 0.0,
@@ -526,14 +524,12 @@ impl Bedrock {
             ) {
                 body.insert("temperature".to_string(), Value::Number(value));
             }
-        }
-        if let Some(top_p) = request.top_p {
-            if let Some(value) =
+        if let Some(top_p) = request.top_p
+            && let Some(value) =
                 crate::utils::params::clamped_number_from_f32("top_p", top_p, 0.0, 1.0, warnings)
             {
                 body.insert("top_p".to_string(), Value::Number(value));
             }
-        }
         if let Some(stop_sequences) = request.stop_sequences.clone() {
             let stop_sequences =
                 crate::utils::params::sanitize_stop_sequences(&stop_sequences, Some(4), warnings);

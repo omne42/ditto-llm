@@ -101,13 +101,12 @@ pub(super) async fn handle_anthropic_messages(
     if let Some(value) = parts.headers.get("authorization") {
         headers.insert("authorization", value.clone());
     }
-    if !headers.contains_key("authorization") {
-        if let Some(token) = extract_virtual_key(&parts.headers)
+    if !headers.contains_key("authorization")
+        && let Some(token) = extract_virtual_key(&parts.headers)
             .as_deref()
             .and_then(synthesize_bearer_header)
-        {
-            headers.insert("authorization", token);
-        }
+    {
+        headers.insert("authorization", token);
     }
     if let Some(value) = parts.headers.get("x-request-id") {
         headers.insert("x-request-id", value.clone());
