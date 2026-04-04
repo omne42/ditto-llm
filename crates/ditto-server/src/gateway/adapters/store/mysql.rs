@@ -1701,7 +1701,9 @@ async fn require_mysql_column_data_type(
         )));
     };
 
-    let data_type: String = row.try_get("DATA_TYPE")?;
+    let data_type = mysql_column_text(&row, "DATA_TYPE")?.ok_or_else(|| {
+        MySqlStoreError::Schema(format!("missing DATA_TYPE for `{table}.{column}`"))
+    })?;
     if data_type.eq_ignore_ascii_case(expected_data_type) {
         Ok(())
     } else {
@@ -1735,7 +1737,7 @@ async fn require_mysql_column_collation(
         )));
     };
 
-    let collation: Option<String> = row.try_get("COLLATION_NAME")?;
+    let collation = mysql_column_text(&row, "COLLATION_NAME")?;
     let Some(collation) = collation else {
         return Err(MySqlStoreError::Schema(format!(
             "column `{table}.{column}` has no collation, expected `{expected_collation}`"
@@ -1747,6 +1749,27 @@ async fn require_mysql_column_collation(
         Err(MySqlStoreError::Schema(format!(
             "column `{table}.{column}` has collation `{collation}`, expected `{expected_collation}`"
         )))
+    }
+}
+
+fn mysql_column_text(
+    row: &sqlx::mysql::MySqlRow,
+    column: &str,
+) -> Result<Option<String>, MySqlStoreError> {
+    match row.try_get::<Option<String>, _>(column) {
+        Ok(value) => Ok(value),
+        Err(text_error) => match row.try_get::<Option<Vec<u8>>, _>(column) {
+            Ok(value) => value
+                .map(|bytes| {
+                    String::from_utf8(bytes).map_err(|utf8_error| {
+                        MySqlStoreError::Schema(format!(
+                            "column `{column}` returned non-utf8 bytes: {utf8_error}"
+                        ))
+                    })
+                })
+                .transpose(),
+            Err(_) => Err(text_error.into()),
+        },
     }
 }
 
