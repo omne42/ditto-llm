@@ -735,13 +735,13 @@ fn wrap_response_for_request_dedup(
             None => {
                 if let Some(mut leader) = state.leader.take() {
                     let outcome = match state.recorder.finish() {
-                        Some(bytes) => ProxyRequestReplayOutcome::Response(
-                            ProxyRequestReplayResponse {
+                        Some(bytes) => {
+                            ProxyRequestReplayOutcome::Response(ProxyRequestReplayResponse {
                                 status: state.status.as_u16(),
                                 headers: header_map_to_record(&state.headers),
                                 body: bytes.to_vec(),
-                            },
-                        ),
+                            })
+                        }
                         None => replay_unavailable_outcome(
                             StatusCode::CONFLICT,
                             "request_id_replay_unavailable",
