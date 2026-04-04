@@ -387,10 +387,10 @@ fn extract_contract_lib_const(path: &Path, const_name: &str) -> Result<String, S
     let captures = re
         .captures(&raw)
         .ok_or_else(|| format!("constant `{const_name}` not found in `{}`", path.display()))?;
-    Ok(captures
+    captures
         .get(1)
         .map(|m| m.as_str().to_string())
-        .ok_or_else(|| format!("constant `{const_name}` has no captured value"))?)
+        .ok_or_else(|| format!("constant `{const_name}` has no captured value"))
 }
 
 fn extract_contract_cargo_version(path: &Path) -> Result<String, String> {
