@@ -10,7 +10,7 @@ pub struct LimitsConfig {
     pub tpm: Option<u32>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RateLimiter {
     usage: HashMap<String, MinuteUsage>,
     last_gc_minute: u64,

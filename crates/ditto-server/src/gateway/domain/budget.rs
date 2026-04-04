@@ -11,7 +11,7 @@ pub struct BudgetConfig {
     pub total_usd_micros: Option<u64>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BudgetTracker {
     spent_tokens: HashMap<String, u64>,
     spent_usd_micros: HashMap<String, u64>,

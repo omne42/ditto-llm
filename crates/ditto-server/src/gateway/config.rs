@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use omne_integrity_primitives::hash_sha256;
 use serde::{Deserialize, Serialize};
@@ -207,9 +207,26 @@ impl GatewayConfig {
     }
 
     pub fn validate(&self) -> Result<(), super::GatewayError> {
+        let backend_names = self
+            .backends
+            .iter()
+            .map(|backend| backend.name.trim())
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .collect::<HashSet<_>>();
+        self.validate_with_backend_names(&backend_names)
+    }
+
+    pub(crate) fn validate_with_backend_names(
+        &self,
+        backend_names: &HashSet<String>,
+    ) -> Result<(), super::GatewayError> {
         self.observability.redaction.validate()?;
         self.observability.sampling.validate()?;
         validate_virtual_key_configs(&self.virtual_keys)?;
+        validate_virtual_key_routes(&self.virtual_keys, backend_names)?;
+        validate_guardrails_config(&self.virtual_keys, &self.router)?;
+        validate_router_against_backends(&self.router, backend_names)?;
         Ok(())
     }
 }
@@ -692,6 +709,133 @@ pub(crate) fn validate_virtual_key_configs(
     Ok(())
 }
 
+pub(crate) fn validate_virtual_key_routes(
+    keys: &[VirtualKeyConfig],
+    backend_names: &HashSet<String>,
+) -> Result<(), super::GatewayError> {
+    for (idx, key) in keys.iter().enumerate() {
+        let Some(route) = key.route.as_deref() else {
+            continue;
+        };
+        let route = route.trim();
+        if route.is_empty() {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!("virtual_keys[{idx}].route cannot be empty"),
+            });
+        }
+        if !backend_names.contains(route) {
+            return Err(super::GatewayError::InvalidRequest {
+                reason: format!("virtual_keys[{idx}].route references unknown backend: {route}"),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn validate_guardrails_config(
+    keys: &[VirtualKeyConfig],
+    router: &RouterConfig,
+) -> Result<(), super::GatewayError> {
+    for (idx, key) in keys.iter().enumerate() {
+        key.guardrails
+            .validate()
+            .map_err(|err| super::GatewayError::InvalidRequest {
+                reason: format!("virtual_keys[{idx}].guardrails invalid: {err}"),
+            })?;
+    }
+
+    for (idx, rule) in router.rules.iter().enumerate() {
+        let Some(guardrails) = rule.guardrails.as_ref() else {
+            continue;
+        };
+        guardrails
+            .validate()
+            .map_err(|err| super::GatewayError::InvalidRequest {
+                reason: format!("router.rules[{idx}].guardrails invalid: {err}"),
+            })?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn validate_router_against_backends(
+    router: &RouterConfig,
+    backend_names: &HashSet<String>,
+) -> Result<(), super::GatewayError> {
+    let mut unknown_refs: Vec<String> = Vec::new();
+    let mut invalid_fields: Vec<String> = Vec::new();
+
+    for (idx, backend) in router.default_backends.iter().enumerate() {
+        let name = backend.backend.trim();
+        if name.is_empty() {
+            invalid_fields.push(format!("router.default_backends[{idx}].backend"));
+            continue;
+        }
+        if !backend_names.contains(name) {
+            unknown_refs.push(name.to_string());
+        }
+    }
+
+    for (rule_idx, rule) in router.rules.iter().enumerate() {
+        let model_prefix = rule.model_prefix.trim();
+        if model_prefix.is_empty() {
+            invalid_fields.push(format!("router.rules[{rule_idx}].model_prefix"));
+        }
+
+        let mut has_backend = false;
+        let legacy_backend = rule.backend.trim();
+        if !legacy_backend.is_empty() {
+            has_backend = true;
+            if !backend_names.contains(legacy_backend) {
+                unknown_refs.push(legacy_backend.to_string());
+            }
+        }
+
+        for (backend_idx, backend) in rule.backends.iter().enumerate() {
+            let name = backend.backend.trim();
+            if name.is_empty() {
+                invalid_fields.push(format!(
+                    "router.rules[{rule_idx}].backends[{backend_idx}].backend"
+                ));
+                continue;
+            }
+            has_backend = true;
+            if !backend_names.contains(name) {
+                unknown_refs.push(name.to_string());
+            }
+        }
+
+        if !has_backend {
+            invalid_fields.push(format!(
+                "router.rules[{rule_idx}] requires `backend` or non-empty `backends[]`"
+            ));
+        }
+    }
+
+    if !invalid_fields.is_empty() {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!(
+                "invalid router config fields: {}",
+                invalid_fields.join(", ")
+            ),
+        });
+    }
+
+    if !unknown_refs.is_empty() {
+        unknown_refs.sort();
+        unknown_refs.dedup();
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!(
+                "router references unknown backends: {}",
+                unknown_refs.join(", ")
+            ),
+        });
+    }
+
+    Ok(())
+}
+
 async fn resolve_secret_in_string(
     value: &mut String,
     env: &Env,
@@ -920,5 +1064,81 @@ mod tests {
 
         config.resolve_secrets(&env).await.expect("resolve secrets");
         assert_eq!(config.virtual_keys[0].token, "vk-1");
+    }
+
+    #[test]
+    fn gateway_config_validate_rejects_unknown_virtual_key_route() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.route = Some("missing-backend".to_string());
+
+        let config = GatewayConfig {
+            backends: vec![BackendConfig {
+                name: "primary".to_string(),
+                base_url: "https://example.com".to_string(),
+                max_in_flight: None,
+                timeout_seconds: None,
+                headers: BTreeMap::new(),
+                query_params: BTreeMap::new(),
+                provider: None,
+                provider_config: None,
+                model_map: BTreeMap::new(),
+            }],
+            virtual_keys: vec![key],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let err = config.validate().expect_err("unknown route should fail");
+        assert!(
+            err.to_string()
+                .contains("virtual_keys[0].route references unknown backend")
+        );
+    }
+
+    #[test]
+    fn gateway_config_validate_rejects_invalid_guardrails() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.guardrails.banned_regexes = vec!["(".to_string()];
+
+        let config = GatewayConfig {
+            backends: vec![BackendConfig {
+                name: "primary".to_string(),
+                base_url: "https://example.com".to_string(),
+                max_in_flight: None,
+                timeout_seconds: None,
+                headers: BTreeMap::new(),
+                query_params: BTreeMap::new(),
+                provider: None,
+                provider_config: None,
+                model_map: BTreeMap::new(),
+            }],
+            virtual_keys: vec![key],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let err = config
+            .validate()
+            .expect_err("invalid guardrails should fail");
+        assert!(
+            err.to_string()
+                .contains("virtual_keys[0].guardrails invalid")
+        );
     }
 }

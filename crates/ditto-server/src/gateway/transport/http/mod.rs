@@ -347,7 +347,9 @@ impl GatewayHttpState {
         let initial_config = gateway.config_snapshot();
         let initial_virtual_keys = initial_config.virtual_keys.clone();
         let initial_router = initial_config.router.clone();
-        let control_plane = GatewayControlPlaneSnapshot::from_gateway(&gateway);
+        let runtime_backends = GatewayRuntimeBackends::default();
+        let control_plane =
+            GatewayControlPlaneSnapshot::from_gateway_state(&gateway, &runtime_backends);
         let limits = gateway.limits.clone();
         let budget = gateway.budget.clone();
         let observability = gateway.observability.clone();
@@ -381,7 +383,7 @@ impl GatewayHttpState {
             ))),
             redactor,
             observability_policy,
-            backends: GatewayRuntimeBackends::default(),
+            backends: runtime_backends,
             admin: GatewayAdminState::default(),
             stores: GatewayPersistenceState::default(),
             proxy: GatewayProxyRuntimeState::new(proxy_backend_backpressure),
@@ -531,16 +533,19 @@ impl GatewayHttpState {
 
     pub fn with_proxy_backends(mut self, backends: HashMap<String, ProxyBackend>) -> Self {
         self.backends.proxy_backends = Arc::new(backends);
+        self.sync_control_plane_from_gateway();
         self
     }
 
     pub fn with_a2a_agents(mut self, agents: HashMap<String, A2aAgentState>) -> Self {
         self.backends.a2a_agents = Arc::new(agents);
+        self.sync_control_plane_from_gateway();
         self
     }
 
     pub fn with_mcp_servers(mut self, servers: HashMap<String, McpServerState>) -> Self {
         self.backends.mcp_servers = Arc::new(servers);
+        self.sync_control_plane_from_gateway();
         self
     }
 
@@ -560,6 +565,7 @@ impl GatewayHttpState {
         backends: HashMap<String, super::TranslationBackend>,
     ) -> Self {
         self.backends.translation_backends = Arc::new(backends);
+        self.sync_control_plane_from_gateway();
         self
     }
 

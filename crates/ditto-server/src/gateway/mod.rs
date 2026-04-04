@@ -624,6 +624,15 @@ pub struct Gateway {
     clock: Box<dyn Clock>,
 }
 
+#[derive(Clone)]
+pub(crate) struct GatewayRuntimeSnapshot {
+    virtual_keys: Vec<VirtualKeyConfig>,
+    router: RouterConfig,
+    limits: RateLimiter,
+    cache: ResponseCache,
+    budget: BudgetTracker,
+}
+
 pub(crate) struct GatewayMutation<'a> {
     control_plane: &'a mut GatewayControlPlane,
     cache: &'a Mutex<ResponseCache>,
@@ -736,6 +745,16 @@ impl Gateway {
         self.with_control_plane(GatewayControlPlane::config_snapshot)
     }
 
+    pub(crate) fn runtime_snapshot(&self) -> GatewayRuntimeSnapshot {
+        self.with_control_plane(|control_plane| GatewayRuntimeSnapshot {
+            virtual_keys: control_plane.list_virtual_keys(),
+            router: control_plane.router_config(),
+            limits: lock_unpoisoned(&self.limits).clone(),
+            cache: lock_unpoisoned(&self.cache).clone(),
+            budget: lock_unpoisoned(&self.budget).clone(),
+        })
+    }
+
     pub(crate) fn backend_model_maps(&self) -> HashMap<String, BTreeMap<String, String>> {
         self.with_control_plane(GatewayControlPlane::backend_model_maps)
     }
@@ -771,6 +790,17 @@ impl Gateway {
 
     pub fn remove_virtual_key(&self, id: &str) -> Option<VirtualKeyConfig> {
         self.mutate_control_plane(|mutation| mutation.remove_virtual_key(id))
+    }
+
+    pub(crate) fn restore_runtime_snapshot(&self, snapshot: &GatewayRuntimeSnapshot) {
+        {
+            let mut control_plane = write_unpoisoned(&self.control_plane);
+            control_plane.replace_virtual_keys(snapshot.virtual_keys.clone());
+            control_plane.replace_router_config(snapshot.router.clone());
+        }
+        *lock_unpoisoned(&self.limits) = snapshot.limits.clone();
+        *lock_unpoisoned(&self.cache) = snapshot.cache.clone();
+        *lock_unpoisoned(&self.budget) = snapshot.budget.clone();
     }
 
     fn prune_internal_scopes(&self) {

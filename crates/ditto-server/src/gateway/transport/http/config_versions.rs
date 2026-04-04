@@ -282,87 +282,6 @@ fn router_config_equal(lhs: &RouterConfig, rhs: &RouterConfig) -> bool {
     serde_json::to_vec(lhs).ok() == serde_json::to_vec(rhs).ok()
 }
 
-fn validate_router_against_backends(
-    router: &RouterConfig,
-    backend_names: &std::collections::HashSet<String>,
-) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    let mut unknown_refs: Vec<String> = Vec::new();
-    let mut invalid_fields: Vec<String> = Vec::new();
-
-    for (idx, backend) in router.default_backends.iter().enumerate() {
-        let name = backend.backend.trim();
-        if name.is_empty() {
-            invalid_fields.push(format!("router.default_backends[{idx}].backend"));
-            continue;
-        }
-        if !backend_names.contains(name) {
-            unknown_refs.push(name.to_string());
-        }
-    }
-
-    for (rule_idx, rule) in router.rules.iter().enumerate() {
-        let model_prefix = rule.model_prefix.trim();
-        if model_prefix.is_empty() {
-            invalid_fields.push(format!("router.rules[{rule_idx}].model_prefix"));
-        }
-
-        let mut has_backend = false;
-        let legacy_backend = rule.backend.trim();
-        if !legacy_backend.is_empty() {
-            has_backend = true;
-            if !backend_names.contains(legacy_backend) {
-                unknown_refs.push(legacy_backend.to_string());
-            }
-        }
-
-        for (backend_idx, backend) in rule.backends.iter().enumerate() {
-            let name = backend.backend.trim();
-            if name.is_empty() {
-                invalid_fields.push(format!(
-                    "router.rules[{rule_idx}].backends[{backend_idx}].backend"
-                ));
-                continue;
-            }
-            has_backend = true;
-            if !backend_names.contains(name) {
-                unknown_refs.push(name.to_string());
-            }
-        }
-
-        if !has_backend {
-            invalid_fields.push(format!(
-                "router.rules[{rule_idx}] requires `backend` or non-empty `backends[]`"
-            ));
-        }
-    }
-
-    if !invalid_fields.is_empty() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            format!(
-                "invalid router config fields: {}",
-                invalid_fields.join(", ")
-            ),
-        ));
-    }
-
-    if !unknown_refs.is_empty() {
-        unknown_refs.sort();
-        unknown_refs.dedup();
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            format!(
-                "router references unknown backends: {}",
-                unknown_refs.join(", ")
-            ),
-        ));
-    }
-
-    Ok(())
-}
-
 fn push_validation_issue(
     issues: &mut Vec<ConfigValidationIssue>,
     code: &'static str,
@@ -531,6 +450,10 @@ pub(super) async fn validate_config_payload(
     let mut seen_ids: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     let mut seen_tokens: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
+    let backend_names = state
+        .backend_names_snapshot()
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
 
     for (idx, key) in payload.virtual_keys.iter().enumerate() {
         let id = key.id.trim();
@@ -579,6 +502,34 @@ pub(super) async fn validate_config_payload(
                 Some(format!("/virtual_keys/{idx}/token")),
             );
         }
+
+        if let Some(route) = key.route.as_deref() {
+            let route = route.trim();
+            if route.is_empty() {
+                push_validation_issue(
+                    &mut issues,
+                    "invalid_route",
+                    "virtual key route cannot be empty",
+                    Some(format!("/virtual_keys/{idx}/route")),
+                );
+            } else if !backend_names.contains(route) {
+                push_validation_issue(
+                    &mut issues,
+                    "invalid_route",
+                    format!("virtual key route references unknown backend `{route}`"),
+                    Some(format!("/virtual_keys/{idx}/route")),
+                );
+            }
+        }
+
+        if let Err(err) = key.guardrails.validate() {
+            push_validation_issue(
+                &mut issues,
+                "invalid_guardrails",
+                format!("invalid guardrails config: {err}"),
+                Some(format!("/virtual_keys/{idx}/guardrails")),
+            );
+        }
     }
 
     if let Some(expected) = payload
@@ -602,17 +553,28 @@ pub(super) async fn validate_config_payload(
     let mut router_rule_count = None;
     let mut computed_router_sha256 = None;
     if let Some(router) = payload.router.as_ref() {
-        let backend_names = state
-            .backend_names_snapshot()
-            .into_iter()
-            .collect::<std::collections::HashSet<_>>();
-        if let Err((_, Json(err))) = validate_router_against_backends(router, &backend_names) {
+        if let Err(err) =
+            crate::gateway::config::validate_router_against_backends(router, &backend_names)
+        {
             push_validation_issue(
                 &mut issues,
                 "invalid_router",
-                err.error.message,
+                err.to_string(),
                 Some("/router".to_string()),
             );
+        }
+
+        for (idx, rule) in router.rules.iter().enumerate() {
+            if let Some(guardrails) = rule.guardrails.as_ref()
+                && let Err(err) = guardrails.validate()
+            {
+                push_validation_issue(
+                    &mut issues,
+                    "invalid_guardrails",
+                    format!("invalid route guardrails config: {err}"),
+                    Some(format!("/router/rules/{idx}/guardrails")),
+                );
+            }
         }
 
         let computed_router = router_sha256(router);
@@ -677,7 +639,8 @@ pub(super) async fn upsert_config_router(
         .into_iter()
         .collect::<std::collections::HashSet<_>>();
     let current_router = state.router_config_snapshot();
-    validate_router_against_backends(&payload.router, &backend_names)?;
+    crate::gateway::config::validate_router_against_backends(&payload.router, &backend_names)
+        .map_err(map_gateway_error)?;
     let router_changed = !router_config_equal(&current_router, &payload.router);
     let target_router_sha256 = router_sha256(&payload.router);
 

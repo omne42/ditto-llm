@@ -47,7 +47,7 @@ struct CacheEntry {
     body_bytes: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct ScopedCache {
     entries: HashMap<String, CacheEntry>,
     order: VecDeque<String>,
@@ -115,7 +115,7 @@ impl ScopedCache {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ResponseCache {
     scopes: HashMap<String, ScopedCache>,
     last_prune_at: Option<u64>,

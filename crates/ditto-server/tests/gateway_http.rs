@@ -941,6 +941,118 @@ async fn gateway_http_admin_config_versions_support_rollback() -> ditto_core::er
 }
 
 #[tokio::test]
+async fn gateway_http_admin_key_upsert_rejects_unknown_route() -> ditto_core::error::Result<()> {
+    let mut gateway = Gateway::new(base_config());
+    gateway.register_backend("primary", EchoBackend);
+    let state = GatewayHttpState::new(gateway).with_admin_token("admin-token");
+    let app = ditto_server::gateway::http::router(state);
+
+    let mut key = VirtualKeyConfig::new("key-route", "vk-route");
+    key.route = Some("missing-backend".to_string());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/keys")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&key)?))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body)?;
+    assert!(payload["error"]["message"].as_str().is_some_and(|message| {
+        message.contains("virtual_keys[1].route references unknown backend")
+    }));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_config_validate_uses_runtime_backend_snapshot()
+-> ditto_core::error::Result<()> {
+    let upstream = MockServer::start();
+    let backend = ProxyBackend::new(upstream.base_url()).expect("proxy backend");
+    let state = GatewayHttpState::new(Gateway::new(base_config_without_keys()))
+        .with_admin_token("admin-token")
+        .with_proxy_backends(HashMap::from([("primary".to_string(), backend)]));
+    let app = ditto_server::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "router": {
+                    "default_backends": [{"backend": "primary", "weight": 1.0}],
+                    "rules": []
+                }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(payload["valid"].as_bool(), Some(true));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_failed_control_plane_change_restores_runtime_state()
+-> ditto_core::error::Result<()> {
+    let dir = tempfile::tempdir()?;
+    let mut config = base_config();
+    config.virtual_keys[0].limits.rpm = Some(1);
+
+    let mut gateway = Gateway::new(config);
+    gateway.register_backend("primary", EchoBackend);
+    let state = GatewayHttpState::new(gateway)
+        .with_admin_token("admin-token")
+        .with_state_file(dir.path());
+    let app = ditto_server::gateway::http::router(state);
+
+    let gateway_request = || {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/gateway")
+            .header("authorization", "Bearer vk-1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "model": "gpt-4o-mini",
+                    "prompt": "hi",
+                    "input_tokens": 1,
+                    "max_output_tokens": 2
+                })
+                .to_string(),
+            ))
+            .unwrap()
+    };
+
+    let first = app.clone().oneshot(gateway_request()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let delete = Request::builder()
+        .method("DELETE")
+        .uri("/admin/keys/key-1")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let delete_response = app.clone().oneshot(delete).await.unwrap();
+    assert_eq!(delete_response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    let second = app.oneshot(gateway_request()).await.unwrap();
+    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_core::error::Result<()> {
     let mut gateway = Gateway::new(base_config());
     gateway.register_backend("primary", EchoBackend);

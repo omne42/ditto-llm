@@ -2014,13 +2014,6 @@ pub(super) async fn upsert_key(
             key.tenant_id = Some(admin_tenant.to_string());
         }
     }
-    if let Err(err) = key.guardrails.validate() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            format!("invalid guardrails config: {err}"),
-        ));
-    }
     let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
         Ok(gateway.upsert_virtual_key(key.clone()))
     })
@@ -2085,13 +2078,6 @@ pub(super) async fn upsert_key_with_id(
         } else {
             key.tenant_id = Some(admin_tenant.to_string());
         }
-    }
-    if let Err(err) = key.guardrails.validate() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_request",
-            format!("invalid guardrails config: {err}"),
-        ));
     }
     let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
         Ok(gateway.upsert_virtual_key(key.clone()))
