@@ -141,8 +141,10 @@ pub(super) async fn attempt_translation_backend(
     > = 'translation_backend_attempt: {
         #[allow(clippy::collapsible_else_if)]
         if models_root && parts.method == axum::http::Method::GET {
-            let models =
-                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
+            let models = translation::collect_models_from_translation_backend(
+                backend_name,
+                &translation_backend,
+            );
             let value = translation::models_list_to_openai(&models, _now_epoch_seconds);
             let bytes = serde_json::to_vec(&value)
                 .map(Bytes::from)
@@ -168,8 +170,10 @@ pub(super) async fn attempt_translation_backend(
         } else if let Some(model_id) = models_retrieve_id.as_deref()
             && parts.method == axum::http::Method::GET
         {
-            let models =
-                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
+            let models = translation::collect_models_from_translation_backend(
+                backend_name,
+                &translation_backend,
+            );
             let Some(owned_by) = models.get(model_id) else {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::NOT_FOUND,
@@ -2176,11 +2180,8 @@ pub(super) async fn attempt_translation_backend(
 
                     let provider_response_id =
                         translation::provider_response_id(&generated, &fallback_response_id);
-                    let response_id = if translation::is_responses_path(path_and_query) {
-                        translation::gateway_scoped_response_id(
-                            backend_name,
-                            &provider_response_id,
-                        )
+                    let response_id = if translation::is_responses_create_path(path_and_query) {
+                        translation::gateway_scoped_response_id(backend_name, &provider_response_id)
                     } else {
                         provider_response_id
                     };

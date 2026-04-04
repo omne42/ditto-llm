@@ -177,7 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Build: restore workspace `--all-features` compatibility after `omne-fs`/`secret-kit`/`i18n-runtime-kit` API drift by updating runtime resource bootstrapping, secret resolution call sites, and gateway-translation imports to the current crate boundaries.
 - Gateway: make control-plane validation and rollback fail closed by centralizing route/guardrails/backend checks, restoring runtime rate-limit/cache/budget state on persistence failures, snapshotting runtime-injected backends for admin/config validation, and adding regression coverage for the restored runtime state.
-- Gateway translation: namespace model and stored-response identity by backend, scope `/v1/models*` to the selected virtual-key route, and fail closed request-id replay when a streamed response cannot be snapshotted for dedup.
+- Gateway translation: namespace model and stored-response identity by backend, scope `/v1/models*` to the selected virtual-key route, fail closed request-id replay when a streamed response cannot be snapshotted for dedup, and align translation integration coverage with fail-closed virtual-key auth.
 - Gateway: fix proxy backend `/v1` base-url joining for exact `/v1` and `v1` paths (no longer produces duplicated `/v1/v1`).
 - Gateway MCP: tighten `server_url` parsing so only exact `litellm_proxy` / `litellm_proxy/...` forms trigger LiteLLM shortcut parsing (prevents accidental matches like `litellm_proxyabc/...`).
 - Gateway: avoid abort-path panics in proxy stream finalizers by using a runtime-safe fallback when `tokio::spawn` is unavailable during shutdown/drop.

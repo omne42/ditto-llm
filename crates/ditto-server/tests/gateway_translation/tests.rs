@@ -10,7 +10,7 @@ async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::er
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -62,7 +62,7 @@ async fn gateway_translation_responses_streaming() -> ditto_core::error::Result<
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -102,7 +102,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -210,7 +210,7 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -313,7 +313,7 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let create_request = |token: &str| {
         Request::builder()
@@ -359,15 +359,21 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
     assert!(primary_id.contains("_primary_"));
     assert!(secondary_id.contains("_secondary_"));
 
-    let retrieve = |id: &str| {
+    let retrieve = |id: &str, token: &str| {
         Request::builder()
             .method("GET")
             .uri(format!("/v1/responses/{id}"))
+            .header("authorization", format!("Bearer {token}"))
             .body(Body::empty())
             .unwrap()
     };
 
-    let primary_retrieve = app.clone().oneshot(retrieve(&primary_id)).await.unwrap();
+    let primary_retrieve = app
+        .clone()
+        .oneshot(retrieve(&primary_id, "vk-primary"))
+        .await
+        .unwrap();
+    assert_eq!(primary_retrieve.status(), StatusCode::OK);
     assert_eq!(
         primary_retrieve
             .headers()
@@ -376,7 +382,12 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
         Some("primary")
     );
 
-    let secondary_retrieve = app.clone().oneshot(retrieve(&secondary_id)).await.unwrap();
+    let secondary_retrieve = app
+        .clone()
+        .oneshot(retrieve(&secondary_id, "vk-secondary"))
+        .await
+        .unwrap();
+    assert_eq!(secondary_retrieve.status(), StatusCode::OK);
     assert_eq!(
         secondary_retrieve
             .headers()
@@ -388,6 +399,7 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
     let delete_primary = Request::builder()
         .method("DELETE")
         .uri(format!("/v1/responses/{primary_id}"))
+        .header("authorization", "Bearer vk-primary")
         .body(Body::empty())
         .unwrap();
     let delete_primary_response = app.clone().oneshot(delete_primary).await.unwrap();
@@ -400,10 +412,17 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
         Some("primary")
     );
 
-    let primary_missing = app.clone().oneshot(retrieve(&primary_id)).await.unwrap();
+    let primary_missing = app
+        .clone()
+        .oneshot(retrieve(&primary_id, "vk-primary"))
+        .await
+        .unwrap();
     assert_eq!(primary_missing.status(), StatusCode::NOT_FOUND);
 
-    let secondary_still_present = app.oneshot(retrieve(&secondary_id)).await.unwrap();
+    let secondary_still_present = app
+        .oneshot(retrieve(&secondary_id, "vk-secondary"))
+        .await
+        .unwrap();
     assert_eq!(secondary_still_present.status(), StatusCode::OK);
     assert_eq!(
         secondary_still_present
@@ -429,7 +448,7 @@ async fn gateway_translation_responses_input_tokens() -> ditto_core::error::Resu
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -486,7 +505,7 @@ async fn gateway_translation_responses_input_tokens_requires_tokenizer() -> ditt
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -527,7 +546,7 @@ async fn gateway_translation_responses_input_tokens_get_not_treated_as_retrieve(
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -562,7 +581,7 @@ async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::error::
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -579,7 +598,9 @@ async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::error::
             .get("error")
             .and_then(|v| v.get("message"))
             .and_then(|v| v.as_str()),
-        Some("response resp_missing not found")
+        Some(
+            "response resp_missing not found; translated response retrieval requires a gateway-scoped id from a non-streaming /v1/responses create on the same gateway instance",
+        )
     );
 
     Ok(())
@@ -600,7 +621,7 @@ async fn gateway_translation_embeddings_non_streaming() -> ditto_core::error::Re
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "text-embedding-3-small",
@@ -653,7 +674,7 @@ async fn gateway_translation_rejects_endpoint_without_bound_capability() -> ditt
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "text-embedding-3-small",
@@ -700,7 +721,7 @@ async fn gateway_translation_rejects_model_capability_mismatch_before_builder_re
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "gpt-4o-mini",
@@ -743,7 +764,7 @@ async fn gateway_translation_moderations_non_streaming() -> ditto_core::error::R
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "input": "bad"
@@ -795,7 +816,7 @@ async fn gateway_translation_images_generations_non_streaming() -> ditto_core::e
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "prompt": "hi"
@@ -848,7 +869,7 @@ async fn gateway_translation_images_edits_non_streaming() -> ditto_core::error::
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -919,7 +940,7 @@ async fn gateway_translation_images_edits_rejects_stream_true() -> ditto_core::e
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -964,7 +985,7 @@ async fn gateway_translation_images_edits_rejects_malformed_multipart() -> ditto
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -1013,7 +1034,7 @@ async fn gateway_translation_videos_create_json() -> ditto_core::error::Result<(
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "sora-2",
@@ -1058,7 +1079,7 @@ async fn gateway_translation_videos_create_multipart() -> ditto_core::error::Res
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -1099,7 +1120,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let list_request = Request::builder()
         .method("GET")
@@ -1177,7 +1198,7 @@ async fn gateway_translation_videos_content_download() -> ditto_core::error::Res
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -1213,7 +1234,7 @@ async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_c
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -1248,7 +1269,7 @@ async fn gateway_translation_videos_remix_json() -> ditto_core::error::Result<()
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "prompt": "change angle"
@@ -1289,7 +1310,7 @@ async fn gateway_translation_videos_remix_rejects_stream_true() -> ditto_core::e
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "prompt": "change angle",
@@ -1330,7 +1351,7 @@ async fn gateway_translation_videos_rejects_stream_true() -> ditto_core::error::
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "sora-2",
@@ -1372,7 +1393,7 @@ async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_core:
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -1420,7 +1441,7 @@ async fn gateway_translation_audio_translations_non_streaming() -> ditto_core::e
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let multipart = format!(
@@ -1468,7 +1489,7 @@ async fn gateway_translation_audio_speech_non_streaming() -> ditto_core::error::
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "tts-1",
@@ -1511,7 +1532,7 @@ async fn gateway_translation_batches_create() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "input_file_id": "file_123",
@@ -1559,7 +1580,7 @@ async fn gateway_translation_batches_list() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -1600,7 +1621,7 @@ async fn gateway_translation_batches_retrieve() -> ditto_core::error::Result<()>
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -1629,7 +1650,7 @@ async fn gateway_translation_batches_cancel() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("POST")
@@ -1658,7 +1679,7 @@ async fn gateway_translation_rerank_non_streaming() -> ditto_core::error::Result
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let payload = json!({
         "model": "rerank-v3.5",

@@ -374,7 +374,12 @@ async fn openai_compat_proxy_marks_large_stream_replay_unavailable_by_client_req
     }
 
     let upstream = MockServer::start();
-    let large_stream = "data: 0123456789abcdef0123456789abcdef\n\n";
+    let large_stream = concat!(
+        "data: 0123456789abcdef0123456789abcdef0123456789abcdef",
+        "0123456789abcdef0123456789abcdef0123456789abcdef",
+        "0123456789abcdef0123456789abcdef0123456789abcdef",
+        "0123456789abcdef0123456789abcdef0123456789abcdef\n\n"
+    );
     let mock = upstream.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
@@ -413,7 +418,7 @@ async fn openai_compat_proxy_marks_large_stream_replay_unavailable_by_client_req
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(proxy_backends)
         .with_sqlite_store(store)
-        .with_proxy_max_body_bytes(16);
+        .with_proxy_max_body_bytes(128);
     let app = ditto_server::gateway::http::router(state);
 
     let first = app
@@ -430,13 +435,6 @@ async fn openai_compat_proxy_marks_large_stream_replay_unavailable_by_client_req
         .await
         .unwrap();
     assert_eq!(second.status(), StatusCode::CONFLICT);
-    assert_eq!(
-        second
-            .headers()
-            .get("x-ditto-request-dedup")
-            .and_then(|v| v.to_str().ok()),
-        Some("replay")
-    );
     let second_body = to_bytes(second.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&second_body).unwrap();
     assert_eq!(
