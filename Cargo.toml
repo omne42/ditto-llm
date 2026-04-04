@@ -8,3 +8,7 @@ default-members = [
   "crates/ditto-server",
 ]
 resolver = "2"
+
+[patch."https://github.com/omne42/omne-runtime.git"]
+omne-fs-primitives = { path = "../omne-runtime/crates/omne-fs-primitives" }
+omne-process-primitives = { path = "../omne-runtime/crates/omne-process-primitives" }
