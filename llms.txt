@@ -323,7 +323,7 @@ Endpoints:
   - The client `Authorization` header is treated as a virtual key and is not forwarded upstream; the backend `headers` are applied instead.
   - An empty `virtual_keys` set means there are no valid client credentials yet, so those surfaces will return `401` until keys are provisioned.
   - If the upstream does **not** implement `POST /v1/responses` (returns 404/405/501), Ditto will fall back to `POST /v1/chat/completions` and return a best-effort Responses-like response/stream (adds `x-ditto-shim: responses_via_chat_completions`).
-- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*` (create/list/retrieve/delete/content/remix), `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <provider>`).
+- OpenAI-compatible translation (feature `gateway-translation`): `GET /v1/models`, `GET /v1/models/*`, `POST /v1/chat/completions`, `POST /v1/completions`, `POST /v1/responses`, `POST /v1/responses/compact`, `POST /v1/responses/input_tokens`, `GET /v1/responses/*`, `GET /v1/responses/*/input_items`, `DELETE /v1/responses/*`, `POST /v1/embeddings`, `POST /v1/moderations`, `POST /v1/images/generations`, `/v1/videos*` (create/list/retrieve/delete/content/remix), `POST /v1/audio/transcriptions`, `POST /v1/audio/translations`, `POST /v1/audio/speech`, `/v1/files*`, `POST /v1/rerank`, and `/v1/batches` can be served by a backend with `provider` configured (adds `x-ditto-translation: <backend>`; translated `/v1/responses/*` retrieve/delete use gateway-scoped ids from the same gateway instance).
 - Control-plane demo endpoint: `POST /v1/gateway` (JSON `GatewayRequest`; accepts `Authorization: Bearer <virtual_key>`).
 - `GET /health`
 - `GET /ready`
@@ -4735,12 +4735,12 @@ Gateway 的 HTTP 路由见 `crates/ditto-server/src/gateway/transport/http/route
 
 当请求由 translation backend 处理时，响应会包含：
 
-- `x-ditto-translation: <provider>`
+- `x-ditto-translation: <backend>`
 
 补充说明：
 
 - `POST /v1/responses/input_tokens` 是 best-effort 估算：启用 `gateway-tokenizer` 时尽量按模型计数，否则显式返回 `unsupported_endpoint`，不会发起上游 provider 调用。
-- `GET /v1/responses/*` 与 `GET /v1/responses/*/input_items` 当前走 best-effort local store，只保证读写“同一进程内由 non-stream translation create 生成”的 response。
+- `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store，只保证读写“同一进程内由 non-stream translation create 生成”的 response，并要求调用方使用该 gateway 返回的 gateway-scoped response id。
 
 ## Anthropic Messages（compat）
 
