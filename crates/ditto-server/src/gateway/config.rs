@@ -859,6 +859,7 @@ async fn resolve_secret_in_string(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gateway::RouteBackend;
 
     #[test]
     fn backend_config_resolves_env_placeholders() {

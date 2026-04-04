@@ -220,7 +220,7 @@ use super::{
     GatewayStateFile, LimitsConfig, ObservabilitySnapshot, ProxyBackend, RouterConfig,
     VirtualKeyConfig, lock_unpoisoned,
 };
-use crate::gateway::{GatewayConfig, ProxyRequestIdempotencyStore};
+use crate::gateway::ProxyRequestIdempotencyStore;
 
 static REQUEST_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
