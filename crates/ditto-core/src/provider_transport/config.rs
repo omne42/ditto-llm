@@ -68,6 +68,7 @@ pub(crate) fn build_http_client(
 }
 
 #[cfg(any(
+    feature = "provider-anthropic",
     feature = "provider-google",
     feature = "provider-cohere",
     feature = "provider-openai",
@@ -83,6 +84,8 @@ pub(crate) struct ResolvedHttpProviderConfig {
     pub(crate) http: reqwest::Client,
     pub(crate) base_url: Option<String>,
     #[cfg(any(
+        feature = "provider-anthropic",
+        feature = "provider-cohere",
         feature = "provider-google",
         feature = "provider-bedrock",
         feature = "provider-vertex",
@@ -125,6 +128,8 @@ pub(crate) fn resolve_http_provider_config_with_policy(
         http: build_http_client_with_policy(policy, &config.http_headers)?,
         base_url: clean(config.base_url.as_deref()).or_else(|| clean(default_base_url)),
         #[cfg(any(
+            feature = "provider-anthropic",
+            feature = "provider-cohere",
             feature = "provider-google",
             feature = "provider-bedrock",
             feature = "provider-vertex",

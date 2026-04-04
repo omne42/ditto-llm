@@ -24,6 +24,7 @@ pub(crate) use config::DEFAULT_HTTP_TIMEOUT;
 #[allow(unused_imports)]
 pub(crate) use config::build_http_client;
 #[cfg(any(
+    feature = "provider-anthropic",
     feature = "provider-google",
     feature = "provider-cohere",
     feature = "provider-openai",

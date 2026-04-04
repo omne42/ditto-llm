@@ -5,17 +5,21 @@ use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use futures_util::{StreamExt, stream};
-use serde_json::{Value, json};
+#[cfg(feature = "cap-llm-tools")]
+use serde_json::Value;
+use serde_json::json;
 use tokio::time::{Duration, sleep};
 
+#[cfg(feature = "cap-llm-tools")]
+use super::ObjectOptions;
+#[cfg(feature = "cap-llm-tools")]
+use super::core::stream_object_from_stream_with_config;
 use super::core::{
     LanguageModelObjectExt, StreamObjectBufferLimits, StreamObjectConfig,
-    stream_object_from_stream_with_config, stream_object_from_stream_with_config_and_limits,
+    stream_object_from_stream_with_config_and_limits,
 };
 use super::json::{parse_json_from_response_text, parse_partial_json};
-use super::{
-    ObjectOptions, ObjectOutput, ObjectStrategy, StreamObjectResult, stream_object_from_stream,
-};
+use super::{ObjectOutput, ObjectStrategy, StreamObjectResult, stream_object_from_stream};
 use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, StreamChunk, Warning,
 };

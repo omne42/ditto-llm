@@ -5,11 +5,11 @@ use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject, Fil
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
 
+#[cfg(feature = "provider-openai-compatible")]
+use crate::config::resolve_provider_request_auth_optional;
 #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 use crate::config::resolve_provider_request_auth_required;
-use crate::config::{
-    Env, HttpAuth, ProviderConfig, RequestAuth, resolve_provider_request_auth_optional,
-};
+use crate::config::{Env, HttpAuth, ProviderConfig, RequestAuth};
 use crate::error::Result;
 use crate::provider_transport::{apply_http_query_params, resolve_http_provider_config};
 
