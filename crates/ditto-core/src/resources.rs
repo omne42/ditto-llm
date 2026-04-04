@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
 
-use i18n_kit::{Catalog, FallbackStrategy, Locale, TemplateArg};
-use i18n_runtime_kit::{CatalogInitError, CatalogLocaleError, LazyCatalog, bootstrap_i18n_catalog};
+use i18n_kit::{Catalog, FallbackStrategy, Locale, TemplateArg, TranslationCatalog};
+use i18n_runtime_kit::{
+    CatalogInitError, CatalogLocaleError, GlobalCatalog, bootstrap_i18n_catalog,
+};
 use text_assets_kit::{DataRootOptions, ResourceManifest, TextResource, ensure_data_root};
 
 use crate::error::{DittoError, Result};
@@ -11,7 +13,10 @@ const DATA_ROOT_DIR_NAME: &str = ".omne_data";
 const DATA_ROOT_ENV_VAR: &str = "OMNE_DATA_DIR";
 
 pub struct RuntimeMessageCatalog {
-    inner: LazyCatalog,
+    inner: GlobalCatalog,
+    initializer:
+        Box<dyn Fn() -> std::result::Result<Arc<dyn Catalog>, CatalogInitError> + Send + Sync>,
+    init_state: Mutex<Option<std::result::Result<(), CatalogInitError>>>,
 }
 
 pub static MESSAGE_CATALOG: LazyLock<RuntimeMessageCatalog> =
@@ -23,7 +28,9 @@ impl RuntimeMessageCatalog {
         I: Fn() -> std::result::Result<Arc<dyn Catalog>, CatalogInitError> + Send + Sync + 'static,
     {
         Self {
-            inner: LazyCatalog::new(initializer),
+            inner: GlobalCatalog::new(Locale::EN_US),
+            initializer: Box::new(initializer),
+            init_state: Mutex::new(None),
         }
     }
 
@@ -32,18 +39,22 @@ impl RuntimeMessageCatalog {
         C: Catalog + 'static,
     {
         self.inner.replace(catalog);
+        *self
+            .init_state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(Ok(()));
     }
 
     pub fn with_catalog<T>(
         &self,
         f: impl FnOnce(&dyn Catalog) -> T,
     ) -> std::result::Result<T, CatalogInitError> {
+        self.ensure_initialized()?;
         self.inner.with_catalog(f)
     }
 
     pub fn render(&self, locale: Locale, key: &str, args: &[TemplateArg<'_>]) -> String {
-        self.inner
-            .try_render(locale, key, args)
+        self.with_catalog(|catalog| catalog.render_text(locale, key, args))
             .unwrap_or_else(|_| key.to_string())
     }
 
@@ -52,6 +63,8 @@ impl RuntimeMessageCatalog {
         args: Vec<String>,
         env_var: &str,
     ) -> std::result::Result<(Locale, Vec<String>), CatalogLocaleError> {
+        self.ensure_initialized()
+            .map_err(CatalogLocaleError::Initialization)?;
         self.inner.resolve_locale_from_cli_args(args, env_var)
     }
 
@@ -62,6 +75,46 @@ impl RuntimeMessageCatalog {
     pub fn locale_enabled(&self, locale: Locale) -> Option<bool> {
         self.with_catalog(|catalog| catalog.locale_enabled(locale))
             .ok()
+    }
+}
+
+impl RuntimeMessageCatalog {
+    fn ensure_initialized(&self) -> std::result::Result<(), CatalogInitError> {
+        let mut init_state = self
+            .init_state
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if let Some(result) = init_state.clone() {
+            return result;
+        }
+
+        let catalog = (self.initializer)()?;
+        self.inner.replace(InstalledCatalog(catalog));
+        let result = Ok(());
+        *init_state = Some(result.clone());
+        result
+    }
+}
+
+struct InstalledCatalog(Arc<dyn Catalog>);
+
+impl TranslationCatalog for InstalledCatalog {
+    fn resolve_shared(&self, locale: Locale, key: &str) -> i18n_kit::TranslationResolution {
+        self.0.resolve_shared(locale, key)
+    }
+}
+
+impl Catalog for InstalledCatalog {
+    fn default_locale(&self) -> Locale {
+        self.0.default_locale()
+    }
+
+    fn available_locales(&self) -> Vec<Locale> {
+        self.0.available_locales()
+    }
+
+    fn locale_enabled(&self, locale: Locale) -> bool {
+        self.0.locale_enabled(locale)
     }
 }
 
@@ -108,7 +161,7 @@ pub fn bootstrap_runtime_assets_with_options(options: &DataRootOptions) -> Resul
             "error" => err.to_string()
         )
     })?;
-    let _ = MESSAGE_CATALOG.replace(i18n_catalog);
+    MESSAGE_CATALOG.replace(i18n_catalog);
 
     Ok(RuntimeAssets {
         data_root,
@@ -150,4 +203,47 @@ fn default_i18n_manifest() -> ResourceManifest {
             TextResource::new("ja_JP.json", include_str!("../i18n/ja_JP.json"))
                 .expect("embedded ja_JP catalog should be valid"),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RuntimeMessageCatalog;
+    use i18n_kit::{Locale, StaticJsonCatalog, StaticJsonLocale, TemplateArg};
+    use i18n_runtime_kit::CatalogInitError;
+    use std::sync::Arc;
+
+    #[test]
+    fn runtime_message_catalog_initializes_on_first_render() {
+        static SOURCES: [StaticJsonLocale; 1] = [StaticJsonLocale::new(
+            Locale::EN_US,
+            true,
+            r#"{"hello":"hello {name}"}"#,
+        )];
+        let catalog = RuntimeMessageCatalog::new(|| {
+            let catalog = StaticJsonCatalog::try_new(Locale::EN_US, &SOURCES)
+                .expect("static catalog should be valid");
+            Ok(Arc::new(catalog))
+        });
+
+        let rendered = catalog.render(Locale::EN_US, "hello", &[TemplateArg::new("name", "Alice")]);
+        assert_eq!(rendered, "hello Alice");
+    }
+
+    #[test]
+    fn runtime_message_catalog_replace_overrides_failed_initializer() {
+        static SOURCES: [StaticJsonLocale; 1] = [StaticJsonLocale::new(
+            Locale::EN_US,
+            true,
+            r#"{"hello":"hello"}"#,
+        )];
+        let catalog = RuntimeMessageCatalog::new(|| {
+            Err(CatalogInitError::new(std::io::Error::other("init failed")))
+        });
+        let replacement =
+            StaticJsonCatalog::try_new(Locale::EN_US, &SOURCES).expect("static catalog valid");
+
+        catalog.replace(replacement);
+
+        assert_eq!(catalog.render(Locale::EN_US, "hello", &[]), "hello");
+    }
 }
