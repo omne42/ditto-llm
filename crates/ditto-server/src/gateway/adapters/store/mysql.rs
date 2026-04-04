@@ -1071,7 +1071,9 @@ impl MySqlStore {
 
         let mut tx = self.pool.begin().await?;
         let rows = sqlx::query(
-            "SELECT request_id, key_id, tokens
+            "SELECT CAST(request_id AS CHAR) AS request_id,
+                    CAST(key_id AS CHAR) AS key_id,
+                    tokens
              FROM budget_reservations
              WHERE ts_ms < ?
              ORDER BY ts_ms ASC
@@ -1144,7 +1146,9 @@ impl MySqlStore {
 
         let mut tx = self.pool.begin().await?;
         let rows = sqlx::query(
-            "SELECT request_id, key_id, usd_micros
+            "SELECT CAST(request_id AS CHAR) AS request_id,
+                    CAST(key_id AS CHAR) AS key_id,
+                    usd_micros
              FROM cost_reservations
              WHERE ts_ms < ?
              ORDER BY ts_ms ASC
