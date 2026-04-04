@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use super::{
+use super::store_types::{
     ProxyRequestFingerprint, ProxyRequestIdempotencyBeginOutcome, ProxyRequestIdempotencyRecord,
     ProxyRequestReplayOutcome,
 };

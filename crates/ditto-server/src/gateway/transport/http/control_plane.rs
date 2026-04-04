@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::gateway::router::Router as GatewayRouter;
 use crate::gateway::{Gateway, GatewayError, RouterConfig, VirtualKeyConfig};
 
-use super::GatewayHttpState;
+use super::{GatewayHttpState, GatewayRuntimeBackends};
 
 #[derive(Clone, Debug)]
 pub(super) struct GatewayControlPlaneSnapshot {
@@ -16,7 +16,10 @@ pub(super) struct GatewayControlPlaneSnapshot {
 }
 
 impl GatewayControlPlaneSnapshot {
-    pub(super) fn from_gateway(gateway: &Gateway) -> Self {
+    pub(super) fn from_gateway_state(
+        gateway: &Gateway,
+        runtime_backends: &GatewayRuntimeBackends,
+    ) -> Self {
         let virtual_keys = gateway.list_virtual_keys();
         let mut virtual_key_token_index = HashMap::new();
         for (idx, key) in virtual_keys.iter().enumerate() {
@@ -27,8 +30,18 @@ impl GatewayControlPlaneSnapshot {
 
         let router_config = gateway.router_config();
         let router = GatewayRouter::new(router_config.clone());
-        let backend_names = gateway.backend_names();
-        let backend_model_maps = gateway.backend_model_maps();
+        let mut backend_names = BTreeSet::new();
+        backend_names.extend(gateway.backend_names());
+        backend_names.extend(runtime_backends.proxy_backends.keys().cloned());
+        #[cfg(feature = "gateway-translation")]
+        backend_names.extend(runtime_backends.translation_backends.keys().cloned());
+
+        let backend_names = backend_names.into_iter().collect::<Vec<_>>();
+        let backend_model_maps = gateway
+            .backend_model_maps()
+            .into_iter()
+            .filter(|(name, _)| backend_names.iter().any(|candidate| candidate == name))
+            .collect();
 
         Self {
             virtual_keys,
@@ -156,7 +169,8 @@ impl GatewayHttpState {
     }
 
     pub(crate) fn sync_control_plane_from_gateway(&self) {
-        let snapshot = GatewayControlPlaneSnapshot::from_gateway(&self.gateway);
+        let snapshot =
+            GatewayControlPlaneSnapshot::from_gateway_state(&self.gateway, &self.backends);
         self.replace_control_plane_snapshot(snapshot);
     }
 }

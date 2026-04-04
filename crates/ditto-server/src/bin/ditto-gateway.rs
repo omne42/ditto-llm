@@ -500,26 +500,6 @@ async fn run_gateway(
     config.resolve_env(&env)?;
     config.resolve_secrets(&env).await?;
 
-    for key in &config.virtual_keys {
-        if let Err(err) = key.guardrails.validate() {
-            return Err(cli_invalid_guardrails(locale, "key", &key.id, &err.to_string()).into());
-        }
-    }
-
-    for rule in &config.router.rules {
-        if let Some(guardrails) = rule.guardrails.as_ref() {
-            if let Err(err) = guardrails.validate() {
-                return Err(cli_invalid_guardrails(
-                    locale,
-                    "route",
-                    &rule.model_prefix,
-                    &err.to_string(),
-                )
-                .into());
-            }
-        }
-    }
-
     config.validate()?;
 
     let mut proxy_backends = std::collections::HashMap::new();
@@ -1003,19 +983,6 @@ fn cli_import_litellm_failed(locale: Locale, error: &str) -> String {
         locale,
         "cli.import_litellm_failed",
         &[TemplateArg::new("error", error)],
-    )
-}
-
-#[cfg(feature = "gateway")]
-fn cli_invalid_guardrails(locale: Locale, scope: &str, name: &str, error: &str) -> String {
-    MESSAGE_CATALOG.render(
-        locale,
-        "cli.invalid_guardrails",
-        &[
-            TemplateArg::new("scope", scope),
-            TemplateArg::new("name", name),
-            TemplateArg::new("error", error),
-        ],
     )
 }
 
