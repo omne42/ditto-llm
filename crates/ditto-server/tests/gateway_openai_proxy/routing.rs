@@ -85,8 +85,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
     let primary_mock = primary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-primary")
-            .header("x-request-id", "req-primary");
+            .header("authorization", "Bearer sk-primary");
         then.status(500)
             .header("content-type", "application/json")
             .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
@@ -94,8 +93,7 @@ async fn openai_compat_proxy_retries_retryable_statuses_across_backends() {
     let secondary_mock = secondary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-secondary")
-            .header("x-request-id", "req-primary");
+            .header("authorization", "Bearer sk-secondary");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"id":"ok"}"#);
@@ -182,8 +180,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
     let primary_mock = primary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-primary")
-            .header("x-request-id", "req-primary");
+            .header("authorization", "Bearer sk-primary");
         then.status(500)
             .header("content-type", "application/json")
             .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
@@ -191,8 +188,7 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
     let secondary_mock = secondary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-secondary")
-            .header("x-request-id", "req-primary");
+            .header("authorization", "Bearer sk-secondary");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"id":"ok"}"#);
@@ -249,12 +245,12 @@ async fn openai_compat_proxy_circuit_breaker_skips_unhealthy_backends() {
         "input": "hi"
     });
 
-    for _ in 0..2 {
+    for request_id in ["req-cb-skip-open", "req-cb-skip-second-0"] {
         let request = Request::builder()
             .method("POST")
             .uri("/v1/responses")
             .header("authorization", "Bearer vk-1")
-            .header("x-request-id", "req-primary")
+            .header("x-request-id", request_id)
             .header("content-type", "application/json")
             .body(Body::from(body.to_string()))
             .unwrap();
@@ -958,8 +954,7 @@ async fn openai_compat_proxy_circuit_breaker_recovers_after_cooldown() {
     let primary_mock = primary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-primary")
-            .header("x-request-id", "req-cb-recovery");
+            .header("authorization", "Bearer sk-primary");
         then.status(500)
             .header("content-type", "application/json")
             .body(r#"{"error":{"message":"overloaded","type":"server_error"}}"#);
@@ -967,8 +962,7 @@ async fn openai_compat_proxy_circuit_breaker_recovers_after_cooldown() {
     let secondary_mock = secondary.mock(|when, then| {
         when.method(POST)
             .path("/v1/responses")
-            .header("authorization", "Bearer sk-secondary")
-            .header("x-request-id", "req-cb-recovery");
+            .header("authorization", "Bearer sk-secondary");
         then.status(200)
             .header("content-type", "application/json")
             .body(r#"{"id":"ok-secondary"}"#);
@@ -1024,25 +1018,33 @@ async fn openai_compat_proxy_circuit_breaker_recovers_after_cooldown() {
         "input": "hi"
     });
 
-    let request = || {
+    let request = |request_id: &str| {
         Request::builder()
             .method("POST")
             .uri("/v1/responses")
             .header("authorization", "Bearer vk-1")
-            .header("x-request-id", "req-cb-recovery")
+            .header("x-request-id", request_id)
             .header("content-type", "application/json")
             .body(Body::from(body.to_string()))
             .unwrap()
     };
 
-    let first = app.clone().oneshot(request()).await.unwrap();
+    let first = app
+        .clone()
+        .oneshot(request("req-cb-recovery-1"))
+        .await
+        .unwrap();
     assert_eq!(first.status(), StatusCode::OK);
-    let second = app.clone().oneshot(request()).await.unwrap();
+    let second = app
+        .clone()
+        .oneshot(request("req-cb-recovery-2"))
+        .await
+        .unwrap();
     assert_eq!(second.status(), StatusCode::OK);
 
     tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
 
-    let third = app.oneshot(request()).await.unwrap();
+    let third = app.oneshot(request("req-cb-recovery-3")).await.unwrap();
     assert_eq!(third.status(), StatusCode::OK);
 
     primary_mock.assert_calls(2);
