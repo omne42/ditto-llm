@@ -6,6 +6,16 @@ use super::*;
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
+fn report_admin_audit_append_failure(store: &str, kind: &str, err: &impl std::fmt::Display) {
+    eprintln!("failed to append {store} admin audit log `{kind}`: {err}");
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 pub(super) async fn append_admin_audit_log(
     state: &GatewayHttpState,
     kind: &str,
@@ -21,28 +31,28 @@ pub(super) async fn append_admin_audit_log(
     #[cfg(feature = "gateway-store-sqlite")]
     if let Some(store) = state.stores.sqlite.as_ref() {
         if let Err(err) = store.append_audit_log(kind, payload.clone()).await {
-            tracing::warn!("failed to append sqlite admin audit log `{kind}`: {err}");
+            report_admin_audit_append_failure("sqlite", kind, &err);
         }
     }
 
     #[cfg(feature = "gateway-store-postgres")]
     if let Some(store) = state.stores.postgres.as_ref() {
         if let Err(err) = store.append_audit_log(kind, payload.clone()).await {
-            tracing::warn!("failed to append postgres admin audit log `{kind}`: {err}");
+            report_admin_audit_append_failure("postgres", kind, &err);
         }
     }
 
     #[cfg(feature = "gateway-store-mysql")]
     if let Some(store) = state.stores.mysql.as_ref() {
         if let Err(err) = store.append_audit_log(kind, payload.clone()).await {
-            tracing::warn!("failed to append mysql admin audit log `{kind}`: {err}");
+            report_admin_audit_append_failure("mysql", kind, &err);
         }
     }
 
     #[cfg(feature = "gateway-store-redis")]
     if let Some(store) = state.stores.redis.as_ref() {
         if let Err(err) = store.append_audit_log(kind, payload).await {
-            tracing::warn!("failed to append redis admin audit log `{kind}`: {err}");
+            report_admin_audit_append_failure("redis", kind, &err);
         }
     }
 }
