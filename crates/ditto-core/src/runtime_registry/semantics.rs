@@ -683,9 +683,7 @@ fn resolve_catalog_context_cache_profile(
         }
     }
 
-    if has_context_cache_binding {
-        push_context_cache_mode(&mut modes, ContextCacheMode::Passive);
-    } else if modes.is_empty() && has_chat_completion_binding {
+    if has_context_cache_binding || (modes.is_empty() && has_chat_completion_binding) {
         push_context_cache_mode(&mut modes, ContextCacheMode::Passive);
     }
     if has_anthropic_context_cache_binding {
