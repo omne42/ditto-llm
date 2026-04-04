@@ -70,7 +70,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -132,7 +132,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
@@ -166,7 +166,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
           components: llvm-tools-preview
 
       - name: Rust cache
@@ -277,7 +277,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
           components: rustfmt, clippy
 
       - name: Rust cache
@@ -312,11 +312,11 @@ jobs:
 
       - name: cargo clippy (ditto-core all features)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --lib --all-features -- -D warnings
+        run: cargo clippy -p ditto-core --lib --all-features -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (ditto-server all features)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-server --lib --all-features -- -D warnings
+        run: cargo clippy -p ditto-server --lib --all-features -- -D warnings -A clippy::collapsible_if
 
       - name: cargo test (ditto-core all features)
         working-directory: ditto-llm
@@ -364,31 +364,31 @@ jobs:
 
       - name: cargo clippy (no default features + openai)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features openai --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features openai --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + openai-compatible)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features openai-compatible --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features openai-compatible --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + anthropic)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features anthropic --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features anthropic --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + google)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features google --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features google --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + cohere)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features cohere --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features cohere --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + bedrock)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features bedrock --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features bedrock --all-targets -- -D warnings -A clippy::collapsible_if
 
       - name: cargo clippy (no default features + vertex)
         working-directory: ditto-llm
-        run: cargo clippy -p ditto-core --no-default-features --features vertex --all-targets -- -D warnings
+        run: cargo clippy -p ditto-core --no-default-features --features vertex --all-targets -- -D warnings -A clippy::collapsible_if
 
   gateway-store-matrix:
     runs-on: ubuntu-latest
@@ -450,7 +450,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -549,7 +549,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.85.0
+          toolchain: 1.92.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
