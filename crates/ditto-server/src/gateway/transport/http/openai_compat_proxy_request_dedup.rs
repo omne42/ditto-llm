@@ -334,6 +334,7 @@ pub(super) async fn prepare_proxy_request_dedup(
     state: &GatewayHttpState,
     method: &axum::http::Method,
     path_and_query: &str,
+    headers: &HeaderMap,
     body: &Bytes,
     request_id: &str,
     client_supplied_request_id: bool,
@@ -347,7 +348,7 @@ pub(super) async fn prepare_proxy_request_dedup(
     let local_fallback = local_proxy_request_dedup_persistence(state);
     let mut tried_local_fallback = !has_persistent_proxy_request_dedup_store(state);
     let (fingerprint, fingerprint_key) =
-        request_dedup_fingerprint(method, path_and_query, virtual_key_id, body);
+        request_dedup_fingerprint(method, path_and_query, virtual_key_id, headers, body);
     let owner_token = format!("dedup-{}", generate_request_id());
 
     loop {
@@ -518,19 +519,22 @@ fn request_dedup_fingerprint(
     method: &axum::http::Method,
     path_and_query: &str,
     virtual_key_id: Option<&str>,
+    headers: &HeaderMap,
     body: &Bytes,
 ) -> (ProxyRequestFingerprint, String) {
     let body_sha256 = hash_sha256(body).to_string();
+    let upstream_headers = request_dedup_upstream_headers(headers);
     let fingerprint = ProxyRequestFingerprint {
         method: method.as_str().to_string(),
         path: path_and_query.to_string(),
         virtual_key_id: virtual_key_id.map(ToString::to_string),
+        upstream_headers,
         body_sha256,
     };
 
     let fingerprint_key = {
         let mut hasher = Sha256Hasher::new();
-        hasher.update(b"ditto-proxy-request-dedup-v1|");
+        hasher.update(b"ditto-proxy-request-dedup-v2|");
         hasher.update(fingerprint.method.as_bytes());
         hasher.update(b"|");
         hasher.update(fingerprint.path.as_bytes());
@@ -543,11 +547,67 @@ fn request_dedup_fingerprint(
                 .as_bytes(),
         );
         hasher.update(b"|");
+        for header in &fingerprint.upstream_headers {
+            hasher.update(header.name.as_bytes());
+            hasher.update(b":");
+            hasher.update(&header.value);
+            hasher.update(b"|");
+        }
         hasher.update(fingerprint.body_sha256.as_bytes());
         hasher.finalize().to_string()
     };
 
     (fingerprint, fingerprint_key)
+}
+
+fn request_dedup_upstream_headers(headers: &HeaderMap) -> Vec<StoredHttpHeader> {
+    let mut header_names: Vec<&str> = headers
+        .keys()
+        .map(|name| name.as_str())
+        .filter(|name| request_dedup_header_affects_upstream(name))
+        .collect();
+    header_names.sort_unstable();
+    header_names.dedup();
+
+    let mut stored = Vec::new();
+    for header_name in header_names {
+        for value in headers.get_all(header_name).iter() {
+            stored.push(StoredHttpHeader {
+                name: header_name.to_string(),
+                value: value.as_bytes().to_vec(),
+            });
+        }
+    }
+
+    stored
+}
+
+fn request_dedup_header_affects_upstream(header: &str) -> bool {
+    !matches!(
+        header,
+        "authorization"
+            | "x-api-key"
+            | "x-litellm-api-key"
+            | "proxy-authorization"
+            | "x-forwarded-authorization"
+            | "connection"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-connection"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-ditto-virtual-key"
+            | "x-ditto-protocol"
+            | "x-ditto-cache-bypass"
+            | "x-ditto-bypass-cache"
+            | "content-length"
+            | "x-request-id"
+            | "traceparent"
+            | "tracestate"
+            | "baggage"
+    )
 }
 
 fn should_buffer_request_dedup_response(

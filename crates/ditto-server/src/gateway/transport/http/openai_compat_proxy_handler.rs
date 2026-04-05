@@ -242,6 +242,7 @@ pub(super) async fn handle_openai_compat_proxy(
         &state,
         &parts.method,
         path_and_query,
+        &parts.headers,
         &body,
         &request_id,
         client_supplied_request_id,
