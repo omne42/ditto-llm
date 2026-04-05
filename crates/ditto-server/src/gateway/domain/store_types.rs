@@ -13,6 +13,8 @@ pub struct ProxyRequestFingerprint {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub virtual_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub upstream_headers: Vec<StoredHttpHeader>,
     pub body_sha256: String,
 }
 
