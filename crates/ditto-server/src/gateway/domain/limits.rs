@@ -37,8 +37,9 @@ impl RateLimiter {
             return Ok(());
         }
 
-        if minute != self.last_gc_minute {
-            // Keep only the active minute bucket. Older/future buckets are stale.
+        if minute > self.last_gc_minute {
+            // Only advance GC when time moves forward so out-of-order or rolled-back
+            // requests cannot drop newer buckets for other scopes.
             self.usage.retain(|_, usage| usage.minute == minute);
             self.last_gc_minute = minute;
         }
@@ -100,7 +101,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gc_keeps_only_current_minute_after_clock_rollback() {
+    fn clock_rollback_does_not_drop_newer_buckets() {
         let mut limiter = RateLimiter::default();
         let limits = LimitsConfig {
             rpm: Some(10),
@@ -108,10 +109,27 @@ mod tests {
         };
 
         limiter.check_and_consume("a", &limits, 1, 100).unwrap();
-        limiter.check_and_consume("b", &limits, 1, 99).unwrap();
+        limiter.check_and_consume("b", &limits, 1, 101).unwrap();
+        limiter.check_and_consume("c", &limits, 1, 99).unwrap();
+
+        assert_eq!(limiter.usage.len(), 2);
+        assert_eq!(limiter.usage.get("b").map(|usage| usage.minute), Some(101));
+        assert_eq!(limiter.usage.get("c").map(|usage| usage.minute), Some(99));
+    }
+
+    #[test]
+    fn forward_gc_still_drops_older_buckets() {
+        let mut limiter = RateLimiter::default();
+        let limits = LimitsConfig {
+            rpm: Some(10),
+            tpm: Some(100),
+        };
+
+        limiter.check_and_consume("a", &limits, 1, 100).unwrap();
+        limiter.check_and_consume("b", &limits, 1, 101).unwrap();
 
         assert_eq!(limiter.usage.len(), 1);
-        assert_eq!(limiter.usage.get("b").map(|usage| usage.minute), Some(99));
+        assert_eq!(limiter.usage.get("b").map(|usage| usage.minute), Some(101));
     }
 
     #[test]
