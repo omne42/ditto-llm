@@ -813,7 +813,7 @@ impl ToolExecutor for ShellToolExecutor {
         let ok =
             exit_code == Some(0) && !timed_out && wait_error.is_none() && stdin_error.is_none();
 
-        let is_error = timed_out || wait_error.is_some() || stdin_error.is_some();
+        let is_error = !ok || timed_out || wait_error.is_some() || stdin_error.is_some();
 
         let mut out = serde_json::json!({
             "program": program,
