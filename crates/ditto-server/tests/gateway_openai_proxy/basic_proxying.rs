@@ -120,8 +120,14 @@ async fn openai_compat_proxy_fails_closed_when_audit_store_append_fails() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    mock.assert_calls(0);
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body.pointer("/error/code").and_then(|value| value.as_str()),
+        Some("storage_error")
+    );
+    mock.assert();
 }
 
 #[tokio::test]
