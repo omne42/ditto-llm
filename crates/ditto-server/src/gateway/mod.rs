@@ -211,10 +211,12 @@ impl GatewayRequest {
     }
 }
 
-fn control_plane_cache_key(key_id: &str, request: &GatewayRequest) -> String {
+fn control_plane_cache_key(key_id: &str, backend_name: &str, request: &GatewayRequest) -> String {
     let mut hasher = Sha256Hasher::new();
     hasher.update(b"ditto-gateway-cache-v2|");
     hasher.update(key_id.as_bytes());
+    hasher.update(b"|");
+    hasher.update(backend_name.as_bytes());
     hasher.update(b"|");
     hasher.update(request.model.as_bytes());
     hasher.update(b"|");
@@ -305,14 +307,33 @@ mod tests {
             ..request_a.clone()
         };
 
-        let cache_key_a = control_plane_cache_key(key_id, &request_a);
-        let cache_key_b = control_plane_cache_key(key_id, &request_b);
+        let cache_key_a = control_plane_cache_key(key_id, "primary", &request_a);
+        let cache_key_b = control_plane_cache_key(key_id, "primary", &request_b);
 
         assert_eq!(cache_key_a.len(), 64);
         assert_eq!(cache_key_b.len(), 64);
         assert_ne!(cache_key_a, cache_key_b);
         assert!(!cache_key_a.contains("hello prompt a"));
         assert!(!cache_key_b.contains("hello prompt b"));
+    }
+
+    #[test]
+    fn control_plane_cache_key_changes_when_backend_changes() {
+        let request = GatewayRequest {
+            virtual_key: "sk-test-secret".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello prompt".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let cache_key_a = control_plane_cache_key("vk_1", "primary", &request);
+        let cache_key_b = control_plane_cache_key("vk_1", "secondary", &request);
+
+        assert_eq!(cache_key_a.len(), 64);
+        assert_eq!(cache_key_b.len(), 64);
+        assert_ne!(cache_key_a, cache_key_b);
     }
 
     #[test]
@@ -974,8 +995,8 @@ impl Gateway {
         let backend_name = control_plane.router.select_backend(request, &key)?;
 
         let bypass_cache = key.passthrough.bypass_cache(request);
-        let cache_key =
-            (key.cache.enabled && !bypass_cache).then(|| control_plane_cache_key(&key.id, request));
+        let cache_key = (key.cache.enabled && !bypass_cache)
+            .then(|| control_plane_cache_key(&key.id, &backend_name, request));
         if let Some(cache_key) = cache_key.as_deref()
             && let Some(mut cached) = lock_unpoisoned(&self.cache).get(&key.id, cache_key, now)
         {

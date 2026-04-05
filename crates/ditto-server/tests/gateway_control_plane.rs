@@ -446,6 +446,61 @@ async fn router_switches_backend_by_model_prefix() {
 }
 
 #[tokio::test]
+async fn cache_key_does_not_cross_backend_routes() {
+    let mut key = base_key();
+    key.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(60),
+        ..CacheConfig::default()
+    };
+
+    let mut config = base_config(key);
+    config.router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "primary".to_string(),
+            weight: 1.0,
+        }],
+        rules: vec![RouteRule {
+            model_prefix: "gpt-4".to_string(),
+            exact: false,
+            backend: "secondary".to_string(),
+            backends: Vec::new(),
+            guardrails: None,
+        }],
+    };
+
+    let clock = Box::new(FixedClock { now: 420 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (primary, primary_calls) = StaticBackend::new("primary");
+    let (secondary, secondary_calls) = StaticBackend::new("secondary");
+    gateway.register_backend("primary", primary);
+    gateway.register_backend("secondary", secondary);
+
+    let primary_request = GatewayRequest {
+        model: "o1-mini".to_string(),
+        ..base_request()
+    };
+    let primary_first = gateway.handle(primary_request.clone()).await.unwrap();
+    let primary_second = gateway.handle(primary_request).await.unwrap();
+    assert_eq!(primary_first.backend, "primary");
+    assert_eq!(primary_second.backend, "primary");
+    assert!(!primary_first.cached);
+    assert!(primary_second.cached);
+
+    let secondary_request = base_request();
+    let secondary_first = gateway.handle(secondary_request.clone()).await.unwrap();
+    let secondary_second = gateway.handle(secondary_request).await.unwrap();
+    assert_eq!(secondary_first.backend, "secondary");
+    assert_eq!(secondary_second.backend, "secondary");
+    assert!(!secondary_first.cached);
+    assert!(secondary_second.cached);
+
+    assert_eq!(primary_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(secondary_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn guardrail_override_applies_for_route_rule() {
     let mut key = base_key();
     key.guardrails = GuardrailsConfig {
