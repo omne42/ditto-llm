@@ -1473,27 +1473,27 @@ async fn resolve_config_target_for_read(
 
     let config_path = match scope {
         ConfigScope::Workspace => {
-            if try_exists(&local_path).await {
+            if path_exists(&local_path).await? {
                 local_path
-            } else if try_exists(&shared_path).await {
+            } else if path_exists(&shared_path).await? {
                 shared_path
             } else {
                 local_path
             }
         }
         ConfigScope::Global => {
-            if try_exists(&shared_path).await {
+            if path_exists(&shared_path).await? {
                 shared_path
-            } else if try_exists(&local_path).await {
+            } else if path_exists(&local_path).await? {
                 local_path
             } else {
                 shared_path
             }
         }
         ConfigScope::Auto => {
-            if try_exists(&local_path).await {
+            if path_exists(&local_path).await? {
                 local_path
-            } else if try_exists(&shared_path).await {
+            } else if path_exists(&shared_path).await? {
                 shared_path
             } else {
                 local_path
@@ -1530,27 +1530,27 @@ async fn resolve_config_target(
 
     let config_path = match scope {
         ConfigScope::Workspace => {
-            if try_exists(&local_path).await {
+            if path_exists(&local_path).await? {
                 local_path
-            } else if try_exists(&shared_path).await {
+            } else if path_exists(&shared_path).await? {
                 shared_path
             } else {
                 local_path
             }
         }
         ConfigScope::Global => {
-            if try_exists(&shared_path).await {
+            if path_exists(&shared_path).await? {
                 shared_path
-            } else if try_exists(&local_path).await {
+            } else if path_exists(&local_path).await? {
                 local_path
             } else {
                 shared_path
             }
         }
         ConfigScope::Auto => {
-            if try_exists(&local_path).await {
+            if path_exists(&local_path).await? {
                 local_path
-            } else if try_exists(&shared_path).await {
+            } else if path_exists(&shared_path).await? {
                 shared_path
             } else {
                 local_path
@@ -1561,8 +1561,8 @@ async fn resolve_config_target(
     Ok(ConfigTarget { config_path, scope })
 }
 
-async fn try_exists(path: &Path) -> bool {
-    tokio::fs::try_exists(path).await.unwrap_or(false)
+async fn path_exists(path: &Path) -> Result<bool> {
+    tokio::fs::try_exists(path).await.map_err(DittoError::Io)
 }
 
 fn data_root_scope(scope: ConfigScope) -> DataRootScope {
@@ -1574,7 +1574,7 @@ fn data_root_scope(scope: ConfigScope) -> DataRootScope {
 }
 
 async fn load_or_create_document(path: &PathBuf) -> Result<DocumentMut> {
-    if try_exists(path.as_path()).await {
+    if path_exists(path.as_path()).await? {
         let raw = tokio::fs::read_to_string(path)
             .await
             .map_err(DittoError::Io)?;
@@ -1591,7 +1591,7 @@ async fn load_or_create_document(path: &PathBuf) -> Result<DocumentMut> {
 }
 
 async fn load_or_create_document_readonly(path: &PathBuf) -> Result<DocumentMut> {
-    if try_exists(path.as_path()).await {
+    if path_exists(path.as_path()).await? {
         let raw = tokio::fs::read_to_string(path)
             .await
             .map_err(DittoError::Io)?;
@@ -1830,6 +1830,7 @@ fn string_array_item<'a>(values: impl Iterator<Item = &'a String>) -> Item {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::ErrorKind;
 
     #[test]
     fn normalize_auth_prefix_adds_bearer_space() {
@@ -2302,5 +2303,37 @@ prompt_cache = true
 
         let _ = tokio::fs::remove_dir_all(&root).await;
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn path_exists_propagates_non_directory_errors() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let parent_file = temp.path().join("not-a-directory");
+        std::fs::write(&parent_file, "sentinel").expect("write parent file");
+
+        let err = path_exists(&parent_file.join("config.toml"))
+            .await
+            .expect_err("non-directory parent should surface io error");
+
+        let DittoError::Io(err) = err else {
+            panic!("expected io error");
+        };
+        assert_ne!(err.kind(), ErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn load_or_create_document_propagates_non_directory_errors() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let parent_file = temp.path().join("not-a-directory");
+        std::fs::write(&parent_file, "sentinel").expect("write parent file");
+
+        let err = load_or_create_document(&parent_file.join("config.toml"))
+            .await
+            .expect_err("non-directory parent should not be treated as missing config");
+
+        let DittoError::Io(err) = err else {
+            panic!("expected io error");
+        };
+        assert_ne!(err.kind(), ErrorKind::NotFound);
     }
 }
