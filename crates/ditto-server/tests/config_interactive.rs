@@ -43,7 +43,13 @@ fn provider_interactive_requires_tty() {
     })
     .expect_err("non-tty tests should reject interactive mode");
 
-    assert!(matches!(err, DittoError::Config(message) if message.to_string().contains("TTY")));
+    assert!(matches!(
+        err,
+        DittoError::Config(message)
+            if message
+                .as_catalog()
+                .is_some_and(|catalog| catalog.code() == "error_detail.config.interactive_tty_required")
+    ));
 }
 
 #[test]
@@ -63,5 +69,11 @@ fn model_interactive_requires_tty() {
     })
     .expect_err("non-tty tests should reject interactive mode");
 
-    assert!(matches!(err, DittoError::Config(message) if message.to_string().contains("TTY")));
+    assert!(matches!(
+        err,
+        DittoError::Config(message)
+            if message
+                .as_catalog()
+                .is_some_and(|catalog| catalog.code() == "error_detail.config.interactive_tty_required")
+    ));
 }

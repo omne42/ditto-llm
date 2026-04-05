@@ -29,6 +29,24 @@ const OPENAI_EVIDENCE: &[EvidenceRef] = &[EvidenceRef {
 
 const OPENAI_BINDINGS: &[ModelBinding] = &[
     ModelBinding {
+        operation: OperationKind::TEXT_COMPLETION,
+        selector: ModelSelector::Any,
+        surface: ApiSurfaceId::OPENAI_TEXT_COMPLETIONS,
+        wire_protocol: WireProtocol::OPENAI_TEXT_COMPLETIONS,
+        endpoint: EndpointTemplate {
+            transport: TransportKind::Http,
+            http_method: Some(HttpMethod::Post),
+            base_url_override: None,
+            path_template: "/v1/completions",
+            query_params: &[],
+        },
+        quirks: None,
+        streaming: None,
+        async_job: None,
+        verification: VerificationStatus::Explicit,
+        evidence: OPENAI_EVIDENCE,
+    },
+    ModelBinding {
         operation: OperationKind::CHAT_COMPLETION,
         selector: ModelSelector::Any,
         surface: ApiSurfaceId::OPENAI_CHAT_COMPLETIONS,

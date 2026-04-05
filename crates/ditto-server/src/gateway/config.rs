@@ -12,6 +12,7 @@ use super::{
 };
 
 pub(crate) const VIRTUAL_KEY_TOKEN_HASH_PREFIX: &str = "sha256:";
+const SHA256_HEX_LEN: usize = 64;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GatewayObservabilityConfig {
@@ -638,7 +639,8 @@ impl VirtualKeyConfig {
         let Some(expected) = self.token_lookup_key() else {
             return false;
         };
-        normalize_virtual_key_token_key(presented).is_some_and(|actual| actual == expected)
+        normalize_presented_virtual_key_token_key(presented)
+            .is_some_and(|actual| actual == expected)
     }
 
     pub(crate) fn sanitized_for_persistence(&self) -> Self {
@@ -660,15 +662,29 @@ pub(crate) fn normalize_virtual_key_token_key(token: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    if let Some(hash) = trimmed.strip_prefix(VIRTUAL_KEY_TOKEN_HASH_PREFIX) {
-        let hash = hash.trim();
-        if hash.is_empty() {
-            return None;
-        }
+    if let Some(hash) = persisted_virtual_key_token_hash(trimmed) {
         return Some(hash.to_string());
     }
 
     Some(hash_sha256(trimmed.as_bytes()).to_string())
+}
+
+pub(crate) fn normalize_presented_virtual_key_token_key(token: &str) -> Option<String> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(hash_sha256(trimmed.as_bytes()).to_string())
+}
+
+fn persisted_virtual_key_token_hash(token: &str) -> Option<&str> {
+    let hash = token
+        .trim()
+        .strip_prefix(VIRTUAL_KEY_TOKEN_HASH_PREFIX)?
+        .trim();
+    (hash.len() == SHA256_HEX_LEN && hash.as_bytes().iter().all(u8::is_ascii_hexdigit))
+        .then_some(hash)
 }
 
 pub(crate) fn validate_virtual_key_configs(
@@ -1140,6 +1156,31 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("virtual_keys[0].guardrails invalid")
+        );
+    }
+
+    #[test]
+    fn persisted_virtual_key_hashes_are_not_valid_presented_tokens() {
+        let raw = "vk-1";
+        let persisted = persisted_virtual_key_token(raw);
+        let key = VirtualKeyConfig::new("key-1", persisted);
+
+        assert!(key.matches_token(raw));
+        assert!(!key.matches_token(&key.token));
+    }
+
+    #[test]
+    fn non_canonical_sha256_prefixed_tokens_hash_as_literal_tokens() {
+        let token = "sha256:not-a-real-persisted-hash";
+        let expected = hash_sha256(token.as_bytes()).to_string();
+
+        assert_eq!(
+            normalize_virtual_key_token_key(token),
+            Some(expected.clone())
+        );
+        assert_eq!(
+            normalize_presented_virtual_key_token_key(token),
+            Some(expected)
         );
     }
 }

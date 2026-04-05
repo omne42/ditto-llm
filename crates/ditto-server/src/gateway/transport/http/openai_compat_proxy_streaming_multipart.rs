@@ -1053,7 +1053,9 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             "spent_cost_usd_micros": spent_cost_usd_micros,
             "body_len": content_length,
         });
-        append_audit_log(&state, "proxy", payload).await;
+        append_audit_log(&state, "proxy", payload)
+            .await
+            .map_err(openai_storage_error_response)?;
     }
 
     emit_json_log(

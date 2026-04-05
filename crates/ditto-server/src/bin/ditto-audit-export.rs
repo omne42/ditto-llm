@@ -550,6 +550,7 @@ fn main() {
     std::process::exit(2);
 }
 
+#[cfg(not(feature = "gateway"))]
 fn cli_feature_disabled(locale: Locale, feature: &str, rebuild_hint: &str) -> String {
     MESSAGE_CATALOG.render(
         locale,

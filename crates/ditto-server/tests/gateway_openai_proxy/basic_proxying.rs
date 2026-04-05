@@ -62,6 +62,68 @@ async fn openai_compat_proxy_forwards_chat_completions_and_injects_upstream_auth
     mock.assert();
 }
 
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn openai_compat_proxy_fails_closed_when_audit_store_append_fails() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .header("x-request-id", "req-audit-fail");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let broken_path = tmp.path().join("missing-parent").join("gateway.sqlite");
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_sqlite_store(ditto_server::gateway::SqliteStore::new(broken_path));
+    let app = ditto_server::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-audit-fail")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    mock.assert_calls(0);
+}
+
 #[tokio::test]
 async fn openai_compat_proxy_forwards_chat_completions_without_v1_prefix() {
     if ditto_core::utils::test_support::should_skip_httpmock() {

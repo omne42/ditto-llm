@@ -678,7 +678,7 @@ pub(super) async fn upsert_config_router(
             "router_sha256": &next_version.router_sha256,
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(ConfigRouterUpsertResponse {
         dry_run: false,
@@ -939,7 +939,7 @@ pub(super) async fn rollback_config_version(
             "router_sha256": &current_version.router_sha256,
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(ConfigRollbackResponse {
         dry_run: false,

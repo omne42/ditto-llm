@@ -88,6 +88,74 @@ async fn gateway_translation_responses_streaming() -> ditto_core::error::Result<
 }
 
 #[tokio::test]
+async fn gateway_translation_streamed_responses_can_be_retrieved() -> ditto_core::error::Result<()>
+{
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "input": [{"role":"user","content":"hi"}]
+    });
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let create_text = String::from_utf8_lossy(&create_body).to_string();
+    let start = create_text.find("resp_ditto_").expect("streamed response id");
+    let created_id = create_text[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect::<String>();
+    assert!(created_id.starts_with("resp_ditto_"));
+
+    let retrieve_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let retrieve_response = app.oneshot(retrieve_request).await.unwrap();
+    assert_eq!(retrieve_response.status(), StatusCode::OK);
+    let retrieve_body = to_bytes(retrieve_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let retrieve_parsed: serde_json::Value = serde_json::from_slice(&retrieve_body)?;
+    assert_eq!(
+        retrieve_parsed.get("id").and_then(|value| value.as_str()),
+        Some(created_id.as_str())
+    );
+    assert_eq!(
+        retrieve_parsed
+            .get("output_text")
+            .and_then(|value| value.as_str()),
+        Some("hello")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
@@ -435,6 +503,93 @@ async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends
     Ok(())
 }
 
+#[tokio::test]
+async fn gateway_translation_responses_reject_other_virtual_keys()
+-> ditto_core::error::Result<()> {
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![
+            ditto_server::gateway::VirtualKeyConfig::new("key-1", "vk-1"),
+            ditto_server::gateway::VirtualKeyConfig::new("key-2", "vk-2"),
+        ],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "input": "hi"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created_id = serde_json::from_slice::<serde_json::Value>(&create_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("response id")
+        .to_string();
+
+    let retrieve_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}"))
+        .header("authorization", "Bearer vk-2")
+        .body(Body::empty())
+        .unwrap();
+    let retrieve_response = app.clone().oneshot(retrieve_request).await.unwrap();
+    assert_eq!(retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    let delete_request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{created_id}"))
+        .header("authorization", "Bearer vk-2")
+        .body(Body::empty())
+        .unwrap();
+    let delete_response = app.clone().oneshot(delete_request).await.unwrap();
+    assert_eq!(delete_response.status(), StatusCode::NOT_FOUND);
+
+    let creator_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}"))
+        .header("authorization", "Bearer vk-1")
+        .body(Body::empty())
+        .unwrap();
+    let creator_response = app.oneshot(creator_retrieve).await.unwrap();
+    assert_eq!(creator_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
 #[cfg(feature = "gateway-tokenizer")]
 #[tokio::test]
 async fn gateway_translation_responses_input_tokens() -> ditto_core::error::Result<()> {
@@ -599,7 +754,7 @@ async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::error::
             .and_then(|v| v.get("message"))
             .and_then(|v| v.as_str()),
         Some(
-            "response resp_missing not found; translated response retrieval requires a gateway-scoped id from a non-streaming /v1/responses create on the same gateway instance",
+            "response resp_missing not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key",
         )
     );
 
@@ -797,6 +952,75 @@ async fn gateway_translation_moderations_non_streaming() -> ditto_core::error::R
             .and_then(|v| v.as_bool()),
         Some(true)
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_spends_tenant_budget_scope() -> ditto_core::error::Result<()> {
+    let mut key = ditto_server::gateway::VirtualKeyConfig::new("key-1", "vk-1");
+    key.tenant_id = Some("tenant-1".to_string());
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "max_output_tokens": 0,
+        "input": "hi"
+    });
+    let payload_text = payload.to_string();
+    #[cfg(feature = "gateway-tokenizer")]
+    let charge_tokens = ditto_server::gateway::token_count::estimate_input_tokens(
+        "/v1/responses",
+        "gpt-4o-mini",
+        &payload,
+    )
+    .unwrap_or(((payload_text.len().saturating_add(3)) / 4) as u32) as u64;
+    #[cfg(not(feature = "gateway-tokenizer"))]
+    let charge_tokens = ((payload_text.len().saturating_add(3)) / 4) as u64;
+    key.tenant_budget = Some(ditto_server::gateway::BudgetConfig {
+        total_tokens: Some(charge_tokens + 1),
+        ..ditto_server::gateway::BudgetConfig::default()
+    });
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let request = || {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/responses")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                payload_text.clone(),
+            ))
+            .unwrap()
+    };
+
+    let first = app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let _ = to_bytes(first.into_body(), usize::MAX).await.unwrap();
+
+    let second = app.oneshot(request()).await.unwrap();
+    assert_eq!(second.status(), StatusCode::PAYMENT_REQUIRED);
 
     Ok(())
 }

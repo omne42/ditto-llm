@@ -51,7 +51,9 @@ pub(super) async fn finalize_openai_compat_proxy_failure(
             "error_code": err_code,
             "error_message": err_message,
         });
-        append_audit_log(state, "proxy.error", payload).await;
+        if let Err(err) = append_audit_log(state, "proxy.error", payload).await {
+            return openai_storage_error_response(err);
+        }
     }
 
     emit_json_log(

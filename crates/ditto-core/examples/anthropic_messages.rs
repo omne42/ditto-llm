@@ -15,10 +15,10 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "claude-3-5-sonnet-20241022".to_string());
 
     let mut client = Anthropic::new(api_key).with_model(model);
-    if let Ok(base_url) = std::env::var("ANTHROPIC_BASE_URL") {
-        if !base_url.trim().is_empty() {
-            client = client.with_base_url(base_url);
-        }
+    if let Ok(base_url) = std::env::var("ANTHROPIC_BASE_URL")
+        && !base_url.trim().is_empty()
+    {
+        client = client.with_base_url(base_url);
     }
 
     let messages = vec![

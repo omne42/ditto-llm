@@ -321,7 +321,7 @@ async fn reserve_proxy_token_budget(
         {
             Ok(()) => return Ok(()),
             Err(SqliteStoreError::BudgetExceeded { limit, attempted }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -355,7 +355,7 @@ async fn reserve_proxy_token_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -387,7 +387,7 @@ async fn reserve_proxy_token_budget(
         {
             Ok(()) => return Ok(()),
             Err(PostgresStoreError::BudgetExceeded { limit, attempted }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -421,7 +421,7 @@ async fn reserve_proxy_token_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -453,7 +453,7 @@ async fn reserve_proxy_token_budget(
         {
             Ok(()) => return Ok(()),
             Err(MySqlStoreError::BudgetExceeded { limit, attempted }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -487,7 +487,7 @@ async fn reserve_proxy_token_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -519,7 +519,7 @@ async fn reserve_proxy_token_budget(
         {
             Ok(()) => return Ok(()),
             Err(RedisStoreError::BudgetExceeded { limit, attempted }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -553,7 +553,7 @@ async fn reserve_proxy_token_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -708,7 +708,7 @@ async fn reserve_proxy_cost_budget(
                 limit_usd_micros,
                 attempted_usd_micros,
             }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -742,7 +742,7 @@ async fn reserve_proxy_cost_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -782,7 +782,7 @@ async fn reserve_proxy_cost_budget(
                 limit_usd_micros,
                 attempted_usd_micros,
             }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -816,7 +816,7 @@ async fn reserve_proxy_cost_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -856,7 +856,7 @@ async fn reserve_proxy_cost_budget(
                 limit_usd_micros,
                 attempted_usd_micros,
             }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -890,7 +890,7 @@ async fn reserve_proxy_cost_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -930,7 +930,7 @@ async fn reserve_proxy_cost_budget(
                 limit_usd_micros,
                 attempted_usd_micros,
             }) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({
@@ -964,7 +964,7 @@ async fn reserve_proxy_cost_budget(
                 }));
             }
             Err(err) => {
-                append_audit_log(
+                let _ = append_audit_log(
                     state,
                     "proxy.blocked",
                     serde_json::json!({

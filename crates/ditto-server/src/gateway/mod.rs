@@ -72,21 +72,25 @@ use omne_integrity_primitives::Sha256Hasher;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use self::config::normalize_virtual_key_token_key;
+use self::config::normalize_presented_virtual_key_token_key;
 use domain::RateLimiter;
 use domain::{BudgetTracker, ResponseCache, Router};
 use observability::{Observability, ObservabilitySnapshot};
 
 pub(crate) fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poison| poison.into_inner())
+    mutex
+        .lock()
+        .expect("gateway mutex poisoned; refusing to continue with inconsistent state")
 }
 
 pub(crate) fn read_unpoisoned<T>(lock: &RwLock<T>) -> RwLockReadGuard<'_, T> {
-    lock.read().unwrap_or_else(|poison| poison.into_inner())
+    lock.read()
+        .expect("gateway rwlock poisoned; refusing to continue with inconsistent state")
 }
 
 pub(crate) fn write_unpoisoned<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
-    lock.write().unwrap_or_else(|poison| poison.into_inner())
+    lock.write()
+        .expect("gateway rwlock poisoned; refusing to continue with inconsistent state")
 }
 
 pub use adapters::backend::{HttpBackend, ProxyBackend};
@@ -446,6 +450,33 @@ mod tests {
                 .is_none()
         );
     }
+
+    #[test]
+    fn poisoned_mutex_panics_instead_of_recovering() {
+        let mutex = Arc::new(Mutex::new(()));
+        let poison = Arc::clone(&mutex);
+        let _ = std::thread::spawn(move || {
+            let _guard = poison.lock().expect("lock");
+            panic!("poison gateway mutex");
+        })
+        .join();
+
+        assert!(std::panic::catch_unwind(|| lock_unpoisoned(&mutex)).is_err());
+    }
+
+    #[test]
+    fn poisoned_rwlock_panics_instead_of_recovering() {
+        let lock = Arc::new(RwLock::new(()));
+        let poison = Arc::clone(&lock);
+        let _ = std::thread::spawn(move || {
+            let _guard = poison.write().expect("write");
+            panic!("poison gateway rwlock");
+        })
+        .join();
+
+        assert!(std::panic::catch_unwind(|| read_unpoisoned(&lock)).is_err());
+        assert!(std::panic::catch_unwind(|| write_unpoisoned(&lock)).is_err());
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -564,7 +595,7 @@ impl GatewayControlPlane {
     }
 
     fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        if let Some(token_key) = normalize_virtual_key_token_key(token)
+        if let Some(token_key) = normalize_presented_virtual_key_token_key(token)
             && let Some(index) = self.virtual_key_token_index.get(&token_key).copied()
             && let Some(key) = self.config.virtual_keys.get(index)
             && key.matches_token(token)
@@ -731,7 +762,7 @@ impl Gateway {
         let control_plane = self
             .control_plane
             .get_mut()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .expect("gateway control plane poisoned; refusing to continue with inconsistent state");
         control_plane
             .backends
             .insert(name.into(), Arc::new(backend));

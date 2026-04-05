@@ -679,7 +679,9 @@ pub(super) async fn attempt_proxy_backend(
                 "shim": "responses_via_chat_completions",
             });
 
-            append_audit_log(state, "proxy", payload).await;
+            append_audit_log(state, "proxy", payload)
+                .await
+                .map_err(openai_storage_error_response)?;
         }
 
         emit_json_log(
@@ -1392,7 +1394,18 @@ pub(super) async fn attempt_proxy_backend(
                             "body_len": self.request_body_len,
                             "stream": true,
                         });
-                        append_audit_log(&self.state, "proxy", payload).await;
+                        if let Err(err) = append_audit_log(&self.state, "proxy", payload).await {
+                            emit_json_log(
+                                &self.state,
+                                "proxy.warning",
+                                serde_json::json!({
+                                    "request_id": &self.request_id,
+                                    "backend": &self.backend_name,
+                                    "warning": "audit_append_failed_after_stream_start",
+                                    "error": err,
+                                }),
+                            );
+                        }
                     }
 
                     emit_json_log(
@@ -2110,7 +2123,9 @@ pub(super) async fn attempt_proxy_backend(
                 "spent_cost_usd_micros": spent_cost_usd_micros,
                 "body_len": body.len(),
             });
-            append_audit_log(state, "proxy", payload).await;
+            append_audit_log(state, "proxy", payload)
+                .await
+                .map_err(openai_storage_error_response)?;
         }
 
         emit_json_log(

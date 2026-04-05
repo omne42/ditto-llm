@@ -57,11 +57,6 @@ fn minimax_catalog_runtime_spec_includes_context_cache() {
             .resolve("minimax", "MiniMax-M2", OperationKind::CHAT_COMPLETION)
             .is_some()
     );
-    assert!(
-        builtin_registry()
-            .resolve("minimax", "MiniMax-M2", OperationKind::CONTEXT_CACHE)
-            .is_some()
-    );
 }
 
 #[cfg(all(

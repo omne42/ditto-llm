@@ -3,6 +3,8 @@ use super::*;
 #[derive(Debug, Clone)]
 pub(super) struct ResolvedGatewayContext {
     pub(super) virtual_key_id: Option<String>,
+    #[cfg(feature = "gateway-translation")]
+    pub(super) response_owner: super::translation::TranslationResponseOwner,
     pub(super) limits: Option<super::LimitsConfig>,
     pub(super) budget: Option<super::BudgetConfig>,
     pub(super) tenant_budget_scope: Option<(String, super::BudgetConfig)>,
@@ -118,6 +120,31 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
     let gateway_preamble = resolve_openai_compat_proxy_gateway_preamble(state, parts).await?;
     let strip_authorization = gateway_preamble.strip_authorization;
     let key = gateway_preamble.key;
+    #[cfg(feature = "gateway-translation")]
+    let response_owner = key
+        .as_ref()
+        .map(|key| super::translation::TranslationResponseOwner {
+            virtual_key_id: Some(key.id.clone()),
+            tenant_id: key
+                .tenant_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_string),
+            project_id: key
+                .project_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_string),
+            user_id: key
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_string),
+        })
+        .unwrap_or_default();
 
     let (
         virtual_key_id,
@@ -865,6 +892,8 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
 
     Ok(ResolvedGatewayContext {
         virtual_key_id,
+        #[cfg(feature = "gateway-translation")]
+        response_owner,
         limits,
         budget,
         tenant_budget_scope,
