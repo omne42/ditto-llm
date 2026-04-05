@@ -509,21 +509,21 @@ fn local_proxy_request_dedup_persistence(state: &GatewayHttpState) -> ProxyReque
     state.proxy.request_dedup.clone()
 }
 
-fn has_persistent_proxy_request_dedup_store(state: &GatewayHttpState) -> bool {
+fn has_persistent_proxy_request_dedup_store(_state: &GatewayHttpState) -> bool {
     #[cfg(feature = "gateway-store-redis")]
-    if state.stores.redis.is_some() {
+    if _state.stores.redis.is_some() {
         return true;
     }
     #[cfg(feature = "gateway-store-postgres")]
-    if state.stores.postgres.is_some() {
+    if _state.stores.postgres.is_some() {
         return true;
     }
     #[cfg(feature = "gateway-store-mysql")]
-    if state.stores.mysql.is_some() {
+    if _state.stores.mysql.is_some() {
         return true;
     }
     #[cfg(feature = "gateway-store-sqlite")]
-    if state.stores.sqlite.is_some() {
+    if _state.stores.sqlite.is_some() {
         return true;
     }
 
