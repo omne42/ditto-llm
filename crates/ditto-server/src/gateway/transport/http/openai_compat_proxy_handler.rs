@@ -238,22 +238,23 @@ pub(super) async fn handle_openai_compat_proxy(
     )
     .await?;
 
-    let mut request_dedup_leader = match prepare_proxy_request_dedup(
-        &state,
-        &parts.method,
-        path_and_query,
-        &parts.headers,
-        &body,
-        &request_id,
-        client_supplied_request_id,
-        virtual_key_id.as_deref(),
-    )
-    .await?
-    {
-        ProxyRequestDedupDecision::Disabled => None,
-        ProxyRequestDedupDecision::Replay(result) => return result,
-        ProxyRequestDedupDecision::Leader(leader) => Some(leader),
-    };
+    let mut request_dedup_leader =
+        match prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &parts.method,
+            path_and_query,
+            headers: &parts.headers,
+            body: &body,
+            request_id: &request_id,
+            client_supplied_request_id,
+            virtual_key_id: virtual_key_id.as_deref(),
+        })
+        .await?
+        {
+            ProxyRequestDedupDecision::Disabled => None,
+            ProxyRequestDedupDecision::Replay(result) => return result,
+            ProxyRequestDedupDecision::Leader(leader) => Some(leader),
+        };
 
     state.record_request();
 

@@ -330,16 +330,31 @@ impl Drop for ProxyRequestDedupLeader {
     }
 }
 
+pub(super) struct PrepareProxyRequestDedupInput<'a> {
+    pub state: &'a GatewayHttpState,
+    pub method: &'a axum::http::Method,
+    pub path_and_query: &'a str,
+    pub headers: &'a HeaderMap,
+    pub body: &'a Bytes,
+    pub request_id: &'a str,
+    pub client_supplied_request_id: bool,
+    pub virtual_key_id: Option<&'a str>,
+}
+
 pub(super) async fn prepare_proxy_request_dedup(
-    state: &GatewayHttpState,
-    method: &axum::http::Method,
-    path_and_query: &str,
-    headers: &HeaderMap,
-    body: &Bytes,
-    request_id: &str,
-    client_supplied_request_id: bool,
-    virtual_key_id: Option<&str>,
+    input: PrepareProxyRequestDedupInput<'_>,
 ) -> Result<ProxyRequestDedupDecision, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let PrepareProxyRequestDedupInput {
+        state,
+        method,
+        path_and_query,
+        headers,
+        body,
+        request_id,
+        client_supplied_request_id,
+        virtual_key_id,
+    } = input;
+
     if !client_supplied_request_id || method.is_safe() {
         return Ok(ProxyRequestDedupDecision::Disabled);
     }

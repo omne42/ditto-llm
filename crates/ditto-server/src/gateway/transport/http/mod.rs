@@ -62,7 +62,7 @@ use self::openai_compat_proxy_proxy_failure::{
 #[cfg(feature = "gateway-store-redis")]
 use self::openai_compat_proxy_rate_limit::normalize_rate_limit_route;
 use self::openai_compat_proxy_request_dedup::{
-    LocalProxyRequestIdempotencyStore, ProxyRequestDedupDecision,
+    LocalProxyRequestIdempotencyStore, PrepareProxyRequestDedupInput, ProxyRequestDedupDecision,
     finish_proxy_request_dedup_result, prepare_proxy_request_dedup,
 };
 #[allow(unused_imports)]
