@@ -332,6 +332,14 @@ async fn run_gateway(
     if redis_prefix.is_some() && redis_url.is_none() {
         return Err(cli_requires(locale, "--redis-prefix", "--redis or --redis-env").into());
     }
+    validate_single_control_plane_persistence_target(
+        locale,
+        state_path.is_some(),
+        _sqlite_path.is_some(),
+        postgres_url.is_some(),
+        mysql_url.is_some(),
+        redis_url.is_some(),
+    )?;
 
     let mut config = load_gateway_config(locale, &path)?;
 
@@ -897,6 +905,39 @@ fn cli_cannot_combine(locale: Locale, left: &str, right: &str) -> String {
             TemplateArg::new("right", right),
         ],
     )
+}
+
+#[cfg(feature = "gateway")]
+fn validate_single_control_plane_persistence_target(
+    locale: Locale,
+    has_state: bool,
+    has_sqlite: bool,
+    has_postgres: bool,
+    has_mysql: bool,
+    has_redis: bool,
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let configured = [has_state, has_sqlite, has_postgres, has_mysql, has_redis]
+        .into_iter()
+        .filter(|configured| *configured)
+        .count();
+
+    if configured > 1 {
+        return Err(format!(
+            "{}: {}",
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.invalid_value",
+                &[TemplateArg::new(
+                    "label",
+                    "control-plane persistence target"
+                )],
+            ),
+            "choose exactly one of --state, --sqlite, --pg/--postgres, --mysql, or --redis"
+        )
+        .into());
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "gateway")]
