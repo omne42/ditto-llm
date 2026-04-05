@@ -511,6 +511,15 @@ pub(crate) fn parse_gateway_cli_args_with_locale(
         }
     }
 
+    validate_single_control_plane_persistence_target(
+        locale,
+        state_path.is_some(),
+        sqlite_path.is_some(),
+        postgres_url.is_some() || postgres_url_env.is_some(),
+        mysql_url.is_some() || mysql_url_env.is_some(),
+        redis_url.is_some() || redis_url_env.is_some(),
+    )?;
+
     Ok(GatewayCliArgs {
         path,
         listen,
@@ -732,6 +741,39 @@ fn invalid_spec(locale: Locale, flag: &str, expected: &str) -> Box<dyn std::erro
 }
 
 #[cfg(feature = "gateway")]
+fn validate_single_control_plane_persistence_target(
+    locale: Locale,
+    has_state: bool,
+    has_sqlite: bool,
+    has_postgres: bool,
+    has_mysql: bool,
+    has_redis: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let configured = [has_state, has_sqlite, has_postgres, has_mysql, has_redis]
+        .into_iter()
+        .filter(|configured| *configured)
+        .count();
+
+    if configured > 1 {
+        return Err(format!(
+            "{}: {}",
+            MESSAGE_CATALOG.render(
+                locale,
+                "cli.invalid_value",
+                &[TemplateArg::new(
+                    "label",
+                    "control-plane persistence target"
+                )],
+            ),
+            "choose exactly one of --state, --sqlite, --pg/--postgres, --mysql, or --redis"
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "gateway")]
 fn empty_status_code_list(locale: Locale) -> Box<dyn std::error::Error> {
     MESSAGE_CATALOG
         .render(locale, "cli.empty_status_code_list", &[])
@@ -812,29 +854,23 @@ mod tests {
     }
 
     #[test]
-    fn parses_sql_store_args() {
-        let cli = parse_gateway_cli_args(
+    fn rejects_multiple_control_plane_persistence_targets() {
+        let err = parse_gateway_cli_args(
             vec![
                 "gateway.json".to_string(),
+                "--state".to_string(),
+                "./gateway-state.json".to_string(),
                 "--sqlite".to_string(),
                 "./gateway.sqlite".to_string(),
                 "--pg".to_string(),
                 "postgres://user:pass@localhost/ditto".to_string(),
-                "--mysql".to_string(),
-                "mysql://user:pass@localhost/ditto".to_string(),
             ]
             .into_iter(),
         )
-        .expect("parse");
-        assert_eq!(cli.sqlite_path, Some(PathBuf::from("./gateway.sqlite")));
-        assert_eq!(
-            cli.postgres_url.as_deref(),
-            Some("postgres://user:pass@localhost/ditto")
-        );
-        assert_eq!(
-            cli.mysql_url.as_deref(),
-            Some("mysql://user:pass@localhost/ditto")
-        );
+        .expect_err("multiple persistence targets should be rejected");
+        assert!(err.to_string().contains(
+            "choose exactly one of --state, --sqlite, --pg/--postgres, --mysql, or --redis"
+        ));
     }
 
     #[test]
