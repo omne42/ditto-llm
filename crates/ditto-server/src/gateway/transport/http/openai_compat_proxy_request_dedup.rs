@@ -343,7 +343,9 @@ pub(super) async fn prepare_proxy_request_dedup(
         return Ok(ProxyRequestDedupDecision::Disabled);
     }
 
-    let persistence = select_proxy_request_dedup_persistence(state);
+    let mut persistence = select_proxy_request_dedup_persistence(state);
+    let local_fallback = local_proxy_request_dedup_persistence(state);
+    let mut tried_local_fallback = !has_persistent_proxy_request_dedup_store(state);
     let (fingerprint, fingerprint_key) =
         request_dedup_fingerprint(method, path_and_query, virtual_key_id, body);
     let owner_token = format!("dedup-{}", generate_request_id());
@@ -418,6 +420,22 @@ pub(super) async fn prepare_proxy_request_dedup(
                 sleep(Duration::from_millis(REQUEST_DEDUP_POLL_INTERVAL_MS)).await;
             }
             Err(err) => {
+                if !tried_local_fallback {
+                    tried_local_fallback = true;
+                    persistence = local_fallback.clone();
+                    emit_json_log(
+                        state,
+                        "proxy.request_dedup_store_fallback",
+                        serde_json::json!({
+                            "request_id": request_id,
+                            "method": method.as_str(),
+                            "path": path_and_query,
+                            "virtual_key_id": virtual_key_id,
+                            "error": err.to_string(),
+                        }),
+                    );
+                    continue;
+                }
                 return Err(openai_error(
                     StatusCode::SERVICE_UNAVAILABLE,
                     "api_error",
@@ -469,6 +487,31 @@ fn select_proxy_request_dedup_persistence(
     state: &GatewayHttpState,
 ) -> ProxyRequestDedupPersistence {
     state.proxy_request_idempotency_store()
+}
+
+fn local_proxy_request_dedup_persistence(state: &GatewayHttpState) -> ProxyRequestDedupPersistence {
+    state.proxy.request_dedup.clone()
+}
+
+fn has_persistent_proxy_request_dedup_store(state: &GatewayHttpState) -> bool {
+    #[cfg(feature = "gateway-store-redis")]
+    if state.stores.redis.is_some() {
+        return true;
+    }
+    #[cfg(feature = "gateway-store-postgres")]
+    if state.stores.postgres.is_some() {
+        return true;
+    }
+    #[cfg(feature = "gateway-store-mysql")]
+    if state.stores.mysql.is_some() {
+        return true;
+    }
+    #[cfg(feature = "gateway-store-sqlite")]
+    if state.stores.sqlite.is_some() {
+        return true;
+    }
+
+    false
 }
 
 fn request_dedup_fingerprint(
