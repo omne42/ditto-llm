@@ -294,7 +294,7 @@ async fn litellm_key_generate(
             "user_id": virtual_key.user_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(LitellmKeyGenerateResponse {
         key: key.clone(),
@@ -540,7 +540,7 @@ async fn litellm_key_update(
             "user_id": key.user_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(litellm_generate_response_from_virtual_key_with_token(
         &key,
@@ -684,7 +684,7 @@ async fn litellm_key_delete(
             "tenant_id": admin.tenant_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(LitellmKeyDeleteResponse { deleted_keys }))
 }
@@ -1110,7 +1110,7 @@ async fn litellm_key_regenerate_inner(
             "user_id": key.user_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(litellm_generate_response_from_virtual_key(&key)))
 }

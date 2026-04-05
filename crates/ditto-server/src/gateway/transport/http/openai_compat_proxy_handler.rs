@@ -201,6 +201,8 @@ pub(super) async fn handle_openai_compat_proxy(
 
     let ResolvedGatewayContext {
         virtual_key_id,
+        #[cfg(feature = "gateway-translation")]
+        response_owner,
         limits,
         budget,
         tenant_budget_scope,
@@ -680,6 +682,8 @@ pub(super) async fn handle_openai_compat_proxy(
         strip_authorization,
         use_persistent_budget,
         virtual_key_id: &virtual_key_id,
+        #[cfg(feature = "gateway-translation")]
+        response_owner: &response_owner,
         budget: &budget,
         tenant_budget_scope: &tenant_budget_scope,
         project_budget_scope: &project_budget_scope,

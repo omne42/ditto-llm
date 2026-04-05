@@ -18,6 +18,8 @@ pub(super) struct ProxyAttemptParams<'a> {
     pub(super) strip_authorization: bool,
     pub(super) use_persistent_budget: bool,
     pub(super) virtual_key_id: &'a Option<String>,
+    #[cfg(feature = "gateway-translation")]
+    pub(super) response_owner: &'a super::translation::TranslationResponseOwner,
     pub(super) budget: &'a Option<super::BudgetConfig>,
     pub(super) tenant_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     pub(super) project_budget_scope: &'a Option<(String, super::BudgetConfig)>,

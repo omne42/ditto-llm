@@ -194,7 +194,7 @@ pub(super) async fn purge_proxy_cache(
                 "deleted_redis": deleted_redis,
             }),
         )
-        .await;
+        .await?;
 
         return Ok(Json(PurgeProxyCacheResponse {
             cleared_memory: true,
@@ -264,7 +264,7 @@ pub(super) async fn purge_proxy_cache(
             "deleted_redis": deleted_redis,
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(PurgeProxyCacheResponse {
         cleared_memory: deleted_memory > 0,
@@ -1895,7 +1895,7 @@ pub(super) async fn reset_backend(
             "backend": &name,
         }),
     )
-    .await;
+    .await?;
 
     Ok(Json(BackendHealth::default().snapshot(&name)))
 }
@@ -2048,7 +2048,7 @@ pub(super) async fn upsert_key(
             "user_id": key.user_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     let status = if inserted {
         StatusCode::CREATED
@@ -2113,7 +2113,7 @@ pub(super) async fn upsert_key_with_id(
             "user_id": key.user_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     let status = if inserted {
         StatusCode::CREATED
@@ -2177,7 +2177,7 @@ pub(super) async fn delete_key(
             "tenant_id": admin.tenant_id.as_deref(),
         }),
     )
-    .await;
+    .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

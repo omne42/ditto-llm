@@ -9,8 +9,34 @@ use crate::gateway::adapters::cache::LocalLruCache;
 const DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_ENTRIES: usize = 128;
 const TRANSLATION_RESPONSE_HANDLE_PREFIX: &str = "resp_ditto_";
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct TranslationResponseOwner {
+    pub(crate) virtual_key_id: Option<String>,
+    pub(crate) tenant_id: Option<String>,
+    pub(crate) project_id: Option<String>,
+    pub(crate) user_id: Option<String>,
+}
+
+impl TranslationResponseOwner {
+    pub(crate) fn matches(&self, requester: &Self) -> bool {
+        [
+            (&self.virtual_key_id, &requester.virtual_key_id),
+            (&self.tenant_id, &requester.tenant_id),
+            (&self.project_id, &requester.project_id),
+            (&self.user_id, &requester.user_id),
+        ]
+        .into_iter()
+        .all(|(stored, actual)| {
+            stored
+                .as_ref()
+                .is_none_or(|stored| actual.as_ref() == Some(stored))
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct StoredTranslationResponse {
+    pub(crate) owner: TranslationResponseOwner,
     pub(crate) response: Value,
     pub(crate) input_items: Vec<Value>,
 }
@@ -58,6 +84,7 @@ impl TranslationResponseStore {
     async fn store_response_record(
         &self,
         response_id: &str,
+        owner: TranslationResponseOwner,
         response: Value,
         input_items: Vec<Value>,
     ) {
@@ -70,6 +97,7 @@ impl TranslationResponseStore {
         entries.insert(
             response_id.to_string(),
             StoredTranslationResponse {
+                owner,
                 response,
                 input_items,
             },
@@ -93,11 +121,12 @@ impl TranslationResponseStore {
 pub(crate) async fn delete_stored_response_from_translation_backends(
     backends: &HashMap<String, super::TranslationBackend>,
     response_id: &str,
+    requester: &TranslationResponseOwner,
 ) -> Option<String> {
     let (backend_name, _) = parse_gateway_scoped_response_id(response_id)?;
     let backend = backends.get(backend_name)?;
     backend
-        .delete_stored_response(response_id.trim())
+        .delete_stored_response(response_id.trim(), requester)
         .await
         .then(|| backend_name.to_string())
 }
@@ -105,11 +134,12 @@ pub(crate) async fn delete_stored_response_from_translation_backends(
 pub(crate) async fn find_stored_response_from_translation_backends(
     backends: &HashMap<String, super::TranslationBackend>,
     response_id: &str,
+    requester: &TranslationResponseOwner,
 ) -> Option<(String, StoredTranslationResponse)> {
     let (backend_name, _) = parse_gateway_scoped_response_id(response_id)?;
     let backend = backends.get(backend_name)?;
     backend
-        .stored_response(response_id.trim())
+        .stored_response(response_id.trim(), requester)
         .await
         .map(|stored| (backend_name.to_string(), stored))
 }
@@ -118,24 +148,38 @@ impl super::TranslationBackend {
     pub(crate) async fn store_response_record(
         &self,
         response_id: &str,
+        owner: TranslationResponseOwner,
         response: Value,
         input_items: Vec<Value>,
     ) {
         self.runtime
             .response_store
-            .store_response_record(response_id, response, input_items)
+            .store_response_record(response_id, owner, response, input_items)
             .await;
     }
 
-    async fn stored_response(&self, response_id: &str) -> Option<StoredTranslationResponse> {
+    async fn stored_response(
+        &self,
+        response_id: &str,
+        requester: &TranslationResponseOwner,
+    ) -> Option<StoredTranslationResponse> {
         self.runtime
             .response_store
             .stored_response(response_id)
             .await
+            .filter(|stored| stored.owner.matches(requester))
     }
 
-    async fn delete_stored_response(&self, response_id: &str) -> bool {
-        self.runtime
+    async fn delete_stored_response(
+        &self,
+        response_id: &str,
+        requester: &TranslationResponseOwner,
+    ) -> bool {
+        matches!(
+            self.runtime.response_store.stored_response(response_id).await,
+            Some(stored) if stored.owner.matches(requester)
+        ) && self
+            .runtime
             .response_store
             .delete_stored_response(response_id)
             .await
@@ -154,6 +198,10 @@ mod tests {
         store
             .store_response_record(
                 &response_id,
+                TranslationResponseOwner {
+                    virtual_key_id: Some("key-1".to_string()),
+                    ..TranslationResponseOwner::default()
+                },
                 json!({ "id": response_id }),
                 vec![json!({ "type": "message" })],
             )
@@ -171,6 +219,37 @@ mod tests {
 
         assert!(store.delete_stored_response(&response_id).await);
         assert!(store.stored_response(&response_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn response_store_rejects_other_virtual_keys() {
+        let store = TranslationResponseStore::default();
+        let response_id = gateway_scoped_response_id("primary", "resp_123");
+        store
+            .store_response_record(
+                &response_id,
+                TranslationResponseOwner {
+                    virtual_key_id: Some("key-1".to_string()),
+                    tenant_id: Some("tenant-a".to_string()),
+                    ..TranslationResponseOwner::default()
+                },
+                json!({ "id": response_id }),
+                vec![],
+            )
+            .await;
+
+        let requester = TranslationResponseOwner {
+            virtual_key_id: Some("key-2".to_string()),
+            tenant_id: Some("tenant-a".to_string()),
+            ..TranslationResponseOwner::default()
+        };
+        assert!(store.stored_response(&response_id).await.is_some());
+        assert!(
+            !store
+                .stored_response(&response_id)
+                .await
+                .is_some_and(|stored| stored.owner.matches(&requester))
+        );
     }
 
     #[test]

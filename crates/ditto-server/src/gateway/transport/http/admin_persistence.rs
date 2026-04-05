@@ -20,12 +20,12 @@ pub(super) async fn append_admin_audit_log(
     state: &GatewayHttpState,
     kind: &str,
     payload: serde_json::Value,
-) {
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     let Some(payload) = state.prepare_observability_event(
         crate::gateway::observability::GatewayObservabilitySink::Audit,
         payload,
     ) else {
-        return;
+        return Ok(());
     };
 
     #[cfg(feature = "gateway-store-sqlite")]
@@ -33,6 +33,11 @@ pub(super) async fn append_admin_audit_log(
         && let Err(err) = store.append_audit_log(kind, payload.clone()).await
     {
         report_admin_audit_append_failure("sqlite", kind, &err);
+        return Err(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "storage_error",
+            format!("failed to append sqlite admin audit log `{kind}`: {err}"),
+        ));
     }
 
     #[cfg(feature = "gateway-store-postgres")]
@@ -40,6 +45,11 @@ pub(super) async fn append_admin_audit_log(
         && let Err(err) = store.append_audit_log(kind, payload.clone()).await
     {
         report_admin_audit_append_failure("postgres", kind, &err);
+        return Err(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "storage_error",
+            format!("failed to append postgres admin audit log `{kind}`: {err}"),
+        ));
     }
 
     #[cfg(feature = "gateway-store-mysql")]
@@ -47,6 +57,11 @@ pub(super) async fn append_admin_audit_log(
         && let Err(err) = store.append_audit_log(kind, payload.clone()).await
     {
         report_admin_audit_append_failure("mysql", kind, &err);
+        return Err(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "storage_error",
+            format!("failed to append mysql admin audit log `{kind}`: {err}"),
+        ));
     }
 
     #[cfg(feature = "gateway-store-redis")]
@@ -54,7 +69,14 @@ pub(super) async fn append_admin_audit_log(
         && let Err(err) = store.append_audit_log(kind, payload).await
     {
         report_admin_audit_append_failure("redis", kind, &err);
+        return Err(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "storage_error",
+            format!("failed to append redis admin audit log `{kind}`: {err}"),
+        ));
     }
+
+    Ok(())
 }
 
 fn persist_state_file(

@@ -73,10 +73,15 @@ fn runtime_transport_plan_exposes_openai_compatible_http_shape() {
 
 #[cfg(feature = "provider-google")]
 #[test]
-fn runtime_transport_plan_uses_google_default_header_auth_for_yunwu() {
+fn runtime_transport_plan_uses_explicit_bearer_auth_for_yunwu() {
     let provider_config = ProviderConfig {
         base_url: Some("https://yunwu.ai/v1beta".to_string()),
         default_model: Some("gemini-3.1-pro".to_string()),
+        auth: Some(ProviderAuth::HttpHeaderEnv {
+            header: "Authorization".to_string(),
+            keys: vec!["YUNWU_API_KEY".to_string()],
+            prefix: Some("Bearer ".to_string()),
+        }),
         upstream_api: Some(ProviderApi::GeminiGenerateContent),
         ..ProviderConfig::default()
     };
@@ -99,16 +104,13 @@ fn runtime_transport_plan_uses_google_default_header_auth_for_yunwu() {
             prefix,
             credential,
         } => {
-            assert_eq!(
-                *source,
-                RuntimeTransportAuthSelectionSource::ProviderDefault
-            );
-            assert_eq!(header_name, "x-goog-api-key");
-            assert_eq!(prefix, &None);
+            assert_eq!(*source, RuntimeTransportAuthSelectionSource::ProviderConfig);
+            assert_eq!(header_name, "Authorization");
+            assert_eq!(prefix.as_deref(), Some("Bearer "));
             assert_eq!(
                 credential,
                 &RuntimeTransportCredentialSource::Env {
-                    keys: vec!["GOOGLE_API_KEY".to_string(), "GEMINI_API_KEY".to_string()],
+                    keys: vec!["YUNWU_API_KEY".to_string()],
                 }
             );
         }

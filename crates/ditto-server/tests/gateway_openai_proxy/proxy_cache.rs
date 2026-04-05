@@ -355,7 +355,7 @@ async fn openai_compat_proxy_cache_scopes_by_virtual_key_x_api_key() {
             .path("/v1/responses")
             .header("authorization", "Bearer sk-test")
             .is_true(|req: &httpmock::prelude::HttpMockRequest| {
-                req.headers()
+                !req.headers()
                     .iter()
                     .any(|(name, _)| name.as_str() == "x-api-key")
             });

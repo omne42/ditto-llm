@@ -28,7 +28,9 @@ pub(super) async fn attempt_translation_backend(
     #[cfg(not(feature = "gateway-costing"))]
     let _ = use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
+    let response_owner = params.response_owner.to_owned();
     let budget = params.budget;
+    let tenant_budget_scope = params.tenant_budget_scope;
     let project_budget_scope = params.project_budget_scope;
     let user_budget_scope = params.user_budget_scope;
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
@@ -95,7 +97,7 @@ pub(super) async fn attempt_translation_backend(
 
     fn response_store_contract_message(response_id: &str) -> String {
         format!(
-            "response {response_id} not found; translated response retrieval requires a gateway-scoped id from a non-streaming /v1/responses create on the same gateway instance"
+            "response {response_id} not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key"
         )
     }
     if !translation_backend.supports_endpoint(&endpoint_descriptor, mapped_request_model.as_deref())
@@ -1586,6 +1588,7 @@ pub(super) async fn attempt_translation_backend(
                     translation::find_stored_response_from_translation_backends(
                         state.backends.translation_backends.as_ref(),
                         response_id,
+                        &response_owner,
                     )
                     .await
                 else {
@@ -1635,6 +1638,7 @@ pub(super) async fn attempt_translation_backend(
                         translation::find_stored_response_from_translation_backends(
                             state.backends.translation_backends.as_ref(),
                             response_id,
+                            &response_owner,
                         )
                         .await
                     else {
@@ -1677,6 +1681,7 @@ pub(super) async fn attempt_translation_backend(
                         translation::delete_stored_response_from_translation_backends(
                             state.backends.translation_backends.as_ref(),
                             response_id,
+                            &response_owner,
                         )
                         .await
                     else {
@@ -2141,7 +2146,21 @@ pub(super) async fn attempt_translation_backend(
                             _now_epoch_seconds,
                         )
                     } else {
-                        translation::stream_to_responses_sse(stream, fallback_response_id)
+                        translation::stream_to_responses_sse(
+                            stream,
+                            translation::ResponsesSseStreamParams {
+                                backend_name: backend_name.to_string(),
+                                fallback_id: translation::gateway_scoped_response_id(
+                                    backend_name,
+                                    &fallback_response_id,
+                                ),
+                                model: original_model.clone(),
+                                created: _now_epoch_seconds,
+                                input_items: responses_input_items.unwrap_or_default(),
+                                response_owner: response_owner.clone(),
+                                response_store_backend: translation_backend.clone(),
+                            },
+                        )
                     };
 
                     let mut headers = HeaderMap::new();
@@ -2210,7 +2229,12 @@ pub(super) async fn attempt_translation_backend(
 
                     if let Some(input_items) = responses_input_items {
                         translation_backend
-                            .store_response_record(&response_id, value.clone(), input_items)
+                            .store_response_record(
+                                &response_id,
+                                response_owner.clone(),
+                                value.clone(),
+                                input_items,
+                            )
                             .await;
                     }
 
@@ -2333,11 +2357,13 @@ pub(super) async fn attempt_translation_backend(
                 spent_tokens,
             )
             .await;
-        } else if let (Some(virtual_key_id), Some(budget)) =
-            (virtual_key_id.clone(), budget.clone())
-            && spend_tokens
-        {
-            state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+        } else if spend_tokens {
+            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
+                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
             if let Some((scope, budget)) = project_budget_scope.as_ref() {
                 state.spend_budget_tokens(scope, budget, spent_tokens);
             }
@@ -2347,7 +2373,14 @@ pub(super) async fn attempt_translation_backend(
 
             #[cfg(feature = "gateway-costing")]
             if !use_persistent_budget && let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
+                if let (Some(virtual_key_id), Some(budget)) =
+                    (virtual_key_id.clone(), budget.clone())
+                {
+                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
@@ -2362,25 +2395,35 @@ pub(super) async fn attempt_translation_backend(
             feature = "gateway-store-mysql",
             feature = "gateway-store-redis"
         )))]
-        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-            if spend_tokens {
+        if spend_tokens {
+            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
                 state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                if let (Some(virtual_key_id), Some(budget)) =
+                    (virtual_key_id.clone(), budget.clone())
+                {
+                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
+                }
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
-                }
-
-                #[cfg(feature = "gateway-costing")]
-                if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                    }
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
             }
         }
@@ -2468,7 +2511,9 @@ pub(super) async fn attempt_translation_backend(
                 "body_len": body.len(),
                 "mode": "translation",
             });
-            append_audit_log(state, "proxy", payload).await;
+            append_audit_log(state, "proxy", payload)
+                .await
+                .map_err(openai_storage_error_response)?;
         }
 
         emit_json_log(

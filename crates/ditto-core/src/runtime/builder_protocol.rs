@@ -81,6 +81,22 @@ pub(super) struct BuilderAssemblyPlan {
     pub(super) config: ProviderConfig,
 }
 
+fn direct_builtin_builder_provider(provider: &str) -> Option<&'static str> {
+    match provider {
+        // These aliases intentionally resolve to the generic OpenAI-compatible
+        // runtime even when they do not have dedicated catalog truth.
+        "openai_compatible" | "litellm" | "azure" | "azure-openai" | "azure_openai" | "qwen"
+        | "groq" | "mistral" | "together" | "together-ai" | "together_ai" | "fireworks"
+        | "perplexity" | "ollama" => Some("openai-compatible"),
+        // These backends are buildable today even though they do not yet expose
+        // a builtin runtime catalog plugin.
+        "cohere" => Some("cohere"),
+        "bedrock" => Some("bedrock"),
+        "vertex" => Some("vertex"),
+        _ => None,
+    }
+}
+
 fn apply_runtime_route_to_builder_config(
     config: &ProviderConfig,
     route: &RuntimeRoute,
@@ -101,10 +117,19 @@ pub(super) fn default_builder_assembly(
         return Err(unsupported_provider_backend(provider));
     }
 
-    let plugin = runtime
+    let Some(plugin) = runtime
         .registry()
         .resolve_builder_provider(provider, config)
-        .ok_or_else(|| unsupported_provider_backend(provider))?;
+    else {
+        if let Some(provider) = direct_builtin_builder_provider(provider) {
+            return Ok(BuilderAssemblyPlan {
+                provider,
+                behavior_provider: provider,
+                config: config.clone(),
+            });
+        }
+        return Err(unsupported_provider_backend(provider));
+    };
 
     let mut runtime_config = config.clone();
     if runtime_config.base_url.is_none() {

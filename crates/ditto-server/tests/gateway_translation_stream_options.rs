@@ -11,6 +11,7 @@ use ditto_core::contracts::{GenerateRequest, GenerateResponse, StreamChunk};
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
+    VirtualKeyConfig,
 };
 use futures_util::{StreamExt, stream};
 use serde_json::json;
@@ -63,7 +64,7 @@ impl LanguageModel for FakeModel {
 fn base_gateway() -> Gateway {
     Gateway::new(GatewayConfig {
         backends: Vec::new(),
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
             default_backends: vec![RouteBackend {
                 backend: "primary".to_string(),
@@ -101,6 +102,7 @@ async fn gateway_translation_chat_completions_stream_include_usage() -> ditto_co
     let request = Request::builder()
         .method("POST")
         .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
         .header("content-type", "application/json")
         .body(Body::from(payload.to_string()))
         .unwrap();
@@ -141,6 +143,7 @@ async fn gateway_translation_chat_completions_stream_defaults_without_usage()
     let request = Request::builder()
         .method("POST")
         .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
         .header("content-type", "application/json")
         .body(Body::from(payload.to_string()))
         .unwrap();

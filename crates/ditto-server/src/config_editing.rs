@@ -1915,12 +1915,11 @@ mod tests {
             req.base_url.as_deref(),
             Some("https://generativelanguage.googleapis.com/v1beta")
         );
-        assert_eq!(req.auth_type, ProviderAuthType::HttpHeaderEnv);
-        assert_eq!(req.auth_header.as_deref(), Some("x-goog-api-key"));
-        assert_eq!(
-            req.auth_keys,
-            vec!["GOOGLE_API_KEY".to_string(), "GEMINI_API_KEY".to_string()]
-        );
+        assert_eq!(req.auth_type, ProviderAuthType::QueryParamEnv);
+        assert_eq!(req.auth_param.as_deref(), Some("key"));
+        assert_eq!(req.auth_header, None);
+        assert_eq!(req.auth_prefix, None);
+        assert_eq!(req.auth_keys, vec!["GOOGLE_API_KEY".to_string()]);
     }
 
     #[test]

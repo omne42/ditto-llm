@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
-use axum::http::{Request, StatusCode};
+use axum::http::{HeaderValue, Request, StatusCode};
 use ditto_core::capabilities::{
     FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
 };
@@ -13,6 +13,7 @@ use ditto_core::contracts::{GenerateRequest, GenerateResponse};
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
+    VirtualKeyConfig,
 };
 use tower::util::ServiceExt;
 
@@ -112,7 +113,7 @@ impl FileClient for FakeFileClient {
 fn base_gateway() -> Gateway {
     Gateway::new(GatewayConfig {
         backends: Vec::new(),
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
         router: RouterConfig {
             default_backends: vec![RouteBackend {
                 backend: "primary".to_string(),
@@ -124,6 +125,29 @@ fn base_gateway() -> Gateway {
         mcp_servers: Vec::new(),
         observability: Default::default(),
     })
+}
+
+fn authorized_test_app(
+    state: GatewayHttpState,
+) -> tower::util::BoxCloneService<Request<Body>, axum::response::Response, std::convert::Infallible>
+{
+    let app = ditto_server::gateway::http::router(state);
+    tower::service_fn(move |mut request: Request<Body>| {
+        let app = app.clone();
+        async move {
+            if !request
+                .headers()
+                .contains_key(axum::http::header::AUTHORIZATION)
+            {
+                request.headers_mut().insert(
+                    axum::http::header::AUTHORIZATION,
+                    HeaderValue::from_static("Bearer vk-1"),
+                );
+            }
+            app.oneshot(request).await
+        }
+    })
+    .boxed_clone()
 }
 
 #[tokio::test]
@@ -139,7 +163,7 @@ async fn gateway_translation_files_upload() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let boundary = "ditto_boundary";
     let content_type = format!("multipart/form-data; boundary={boundary}");
@@ -204,7 +228,7 @@ async fn gateway_translation_files_list() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -251,7 +275,7 @@ async fn gateway_translation_files_retrieve() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")
@@ -290,7 +314,7 @@ async fn gateway_translation_files_delete() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("DELETE")
@@ -330,7 +354,7 @@ async fn gateway_translation_files_content() -> ditto_core::error::Result<()> {
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
-    let app = ditto_server::gateway::http::router(state);
+    let app = authorized_test_app(state);
 
     let request = Request::builder()
         .method("GET")

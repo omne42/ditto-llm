@@ -58,7 +58,8 @@ impl GatewayControlPlaneSnapshot {
     }
 
     fn virtual_key_by_token(&self, token: &str) -> Option<&VirtualKeyConfig> {
-        if let Some(token_key) = crate::gateway::config::normalize_virtual_key_token_key(token)
+        if let Some(token_key) =
+            crate::gateway::config::normalize_presented_virtual_key_token_key(token)
             && let Some(index) = self.virtual_key_token_index.get(&token_key).copied()
             && let Some(key) = self.virtual_keys.get(index)
             && key.matches_token(token)
@@ -76,7 +77,7 @@ impl GatewayHttpState {
         let snapshot = self
             .control_plane
             .read()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .expect("gateway http control plane poisoned; refusing to continue");
         f(&snapshot)
     }
 
@@ -84,7 +85,7 @@ impl GatewayHttpState {
         let mut slot = self
             .control_plane
             .write()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .expect("gateway http control plane poisoned; refusing to continue");
         *slot = snapshot;
     }
 

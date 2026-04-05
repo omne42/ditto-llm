@@ -50,6 +50,7 @@ use self::openai_compat_proxy_costing::estimate_charge_cost_usd_micros;
 use self::openai_compat_proxy_handler::handle_openai_compat_proxy;
 use self::openai_compat_proxy_mcp::maybe_handle_mcp_tools_chat_completions;
 use self::openai_compat_proxy_path_normalize::normalize_openai_compat_path_and_query;
+#[allow(unused_imports)]
 use self::openai_compat_proxy_preamble::{
     BackendAttemptOutcome, ProxyAttemptParams, validate_openai_multipart_request_schema,
 };
@@ -64,6 +65,7 @@ use self::openai_compat_proxy_request_dedup::{
     LocalProxyRequestIdempotencyStore, ProxyRequestDedupDecision,
     finish_proxy_request_dedup_result, prepare_proxy_request_dedup,
 };
+#[allow(unused_imports)]
 use self::openai_compat_proxy_request_schema::{
     extract_max_output_tokens, validate_openai_request_schema,
 };
@@ -1096,7 +1098,8 @@ async fn handle_gateway(
                 "ok": result.is_ok(),
             }),
         )
-        .await;
+        .await
+        .map_err(|err| error_response(StatusCode::INTERNAL_SERVER_ERROR, "storage_error", err))?;
     }
 
     match result {
@@ -1437,33 +1440,86 @@ fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
-async fn append_audit_log(state: &GatewayHttpState, kind: &str, payload: serde_json::Value) {
+fn report_proxy_audit_append_failure(store: &str, kind: &str, err: &impl std::fmt::Display) {
+    eprintln!("failed to append {store} proxy audit log `{kind}`: {err}");
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+pub(super) fn openai_storage_error_response(
+    message: impl std::fmt::Display,
+) -> (StatusCode, Json<OpenAiErrorResponse>) {
+    openai_error(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "api_error",
+        Some("storage_error"),
+        message,
+    )
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+async fn append_audit_log(
+    state: &GatewayHttpState,
+    kind: &str,
+    payload: serde_json::Value,
+) -> Result<(), String> {
     let Some(payload) = state.prepare_observability_event(
         crate::gateway::observability::GatewayObservabilitySink::Audit,
         payload,
     ) else {
-        return;
+        return Ok(());
     };
 
     #[cfg(feature = "gateway-store-sqlite")]
-    if let Some(store) = state.stores.sqlite.as_ref() {
-        let _ = store.append_audit_log(kind, payload.clone()).await;
+    if let Some(store) = state.stores.sqlite.as_ref()
+        && let Err(err) = store.append_audit_log(kind, payload.clone()).await
+    {
+        report_proxy_audit_append_failure("sqlite", kind, &err);
+        return Err(format!(
+            "failed to append sqlite proxy audit log `{kind}`: {err}"
+        ));
     }
 
     #[cfg(feature = "gateway-store-postgres")]
-    if let Some(store) = state.stores.postgres.as_ref() {
-        let _ = store.append_audit_log(kind, payload.clone()).await;
+    if let Some(store) = state.stores.postgres.as_ref()
+        && let Err(err) = store.append_audit_log(kind, payload.clone()).await
+    {
+        report_proxy_audit_append_failure("postgres", kind, &err);
+        return Err(format!(
+            "failed to append postgres proxy audit log `{kind}`: {err}"
+        ));
     }
 
     #[cfg(feature = "gateway-store-mysql")]
-    if let Some(store) = state.stores.mysql.as_ref() {
-        let _ = store.append_audit_log(kind, payload.clone()).await;
+    if let Some(store) = state.stores.mysql.as_ref()
+        && let Err(err) = store.append_audit_log(kind, payload.clone()).await
+    {
+        report_proxy_audit_append_failure("mysql", kind, &err);
+        return Err(format!(
+            "failed to append mysql proxy audit log `{kind}`: {err}"
+        ));
     }
 
     #[cfg(feature = "gateway-store-redis")]
-    if let Some(store) = state.stores.redis.as_ref() {
-        let _ = store.append_audit_log(kind, payload).await;
+    if let Some(store) = state.stores.redis.as_ref()
+        && let Err(err) = store.append_audit_log(kind, payload).await
+    {
+        report_proxy_audit_append_failure("redis", kind, &err);
+        return Err(format!(
+            "failed to append redis proxy audit log `{kind}`: {err}"
+        ));
     }
+
+    Ok(())
 }
 
 type ProxyBodyStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
@@ -2769,4 +2825,30 @@ mod usage_parsing_tests {
     }
 }
 // end inline: proxy/usage_parsing_tests.rs
+
+#[cfg(all(test, feature = "gateway-store-sqlite"))]
+mod audit_log_tests {
+    use super::*;
+    use crate::gateway::{Gateway, GatewayConfig, RouterConfig};
+
+    #[tokio::test]
+    async fn append_audit_log_returns_storage_error_for_broken_sqlite_store() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let broken_path = tmp.path().join("missing-parent").join("gateway.sqlite");
+        let state = GatewayHttpState::new(Gateway::new(GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: Vec::new(),
+            router: RouterConfig::default(),
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        }))
+        .with_sqlite_store(SqliteStore::new(broken_path));
+
+        let err = append_audit_log(&state, "proxy", serde_json::json!({"ok": true}))
+            .await
+            .expect_err("audit append should fail");
+        assert!(err.contains("sqlite proxy audit log `proxy`"));
+    }
+}
 // end inline: ../../http/proxy.rs

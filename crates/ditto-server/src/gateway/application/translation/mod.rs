@@ -57,7 +57,7 @@ use response_mapping::{
 };
 use response_store::TranslationResponseStore;
 pub(crate) use response_store::{
-    delete_stored_response_from_translation_backends,
+    TranslationResponseOwner, delete_stored_response_from_translation_backends,
     find_stored_response_from_translation_backends, gateway_scoped_response_id,
 };
 
@@ -87,10 +87,10 @@ struct TranslationBackendRuntime {
     env: Env,
     provider_config: ProviderConfig,
     embedding_cache: Arc<Mutex<LocalLruCache<Arc<dyn EmbeddingModel>>>>,
-    moderation_cache: Arc<OnceCell<Arc<dyn ModerationModel>>>,
-    image_generation_cache: Arc<OnceCell<Arc<dyn ImageGenerationModel>>>,
-    image_edit_cache: Arc<OnceCell<Arc<dyn ImageEditModel>>>,
-    video_generation_cache: Arc<OnceCell<Arc<dyn VideoGenerationModel>>>,
+    moderation_cache: Arc<Mutex<LocalLruCache<Arc<dyn ModerationModel>>>>,
+    image_generation_cache: Arc<Mutex<LocalLruCache<Arc<dyn ImageGenerationModel>>>>,
+    image_edit_cache: Arc<Mutex<LocalLruCache<Arc<dyn ImageEditModel>>>>,
+    video_generation_cache: Arc<Mutex<LocalLruCache<Arc<dyn VideoGenerationModel>>>>,
     audio_transcription_cache: Arc<Mutex<LocalLruCache<Arc<dyn AudioTranscriptionModel>>>>,
     speech_cache: Arc<Mutex<LocalLruCache<Arc<dyn SpeechModel>>>>,
     rerank_cache: Arc<Mutex<LocalLruCache<Arc<dyn RerankModel>>>>,
@@ -106,10 +106,10 @@ impl Default for TranslationBackendRuntime {
             env: Env::default(),
             provider_config: ProviderConfig::default(),
             embedding_cache: Arc::new(Mutex::new(LocalLruCache::default())),
-            moderation_cache: Arc::new(OnceCell::new()),
-            image_generation_cache: Arc::new(OnceCell::new()),
-            image_edit_cache: Arc::new(OnceCell::new()),
-            video_generation_cache: Arc::new(OnceCell::new()),
+            moderation_cache: Arc::new(Mutex::new(LocalLruCache::default())),
+            image_generation_cache: Arc::new(Mutex::new(LocalLruCache::default())),
+            image_edit_cache: Arc::new(Mutex::new(LocalLruCache::default())),
+            video_generation_cache: Arc::new(Mutex::new(LocalLruCache::default())),
             audio_transcription_cache: Arc::new(Mutex::new(LocalLruCache::default())),
             speech_cache: Arc::new(Mutex::new(LocalLruCache::default())),
             rerank_cache: Arc::new(Mutex::new(LocalLruCache::default())),
@@ -142,6 +142,18 @@ impl TranslationBackendRuntime {
             .as_deref()
             .map(str::trim)
             .filter(|model| !model.is_empty())
+    }
+
+    fn cache_key_for_optional_model(&self, model: Option<&str>) -> Option<String> {
+        model
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| self.configured_default_model().map(ToOwned::to_owned))
+            .filter(|model| {
+                self.model_cache_max_entries > 0
+                    && model.len() <= MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES
+            })
     }
 
     fn supports_runtime_route(
@@ -251,108 +263,172 @@ impl TranslationBackendRuntime {
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ModerationModel>>,
+        model: Option<&str>,
     ) -> ditto_core::error::Result<Arc<dyn ModerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
-        let provider = provider.trim().to_string();
-        let model_impl = self
-            .moderation_cache
-            .get_or_try_init(|| async {
-                build_moderation_model(provider.as_str(), &self.provider_config, &self.env)
-                    .await?
-                    .ok_or_else(|| {
-                        ditto_core::invalid_response!(
-                            "error_detail.translation.provider_moderations_unsupported",
-                            "provider" => provider.as_str()
-                        )
-                    })
-            })
-            .await?;
+        let cache_key = self.cache_key_for_optional_model(model);
+        if let Some(cache_key) = cache_key.as_deref()
+            && let Some(model_impl) = self.moderation_cache.lock().await.get(cache_key)
+        {
+            return Ok(model_impl);
+        }
 
-        Ok(model_impl.clone())
+        let provider = provider.trim();
+        let mut cfg = self.provider_config.clone();
+        if let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) {
+            cfg.default_model = Some(model.to_string());
+        }
+
+        let model_impl = build_moderation_model(provider, &cfg, &self.env)
+            .await?
+            .ok_or_else(|| {
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_moderations_unsupported",
+                    "provider" => provider
+                )
+            })?;
+
+        if let Some(cache_key) = cache_key {
+            self.moderation_cache.lock().await.insert(
+                cache_key,
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
+        }
+
+        Ok(model_impl)
     }
 
     async fn resolve_image_generation_model(
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageGenerationModel>>,
+        model: Option<&str>,
     ) -> ditto_core::error::Result<Arc<dyn ImageGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
-        let provider = provider.trim().to_string();
-        let model_impl = self
-            .image_generation_cache
-            .get_or_try_init(|| async {
-                build_image_generation_model(provider.as_str(), &self.provider_config, &self.env)
-                    .await?
-                    .ok_or_else(|| {
-                        ditto_core::invalid_response!(
-                            "error_detail.translation.provider_images_unsupported",
-                            "provider" => provider.as_str()
-                        )
-                    })
-            })
-            .await?;
+        let cache_key = self.cache_key_for_optional_model(model);
+        if let Some(cache_key) = cache_key.as_deref()
+            && let Some(model_impl) = self.image_generation_cache.lock().await.get(cache_key)
+        {
+            return Ok(model_impl);
+        }
 
-        Ok(model_impl.clone())
+        let provider = provider.trim();
+        let mut cfg = self.provider_config.clone();
+        if let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) {
+            cfg.default_model = Some(model.to_string());
+        }
+
+        let model_impl = build_image_generation_model(provider, &cfg, &self.env)
+            .await?
+            .ok_or_else(|| {
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_images_unsupported",
+                    "provider" => provider
+                )
+            })?;
+
+        if let Some(cache_key) = cache_key {
+            self.image_generation_cache.lock().await.insert(
+                cache_key,
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
+        }
+
+        Ok(model_impl)
     }
 
     async fn resolve_image_edit_model(
         &self,
         provider: &str,
         direct: Option<&Arc<dyn ImageEditModel>>,
+        model: Option<&str>,
     ) -> ditto_core::error::Result<Arc<dyn ImageEditModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
-        let provider = provider.trim().to_string();
-        let model_impl = self
-            .image_edit_cache
-            .get_or_try_init(|| async {
-                build_image_edit_model(provider.as_str(), &self.provider_config, &self.env)
-                    .await?
-                    .ok_or_else(|| {
-                        ditto_core::invalid_response!(
-                            "error_detail.translation.provider_image_edits_unsupported",
-                            "provider" => provider.as_str()
-                        )
-                    })
-            })
-            .await?;
+        let cache_key = self.cache_key_for_optional_model(model);
+        if let Some(cache_key) = cache_key.as_deref()
+            && let Some(model_impl) = self.image_edit_cache.lock().await.get(cache_key)
+        {
+            return Ok(model_impl);
+        }
 
-        Ok(model_impl.clone())
+        let provider = provider.trim();
+        let mut cfg = self.provider_config.clone();
+        if let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) {
+            cfg.default_model = Some(model.to_string());
+        }
+
+        let model_impl = build_image_edit_model(provider, &cfg, &self.env)
+            .await?
+            .ok_or_else(|| {
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_image_edits_unsupported",
+                    "provider" => provider
+                )
+            })?;
+
+        if let Some(cache_key) = cache_key {
+            self.image_edit_cache.lock().await.insert(
+                cache_key,
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
+        }
+
+        Ok(model_impl)
     }
 
     async fn resolve_video_generation_model(
         &self,
         provider: &str,
         direct: Option<&Arc<dyn VideoGenerationModel>>,
+        model: Option<&str>,
     ) -> ditto_core::error::Result<Arc<dyn VideoGenerationModel>> {
         if let Some(model_impl) = direct.cloned() {
             return Ok(model_impl);
         }
 
-        let provider = provider.trim().to_string();
-        let model_impl = self
-            .video_generation_cache
-            .get_or_try_init(|| async {
-                build_video_generation_model(provider.as_str(), &self.provider_config, &self.env)
-                    .await?
-                    .ok_or_else(|| {
-                        ditto_core::invalid_response!(
-                            "error_detail.translation.provider_videos_unsupported",
-                            "provider" => provider.as_str()
-                        )
-                    })
-            })
-            .await?;
+        let cache_key = self.cache_key_for_optional_model(model);
+        if let Some(cache_key) = cache_key.as_deref()
+            && let Some(model_impl) = self.video_generation_cache.lock().await.get(cache_key)
+        {
+            return Ok(model_impl);
+        }
 
-        Ok(model_impl.clone())
+        let provider = provider.trim();
+        let mut cfg = self.provider_config.clone();
+        if let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) {
+            cfg.default_model = Some(model.to_string());
+        }
+
+        let model_impl = build_video_generation_model(provider, &cfg, &self.env)
+            .await?
+            .ok_or_else(|| {
+                ditto_core::invalid_response!(
+                    "error_detail.translation.provider_videos_unsupported",
+                    "provider" => provider
+                )
+            })?;
+
+        if let Some(cache_key) = cache_key {
+            self.video_generation_cache.lock().await.insert(
+                cache_key,
+                model_impl.clone(),
+                self.model_cache_max_entries,
+            );
+        }
+
+        Ok(model_impl)
     }
 
     async fn resolve_audio_transcription_model(
@@ -833,6 +909,7 @@ impl TranslationBackend {
             .resolve_moderation_model(
                 self.provider_name(),
                 self.bindings.moderation_model.as_ref(),
+                request.model.as_deref(),
             )
             .await?;
 
@@ -848,6 +925,7 @@ impl TranslationBackend {
             .resolve_image_generation_model(
                 self.provider_name(),
                 self.bindings.image_generation_model.as_ref(),
+                request.model.as_deref(),
             )
             .await?;
 
@@ -863,6 +941,7 @@ impl TranslationBackend {
             .resolve_image_edit_model(
                 self.provider_name(),
                 self.bindings.image_edit_model.as_ref(),
+                request.model.as_deref(),
             )
             .await?;
 
@@ -878,6 +957,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                request.model.as_deref(),
             )
             .await?;
 
@@ -893,6 +973,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                None,
             )
             .await?;
 
@@ -908,6 +989,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                None,
             )
             .await?;
 
@@ -923,6 +1005,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                None,
             )
             .await?;
 
@@ -939,6 +1022,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                None,
             )
             .await?;
 
@@ -955,6 +1039,7 @@ impl TranslationBackend {
             .resolve_video_generation_model(
                 self.provider_name(),
                 self.bindings.video_generation_model.as_ref(),
+                None,
             )
             .await?;
 
@@ -1773,6 +1858,47 @@ pub fn generate_response_to_completions(
     Value::Object(out)
 }
 
+fn responses_payload_from_parts(
+    id: &str,
+    model: &str,
+    created: u64,
+    output_text: String,
+    tool_calls: Vec<Value>,
+    finish_reason: FinishReason,
+    usage: &Usage,
+) -> Value {
+    let mut output_items = Vec::<Value>::new();
+    if !output_text.is_empty() {
+        output_items.push(serde_json::json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type":"output_text", "text": output_text}],
+        }));
+    }
+    output_items.extend(tool_calls);
+
+    let (status, incomplete_details) = finish_reason_to_responses_status(finish_reason);
+
+    let mut out = Map::<String, Value>::new();
+    out.insert("id".to_string(), Value::String(id.to_string()));
+    out.insert("object".to_string(), Value::String("response".to_string()));
+    out.insert(
+        "created".to_string(),
+        Value::Number((created as i64).into()),
+    );
+    out.insert("model".to_string(), Value::String(model.to_string()));
+    out.insert("status".to_string(), Value::String(status.to_string()));
+    if let Some(details) = incomplete_details {
+        out.insert("incomplete_details".to_string(), details);
+    }
+    out.insert("output".to_string(), Value::Array(output_items));
+    out.insert("output_text".to_string(), Value::String(output_text));
+    if let Some(usage) = usage_to_responses_usage(usage) {
+        out.insert("usage".to_string(), usage);
+    }
+    Value::Object(out)
+}
+
 pub fn generate_response_to_responses(
     response: &GenerateResponse,
     id: &str,
@@ -1780,7 +1906,6 @@ pub fn generate_response_to_responses(
     created: u64,
 ) -> Value {
     let mut output_text = String::new();
-    let mut output_items = Vec::<Value>::new();
     let mut tool_calls = Vec::<Value>::new();
 
     for (idx, part) in response.content.iter().enumerate() {
@@ -1808,35 +1933,15 @@ pub fn generate_response_to_responses(
         }
     }
 
-    if !output_text.is_empty() {
-        output_items.push(serde_json::json!({
-            "type": "message",
-            "role": "assistant",
-            "content": [{"type":"output_text", "text": output_text}],
-        }));
-    }
-    output_items.extend(tool_calls);
-
-    let (status, incomplete_details) = finish_reason_to_responses_status(response.finish_reason);
-
-    let mut out = Map::<String, Value>::new();
-    out.insert("id".to_string(), Value::String(id.to_string()));
-    out.insert("object".to_string(), Value::String("response".to_string()));
-    out.insert(
-        "created".to_string(),
-        Value::Number((created as i64).into()),
-    );
-    out.insert("model".to_string(), Value::String(model.to_string()));
-    out.insert("status".to_string(), Value::String(status.to_string()));
-    if let Some(details) = incomplete_details {
-        out.insert("incomplete_details".to_string(), details);
-    }
-    out.insert("output".to_string(), Value::Array(output_items));
-    out.insert("output_text".to_string(), Value::String(output_text));
-    if let Some(usage) = usage_to_responses_usage(&response.usage) {
-        out.insert("usage".to_string(), usage);
-    }
-    Value::Object(out)
+    responses_payload_from_parts(
+        id,
+        model,
+        created,
+        output_text,
+        tool_calls,
+        response.finish_reason,
+        &response.usage,
+    )
 }
 
 pub fn stream_to_chat_completions_sse(
@@ -1859,7 +1964,7 @@ pub fn stream_to_chat_completions_sse(
             stream,
             VecDeque::<IoResult<Bytes>>::new(),
             State {
-                response_id: fallback_id,
+                response_id: fallback_id.clone(),
                 ..State::default()
             },
             false,
@@ -2030,7 +2135,7 @@ pub fn stream_to_completions_sse(
             stream,
             VecDeque::<IoResult<Bytes>>::new(),
             State {
-                response_id: fallback_id,
+                response_id: fallback_id.clone(),
                 ..State::default()
             },
             false,
@@ -2103,9 +2208,19 @@ pub fn stream_to_completions_sse(
     .boxed()
 }
 
-pub fn stream_to_responses_sse(
+pub(crate) struct ResponsesSseStreamParams {
+    pub backend_name: String,
+    pub fallback_id: String,
+    pub model: String,
+    pub created: u64,
+    pub input_items: Vec<Value>,
+    pub response_owner: TranslationResponseOwner,
+    pub response_store_backend: TranslationBackend,
+}
+
+pub(crate) fn stream_to_responses_sse(
     stream: StreamResult,
-    fallback_id: String,
+    params: ResponsesSseStreamParams,
 ) -> futures_util::stream::BoxStream<'static, IoResult<Bytes>> {
     #[derive(Default)]
     struct ToolCallState {
@@ -2120,6 +2235,7 @@ pub fn stream_to_responses_sse(
         created_sent: bool,
         tool_call_index: HashMap<String, usize>,
         tool_calls: Vec<ToolCallState>,
+        output_text: String,
         finish_reason: Option<FinishReason>,
         usage: Option<Usage>,
     }
@@ -2129,171 +2245,251 @@ pub fn stream_to_responses_sse(
             stream,
             VecDeque::<IoResult<Bytes>>::new(),
             State {
-                response_id: fallback_id,
+                response_id: params.fallback_id.clone(),
                 ..State::default()
             },
             false,
         ),
-        move |(mut inner, mut buffer, mut state, mut done)| async move {
-            loop {
-                if let Some(item) = buffer.pop_front() {
-                    return Some((item, (inner, buffer, state, done)));
-                }
-                if done {
-                    return None;
-                }
+        move |(mut inner, mut buffer, mut state, mut done)| {
+            let backend_name = params.backend_name.clone();
+            let fallback_id = params.fallback_id.clone();
+            let model = params.model.clone();
+            let created = params.created;
+            let input_items = params.input_items.clone();
+            let response_owner = params.response_owner.clone();
+            let response_store_backend = params.response_store_backend.clone();
+            async move {
+                loop {
+                    if let Some(item) = buffer.pop_front() {
+                        return Some((item, (inner, buffer, state, done)));
+                    }
+                    if done {
+                        return None;
+                    }
 
-                match inner.next().await {
-                    Some(Ok(chunk)) => {
-                        if let ditto_core::contracts::StreamChunk::ResponseId { id } = &chunk {
-                            let id = id.trim();
-                            if !id.is_empty() {
-                                state.response_id = id.to_string();
-                            }
-                        }
-
-                        if !state.created_sent {
-                            let response_id = state.response_id.clone();
-                            buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                "type": "response.created",
-                                "response": { "id": response_id }
-                            }))));
-                            state.created_sent = true;
-                        }
-
-                        match chunk {
-                            ditto_core::contracts::StreamChunk::Warnings { .. } => {}
-                            ditto_core::contracts::StreamChunk::ResponseId { .. } => {}
-                            ditto_core::contracts::StreamChunk::TextDelta { text } => {
-                                if !text.is_empty() {
-                                    buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                        "type": "response.output_text.delta",
-                                        "delta": text,
-                                    }))));
+                    match inner.next().await {
+                        Some(Ok(chunk)) => {
+                            if let ditto_core::contracts::StreamChunk::ResponseId { id } = &chunk {
+                                let id = id.trim();
+                                if !id.is_empty() {
+                                    state.response_id =
+                                        gateway_scoped_response_id(&backend_name, id);
                                 }
                             }
-                            ditto_core::contracts::StreamChunk::ToolCallStart { id, name } => {
-                                let idx = state
-                                    .tool_call_index
-                                    .entry(id.clone())
-                                    .or_insert_with(|| state.tool_calls.len())
-                                    .to_owned();
-                                if state.tool_calls.len() <= idx {
-                                    state
-                                        .tool_calls
-                                        .resize_with(idx.saturating_add(1), ToolCallState::default);
-                                }
-                                let slot = &mut state.tool_calls[idx];
-                                slot.id = id;
-                                slot.name = name;
+
+                            if !state.created_sent {
+                                let response_id = state.response_id.clone();
+                                buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                    "type": "response.created",
+                                    "response": { "id": response_id }
+                                }))));
+                                state.created_sent = true;
                             }
-                            ditto_core::contracts::StreamChunk::ToolCallDelta {
-                                id,
-                                arguments_delta,
-                            } => {
-                                let idx = state
-                                    .tool_call_index
-                                    .entry(id.clone())
-                                    .or_insert_with(|| state.tool_calls.len())
-                                    .to_owned();
-                                if state.tool_calls.len() <= idx {
-                                    state
-                                        .tool_calls
-                                        .resize_with(idx.saturating_add(1), ToolCallState::default);
+
+                            match chunk {
+                                ditto_core::contracts::StreamChunk::Warnings { .. } => {}
+                                ditto_core::contracts::StreamChunk::ResponseId { .. } => {
+                                    if state.response_id.trim().is_empty() {
+                                        state.response_id = fallback_id.clone();
+                                    }
                                 }
-                                let slot = &mut state.tool_calls[idx];
-                                if slot.id.is_empty() {
+                                ditto_core::contracts::StreamChunk::TextDelta { text } => {
+                                    if !text.is_empty() {
+                                        state.output_text.push_str(&text);
+                                        buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                            "type": "response.output_text.delta",
+                                            "delta": text,
+                                        }))));
+                                    }
+                                }
+                                ditto_core::contracts::StreamChunk::ToolCallStart { id, name } => {
+                                    let idx = state
+                                        .tool_call_index
+                                        .entry(id.clone())
+                                        .or_insert_with(|| state.tool_calls.len())
+                                        .to_owned();
+                                    if state.tool_calls.len() <= idx {
+                                        state.tool_calls.resize_with(
+                                            idx.saturating_add(1),
+                                            ToolCallState::default,
+                                        );
+                                    }
+                                    let slot = &mut state.tool_calls[idx];
                                     slot.id = id;
+                                    slot.name = name;
                                 }
-                                slot.pending_arguments.push_str(&arguments_delta);
-                            }
-                            ditto_core::contracts::StreamChunk::ReasoningDelta { text } => {
-                                if !text.is_empty() {
-                                    buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                        "type": "response.reasoning_text.delta",
-                                        "delta": text,
-                                    }))));
+                                ditto_core::contracts::StreamChunk::ToolCallDelta {
+                                    id,
+                                    arguments_delta,
+                                } => {
+                                    let idx = state
+                                        .tool_call_index
+                                        .entry(id.clone())
+                                        .or_insert_with(|| state.tool_calls.len())
+                                        .to_owned();
+                                    if state.tool_calls.len() <= idx {
+                                        state.tool_calls.resize_with(
+                                            idx.saturating_add(1),
+                                            ToolCallState::default,
+                                        );
+                                    }
+                                    let slot = &mut state.tool_calls[idx];
+                                    if slot.id.is_empty() {
+                                        slot.id = id;
+                                    }
+                                    slot.pending_arguments.push_str(&arguments_delta);
+                                }
+                                ditto_core::contracts::StreamChunk::ReasoningDelta { text } => {
+                                    if !text.is_empty() {
+                                        buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                            "type": "response.reasoning_text.delta",
+                                            "delta": text,
+                                        }))));
+                                    }
+                                }
+                                ditto_core::contracts::StreamChunk::FinishReason(reason) => {
+                                    state.finish_reason = Some(reason);
+                                }
+                                ditto_core::contracts::StreamChunk::Usage(usage) => {
+                                    state.usage = Some(usage);
                                 }
                             }
-                            ditto_core::contracts::StreamChunk::FinishReason(reason) => {
-                                state.finish_reason = Some(reason);
-                            }
-                            ditto_core::contracts::StreamChunk::Usage(usage) => {
-                                state.usage = Some(usage);
-                            }
+                            continue;
                         }
-                        continue;
-                    }
-                    Some(Err(err)) => {
-                        buffer.push_back(Err(std::io::Error::other(err.to_string())));
-                        done = true;
-                        continue;
-                    }
-                    None => {
-                        if !state.created_sent {
-                            let response_id = state.response_id.clone();
-                            buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                "type": "response.created",
-                                "response": { "id": response_id }
-                            }))));
-                            state.created_sent = true;
+                        Some(Err(err)) => {
+                            buffer.push_back(Err(std::io::Error::other(err.to_string())));
+                            done = true;
+                            continue;
                         }
+                        None => {
+                            if !state.created_sent {
+                                if state.response_id.trim().is_empty() {
+                                    state.response_id = fallback_id.clone();
+                                }
+                                let response_id = state.response_id.clone();
+                                buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                    "type": "response.created",
+                                    "response": { "id": response_id }
+                                }))));
+                                state.created_sent = true;
+                            }
 
-                        for (idx, slot) in state.tool_calls.iter().enumerate() {
-                            let call_id = slot.id.trim();
-                            let call_id = if call_id.is_empty() {
-                                format!("call_{idx}")
+                            for (idx, slot) in state.tool_calls.iter().enumerate() {
+                                let call_id = slot.id.trim();
+                                let call_id = if call_id.is_empty() {
+                                    format!("call_{idx}")
+                                } else {
+                                    call_id.to_string()
+                                };
+                                let name = slot.name.trim();
+                                let name = if name.is_empty() {
+                                    "unknown".to_string()
+                                } else {
+                                    name.to_string()
+                                };
+                                let args = slot.pending_arguments.trim();
+                                if args.is_empty() && name == "unknown" {
+                                    continue;
+                                }
+                                buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
+                                    "type": "response.output_item.done",
+                                    "item": {
+                                        "type": "function_call",
+                                        "call_id": call_id,
+                                        "name": name,
+                                        "arguments": if args.is_empty() { "{}" } else { args },
+                                    }
+                                }))));
+                            }
+
+                            let finish_reason = state.finish_reason.unwrap_or(FinishReason::Stop);
+                            let (status, incomplete_details) =
+                                finish_reason_to_responses_status(finish_reason);
+
+                            let mut content = Vec::<ContentPart>::new();
+                            if !state.output_text.is_empty() {
+                                content.push(ContentPart::Text {
+                                    text: state.output_text.clone(),
+                                });
+                            }
+                            for (idx, slot) in state.tool_calls.iter().enumerate() {
+                                let call_id = slot.id.trim();
+                                let name = slot.name.trim();
+                                let arguments = slot.pending_arguments.trim();
+                                if call_id.is_empty() && name.is_empty() && arguments.is_empty() {
+                                    continue;
+                                }
+                                let call_id = if call_id.is_empty() {
+                                    format!("call_{idx}")
+                                } else {
+                                    call_id.to_string()
+                                };
+                                let name = if name.is_empty() {
+                                    "unknown".to_string()
+                                } else {
+                                    name.to_string()
+                                };
+                                let arguments = if arguments.is_empty() {
+                                    Value::Object(Map::new())
+                                } else {
+                                    serde_json::from_str(arguments)
+                                        .unwrap_or_else(|_| Value::String(arguments.to_string()))
+                                };
+                                content.push(ContentPart::ToolCall {
+                                    id: call_id,
+                                    name,
+                                    arguments,
+                                });
+                            }
+                            let streamed_response = generate_response_to_responses(
+                                &GenerateResponse {
+                                    content,
+                                    finish_reason,
+                                    usage: state.usage.clone().unwrap_or_default(),
+                                    warnings: Vec::new(),
+                                    provider_metadata: None,
+                                },
+                                &state.response_id,
+                                &model,
+                                created,
+                            );
+                            response_store_backend
+                                .store_response_record(
+                                    &state.response_id,
+                                    response_owner.clone(),
+                                    streamed_response,
+                                    input_items.clone(),
+                                )
+                                .await;
+
+                            let mut response = Map::<String, Value>::new();
+                            response
+                                .insert("id".to_string(), Value::String(state.response_id.clone()));
+                            response
+                                .insert("status".to_string(), Value::String(status.to_string()));
+                            if let Some(incomplete_details) = incomplete_details {
+                                response
+                                    .insert("incomplete_details".to_string(), incomplete_details);
+                            }
+                            if let Some(usage) =
+                                state.usage.as_ref().and_then(usage_to_responses_usage)
+                            {
+                                response.insert("usage".to_string(), usage);
+                            }
+
+                            let event_kind = if status == "completed" {
+                                "response.completed"
                             } else {
-                                call_id.to_string()
+                                "response.incomplete"
                             };
-                            let name = slot.name.trim();
-                            let name = if name.is_empty() {
-                                "unknown".to_string()
-                            } else {
-                                name.to_string()
-                            };
-                            let args = slot.pending_arguments.trim();
-                            if args.is_empty() && name == "unknown" {
-                                continue;
-                            }
                             buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                                "type": "response.output_item.done",
-                                "item": {
-                                    "type": "function_call",
-                                    "call_id": call_id,
-                                    "name": name,
-                                    "arguments": if args.is_empty() { "{}" } else { args },
-                                }
+                                "type": event_kind,
+                                "response": response,
                             }))));
+
+                            done = true;
+                            continue;
                         }
-
-                        let finish_reason = state.finish_reason.unwrap_or(FinishReason::Stop);
-                        let (status, incomplete_details) =
-                            finish_reason_to_responses_status(finish_reason);
-
-                        let mut response = Map::<String, Value>::new();
-                        response.insert("id".to_string(), Value::String(state.response_id.clone()));
-                        response.insert("status".to_string(), Value::String(status.to_string()));
-                        if let Some(incomplete_details) = incomplete_details {
-                            response.insert("incomplete_details".to_string(), incomplete_details);
-                        }
-                        if let Some(usage) = state.usage.as_ref().and_then(usage_to_responses_usage)
-                        {
-                            response.insert("usage".to_string(), usage);
-                        }
-
-                        let event_kind = if status == "completed" {
-                            "response.completed"
-                        } else {
-                            "response.incomplete"
-                        };
-                        buffer.push_back(Ok(sse_event_bytes(serde_json::json!({
-                            "type": event_kind,
-                            "response": response,
-                        }))));
-
-                        done = true;
-                        continue;
                     }
                 }
             }
@@ -2305,7 +2501,42 @@ pub fn stream_to_responses_sse(
 #[cfg(test)]
 mod openai_protocol_reasoning_tests {
     use super::*;
+    use async_trait::async_trait;
     use futures_util::StreamExt;
+
+    #[derive(Clone)]
+    struct NoopModel;
+
+    #[async_trait]
+    impl LanguageModel for NoopModel {
+        fn provider(&self) -> &str {
+            "fake"
+        }
+
+        fn model_id(&self) -> &str {
+            "fake-model"
+        }
+
+        async fn generate(
+            &self,
+            _request: GenerateRequest,
+        ) -> ditto_core::error::Result<GenerateResponse> {
+            Ok(GenerateResponse {
+                content: Vec::new(),
+                finish_reason: FinishReason::Stop,
+                usage: Usage::default(),
+                warnings: Vec::new(),
+                provider_metadata: None,
+            })
+        }
+
+        async fn stream(
+            &self,
+            _request: GenerateRequest,
+        ) -> ditto_core::error::Result<StreamResult> {
+            Ok(futures_util::stream::empty().boxed())
+        }
+    }
 
     #[tokio::test]
     async fn chat_completions_sse_emits_reasoning_content_delta()
@@ -2357,7 +2588,19 @@ mod openai_protocol_reasoning_tests {
         ]));
 
         let mut out = Vec::<u8>::new();
-        let mut s = stream_to_responses_sse(inner, "fallback".to_string());
+        let backend = TranslationBackend::new("fake", Arc::new(NoopModel));
+        let mut s = stream_to_responses_sse(
+            inner,
+            ResponsesSseStreamParams {
+                backend_name: "primary".to_string(),
+                fallback_id: gateway_scoped_response_id("primary", "fallback"),
+                model: "stub".to_string(),
+                created: 0,
+                input_items: Vec::new(),
+                response_owner: TranslationResponseOwner::default(),
+                response_store_backend: backend,
+            },
+        );
         while let Some(item) = s.next().await {
             out.extend_from_slice(&item?);
         }
@@ -2449,7 +2692,8 @@ mod error_mapping_tests {
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(kind, "invalid_request_error");
         assert_eq!(code, None);
-        assert!(message.contains("model is not set"));
+        assert!(message.contains("openai"));
+        assert!(message.contains("with_model"));
     }
 
     #[test]
