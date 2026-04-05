@@ -4740,7 +4740,7 @@ Gateway 的 HTTP 路由见 `crates/ditto-server/src/gateway/transport/http/route
 补充说明：
 
 - `POST /v1/responses/input_tokens` 是 best-effort 估算：启用 `gateway-tokenizer` 时尽量按模型计数，否则显式返回 `unsupported_endpoint`，不会发起上游 provider 调用。
-- `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store，只保证读写“同一进程内由 non-stream translation create 生成”的 response，并要求调用方使用该 gateway 返回的 gateway-scoped response id。
+- `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store，只保证读写“同一 gateway instance 内由 translation create 生成”的 response（含 streaming create），并要求调用方使用该 gateway 返回的 gateway-scoped response id。
 
 ## Anthropic Messages（compat）
 
