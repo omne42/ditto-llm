@@ -8,7 +8,7 @@ use std::sync::{
 use async_trait::async_trait;
 
 use ditto_server::gateway::{
-    Backend, BudgetConfig, CacheConfig, Clock, Gateway, GatewayConfig, GatewayError,
+    Backend, BackendConfig, BudgetConfig, CacheConfig, Clock, Gateway, GatewayConfig, GatewayError,
     GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig,
     RouteBackend, RouteRule, RouterConfig, VirtualKeyConfig,
 };
@@ -127,6 +127,20 @@ fn base_config(key: VirtualKeyConfig) -> GatewayConfig {
         a2a_agents: Vec::new(),
         mcp_servers: Vec::new(),
         observability: Default::default(),
+    }
+}
+
+fn provider_backend_config(name: &str, provider: &str) -> BackendConfig {
+    BackendConfig {
+        name: name.to_string(),
+        base_url: String::new(),
+        max_in_flight: None,
+        timeout_seconds: None,
+        headers: Default::default(),
+        query_params: Default::default(),
+        provider: Some(provider.to_string()),
+        provider_config: None,
+        model_map: Default::default(),
     }
 }
 
@@ -444,6 +458,46 @@ async fn try_replace_router_config_rejects_invalid_router_without_mutating_runti
         gateway.router_config().default_backends[0].backend,
         "primary"
     );
+}
+
+#[test]
+fn gateway_config_validate_rejects_unknown_router_backend_before_runtime() {
+    let mut config = base_config(base_key());
+    config.router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "missing".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+
+    let err = config.validate().unwrap_err();
+    assert!(matches!(err, GatewayError::InvalidRequest { .. }));
+    assert!(
+        err.to_string()
+            .contains("router references unknown backends: missing")
+    );
+}
+
+#[test]
+fn gateway_config_validate_accepts_provider_backends_as_router_targets() {
+    let mut config = base_config(base_key());
+    config.backends = vec![provider_backend_config(
+        "translation-primary",
+        "openai-compatible",
+    )];
+    config.router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "translation-primary".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+    config.virtual_keys[0].route = Some("translation-primary".to_string());
+
+    config
+        .validate()
+        .expect("provider-backed translation routes should validate before runtime");
 }
 
 #[tokio::test]
