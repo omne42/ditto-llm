@@ -1,12 +1,11 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::gateway::adapters::cache::LocalLruCache;
-
 const DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_ENTRIES: usize = 128;
+const DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_TOTAL_BYTES: usize = 1024 * 1024;
 const TRANSLATION_RESPONSE_HANDLE_PREFIX: &str = "resp_ditto_";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -41,9 +40,107 @@ pub(crate) struct StoredTranslationResponse {
     pub(crate) input_items: Vec<Value>,
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug)]
+struct StoredTranslationResponseEntry {
+    stored: StoredTranslationResponse,
+    bytes: usize,
+}
+
+#[derive(Debug)]
+struct TranslationResponseStoreState {
+    entries: HashMap<String, StoredTranslationResponseEntry>,
+    order: VecDeque<String>,
+    total_bytes: usize,
+    max_entries: usize,
+    max_total_bytes: usize,
+}
+
+impl TranslationResponseStoreState {
+    fn new(max_entries: usize, max_total_bytes: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            order: VecDeque::new(),
+            total_bytes: 0,
+            max_entries,
+            max_total_bytes,
+        }
+    }
+
+    fn move_key_to_back(&mut self, key: &str) {
+        if self.order.back().is_some_and(|candidate| candidate == key) {
+            return;
+        }
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            if let Some(existing) = self.order.remove(index) {
+                self.order.push_back(existing);
+            }
+            return;
+        }
+        self.order.push_back(key.to_string());
+    }
+
+    fn remove_entry(&mut self, key: &str) -> Option<StoredTranslationResponse> {
+        let entry = self.entries.remove(key)?;
+        self.total_bytes = self.total_bytes.saturating_sub(entry.bytes);
+        if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
+            let _ = self.order.remove(index);
+        }
+        Some(entry.stored)
+    }
+
+    fn store(&mut self, response_id: String, stored: StoredTranslationResponse, bytes: usize) {
+        if self.max_entries == 0 || self.max_total_bytes == 0 || bytes > self.max_total_bytes {
+            return;
+        }
+
+        let _ = self.remove_entry(&response_id);
+        self.total_bytes = self.total_bytes.saturating_add(bytes);
+        self.entries.insert(
+            response_id.clone(),
+            StoredTranslationResponseEntry { stored, bytes },
+        );
+        self.order.push_back(response_id);
+
+        while self.entries.len() > self.max_entries || self.total_bytes > self.max_total_bytes {
+            let Some(candidate) = self.order.pop_front() else {
+                break;
+            };
+            if let Some(entry) = self.entries.remove(&candidate) {
+                self.total_bytes = self.total_bytes.saturating_sub(entry.bytes);
+            }
+        }
+    }
+
+    fn get(&mut self, response_id: &str) -> Option<StoredTranslationResponse> {
+        let stored = self.entries.get(response_id)?.stored.clone();
+        self.move_key_to_back(response_id);
+        Some(stored)
+    }
+}
+
+#[derive(Clone)]
 pub(super) struct TranslationResponseStore {
-    entries: Arc<Mutex<LocalLruCache<StoredTranslationResponse>>>,
+    state: Arc<Mutex<TranslationResponseStoreState>>,
+}
+
+impl Default for TranslationResponseStore {
+    fn default() -> Self {
+        Self::with_limits(
+            DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_ENTRIES,
+            DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_TOTAL_BYTES,
+        )
+    }
+}
+
+impl TranslationResponseStore {
+    fn with_limits(max_entries: usize, max_total_bytes: usize) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(TranslationResponseStoreState::new(
+                max_entries,
+                max_total_bytes,
+            ))),
+        }
+    }
 }
 
 pub(crate) fn gateway_scoped_response_id(backend_name: &str, response_id: &str) -> String {
@@ -93,29 +190,40 @@ impl TranslationResponseStore {
             return;
         }
 
-        let mut entries = self.entries.lock().await;
-        entries.insert(
-            response_id.to_string(),
-            StoredTranslationResponse {
-                owner,
-                response,
-                input_items,
-            },
-            DEFAULT_TRANSLATION_RESPONSE_STORE_MAX_ENTRIES,
-        );
+        let stored = StoredTranslationResponse {
+            owner,
+            response,
+            input_items,
+        };
+        let entry_bytes = stored_translation_response_bytes(response_id, &stored);
+        let mut state = self.state.lock().await;
+        state.store(response_id.to_string(), stored, entry_bytes);
     }
 
     async fn stored_response(&self, response_id: &str) -> Option<StoredTranslationResponse> {
-        self.entries.lock().await.get(response_id.trim())
+        self.state.lock().await.get(response_id.trim())
     }
 
     async fn delete_stored_response(&self, response_id: &str) -> bool {
-        self.entries
+        self.state
             .lock()
             .await
-            .remove(response_id.trim())
+            .remove_entry(response_id.trim())
             .is_some()
     }
+}
+
+fn stored_translation_response_bytes(
+    response_id: &str,
+    stored: &StoredTranslationResponse,
+) -> usize {
+    response_id.len()
+        + stored.owner.virtual_key_id.as_ref().map_or(0, String::len)
+        + stored.owner.tenant_id.as_ref().map_or(0, String::len)
+        + stored.owner.project_id.as_ref().map_or(0, String::len)
+        + stored.owner.user_id.as_ref().map_or(0, String::len)
+        + serde_json::to_vec(&stored.response).map_or(0, |bytes| bytes.len())
+        + serde_json::to_vec(&stored.input_items).map_or(0, |bytes| bytes.len())
 }
 
 pub(crate) async fn delete_stored_response_from_translation_backends(
@@ -260,5 +368,49 @@ mod tests {
             Some(("primary", "resp_123"))
         );
         assert!(parse_gateway_scoped_response_id("resp_123").is_none());
+    }
+
+    #[tokio::test]
+    async fn response_store_skips_entries_larger_than_byte_budget() {
+        let store = TranslationResponseStore::with_limits(4, 64);
+        let response_id = gateway_scoped_response_id("primary", "resp_big");
+        store
+            .store_response_record(
+                &response_id,
+                TranslationResponseOwner::default(),
+                json!({ "id": response_id, "output_text": "x".repeat(512) }),
+                vec![json!({ "type": "message", "content": "x".repeat(512) })],
+            )
+            .await;
+
+        assert!(store.stored_response("resp_big").await.is_none());
+        assert!(store.stored_response(&response_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn response_store_evicts_oldest_entries_to_respect_byte_budget() {
+        let store = TranslationResponseStore::with_limits(4, 220);
+        let first_id = gateway_scoped_response_id("primary", "resp_first");
+        let second_id = gateway_scoped_response_id("primary", "resp_second");
+
+        store
+            .store_response_record(
+                &first_id,
+                TranslationResponseOwner::default(),
+                json!({ "id": first_id, "output_text": "x".repeat(64) }),
+                vec![],
+            )
+            .await;
+        store
+            .store_response_record(
+                &second_id,
+                TranslationResponseOwner::default(),
+                json!({ "id": second_id, "output_text": "y".repeat(64) }),
+                vec![],
+            )
+            .await;
+
+        assert!(store.stored_response(&first_id).await.is_none());
+        assert!(store.stored_response(&second_id).await.is_some());
     }
 }

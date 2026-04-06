@@ -219,11 +219,9 @@ pub(super) async fn attempt_translation_backend(
         } else if batches_root && parts.method == axum::http::Method::GET {
             let mut limit: Option<u32> = None;
             let mut after: Option<String> = None;
-            let query = parts.uri.query().unwrap_or_default();
-            for pair in query.split('&') {
-                let Some((key, value)) = pair.split_once('=') else {
-                    continue;
-                };
+            for (key, value) in
+                translation::decoded_query_pairs(parts.uri.query().unwrap_or_default())
+            {
                 if key == "limit" {
                     limit = value.parse::<u32>().ok();
                 } else if key == "after" {
