@@ -362,6 +362,7 @@ pub(super) async fn prepare_proxy_request_dedup(
     let mut persistence = select_proxy_request_dedup_persistence(state);
     let local_fallback = local_proxy_request_dedup_persistence(state);
     let mut tried_local_fallback = !has_persistent_proxy_request_dedup_store(state);
+    let scoped_request_id = scoped_proxy_request_id(request_id, virtual_key_id);
     let (fingerprint, fingerprint_key) =
         request_dedup_fingerprint(method, path_and_query, virtual_key_id, headers, body);
     let owner_token = format!("dedup-{}", generate_request_id());
@@ -370,7 +371,7 @@ pub(super) async fn prepare_proxy_request_dedup(
         let now_ms = now_epoch_millis();
         match persistence
             .begin_proxy_request_idempotency(
-                request_id,
+                &scoped_request_id,
                 &fingerprint,
                 &fingerprint_key,
                 &owner_token,
@@ -393,7 +394,7 @@ pub(super) async fn prepare_proxy_request_dedup(
                 return Ok(ProxyRequestDedupDecision::Leader(
                     ProxyRequestDedupLeader::new(
                         persistence,
-                        request_id,
+                        &scoped_request_id,
                         &owner_token,
                         state.proxy.max_body_bytes,
                     ),
@@ -528,6 +529,14 @@ fn has_persistent_proxy_request_dedup_store(_state: &GatewayHttpState) -> bool {
     }
 
     false
+}
+
+fn scoped_proxy_request_id(request_id: &str, virtual_key_id: Option<&str>) -> String {
+    let scope = virtual_key_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("_global");
+    format!("ditto-proxy-request-dedup-v1|{scope}|{request_id}")
 }
 
 fn request_dedup_fingerprint(
@@ -942,6 +951,7 @@ fn now_epoch_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gateway::{Gateway, GatewayConfig, RouterConfig};
 
     #[tokio::test]
     async fn oversized_stream_records_replay_unavailable_outcome() {
@@ -1003,5 +1013,104 @@ mod tests {
             replay.1.error.code.as_deref(),
             Some("request_id_replay_unavailable")
         );
+    }
+
+    fn test_gateway_http_state() -> GatewayHttpState {
+        GatewayHttpState::new(Gateway::new(GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: Vec::new(),
+            router: RouterConfig {
+                default_backends: Vec::new(),
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        }))
+    }
+
+    #[tokio::test]
+    async fn request_id_dedup_is_isolated_per_virtual_key() {
+        let state = test_gateway_http_state();
+        let method = axum::http::Method::POST;
+        let headers = HeaderMap::new();
+        let request_id = "req-shared";
+
+        let first = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &headers,
+            body: &Bytes::from_static(br#"{"prompt":"hello"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: Some("key-a"),
+        })
+        .await
+        .expect("first request should acquire dedup leadership");
+        assert!(matches!(first, ProxyRequestDedupDecision::Leader(_)));
+
+        let second = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &headers,
+            body: &Bytes::from_static(br#"{"prompt":"world"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: Some("key-b"),
+        })
+        .await
+        .expect("different virtual keys should not conflict");
+        assert!(matches!(second, ProxyRequestDedupDecision::Leader(_)));
+    }
+
+    #[tokio::test]
+    async fn request_id_dedup_still_conflicts_within_same_virtual_key() {
+        let state = test_gateway_http_state();
+        let method = axum::http::Method::POST;
+        let headers = HeaderMap::new();
+        let request_id = "req-conflict";
+
+        let first = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &headers,
+            body: &Bytes::from_static(br#"{"prompt":"hello"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: Some("key-a"),
+        })
+        .await
+        .expect("first request should acquire dedup leadership");
+        assert!(matches!(first, ProxyRequestDedupDecision::Leader(_)));
+
+        let second = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &headers,
+            body: &Bytes::from_static(br#"{"prompt":"different"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: Some("key-a"),
+        })
+        .await
+        .expect("same virtual key should return a dedup decision");
+        let replay = match second {
+            ProxyRequestDedupDecision::Replay(Err(err)) => err,
+            ProxyRequestDedupDecision::Replay(Ok(_)) => {
+                panic!("expected conflict replay, got buffered replay response")
+            }
+            ProxyRequestDedupDecision::Leader(_) => {
+                panic!("expected conflict replay, got a new dedup leader")
+            }
+            ProxyRequestDedupDecision::Disabled => {
+                panic!("expected conflict replay, dedup was unexpectedly disabled")
+            }
+        };
+        assert_eq!(replay.0, StatusCode::CONFLICT);
+        assert_eq!(replay.1.error.code.as_deref(), Some("request_id_conflict"));
     }
 }
