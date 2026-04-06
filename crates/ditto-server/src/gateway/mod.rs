@@ -409,6 +409,59 @@ mod tests {
     }
 
     #[test]
+    fn complete_handle_success_settles_reserved_budget_to_actual_output_tokens() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.budget.total_tokens = Some(7);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", TestBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 4,
+            passthrough: false,
+        };
+
+        let prepared = match gateway
+            .prepare_handle_request(&request)
+            .expect("first request should pass")
+        {
+            GatewayPreparedRequest::Call(prepared) => prepared,
+            GatewayPreparedRequest::Cached { .. } => panic!("expected backend call"),
+        };
+
+        gateway.complete_handle_success(
+            &prepared,
+            &GatewayResponse {
+                content: "ok".to_string(),
+                output_tokens: 1,
+                backend: "primary".to_string(),
+                cached: false,
+            },
+        );
+
+        let second = gateway.prepare_handle_request(&request);
+        assert!(matches!(second, Ok(GatewayPreparedRequest::Call(_))));
+    }
+
+    #[test]
     fn in_flight_request_does_not_repopulate_cache_after_cache_disable() {
         let mut key = VirtualKeyConfig::new("key-1", "vk-1");
         key.cache.enabled = true;
@@ -726,6 +779,7 @@ pub(crate) struct GatewayPreparedCall {
     pub(crate) key_id: String,
     pub(crate) backend: Arc<dyn Backend>,
     pub(crate) backend_name: String,
+    input_tokens: u32,
     tokens: u64,
     key_budget: BudgetConfig,
     tenant_budget_scope: Option<(String, BudgetConfig)>,
@@ -1121,6 +1175,7 @@ impl Gateway {
                 key_id: key.id,
                 backend,
                 backend_name,
+                input_tokens: request.input_tokens,
                 tokens: u64::from(tokens),
                 key_budget: key.budget,
                 tenant_budget_scope,
@@ -1136,6 +1191,24 @@ impl Gateway {
         prepared: &GatewayPreparedCall,
         response: &GatewayResponse,
     ) {
+        let actual_tokens =
+            u64::from(prepared.input_tokens).saturating_add(u64::from(response.output_tokens));
+        self.settle_handle_budget_scope(
+            &prepared.key_id,
+            &prepared.key_budget,
+            prepared.tokens,
+            actual_tokens,
+        );
+        if let Some((scope, budget)) = prepared.tenant_budget_scope.as_ref() {
+            self.settle_handle_budget_scope(scope, budget, prepared.tokens, actual_tokens);
+        }
+        if let Some((scope, budget)) = prepared.project_budget_scope.as_ref() {
+            self.settle_handle_budget_scope(scope, budget, prepared.tokens, actual_tokens);
+        }
+        if let Some((scope, budget)) = prepared.user_budget_scope.as_ref() {
+            self.settle_handle_budget_scope(scope, budget, prepared.tokens, actual_tokens);
+        }
+
         let Some(cache_key) = prepared.cache_key.as_ref() else {
             return;
         };
@@ -1164,6 +1237,25 @@ impl Gateway {
             &cache_config,
             now,
         );
+    }
+
+    fn settle_handle_budget_scope(
+        &self,
+        scope: &str,
+        budget: &BudgetConfig,
+        reserved_tokens: u64,
+        actual_tokens: u64,
+    ) {
+        let mut budget_tracker = lock_unpoisoned(&self.budget);
+        match actual_tokens.cmp(&reserved_tokens) {
+            std::cmp::Ordering::Less => {
+                budget_tracker.refund(scope, budget, reserved_tokens - actual_tokens);
+            }
+            std::cmp::Ordering::Greater => {
+                budget_tracker.spend(scope, budget, actual_tokens - reserved_tokens);
+            }
+            std::cmp::Ordering::Equal => {}
+        }
     }
 
     pub(crate) fn complete_handle_failure(&self, prepared: &GatewayPreparedCall) {

@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: settle non-persistent control-plane token budgets to `input_tokens + response.output_tokens` on success instead of leaving the optimistic `max_output_tokens` reservation fully charged.
 - Build: realign `ditto-core` secret-resolution imports with the `secret-kit` module boundaries pinned in CI so current `cargo check`/`cargo clippy --all-features` gates compile again.
 - Build: restore workspace `--all-features` compatibility after `omne-fs`/`secret-kit`/`i18n-runtime-kit` API drift by updating runtime resource bootstrapping, secret resolution call sites, and gateway-translation imports to the current crate boundaries.
 - Gateway: make control-plane validation and rollback fail closed by centralizing route/guardrails/backend checks, restoring runtime rate-limit/cache/budget state on persistence failures, snapshotting runtime-injected backends for admin/config validation, and adding regression coverage for the restored runtime state.
