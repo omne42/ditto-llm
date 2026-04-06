@@ -16,6 +16,9 @@ pub(super) struct ResolvedGatewayContext {
     pub(super) backend_candidates: Vec<String>,
     pub(super) strip_authorization: bool,
     pub(super) charge_cost_usd_micros: Option<u64>,
+    pub(super) local_token_budget_reserved: bool,
+    #[cfg(feature = "gateway-costing")]
+    pub(super) local_cost_budget_reserved: bool,
 }
 
 pub(super) struct ResolveOpenAiCompatProxyGatewayContextRequest<'a> {
@@ -158,6 +161,8 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         user_limits_scope,
         backend_candidates,
         charge_cost_usd_micros,
+        local_token_budget_reserved,
+        local_cost_budget_reserved,
     ) = {
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
@@ -439,115 +444,6 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 return Err(err);
             }
 
-            if !use_persistent_budget {
-                if let Err(err) =
-                    state.can_spend_budget_tokens(&key.id, &key.budget, u64::from(charge_tokens))
-                {
-                    state.record_budget_exceeded();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let duration = metrics_timer_start.elapsed();
-                        let status = mapped.0.as_u16();
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
-                        metrics.record_proxy_budget_exceeded(
-                            Some(&key.id),
-                            model.as_deref(),
-                            metrics_path,
-                        );
-                        metrics.record_proxy_response_status_by_path(metrics_path, status);
-                        if let Some(model) = model.as_deref() {
-                            metrics.record_proxy_response_status_by_model(model, status);
-                            metrics.observe_proxy_request_duration_by_model(model, duration);
-                        }
-                        metrics.observe_proxy_request_duration(metrics_path, duration);
-                    }
-                    return Err(mapped);
-                }
-
-                if let Some((scope, budget)) = tenant_budget_scope.as_ref()
-                    && let Err(err) =
-                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
-                {
-                    state.record_budget_exceeded();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let duration = metrics_timer_start.elapsed();
-                        let status = mapped.0.as_u16();
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
-                        metrics.record_proxy_budget_exceeded(
-                            Some(&key.id),
-                            model.as_deref(),
-                            metrics_path,
-                        );
-                        metrics.record_proxy_response_status_by_path(metrics_path, status);
-                        if let Some(model) = model.as_deref() {
-                            metrics.record_proxy_response_status_by_model(model, status);
-                            metrics.observe_proxy_request_duration_by_model(model, duration);
-                        }
-                        metrics.observe_proxy_request_duration(metrics_path, duration);
-                    }
-                    return Err(mapped);
-                }
-
-                if let Some((scope, budget)) = project_budget_scope.as_ref()
-                    && let Err(err) =
-                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
-                {
-                    state.record_budget_exceeded();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let duration = metrics_timer_start.elapsed();
-                        let status = mapped.0.as_u16();
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
-                        metrics.record_proxy_budget_exceeded(
-                            Some(&key.id),
-                            model.as_deref(),
-                            metrics_path,
-                        );
-                        metrics.record_proxy_response_status_by_path(metrics_path, status);
-                        if let Some(model) = model.as_deref() {
-                            metrics.record_proxy_response_status_by_model(model, status);
-                            metrics.observe_proxy_request_duration_by_model(model, duration);
-                        }
-                        metrics.observe_proxy_request_duration(metrics_path, duration);
-                    }
-                    return Err(mapped);
-                }
-
-                if let Some((scope, budget)) = user_budget_scope.as_ref()
-                    && let Err(err) =
-                        state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
-                {
-                    state.record_budget_exceeded();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let duration = metrics_timer_start.elapsed();
-                        let status = mapped.0.as_u16();
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
-                        metrics.record_proxy_budget_exceeded(
-                            Some(&key.id),
-                            model.as_deref(),
-                            metrics_path,
-                        );
-                        metrics.record_proxy_response_status_by_path(metrics_path, status);
-                        if let Some(model) = model.as_deref() {
-                            metrics.record_proxy_response_status_by_model(model, status);
-                            metrics.observe_proxy_request_duration_by_model(model, duration);
-                        }
-                        metrics.observe_proxy_request_duration(metrics_path, duration);
-                    }
-                    return Err(mapped);
-                }
-            }
-
             let budget = Some(key.budget.clone());
 
             let backends = state
@@ -613,53 +509,52 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
+            let mut local_token_budget_reserved = false;
+            let mut local_cost_budget_reserved = false;
+
             if !use_persistent_budget {
-                #[cfg(feature = "gateway-costing")]
-                if key.budget.total_usd_micros.is_some() {
-                    let Some(charge_cost_usd_micros) = charge_cost_usd_micros else {
-                        return Err(openai_error(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "api_error",
-                            Some("pricing_not_configured"),
-                            "pricing not configured for cost budgets",
-                        ));
-                    };
-
-                    if let Err(err) =
-                        state.can_spend_budget_cost(&key.id, &key.budget, charge_cost_usd_micros)
-                    {
-                        state.record_budget_exceeded();
-                        let mapped = map_openai_gateway_error(err);
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.proxy.metrics.as_ref() {
-                            let duration = metrics_timer_start.elapsed();
-                            let status = mapped.0.as_u16();
-                            let mut metrics = metrics.lock().await;
-                            metrics.record_proxy_request(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_budget_exceeded(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_response_status_by_path(metrics_path, status);
-                            if let Some(model) = model.as_deref() {
-                                metrics.record_proxy_response_status_by_model(model, status);
-                                metrics.observe_proxy_request_duration_by_model(model, duration);
-                            }
-                            metrics.observe_proxy_request_duration(metrics_path, duration);
+                let budget_scopes = collect_budget_scopes(
+                    Some(&key.id),
+                    budget.as_ref(),
+                    &tenant_budget_scope,
+                    &project_budget_scope,
+                    &user_budget_scope,
+                );
+                if !budget_scopes.is_empty()
+                    && let Err(err) =
+                        state.reserve_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens))
+                {
+                    state.record_budget_exceeded();
+                    let mapped = map_openai_gateway_error(err);
+                    #[cfg(feature = "gateway-metrics-prometheus")]
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
+                        let duration = metrics_timer_start.elapsed();
+                        let status = mapped.0.as_u16();
+                        let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
+                        metrics.record_proxy_budget_exceeded(
+                            Some(&key.id),
+                            model.as_deref(),
+                            metrics_path,
+                        );
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
+                        if let Some(model) = model.as_deref() {
+                            metrics.record_proxy_response_status_by_model(model, status);
+                            metrics.observe_proxy_request_duration_by_model(model, duration);
                         }
-                        return Err(mapped);
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
                     }
+                    return Err(mapped);
                 }
+                local_token_budget_reserved = !budget_scopes.is_empty();
 
                 #[cfg(feature = "gateway-costing")]
-                if tenant_budget_scope
+                if budget
                     .as_ref()
-                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                    .is_some_and(|budget| budget.total_usd_micros.is_some())
+                    || tenant_budget_scope
+                        .as_ref()
+                        .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
                     || project_budget_scope
                         .as_ref()
                         .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
@@ -668,6 +563,16 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                         .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
                 {
                     let Some(charge_cost_usd_micros) = charge_cost_usd_micros else {
+                        if local_token_budget_reserved {
+                            let budget_scopes = collect_budget_scopes(
+                                Some(&key.id),
+                                budget.as_ref(),
+                                &tenant_budget_scope,
+                                &project_budget_scope,
+                                &user_budget_scope,
+                            );
+                            state.rollback_budget_tokens(budget_scopes, u64::from(charge_tokens));
+                        }
                         return Err(openai_error(
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "api_error",
@@ -676,11 +581,23 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                         ));
                     };
 
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref()
-                        && let Some(_limit) = budget.total_usd_micros
+                    let budget_scopes = collect_budget_scopes(
+                        Some(&key.id),
+                        budget.as_ref(),
+                        &tenant_budget_scope,
+                        &project_budget_scope,
+                        &user_budget_scope,
+                    );
+                    if !budget_scopes.is_empty()
                         && let Err(err) =
-                            state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
+                            state.reserve_budget_cost(budget_scopes.clone(), charge_cost_usd_micros)
                     {
+                        if local_token_budget_reserved {
+                            state.rollback_budget_tokens(
+                                budget_scopes.clone(),
+                                u64::from(charge_tokens),
+                            );
+                        }
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
                         #[cfg(feature = "gateway-metrics-prometheus")]
@@ -707,70 +624,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                         }
                         return Err(mapped);
                     }
-
-                    if let Some((scope, budget)) = project_budget_scope.as_ref()
-                        && let Some(_limit) = budget.total_usd_micros
-                        && let Err(err) =
-                            state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
-                    {
-                        state.record_budget_exceeded();
-                        let mapped = map_openai_gateway_error(err);
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.proxy.metrics.as_ref() {
-                            let duration = metrics_timer_start.elapsed();
-                            let status = mapped.0.as_u16();
-                            let mut metrics = metrics.lock().await;
-                            metrics.record_proxy_request(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_budget_exceeded(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_response_status_by_path(metrics_path, status);
-                            if let Some(model) = model.as_deref() {
-                                metrics.record_proxy_response_status_by_model(model, status);
-                                metrics.observe_proxy_request_duration_by_model(model, duration);
-                            }
-                            metrics.observe_proxy_request_duration(metrics_path, duration);
-                        }
-                        return Err(mapped);
-                    }
-
-                    if let Some((scope, budget)) = user_budget_scope.as_ref()
-                        && let Some(_limit) = budget.total_usd_micros
-                        && let Err(err) =
-                            state.can_spend_budget_cost(scope, budget, charge_cost_usd_micros)
-                    {
-                        state.record_budget_exceeded();
-                        let mapped = map_openai_gateway_error(err);
-                        #[cfg(feature = "gateway-metrics-prometheus")]
-                        if let Some(metrics) = state.proxy.metrics.as_ref() {
-                            let duration = metrics_timer_start.elapsed();
-                            let status = mapped.0.as_u16();
-                            let mut metrics = metrics.lock().await;
-                            metrics.record_proxy_request(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_budget_exceeded(
-                                Some(&key.id),
-                                model.as_deref(),
-                                metrics_path,
-                            );
-                            metrics.record_proxy_response_status_by_path(metrics_path, status);
-                            if let Some(model) = model.as_deref() {
-                                metrics.record_proxy_response_status_by_model(model, status);
-                                metrics.observe_proxy_request_duration_by_model(model, duration);
-                            }
-                            metrics.observe_proxy_request_duration(metrics_path, duration);
-                        }
-                        return Err(mapped);
-                    }
+                    local_cost_budget_reserved = !budget_scopes.is_empty();
                 }
             }
 
@@ -786,6 +640,8 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 user_limits_scope,
                 backends,
                 charge_cost_usd_micros,
+                local_token_budget_reserved,
+                local_cost_budget_reserved,
             )
         } else {
             let backends = state
@@ -820,6 +676,8 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 None,
                 backends,
                 charge_cost_usd_micros,
+                false,
+                false,
             )
         }
     };
@@ -839,5 +697,8 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
+        local_token_budget_reserved,
+        #[cfg(feature = "gateway-costing")]
+        local_cost_budget_reserved,
     })
 }

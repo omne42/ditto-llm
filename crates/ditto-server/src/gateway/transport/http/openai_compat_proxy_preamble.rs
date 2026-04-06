@@ -24,6 +24,9 @@ pub(super) struct ProxyAttemptParams<'a> {
     pub(super) tenant_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     pub(super) project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     pub(super) user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
+    pub(super) local_token_budget_reserved: bool,
+    #[cfg(feature = "gateway-costing")]
+    pub(super) local_cost_budget_reserved: bool,
     pub(super) charge_cost_usd_micros: Option<u64>,
     #[cfg(any(
         feature = "gateway-store-sqlite",

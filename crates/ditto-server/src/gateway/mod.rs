@@ -1225,60 +1225,6 @@ impl Gateway {
             });
         }
 
-        if let Err(err) =
-            lock_unpoisoned(&self.budget).can_spend(&key.id, &key.budget, u64::from(tokens))
-        {
-            lock_unpoisoned(&self.observability).record_budget_exceeded();
-            return Err(err);
-        }
-
-        if let (Some(tenant_id), Some(tenant_budget)) = (
-            key.tenant_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.tenant_budget.as_ref(),
-        ) {
-            let scope = format!("tenant:{tenant_id}");
-            if let Err(err) =
-                lock_unpoisoned(&self.budget).can_spend(&scope, tenant_budget, u64::from(tokens))
-            {
-                lock_unpoisoned(&self.observability).record_budget_exceeded();
-                return Err(err);
-            }
-        }
-
-        if let (Some(project_id), Some(project_budget)) = (
-            key.project_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.project_budget.as_ref(),
-        ) {
-            let scope = format!("project:{project_id}");
-            if let Err(err) =
-                lock_unpoisoned(&self.budget).can_spend(&scope, project_budget, u64::from(tokens))
-            {
-                lock_unpoisoned(&self.observability).record_budget_exceeded();
-                return Err(err);
-            }
-        }
-        if let (Some(user_id), Some(user_budget)) = (
-            key.user_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.user_budget.as_ref(),
-        ) {
-            let scope = format!("user:{user_id}");
-            if let Err(err) =
-                lock_unpoisoned(&self.budget).can_spend(&scope, user_budget, u64::from(tokens))
-            {
-                lock_unpoisoned(&self.observability).record_budget_exceeded();
-                return Err(err);
-            }
-        }
-
         let backend = control_plane
             .backends
             .get(&backend_name)
@@ -1320,17 +1266,24 @@ impl Gateway {
                     .map(|budget| (format!("user:{user_id}"), budget.clone()))
             });
 
-        // Reserve token budgets before returning so concurrent requests cannot
-        // pass budget checks against stale spent counters.
-        lock_unpoisoned(&self.budget).spend(&key.id, &key.budget, u64::from(tokens));
+        let mut budget_scopes = vec![(&key.id[..], &key.budget)];
         if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
+            budget_scopes.push((scope.as_str(), budget));
         }
         if let Some((scope, budget)) = project_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
+            budget_scopes.push((scope.as_str(), budget));
         }
         if let Some((scope, budget)) = user_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).spend(scope, budget, u64::from(tokens));
+            budget_scopes.push((scope.as_str(), budget));
+        }
+
+        // Reserve all in-memory scopes under one lock so concurrent requests
+        // cannot pass checks against stale counters between scopes.
+        if let Err(err) =
+            lock_unpoisoned(&self.budget).reserve_many(budget_scopes, u64::from(tokens))
+        {
+            lock_unpoisoned(&self.observability).record_budget_exceeded();
+            return Err(err);
         }
 
         Ok(GatewayPreparedRequest::Call(Box::new(
@@ -1409,33 +1362,25 @@ impl Gateway {
         reserved_tokens: u64,
         actual_tokens: u64,
     ) {
-        let mut budget_tracker = lock_unpoisoned(&self.budget);
-        match actual_tokens.cmp(&reserved_tokens) {
-            std::cmp::Ordering::Less => {
-                budget_tracker.refund(scope, budget, reserved_tokens - actual_tokens);
-            }
-            std::cmp::Ordering::Greater => {
-                budget_tracker.spend(scope, budget, actual_tokens - reserved_tokens);
-            }
-            std::cmp::Ordering::Equal => {}
-        }
+        lock_unpoisoned(&self.budget).settle_many(
+            [(scope, budget)],
+            reserved_tokens,
+            actual_tokens,
+        );
     }
 
     pub(crate) fn complete_handle_failure(&self, prepared: &GatewayPreparedCall) {
-        lock_unpoisoned(&self.budget).refund(
-            &prepared.key_id,
-            &prepared.key_budget,
-            prepared.tokens,
-        );
+        let mut scopes = vec![(&prepared.key_id[..], &prepared.key_budget)];
         if let Some((scope, budget)) = prepared.tenant_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
+            scopes.push((scope.as_str(), budget));
         }
         if let Some((scope, budget)) = prepared.project_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
+            scopes.push((scope.as_str(), budget));
         }
         if let Some((scope, budget)) = prepared.user_budget_scope.as_ref() {
-            lock_unpoisoned(&self.budget).refund(scope, budget, prepared.tokens);
+            scopes.push((scope.as_str(), budget));
         }
+        lock_unpoisoned(&self.budget).refund_many(scopes, prepared.tokens);
     }
 
     pub async fn handle(&self, request: GatewayRequest) -> Result<GatewayResponse, GatewayError> {

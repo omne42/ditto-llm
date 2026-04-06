@@ -446,42 +446,66 @@ impl GatewayHttpState {
         lock_unpoisoned(&self.limits).check_and_consume_many(scopes, tokens, minute)
     }
 
-    pub(crate) fn can_spend_budget_tokens(
+    pub(crate) fn reserve_budget_tokens<'a, I>(
         &self,
-        scope: &str,
-        budget: &super::BudgetConfig,
+        scopes: I,
         tokens: u64,
-    ) -> Result<(), GatewayError> {
-        lock_unpoisoned(&self.budget).can_spend(scope, budget, tokens)
+    ) -> Result<(), GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).reserve_many(scopes, tokens)
     }
 
-    #[cfg(feature = "gateway-costing")]
-    pub(crate) fn can_spend_budget_cost(
+    pub(crate) fn settle_budget_tokens<'a, I>(
         &self,
-        scope: &str,
-        budget: &super::BudgetConfig,
+        scopes: I,
+        reserved_tokens: u64,
+        actual_tokens: u64,
+    ) where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).settle_many(scopes, reserved_tokens, actual_tokens);
+    }
+
+    pub(crate) fn rollback_budget_tokens<'a, I>(&self, scopes: I, reserved_tokens: u64)
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).refund_many(scopes, reserved_tokens);
+    }
+
+    pub(crate) fn reserve_budget_cost<'a, I>(
+        &self,
+        scopes: I,
         usd_micros: u64,
-    ) -> Result<(), GatewayError> {
-        lock_unpoisoned(&self.budget).can_spend_cost_usd_micros(scope, budget, usd_micros)
+    ) -> Result<(), GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).reserve_cost_many(scopes, usd_micros)
     }
 
-    pub(crate) fn spend_budget_tokens(
+    pub(crate) fn settle_budget_cost<'a, I>(
         &self,
-        scope: &str,
-        budget: &super::BudgetConfig,
-        tokens: u64,
-    ) {
-        lock_unpoisoned(&self.budget).spend(scope, budget, tokens);
+        scopes: I,
+        reserved_usd_micros: u64,
+        actual_usd_micros: Option<u64>,
+    ) where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).settle_cost_many(
+            scopes,
+            reserved_usd_micros,
+            actual_usd_micros,
+        );
     }
 
-    #[cfg(feature = "gateway-costing")]
-    pub(crate) fn spend_budget_cost(
-        &self,
-        scope: &str,
-        budget: &super::BudgetConfig,
-        usd_micros: u64,
-    ) {
-        lock_unpoisoned(&self.budget).spend_cost_usd_micros(scope, budget, usd_micros);
+    pub(crate) fn rollback_budget_cost<'a, I>(&self, scopes: I, reserved_usd_micros: u64)
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,
+    {
+        lock_unpoisoned(&self.budget).refund_cost_many(scopes, reserved_usd_micros);
     }
 
     fn has_any_admin_tokens(&self) -> bool {
@@ -1161,6 +1185,29 @@ fn openai_error(
             },
         }),
     )
+}
+
+fn collect_budget_scopes<'a>(
+    virtual_key_id: Option<&'a str>,
+    budget: Option<&'a super::BudgetConfig>,
+    tenant_budget_scope: &'a Option<(String, super::BudgetConfig)>,
+    project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
+    user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
+) -> Vec<(&'a str, &'a super::BudgetConfig)> {
+    let mut scopes = Vec::new();
+    if let (Some(scope), Some(budget)) = (virtual_key_id, budget) {
+        scopes.push((scope, budget));
+    }
+    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+        scopes.push((scope.as_str(), budget));
+    }
+    if let Some((scope, budget)) = project_budget_scope.as_ref() {
+        scopes.push((scope.as_str(), budget));
+    }
+    if let Some((scope, budget)) = user_budget_scope.as_ref() {
+        scopes.push((scope.as_str(), budget));
+    }
+    scopes
 }
 
 #[cfg(feature = "gateway-costing")]

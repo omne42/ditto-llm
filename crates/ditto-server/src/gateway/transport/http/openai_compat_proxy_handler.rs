@@ -214,6 +214,9 @@ pub(super) async fn handle_openai_compat_proxy(
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
+        local_token_budget_reserved,
+        #[cfg(feature = "gateway-costing")]
+        local_cost_budget_reserved,
     } = resolve_openai_compat_proxy_gateway_context(
         ResolveOpenAiCompatProxyGatewayContextRequest {
             state: &state,
@@ -567,6 +570,9 @@ pub(super) async fn handle_openai_compat_proxy(
         tenant_budget_scope: &tenant_budget_scope,
         project_budget_scope: &project_budget_scope,
         user_budget_scope: &user_budget_scope,
+        local_token_budget_reserved,
+        #[cfg(feature = "gateway-costing")]
+        local_cost_budget_reserved,
         charge_cost_usd_micros,
         #[cfg(any(
             feature = "gateway-store-sqlite",
@@ -681,6 +687,21 @@ pub(super) async fn handle_openai_compat_proxy(
         ),
     ))]
     rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+
+    if local_token_budget_reserved {
+        let budget_scopes = collect_budget_scopes(
+            virtual_key_id.as_deref(),
+            budget.as_ref(),
+            &tenant_budget_scope,
+            &project_budget_scope,
+            &user_budget_scope,
+        );
+        state.rollback_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens));
+        #[cfg(feature = "gateway-costing")]
+        if local_cost_budget_reserved {
+            state.rollback_budget_cost(budget_scopes, charge_cost_usd_micros.unwrap_or_default());
+        }
+    }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     let proxy_metrics = Some((metrics_path.as_str(), metrics_timer_start));
