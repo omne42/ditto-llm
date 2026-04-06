@@ -572,6 +572,82 @@ async fn gateway_translation_responses_retrieve_and_delete_are_backend_scoped()
 }
 
 #[tokio::test]
+async fn gateway_translation_bare_response_id_is_not_scanned_across_backends()
+-> ditto_core::error::Result<()> {
+    let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");
+    primary_key.route = Some("primary".to_string());
+    let mut secondary_key =
+        ditto_server::gateway::VirtualKeyConfig::new("key-secondary", "vk-secondary");
+    secondary_key.route = Some("secondary".to_string());
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![primary_key, secondary_key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-primary")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "input": "hi"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+
+    let legacy_retrieve = Request::builder()
+        .method("GET")
+        .uri("/v1/responses/resp_fake")
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let legacy_retrieve_response = app.clone().oneshot(legacy_retrieve).await.unwrap();
+    assert_eq!(legacy_retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    let legacy_delete = Request::builder()
+        .method("DELETE")
+        .uri("/v1/responses/resp_fake")
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let legacy_delete_response = app.oneshot(legacy_delete).await.unwrap();
+    assert_eq!(legacy_delete_response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_retrieve_and_delete_are_virtual_key_scoped_even_on_same_backend()
 -> ditto_core::error::Result<()> {
     let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");

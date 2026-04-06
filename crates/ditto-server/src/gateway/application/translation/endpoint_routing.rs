@@ -85,6 +85,26 @@ fn path_without_query(path_and_query: &str) -> &str {
         .unwrap_or(path_and_query)
 }
 
+fn decode_path_segment(segment: &str) -> Option<String> {
+    let bytes = segment.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hi = *bytes.get(index + 1)?;
+            let lo = *bytes.get(index + 2)?;
+            let hex_bytes = [hi, lo];
+            let hex = std::str::from_utf8(&hex_bytes).ok()?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+            continue;
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(decoded).ok()
+}
+
 fn singleton_path_matches(path_and_query: &str, expected: &str) -> bool {
     let path = path_without_query(path_and_query);
     path == expected || path == format!("{expected}/")
@@ -108,7 +128,7 @@ pub fn models_retrieve_id(path_and_query: &str) -> Option<String> {
     if rest.trim().is_empty() {
         return None;
     }
-    Some(rest.to_string())
+    decode_path_segment(rest)
 }
 
 pub fn is_responses_create_path(path_and_query: &str) -> bool {
@@ -578,7 +598,10 @@ pub fn files_content_id(path_and_query: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TranslationEndpointKind, TranslationHttpMethod, translation_endpoint_descriptor};
+    use super::{
+        TranslationEndpointKind, TranslationHttpMethod, models_retrieve_id,
+        translation_endpoint_descriptor,
+    };
 
     #[test]
     fn translation_http_method_parses_common_http_names() {
@@ -607,5 +630,13 @@ mod tests {
                 .expect("responses create descriptor");
 
         assert_eq!(descriptor.kind, TranslationEndpointKind::ResponsesCreate);
+    }
+
+    #[test]
+    fn models_retrieve_id_decodes_percent_encoded_segments() {
+        assert_eq!(
+            models_retrieve_id("/v1/models/secondary%2Fsecondary-model"),
+            Some("secondary/secondary-model".to_string())
+        );
     }
 }

@@ -65,20 +65,45 @@ struct ResolvedGatewayContextLocals {
     local_cost_budget_reserved: bool,
 }
 
-fn model_from_request_path(path_and_query: &str) -> Option<&str> {
+fn decode_path_segment(segment: &str) -> Option<String> {
+    let bytes = segment.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hi = *bytes.get(index + 1)?;
+            let lo = *bytes.get(index + 2)?;
+            let hex_bytes = [hi, lo];
+            let hex = std::str::from_utf8(&hex_bytes).ok()?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+            continue;
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8(decoded).ok()
+}
+
+fn model_from_request_path(path_and_query: &str) -> Option<String> {
     let path = path_and_query
         .split_once('?')
         .map(|(path, _)| path)
         .unwrap_or(path_and_query)
         .trim_end_matches('/');
     let model = path.strip_prefix("/v1/models/")?.trim();
-    if model.is_empty() { None } else { Some(model) }
+    if model.is_empty() {
+        None
+    } else {
+        decode_path_segment(model)
+    }
 }
 
-fn effective_request_model<'a>(path_and_query: &'a str, model: Option<&'a str>) -> Option<&'a str> {
+fn effective_request_model(path_and_query: &str, model: Option<&str>) -> Option<String> {
     model
         .map(str::trim)
         .filter(|model| !model.is_empty())
+        .map(str::to_string)
         .or_else(|| model_from_request_path(path_and_query))
 }
 
@@ -284,9 +309,9 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 ));
             }
 
-            let guardrails = state.guardrails_for_model(routed_model, key);
+            let guardrails = state.guardrails_for_model(routed_model.as_deref(), key);
 
-            if let Some(model_id) = routed_model
+            if let Some(model_id) = routed_model.as_deref()
                 && let Some(reason) = guardrails.check_model(model_id)
             {
                 state.record_guardrail_blocked();
@@ -429,7 +454,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
 
             let backends = state
                 .select_backends_for_model_seeded(
-                    routed_model.unwrap_or_default(),
+                    routed_model.as_deref().unwrap_or_default(),
                     Some(key),
                     Some(request_id),
                 )
@@ -460,7 +485,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
 
                             estimate_charge_cost_usd_micros(
                                 state,
-                                routed_model,
+                                routed_model.as_deref(),
                                 input_tokens_estimate,
                                 max_output_tokens,
                                 service_tier.as_deref(),
@@ -479,7 +504,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 } else {
                     estimate_charge_cost_usd_micros(
                         state,
-                        routed_model,
+                        routed_model.as_deref(),
                         input_tokens_estimate,
                         max_output_tokens,
                         service_tier.as_deref(),
@@ -669,7 +694,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         } else {
             let backends = state
                 .select_backends_for_model_seeded(
-                    routed_model.unwrap_or_default(),
+                    routed_model.as_deref().unwrap_or_default(),
                     None,
                     Some(request_id),
                 )
@@ -678,7 +703,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(feature = "gateway-costing")]
             let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
                 state,
-                routed_model,
+                routed_model.as_deref(),
                 input_tokens_estimate,
                 max_output_tokens,
                 service_tier.as_deref(),
