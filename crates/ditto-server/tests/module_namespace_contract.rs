@@ -31,4 +31,7 @@ fn gateway_root_exports_stable_public_facades() {
     let _ = TypeId::of::<ditto_server::gateway::VirtualKeyConfig>();
     let _ = TypeId::of::<ditto_server::gateway::RouteBackend>();
     let _ = TypeId::of::<ditto_server::gateway::GatewayRequest>();
+    let _ = TypeId::of::<ditto_server::gateway::GatewayHttpState>();
+    let _ = TypeId::of::<ditto_server::gateway::ProxyBackend>();
+    let _ = TypeId::of::<ditto_server::gateway::GatewayStateFile>();
 }
