@@ -18,15 +18,15 @@ use serde_json::{Map, Value};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::gateway::adapters::cache::LocalLruCache;
-use crate::llm_core::model::{LanguageModel, StreamResult};
-use crate::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
-use crate::provider_options::JsonSchemaFormat;
-use crate::runtime::{
+use ditto_core::llm_core::model::{LanguageModel, StreamResult};
+use ditto_core::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
+use ditto_core::provider_options::JsonSchemaFormat;
+use ditto_core::runtime::{
     build_audio_transcription_model, build_batch_client, build_embedding_model, build_file_client,
     build_image_edit_model, build_image_generation_model, build_moderation_model,
     build_rerank_model, build_speech_model, build_video_generation_model,
 };
-use crate::types::{
+use ditto_core::types::{
     AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
     BatchListResponse, BatchResponse, ImageEditRequest, ImageEditResponse, ImageGenerationRequest,
     ImageGenerationResponse, ModerationRequest, ModerationResponse, RerankRequest, RerankResponse,
@@ -162,7 +162,7 @@ impl TranslationBackendRuntime {
             request = request.with_required_capability(capability);
         }
 
-        crate::runtime::resolve_builtin_runtime_route(request).is_ok()
+        ditto_core::runtime::resolve_builtin_runtime_route(request).is_ok()
     }
 
     fn supports_runtime_capability(
@@ -185,7 +185,7 @@ impl TranslationBackendRuntime {
                 .or_else(|| self.configured_default_model())
         };
 
-        crate::runtime::builtin_runtime_supports_capability(
+        ditto_core::runtime::builtin_runtime_supports_capability(
             provider,
             &self.provider_config,
             requested_model,
@@ -194,7 +194,7 @@ impl TranslationBackendRuntime {
     }
 
     fn supports_file_builder(&self, provider: &str) -> bool {
-        crate::runtime::builtin_runtime_supports_file_builder(provider, &self.provider_config)
+        ditto_core::runtime::builtin_runtime_supports_file_builder(provider, &self.provider_config)
     }
 
     async fn resolve_embedding_model(

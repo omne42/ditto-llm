@@ -1,13 +1,15 @@
 use serde_json::{Map, Value};
 
-use crate::provider_options::{ProviderOptions, ReasoningEffort, ResponseFormat};
 use ditto_core::contracts::GenerateRequest;
+use ditto_core::provider_options::{
+    self, ProviderOptions, ProviderOptionsEnvelope, ReasoningEffort, ResponseFormat,
+};
 
 pub(super) fn apply_openai_request_provider_options(
     request: &mut GenerateRequest,
     obj: &Map<String, Value>,
 ) -> super::ParseResult<()> {
-    let mut provider_options = crate::provider_options::request_parsed_provider_options(request)
+    let mut provider_options = provider_options::request_parsed_provider_options(request)
         .ok()
         .flatten()
         .unwrap_or_default();
@@ -15,7 +17,7 @@ pub(super) fn apply_openai_request_provider_options(
 
     if provider_options != ProviderOptions::default() {
         request.provider_options = Some(
-            crate::provider_options::ProviderOptionsEnvelope::from_options(provider_options)
+            ProviderOptionsEnvelope::from_options(provider_options)
                 .map_err(|err| format!("failed to serialize provider_options: {err}"))?,
         );
     }
@@ -99,7 +101,7 @@ mod tests {
 
         apply_openai_request_provider_options(&mut request, &obj).expect("provider options");
 
-        let parsed = crate::provider_options::request_parsed_provider_options(&request)
+        let parsed = provider_options::request_parsed_provider_options(&request)
             .expect("parsed provider options")
             .expect("provider options present");
         assert_eq!(parsed.reasoning_effort, Some(ReasoningEffort::High));
@@ -114,7 +116,7 @@ mod tests {
     fn merges_openai_request_provider_options_with_existing_request_options() {
         let mut request = GenerateRequest::from(vec![]);
         request.provider_options = Some(
-            crate::provider_options::ProviderOptionsEnvelope::from_options(ProviderOptions {
+            ProviderOptionsEnvelope::from_options(ProviderOptions {
                 parallel_tool_calls: Some(true),
                 ..Default::default()
             })
@@ -129,7 +131,7 @@ mod tests {
 
         apply_openai_request_provider_options(&mut request, &obj).expect("provider options");
 
-        let parsed = crate::provider_options::request_parsed_provider_options(&request)
+        let parsed = provider_options::request_parsed_provider_options(&request)
             .expect("parsed provider options")
             .expect("provider options present");
         assert_eq!(parsed.reasoning_effort, Some(ReasoningEffort::Medium));
