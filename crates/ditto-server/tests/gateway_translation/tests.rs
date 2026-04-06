@@ -327,6 +327,102 @@ async fn gateway_translation_responses_require_gateway_scoped_ids()
 }
 
 #[tokio::test]
+async fn gateway_translation_responses_remain_isolated_by_virtual_key()
+-> ditto_core::error::Result<()> {
+    let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-1", "vk-1");
+    primary_key.tenant_id = Some("tenant-a".to_string());
+
+    let mut secondary_key =
+        ditto_server::gateway::VirtualKeyConfig::new("key-2", "vk-2");
+    secondary_key.tenant_id = Some("tenant-a".to_string());
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![primary_key, secondary_key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header(axum::http::header::AUTHORIZATION, "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "input": "private response"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created_id = serde_json::from_slice::<serde_json::Value>(&create_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("response id")
+        .to_string();
+
+    for method in [axum::http::Method::GET, axum::http::Method::DELETE] {
+        let request = Request::builder()
+            .method(method.clone())
+            .uri(format!("/v1/responses/{created_id}"))
+            .header(axum::http::header::AUTHORIZATION, "Bearer vk-2")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+        assert_eq!(
+            parsed
+                .get("error")
+                .and_then(|value| value.get("message"))
+                .and_then(|value| value.as_str()),
+            Some(
+                format!(
+                    "response {created_id} not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key"
+                )
+                .as_str(),
+            )
+        );
+    }
+
+    let retrieve_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}"))
+        .header(axum::http::header::AUTHORIZATION, "Bearer vk-1")
+        .body(Body::empty())
+        .unwrap();
+    let retrieve_response = app.oneshot(retrieve_request).await.unwrap();
+    assert_eq!(retrieve_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
