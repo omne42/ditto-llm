@@ -100,6 +100,12 @@ pub(super) async fn attempt_translation_backend(
             "response {response_id} not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key"
         )
     }
+
+    fn tracked_resource_contract_message(resource_kind: &str, resource_id: &str) -> String {
+        format!(
+            "{resource_kind} {resource_id} not found; translated {resource_kind} access requires a gateway-scoped id created by the same gateway instance and virtual key"
+        )
+    }
     if !translation_backend.supports_endpoint(&endpoint_descriptor, mapped_request_model.as_deref())
     {
         return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
@@ -225,6 +231,38 @@ pub(super) async fn attempt_translation_backend(
                 }
             }
 
+            if let Some(after_id) = after.as_deref()
+                && translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::Batch,
+                    after_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+            {
+                return Ok(BackendAttemptOutcome::Continue(None));
+            }
+
+            let after = match after {
+                Some(after_id) => {
+                    let Some(provider_id) = translation_backend
+                        .resolve_owned_resource_id(
+                            translation::TranslationOwnedResourceKind::Batch,
+                            &after_id,
+                            &response_owner,
+                        )
+                        .await
+                    else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::NOT_FOUND,
+                            "invalid_request_error",
+                            Some("batch_not_found"),
+                            tracked_resource_contract_message("batch", &after_id),
+                        ));
+                    };
+                    Some(provider_id)
+                }
+                None => None,
+            };
+
             let listed = match translation_backend.list_batches(limit, after).await {
                 Ok(listed) => listed,
                 Err(err) => {
@@ -236,6 +274,9 @@ pub(super) async fn attempt_translation_backend(
                 }
             };
 
+            let listed = translation_backend
+                .filter_batch_list_for_owner(backend_name, listed, &response_owner)
+                .await;
             let value = translation::batch_list_response_to_openai(&listed);
             let bytes = serde_json::to_vec(&value)
                 .map(Bytes::from)
@@ -277,7 +318,7 @@ pub(super) async fn attempt_translation_backend(
                 ));
             }
 
-            let request = match translation::batches_create_request_to_request(parsed_json) {
+            let mut request = match translation::batches_create_request_to_request(parsed_json) {
                 Ok(request) => request,
                 Err(err) => {
                     break 'translation_backend_attempt Err(openai_error(
@@ -289,7 +330,33 @@ pub(super) async fn attempt_translation_backend(
                 }
             };
 
-            let created = match translation_backend.create_batch(request).await {
+            if translation::scoped_owned_resource_backend_name(
+                translation::TranslationOwnedResourceKind::File,
+                &request.input_file_id,
+            )
+            .is_some_and(|scoped_backend| scoped_backend != backend_name)
+            {
+                return Ok(BackendAttemptOutcome::Continue(None));
+            }
+
+            let Some(provider_input_file_id) = translation_backend
+                .resolve_owned_resource_id(
+                    translation::TranslationOwnedResourceKind::File,
+                    &request.input_file_id,
+                    &response_owner,
+                )
+                .await
+            else {
+                break 'translation_backend_attempt Err(openai_error(
+                    StatusCode::NOT_FOUND,
+                    "invalid_request_error",
+                    Some("file_not_found"),
+                    tracked_resource_contract_message("file", &request.input_file_id),
+                ));
+            };
+            request.input_file_id = provider_input_file_id;
+
+            let mut created = match translation_backend.create_batch(request).await {
                 Ok(created) => created,
                 Err(err) => {
                     let (status, kind, code, message) =
@@ -299,6 +366,10 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
             };
+
+            translation_backend
+                .track_batch_ownership(response_owner.clone(), backend_name, &mut created.batch)
+                .await;
 
             let value = translation::batch_to_openai(&created.batch);
             let bytes = serde_json::to_vec(&value)
@@ -323,7 +394,32 @@ pub(super) async fn attempt_translation_backend(
             *response.headers_mut() = headers;
             Ok((response, default_spend))
         } else if let Some(batch_id) = batch_retrieve_id.as_deref() {
-            let retrieved = match translation_backend.retrieve_batch(batch_id).await {
+            if translation::scoped_owned_resource_backend_name(
+                translation::TranslationOwnedResourceKind::Batch,
+                batch_id,
+            )
+            .is_some_and(|scoped_backend| scoped_backend != backend_name)
+            {
+                return Ok(BackendAttemptOutcome::Continue(None));
+            }
+
+            let Some(provider_batch_id) = translation_backend
+                .resolve_owned_resource_id(
+                    translation::TranslationOwnedResourceKind::Batch,
+                    batch_id,
+                    &response_owner,
+                )
+                .await
+            else {
+                break 'translation_backend_attempt Err(openai_error(
+                    StatusCode::NOT_FOUND,
+                    "invalid_request_error",
+                    Some("batch_not_found"),
+                    tracked_resource_contract_message("batch", batch_id),
+                ));
+            };
+
+            let mut retrieved = match translation_backend.retrieve_batch(&provider_batch_id).await {
                 Ok(retrieved) => retrieved,
                 Err(err) => {
                     let (status, kind, code, message) =
@@ -333,6 +429,10 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
             };
+
+            translation_backend
+                .track_batch_ownership(response_owner.clone(), backend_name, &mut retrieved.batch)
+                .await;
 
             let value = translation::batch_to_openai(&retrieved.batch);
             let bytes = serde_json::to_vec(&value)
@@ -366,7 +466,32 @@ pub(super) async fn attempt_translation_backend(
                 ));
             }
 
-            let cancelled = match translation_backend.cancel_batch(batch_id).await {
+            if translation::scoped_owned_resource_backend_name(
+                translation::TranslationOwnedResourceKind::Batch,
+                batch_id,
+            )
+            .is_some_and(|scoped_backend| scoped_backend != backend_name)
+            {
+                return Ok(BackendAttemptOutcome::Continue(None));
+            }
+
+            let Some(provider_batch_id) = translation_backend
+                .resolve_owned_resource_id(
+                    translation::TranslationOwnedResourceKind::Batch,
+                    batch_id,
+                    &response_owner,
+                )
+                .await
+            else {
+                break 'translation_backend_attempt Err(openai_error(
+                    StatusCode::NOT_FOUND,
+                    "invalid_request_error",
+                    Some("batch_not_found"),
+                    tracked_resource_contract_message("batch", batch_id),
+                ));
+            };
+
+            let mut cancelled = match translation_backend.cancel_batch(&provider_batch_id).await {
                 Ok(cancelled) => cancelled,
                 Err(err) => {
                     let (status, kind, code, message) =
@@ -376,6 +501,10 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
             };
+
+            translation_backend
+                .track_batch_ownership(response_owner.clone(), backend_name, &mut cancelled.batch)
+                .await;
 
             let value = translation::batch_to_openai(&cancelled.batch);
             let bytes = serde_json::to_vec(&value)
@@ -903,7 +1032,7 @@ pub(super) async fn attempt_translation_backend(
                 let bytes_len = request.bytes.len();
                 let filename = request.filename.clone();
                 let purpose = request.purpose.clone();
-                let file_id = match translation_backend.upload_file(request).await {
+                let provider_file_id = match translation_backend.upload_file(request).await {
                     Ok(file_id) => file_id,
                     Err(err) => {
                         let (status, kind, code, message) =
@@ -913,6 +1042,15 @@ pub(super) async fn attempt_translation_backend(
                         ));
                     }
                 };
+
+                let file_id = translation_backend
+                    .track_file_id_for_owner(
+                        response_owner.clone(),
+                        backend_name,
+                        &provider_file_id,
+                    )
+                    .await
+                    .unwrap_or(provider_file_id);
 
                 let value = translation::file_upload_response_to_openai(
                     &file_id,
@@ -963,6 +1101,10 @@ pub(super) async fn attempt_translation_backend(
                     }
                 };
 
+                let files = translation_backend
+                    .filter_files_for_owner(backend_name, files, &response_owner)
+                    .await;
+
                 let value = translation::file_list_response_to_openai(&files);
                 let bytes = serde_json::to_vec(&value)
                     .map(Bytes::from)
@@ -997,7 +1139,35 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
-                let content = match translation_backend.download_file_content(file_id).await {
+                if translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::File,
+                    file_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                let Some(provider_file_id) = translation_backend
+                    .resolve_owned_resource_id(
+                        translation::TranslationOwnedResourceKind::File,
+                        file_id,
+                        &response_owner,
+                    )
+                    .await
+                else {
+                    break 'translation_backend_attempt Err(openai_error(
+                        StatusCode::NOT_FOUND,
+                        "invalid_request_error",
+                        Some("file_not_found"),
+                        tracked_resource_contract_message("file", file_id),
+                    ));
+                };
+
+                let content = match translation_backend
+                    .download_file_content(&provider_file_id)
+                    .await
+                {
                     Ok(content) => content,
                     Err(err) => {
                         let (status, kind, code, message) =
@@ -1044,8 +1214,34 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
+                if translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::File,
+                    file_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                let Some(provider_file_id) = translation_backend
+                    .resolve_owned_resource_id(
+                        translation::TranslationOwnedResourceKind::File,
+                        file_id,
+                        &response_owner,
+                    )
+                    .await
+                else {
+                    break 'translation_backend_attempt Err(openai_error(
+                        StatusCode::NOT_FOUND,
+                        "invalid_request_error",
+                        Some("file_not_found"),
+                        tracked_resource_contract_message("file", file_id),
+                    ));
+                };
+
                 let value = if parts.method == axum::http::Method::GET {
-                    let file = match translation_backend.retrieve_file(file_id).await {
+                    let mut file = match translation_backend.retrieve_file(&provider_file_id).await
+                    {
                         Ok(file) => file,
                         Err(err) => {
                             let (status, kind, code, message) =
@@ -1056,9 +1252,14 @@ pub(super) async fn attempt_translation_backend(
                         }
                     };
 
+                    translation_backend
+                        .track_file_for_owner(response_owner.clone(), backend_name, &mut file)
+                        .await;
+
                     translation::file_to_openai(&file)
                 } else if parts.method == axum::http::Method::DELETE {
-                    let deleted = match translation_backend.delete_file(file_id).await {
+                    let mut deleted = match translation_backend.delete_file(&provider_file_id).await
+                    {
                         Ok(deleted) => deleted,
                         Err(err) => {
                             let (status, kind, code, message) =
@@ -1068,6 +1269,15 @@ pub(super) async fn attempt_translation_backend(
                             ));
                         }
                     };
+
+                    translation_backend
+                        .scope_deleted_file_for_owner(
+                            response_owner.clone(),
+                            backend_name,
+                            &mut deleted,
+                        )
+                        .await;
+                    translation_backend.remove_owned_file(file_id).await;
 
                     translation::file_delete_response_to_openai(&deleted)
                 } else {
@@ -1192,7 +1402,7 @@ pub(super) async fn attempt_translation_backend(
                     request.model = Some(mapped_model);
                 }
 
-                let generated = match translation_backend.create_video(request).await {
+                let mut generated = match translation_backend.create_video(request).await {
                     Ok(generated) => generated,
                     Err(err) => {
                         let (status, kind, code, message) =
@@ -1202,6 +1412,10 @@ pub(super) async fn attempt_translation_backend(
                         ));
                     }
                 };
+
+                translation_backend
+                    .track_video_ownership(response_owner.clone(), backend_name, &mut generated)
+                    .await;
 
                 let value = translation::video_generation_response_to_openai(&generated);
                 let bytes = serde_json::to_vec(&value)
@@ -1235,7 +1449,7 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
-                let request = match translation::videos_list_request_from_path(path_and_query) {
+                let mut request = match translation::videos_list_request_from_path(path_and_query) {
                     Ok(request) => request,
                     Err(err) => {
                         break 'translation_backend_attempt Err(openai_error(
@@ -1247,6 +1461,35 @@ pub(super) async fn attempt_translation_backend(
                     }
                 };
 
+                if let Some(after_id) = request.after.as_deref()
+                    && translation::scoped_owned_resource_backend_name(
+                        translation::TranslationOwnedResourceKind::Video,
+                        after_id,
+                    )
+                    .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                if let Some(after_id) = request.after.clone() {
+                    let Some(provider_after_id) = translation_backend
+                        .resolve_owned_resource_id(
+                            translation::TranslationOwnedResourceKind::Video,
+                            &after_id,
+                            &response_owner,
+                        )
+                        .await
+                    else {
+                        break 'translation_backend_attempt Err(openai_error(
+                            StatusCode::NOT_FOUND,
+                            "invalid_request_error",
+                            Some("video_not_found"),
+                            tracked_resource_contract_message("video", &after_id),
+                        ));
+                    };
+                    request.after = Some(provider_after_id);
+                }
+
                 let videos = match translation_backend.list_videos(request).await {
                     Ok(videos) => videos,
                     Err(err) => {
@@ -1257,6 +1500,10 @@ pub(super) async fn attempt_translation_backend(
                         ));
                     }
                 };
+
+                let videos = translation_backend
+                    .filter_video_list_for_owner(backend_name, videos, &response_owner)
+                    .await;
 
                 let value = translation::video_list_response_to_openai(&videos);
                 let bytes = serde_json::to_vec(&value)
@@ -1292,6 +1539,31 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
+                if translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::Video,
+                    video_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                let Some(provider_video_id) = translation_backend
+                    .resolve_owned_resource_id(
+                        translation::TranslationOwnedResourceKind::Video,
+                        video_id,
+                        &response_owner,
+                    )
+                    .await
+                else {
+                    break 'translation_backend_attempt Err(openai_error(
+                        StatusCode::NOT_FOUND,
+                        "invalid_request_error",
+                        Some("video_not_found"),
+                        tracked_resource_contract_message("video", video_id),
+                    ));
+                };
+
                 let variant = match translation::videos_content_variant_from_path(path_and_query) {
                     Ok(variant) => variant,
                     Err(err) => {
@@ -1305,7 +1577,7 @@ pub(super) async fn attempt_translation_backend(
                 };
 
                 let content = match translation_backend
-                    .download_video_content(video_id, variant)
+                    .download_video_content(&provider_video_id, variant)
                     .await
                 {
                     Ok(content) => content,
@@ -1365,6 +1637,31 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
+                if translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::Video,
+                    video_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                let Some(provider_video_id) = translation_backend
+                    .resolve_owned_resource_id(
+                        translation::TranslationOwnedResourceKind::Video,
+                        video_id,
+                        &response_owner,
+                    )
+                    .await
+                else {
+                    break 'translation_backend_attempt Err(openai_error(
+                        StatusCode::NOT_FOUND,
+                        "invalid_request_error",
+                        Some("video_not_found"),
+                        tracked_resource_contract_message("video", video_id),
+                    ));
+                };
+
                 let request = match translation::videos_remix_request_to_request(parsed_json) {
                     Ok(request) => request,
                     Err(err) => {
@@ -1377,7 +1674,10 @@ pub(super) async fn attempt_translation_backend(
                     }
                 };
 
-                let remixed = match translation_backend.remix_video(video_id, request).await {
+                let mut remixed = match translation_backend
+                    .remix_video(&provider_video_id, request)
+                    .await
+                {
                     Ok(remixed) => remixed,
                     Err(err) => {
                         let (status, kind, code, message) =
@@ -1387,6 +1687,10 @@ pub(super) async fn attempt_translation_backend(
                         ));
                     }
                 };
+
+                translation_backend
+                    .track_video_ownership(response_owner.clone(), backend_name, &mut remixed)
+                    .await;
 
                 let value = translation::video_generation_response_to_openai(&remixed);
                 let bytes = serde_json::to_vec(&value)
@@ -1420,30 +1724,70 @@ pub(super) async fn attempt_translation_backend(
                     ));
                 }
 
+                if translation::scoped_owned_resource_backend_name(
+                    translation::TranslationOwnedResourceKind::Video,
+                    video_id,
+                )
+                .is_some_and(|scoped_backend| scoped_backend != backend_name)
+                {
+                    return Ok(BackendAttemptOutcome::Continue(None));
+                }
+
+                let Some(provider_video_id) = translation_backend
+                    .resolve_owned_resource_id(
+                        translation::TranslationOwnedResourceKind::Video,
+                        video_id,
+                        &response_owner,
+                    )
+                    .await
+                else {
+                    break 'translation_backend_attempt Err(openai_error(
+                        StatusCode::NOT_FOUND,
+                        "invalid_request_error",
+                        Some("video_not_found"),
+                        tracked_resource_contract_message("video", video_id),
+                    ));
+                };
+
                 let value = if parts.method == axum::http::Method::GET {
-                    let video = match translation_backend.retrieve_video(video_id).await {
-                        Ok(video) => video,
-                        Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
-                        }
-                    };
+                    let mut video =
+                        match translation_backend.retrieve_video(&provider_video_id).await {
+                            Ok(video) => video,
+                            Err(err) => {
+                                let (status, kind, code, message) =
+                                    translation::map_provider_error_to_openai(err);
+                                break 'translation_backend_attempt Err(openai_error(
+                                    status, kind, code, message,
+                                ));
+                            }
+                        };
+
+                    translation_backend
+                        .track_video_ownership(response_owner.clone(), backend_name, &mut video)
+                        .await;
 
                     translation::video_generation_response_to_openai(&video)
                 } else if parts.method == axum::http::Method::DELETE {
-                    let deleted = match translation_backend.delete_video(video_id).await {
-                        Ok(deleted) => deleted,
-                        Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
-                        }
-                    };
+                    let mut deleted =
+                        match translation_backend.delete_video(&provider_video_id).await {
+                            Ok(deleted) => deleted,
+                            Err(err) => {
+                                let (status, kind, code, message) =
+                                    translation::map_provider_error_to_openai(err);
+                                break 'translation_backend_attempt Err(openai_error(
+                                    status, kind, code, message,
+                                ));
+                            }
+                        };
+
+                    translation_backend
+                        .scope_deleted_video_for_owner(
+                            response_owner.clone(),
+                            backend_name,
+                            &mut deleted,
+                        )
+                        .await;
+                    translation_backend.remove_owned_video(video_id).await;
 
                     translation::video_delete_response_to_openai(&deleted)
                 } else {

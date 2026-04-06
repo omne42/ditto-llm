@@ -1695,6 +1695,7 @@ dependencies = [
  "cap-std",
  "fs2",
  "libc",
+ "rustix",
  "tempfile",
  "windows-sys 0.52.0",
 ]

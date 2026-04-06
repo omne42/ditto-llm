@@ -7,7 +7,9 @@ use axum::http::{HeaderValue, Request, StatusCode};
 use ditto_core::capabilities::BatchClient;
 use ditto_core::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_core::capabilities::embedding::EmbeddingModel;
-use ditto_core::capabilities::file::FileContent;
+use ditto_core::capabilities::file::{
+    FileClient, FileContent, FileDeleteResponse, FileObject, FileUploadRequest,
+};
 use ditto_core::capabilities::video::VideoGenerationModel;
 use ditto_core::capabilities::{
     ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel,
@@ -346,9 +348,9 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
     }
 
     async fn retrieve(&self, video_id: &str) -> ditto_core::error::Result<VideoGenerationResponse> {
-        assert_eq!(video_id, "vid_123");
+        assert_eq!(video_id, "vid_json");
         Ok(VideoGenerationResponse {
-            id: "vid_123".to_string(),
+            id: "vid_json".to_string(),
             object: Some("video".to_string()),
             status: VideoGenerationStatus::Completed,
             model: Some("sora-fast".to_string()),
@@ -364,27 +366,27 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         request: VideoListRequest,
     ) -> ditto_core::error::Result<VideoListResponse> {
         assert_eq!(request.limit, Some(2));
-        assert_eq!(request.after.as_deref(), Some("vid_111"));
+        assert_eq!(request.after.as_deref(), Some("vid_json"));
         assert_eq!(request.order, Some(VideoListOrder::Desc));
         Ok(VideoListResponse {
             videos: vec![VideoGenerationResponse {
-                id: "vid_123".to_string(),
+                id: "vid_json".to_string(),
                 object: Some("video".to_string()),
                 status: VideoGenerationStatus::Completed,
                 model: Some("sora-fast".to_string()),
                 prompt: Some("road at dusk".to_string()),
                 ..Default::default()
             }],
-            after: Some("vid_123".to_string()),
+            after: Some("vid_json".to_string()),
             has_more: Some(false),
             ..Default::default()
         })
     }
 
     async fn delete(&self, video_id: &str) -> ditto_core::error::Result<VideoDeleteResponse> {
-        assert_eq!(video_id, "vid_123");
+        assert_eq!(video_id, "vid_json");
         Ok(VideoDeleteResponse {
-            id: "vid_123".to_string(),
+            id: "vid_json".to_string(),
             deleted: true,
             object: Some("video.deleted".to_string()),
         })
@@ -395,7 +397,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         video_id: &str,
         variant: Option<VideoContentVariant>,
     ) -> ditto_core::error::Result<FileContent> {
-        assert_eq!(video_id, "vid_123");
+        assert_eq!(video_id, "vid_json");
         assert_eq!(variant, Some(VideoContentVariant::Thumbnail));
         Ok(FileContent {
             bytes: b"thumbnail-bytes".to_vec(),
@@ -408,7 +410,7 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
         video_id: &str,
         request: VideoRemixRequest,
     ) -> ditto_core::error::Result<VideoGenerationResponse> {
-        assert_eq!(video_id, "vid_123");
+        assert_eq!(video_id, "vid_json");
         assert_eq!(request.prompt, "change angle");
         assert!(request.provider_options.is_none());
         Ok(VideoGenerationResponse {
@@ -419,6 +421,68 @@ impl VideoGenerationModel for FakeVideoGenerationModel {
             prompt: Some(request.prompt),
             remixed_from_video_id: Some(video_id.to_string()),
             ..Default::default()
+        })
+    }
+}
+
+#[derive(Clone)]
+struct FakeFileClient;
+
+#[async_trait]
+impl FileClient for FakeFileClient {
+    fn provider_name(&self) -> &str {
+        "fake"
+    }
+
+    async fn upload_file_with_purpose(
+        &self,
+        request: FileUploadRequest,
+    ) -> ditto_core::error::Result<String> {
+        assert_eq!(request.filename, "hello.txt");
+        assert_eq!(request.purpose, "fine-tune");
+        assert_eq!(request.bytes, b"hello world".to_vec());
+        assert_eq!(request.media_type.as_deref(), Some("text/plain"));
+        Ok("file_fake".to_string())
+    }
+
+    async fn list_files(&self) -> ditto_core::error::Result<Vec<FileObject>> {
+        Ok(vec![FileObject {
+            id: "file_fake".to_string(),
+            bytes: 11,
+            created_at: 123,
+            filename: "hello.txt".to_string(),
+            purpose: "fine-tune".to_string(),
+            status: None,
+            status_details: None,
+        }])
+    }
+
+    async fn retrieve_file(&self, file_id: &str) -> ditto_core::error::Result<FileObject> {
+        assert_eq!(file_id, "file_fake");
+        Ok(FileObject {
+            id: "file_fake".to_string(),
+            bytes: 11,
+            created_at: 123,
+            filename: "hello.txt".to_string(),
+            purpose: "fine-tune".to_string(),
+            status: None,
+            status_details: None,
+        })
+    }
+
+    async fn delete_file(&self, file_id: &str) -> ditto_core::error::Result<FileDeleteResponse> {
+        assert_eq!(file_id, "file_fake");
+        Ok(FileDeleteResponse {
+            id: file_id.to_string(),
+            deleted: true,
+        })
+    }
+
+    async fn download_file_content(&self, file_id: &str) -> ditto_core::error::Result<FileContent> {
+        assert_eq!(file_id, "file_fake");
+        Ok(FileContent {
+            bytes: b"hello world".to_vec(),
+            media_type: Some("text/plain".to_string()),
         })
     }
 }
@@ -532,8 +596,9 @@ impl BatchClient for FakeBatchClient {
         Ok(BatchListResponse {
             batches: vec![
                 Batch {
-                    id: "batch_1".to_string(),
+                    id: "batch_created".to_string(),
                     status: BatchStatus::InProgress,
+                    input_file_id: Some("file_fake".to_string()),
                     ..Default::default()
                 },
                 Batch {
@@ -625,6 +690,107 @@ fn authorized_test_app(
         }
     })
     .boxed_clone()
+}
+
+async fn create_owned_translation_file(
+    app: tower::util::BoxCloneService<
+        Request<Body>,
+        axum::response::Response,
+        std::convert::Infallible,
+    >,
+) -> ditto_core::error::Result<String> {
+    let boundary = "ditto_boundary";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"purpose\"\r\n\
+\r\n\
+fine-tune\r\n\
+--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+hello world\r\n\
+--{boundary}--\r\n"
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/files")
+        .header("content-type", content_type)
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    Ok(parsed
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("file id")
+        .to_string())
+}
+
+async fn create_owned_translation_video(
+    app: tower::util::BoxCloneService<
+        Request<Body>,
+        axum::response::Response,
+        std::convert::Infallible,
+    >,
+) -> ditto_core::error::Result<String> {
+    let payload = json!({
+        "model": "sora-fast",
+        "prompt": "road at dusk",
+        "seconds": 4,
+        "size": "1280x720"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/videos")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    Ok(parsed
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("video id")
+        .to_string())
+}
+
+async fn create_owned_translation_batch(
+    app: tower::util::BoxCloneService<
+        Request<Body>,
+        axum::response::Response,
+        std::convert::Infallible,
+    >,
+) -> ditto_core::error::Result<String> {
+    let file_id = create_owned_translation_file(app.clone()).await?;
+    let payload = json!({
+        "input_file_id": file_id,
+        "endpoint": "/v1/chat/completions",
+        "completion_window": "24h"
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/batches")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    Ok(parsed
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("batch id")
+        .to_string())
 }
 
 #[tokio::test]

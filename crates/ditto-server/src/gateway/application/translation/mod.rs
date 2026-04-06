@@ -3,6 +3,7 @@
 mod endpoint_routing;
 mod files_api;
 mod openai_provider_options;
+mod owned_resources;
 mod request_shaping;
 mod response_mapping;
 mod response_store;
@@ -50,6 +51,9 @@ use ditto_core::types::{
 pub use endpoint_routing::*;
 pub use files_api::*;
 use openai_provider_options::apply_openai_request_provider_options;
+pub(crate) use owned_resources::{
+    TranslationOwnedResourceKind, scoped_owned_resource_backend_name,
+};
 use response_mapping::{
     chat_chunk_bytes, chat_usage_chunk_bytes, completion_chunk_bytes,
     finish_reason_to_chat_finish_reason, finish_reason_to_responses_status, sse_event_bytes,
@@ -97,6 +101,7 @@ struct TranslationBackendRuntime {
     batch_cache: Arc<OnceCell<Arc<dyn BatchClient>>>,
     file_cache: Arc<OnceCell<Arc<dyn FileClient>>>,
     response_store: TranslationResponseStore,
+    owned_resource_store: owned_resources::TranslationOwnedResourceStore,
 }
 
 impl Default for TranslationBackendRuntime {
@@ -116,6 +121,7 @@ impl Default for TranslationBackendRuntime {
             batch_cache: Arc::new(OnceCell::new()),
             file_cache: Arc::new(OnceCell::new()),
             response_store: TranslationResponseStore::default(),
+            owned_resource_store: owned_resources::TranslationOwnedResourceStore::default(),
         }
     }
 }

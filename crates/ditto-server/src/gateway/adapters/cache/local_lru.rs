@@ -66,6 +66,14 @@ impl<V: Clone> LocalLruCache<V> {
         }
         Some(value)
     }
+
+    #[cfg(feature = "gateway-translation")]
+    pub(crate) fn snapshot(&self) -> Vec<(String, V)> {
+        self.entries
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect()
+    }
 }
 
 #[cfg(test)]

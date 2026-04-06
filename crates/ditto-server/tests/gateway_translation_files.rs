@@ -150,6 +150,46 @@ fn authorized_test_app(
     .boxed_clone()
 }
 
+async fn upload_owned_file(
+    app: tower::util::BoxCloneService<
+        Request<Body>,
+        axum::response::Response,
+        std::convert::Infallible,
+    >,
+) -> ditto_core::error::Result<String> {
+    let boundary = "ditto_boundary";
+    let content_type = format!("multipart/form-data; boundary={boundary}");
+    let body = format!(
+        "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"purpose\"\r\n\
+\r\n\
+fine-tune\r\n\
+--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+hello world\r\n\
+--{boundary}--\r\n"
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/files")
+        .header("content-type", content_type)
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    Ok(parsed
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("file id")
+        .to_string())
+}
+
 #[tokio::test]
 async fn gateway_translation_files_upload() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
@@ -199,7 +239,10 @@ hello world\r\n\
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("file_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("file_ditto_7_primary_file_fake")
+    );
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("file"));
     assert_eq!(
         parsed.get("filename").and_then(|v| v.as_str()),
@@ -229,6 +272,7 @@ async fn gateway_translation_files_list() -> ditto_core::error::Result<()> {
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let uploaded_id = upload_owned_file(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
@@ -256,7 +300,7 @@ async fn gateway_translation_files_list() -> ditto_core::error::Result<()> {
     assert_eq!(data.len(), 1);
     assert_eq!(
         data[0].get("id").and_then(|v| v.as_str()),
-        Some("file_fake")
+        Some(uploaded_id.as_str())
     );
 
     Ok(())
@@ -276,10 +320,11 @@ async fn gateway_translation_files_retrieve() -> ditto_core::error::Result<()> {
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let uploaded_id = upload_owned_file(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/files/file_fake")
+        .uri(format!("/v1/files/{uploaded_id}"))
         .body(Body::empty())
         .unwrap();
 
@@ -295,7 +340,10 @@ async fn gateway_translation_files_retrieve() -> ditto_core::error::Result<()> {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("file_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some(uploaded_id.as_str())
+    );
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("file"));
 
     Ok(())
@@ -315,10 +363,11 @@ async fn gateway_translation_files_delete() -> ditto_core::error::Result<()> {
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let uploaded_id = upload_owned_file(app.clone()).await?;
 
     let request = Request::builder()
         .method("DELETE")
-        .uri("/v1/files/file_fake")
+        .uri(format!("/v1/files/{uploaded_id}"))
         .body(Body::empty())
         .unwrap();
 
@@ -334,7 +383,10 @@ async fn gateway_translation_files_delete() -> ditto_core::error::Result<()> {
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("file_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some(uploaded_id.as_str())
+    );
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("file"));
     assert_eq!(parsed.get("deleted").and_then(|v| v.as_bool()), Some(true));
 
@@ -355,10 +407,11 @@ async fn gateway_translation_files_content() -> ditto_core::error::Result<()> {
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let uploaded_id = upload_owned_file(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/files/file_fake/content")
+        .uri(format!("/v1/files/{uploaded_id}/content"))
         .body(Body::empty())
         .unwrap();
 
