@@ -127,6 +127,84 @@ async fn openai_compat_proxy_schema_validation_rejects_invalid_completions_reque
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_invalid_request_does_not_consume_rate_limit()
+-> ditto_core::error::Result<()> {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return Ok(());
+    }
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test");
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(r#"{"id":"ok"}"#);
+    });
+
+    let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+    key.guardrails.validate_schema = true;
+    key.limits.rpm = Some(1);
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend { backend: "primary".to_string(), weight: 1.0 }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let invalid_body = json!({
+        "messages": [{
+            "role": "user",
+            "content": "hi"
+        }]
+    });
+    let invalid_request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(invalid_body.to_string()))
+        .unwrap();
+    let invalid_response = app.clone().oneshot(invalid_request).await.unwrap();
+    assert_eq!(invalid_response.status(), StatusCode::BAD_REQUEST);
+
+    let valid_body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{
+            "role": "user",
+            "content": "hi"
+        }]
+    });
+    let valid_request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(valid_body.to_string()))
+        .unwrap();
+    let valid_response = app.oneshot(valid_request).await.unwrap();
+    assert_eq!(valid_response.status(), StatusCode::OK);
+    mock.assert_calls(1);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_schema_validation_rejects_invalid_moderations_request()
 -> ditto_core::error::Result<()> {
     if ditto_core::utils::test_support::should_skip_httpmock() {

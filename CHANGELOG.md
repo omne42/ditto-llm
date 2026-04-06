@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gateway: large multipart OpenAI-compatible proxy requests now preserve model-aware routing/passthrough auth semantics, and invalid requests no longer consume in-memory RPM/TPM before schema or guardrail validation.
 - Gateway/Security: fail-close proxy-compatible HTTP auth when no virtual keys are configured, restrict `include_tokens=true` and LiteLLM key secret export paths to secret-managing admin tokens, validate duplicate virtual-key tokens on control-plane mutations, and persist virtual keys as one-way `sha256:` hashes in state/store backends.
 - Gateway/Security: make MCP `/mcp*` and A2A `/a2a/*` endpoints fail-closed as well, add a dependency-aware `/ready` readiness probe (while keeping `/health` as liveness), and switch the optional Admin UI token cache from `localStorage` to `sessionStorage`.
 - Gateway: when built with `--features gateway-config-yaml`, allow `ditto-gateway` to read LiteLLM `proxy_config.yaml` / `proxy_server_config.yaml` and import them into a Ditto gateway config (via `model_list` + `general_settings.master_key`).
