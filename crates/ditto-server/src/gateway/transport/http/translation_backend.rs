@@ -1,6 +1,19 @@
 #[cfg(feature = "gateway-translation")]
 use super::*;
 
+#[cfg(feature = "gateway-translation")]
+fn openai_translation_provider_error(
+    err: ditto_core::error::DittoError,
+) -> (StatusCode, Json<OpenAiErrorResponse>) {
+    let (status, kind, code, message) = translation::map_provider_error_to_openai(err);
+    openai_error(
+        StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_GATEWAY),
+        kind,
+        code,
+        message,
+    )
+}
+
 // This file is intentionally split to keep each staged Rust file under the pre-commit size limit.
 // inlined from translation_backend/attempt.rs
 #[cfg(feature = "gateway-translation")]
@@ -79,9 +92,10 @@ pub(super) async fn attempt_translation_backend(
     let videos_content_id = translation::videos_content_id(path_and_query);
     let videos_remix_id = translation::videos_remix_id(path_and_query);
 
-    let Some(endpoint_descriptor) =
-        translation::translation_endpoint_descriptor(&parts.method, path_and_query)
-    else {
+    let Some(endpoint_descriptor) = translation::translation_endpoint_descriptor(
+        translation::TranslationHttpMethod::from_http_name(parts.method.as_str()),
+        path_and_query,
+    ) else {
         return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
             StatusCode::NOT_IMPLEMENTED,
             "invalid_request_error",
@@ -267,11 +281,7 @@ pub(super) async fn attempt_translation_backend(
             let listed = match translation_backend.list_batches(limit, after).await {
                 Ok(listed) => listed,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -360,11 +370,7 @@ pub(super) async fn attempt_translation_backend(
             let mut created = match translation_backend.create_batch(request).await {
                 Ok(created) => created,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -423,11 +429,7 @@ pub(super) async fn attempt_translation_backend(
             let mut retrieved = match translation_backend.retrieve_batch(&provider_batch_id).await {
                 Ok(retrieved) => retrieved,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -495,11 +497,7 @@ pub(super) async fn attempt_translation_backend(
             let mut cancelled = match translation_backend.cancel_batch(&provider_batch_id).await {
                 Ok(cancelled) => cancelled,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -583,11 +581,7 @@ pub(super) async fn attempt_translation_backend(
             let reranked = match translation_backend.rerank(&mapped_model, request).await {
                 Ok(reranked) => reranked,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -702,11 +696,7 @@ pub(super) async fn attempt_translation_backend(
             {
                 Ok(transcribed) => transcribed,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -800,11 +790,7 @@ pub(super) async fn attempt_translation_backend(
             {
                 Ok(spoken) => spoken,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -877,11 +863,7 @@ pub(super) async fn attempt_translation_backend(
             let embeddings = match translation_backend.embed(&mapped_model, texts).await {
                 Ok(embeddings) => embeddings,
                 Err(err) => {
-                    let (status, kind, code, message) =
-                        translation::map_provider_error_to_openai(err);
-                    break 'translation_backend_attempt Err(openai_error(
-                        status, kind, code, message,
-                    ));
+                    break 'translation_backend_attempt Err(openai_translation_provider_error(err));
                 }
             };
 
@@ -950,10 +932,8 @@ pub(super) async fn attempt_translation_backend(
                 let moderated = match translation_backend.moderate(request).await {
                     Ok(moderated) => moderated,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1036,10 +1016,8 @@ pub(super) async fn attempt_translation_backend(
                 let provider_file_id = match translation_backend.upload_file(request).await {
                     Ok(file_id) => file_id,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1094,10 +1072,8 @@ pub(super) async fn attempt_translation_backend(
                 let files = match translation_backend.list_files().await {
                     Ok(files) => files,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1171,10 +1147,8 @@ pub(super) async fn attempt_translation_backend(
                 {
                     Ok(content) => content,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1245,11 +1219,9 @@ pub(super) async fn attempt_translation_backend(
                     {
                         Ok(file) => file,
                         Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
+                            break 'translation_backend_attempt Err(
+                                openai_translation_provider_error(err),
+                            );
                         }
                     };
 
@@ -1263,11 +1235,9 @@ pub(super) async fn attempt_translation_backend(
                     {
                         Ok(deleted) => deleted,
                         Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
+                            break 'translation_backend_attempt Err(
+                                openai_translation_provider_error(err),
+                            );
                         }
                     };
 
@@ -1406,10 +1376,8 @@ pub(super) async fn attempt_translation_backend(
                 let mut generated = match translation_backend.create_video(request).await {
                     Ok(generated) => generated,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1494,10 +1462,8 @@ pub(super) async fn attempt_translation_backend(
                 let videos = match translation_backend.list_videos(request).await {
                     Ok(videos) => videos,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1583,10 +1549,8 @@ pub(super) async fn attempt_translation_backend(
                 {
                     Ok(content) => content,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1681,10 +1645,8 @@ pub(super) async fn attempt_translation_backend(
                 {
                     Ok(remixed) => remixed,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -1755,11 +1717,9 @@ pub(super) async fn attempt_translation_backend(
                         match translation_backend.retrieve_video(&provider_video_id).await {
                             Ok(video) => video,
                             Err(err) => {
-                                let (status, kind, code, message) =
-                                    translation::map_provider_error_to_openai(err);
-                                break 'translation_backend_attempt Err(openai_error(
-                                    status, kind, code, message,
-                                ));
+                                break 'translation_backend_attempt Err(
+                                    openai_translation_provider_error(err),
+                                );
                             }
                         };
 
@@ -1773,11 +1733,9 @@ pub(super) async fn attempt_translation_backend(
                         match translation_backend.delete_video(&provider_video_id).await {
                             Ok(deleted) => deleted,
                             Err(err) => {
-                                let (status, kind, code, message) =
-                                    translation::map_provider_error_to_openai(err);
-                                break 'translation_backend_attempt Err(openai_error(
-                                    status, kind, code, message,
-                                ));
+                                break 'translation_backend_attempt Err(
+                                    openai_translation_provider_error(err),
+                                );
                             }
                         };
 
@@ -2139,10 +2097,8 @@ pub(super) async fn attempt_translation_backend(
                 {
                     Ok(compacted) => compacted,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -2270,10 +2226,8 @@ pub(super) async fn attempt_translation_backend(
                 let edited = match translation_backend.edit_image(request).await {
                     Ok(edited) => edited,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -2343,10 +2297,8 @@ pub(super) async fn attempt_translation_backend(
                 let generated = match translation_backend.generate_image(request).await {
                     Ok(generated) => generated,
                     Err(err) => {
-                        let (status, kind, code, message) =
-                            translation::map_provider_error_to_openai(err);
-                        break 'translation_backend_attempt Err(openai_error(
-                            status, kind, code, message,
+                        break 'translation_backend_attempt Err(openai_translation_provider_error(
+                            err,
                         ));
                     }
                 };
@@ -2467,11 +2419,9 @@ pub(super) async fn attempt_translation_backend(
                     let stream = match translation_backend.model.stream(generate_request).await {
                         Ok(stream) => stream,
                         Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
+                            break 'translation_backend_attempt Err(
+                                openai_translation_provider_error(err),
+                            );
                         }
                     };
 
@@ -2534,11 +2484,9 @@ pub(super) async fn attempt_translation_backend(
                     {
                         Ok(generated) => generated,
                         Err(err) => {
-                            let (status, kind, code, message) =
-                                translation::map_provider_error_to_openai(err);
-                            break 'translation_backend_attempt Err(openai_error(
-                                status, kind, code, message,
-                            ));
+                            break 'translation_backend_attempt Err(
+                                openai_translation_provider_error(err),
+                            );
                         }
                     };
 

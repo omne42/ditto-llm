@@ -11,7 +11,6 @@ mod response_store;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
-use axum::http::StatusCode;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use futures_util::stream;
@@ -67,6 +66,9 @@ pub(crate) use response_store::{
 
 type ParseResult<T> = std::result::Result<T, String>;
 type IoResult<T> = std::result::Result<T, std::io::Error>;
+
+pub const HTTP_STATUS_BAD_REQUEST: u16 = 400;
+pub const HTTP_STATUS_BAD_GATEWAY: u16 = 502;
 
 const DEFAULT_TRANSLATION_MODEL_CACHE_MAX_ENTRIES: usize = 64;
 const MAX_TRANSLATION_MODEL_CACHE_KEY_BYTES: usize = 256;
@@ -2651,11 +2653,20 @@ pub fn provider_response_id_from_chunk(
 
 pub fn map_provider_error_to_openai(
     err: ditto_core::error::DittoError,
-) -> (StatusCode, &'static str, Option<&'static str>, String) {
+) -> (u16, &'static str, Option<&'static str>, String) {
     match err {
         ditto_core::error::DittoError::Api { status, body } => {
-            let status = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
-            (status, "api_error", Some("provider_error"), body)
+            let status = status.as_u16();
+            (
+                if status == 0 {
+                    HTTP_STATUS_BAD_GATEWAY
+                } else {
+                    status
+                },
+                "api_error",
+                Some("provider_error"),
+                body,
+            )
         }
         ditto_core::error::DittoError::InvalidResponse(message)
             if message
@@ -2663,20 +2674,20 @@ pub fn map_provider_error_to_openai(
                 .is_some_and(|catalog| catalog.code() == "error_detail.provider.model_missing") =>
         {
             (
-                StatusCode::BAD_REQUEST,
+                HTTP_STATUS_BAD_REQUEST,
                 "invalid_request_error",
                 None,
                 message.to_string(),
             )
         }
         ditto_core::error::DittoError::InvalidResponse(message) => (
-            StatusCode::NOT_IMPLEMENTED,
-            "invalid_request_error",
-            Some("unsupported_feature"),
+            HTTP_STATUS_BAD_GATEWAY,
+            "api_error",
+            Some("provider_error"),
             message.to_string(),
         ),
         other => (
-            StatusCode::BAD_GATEWAY,
+            HTTP_STATUS_BAD_GATEWAY,
             "api_error",
             Some("provider_error"),
             other.to_string(),
@@ -2689,7 +2700,7 @@ pub fn map_provider_error_to_openai(
 #[cfg(test)]
 mod error_mapping_tests {
     use super::map_provider_error_to_openai;
-    use axum::http::StatusCode;
+    use super::{HTTP_STATUS_BAD_GATEWAY, HTTP_STATUS_BAD_REQUEST};
 
     #[test]
     fn maps_provider_model_missing_as_bad_request() {
@@ -2699,7 +2710,7 @@ mod error_mapping_tests {
                 "set request.model or OpenAI::with_model",
             ));
 
-        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(status, HTTP_STATUS_BAD_REQUEST);
         assert_eq!(kind, "invalid_request_error");
         assert_eq!(code, None);
         assert!(message.contains("openai"));
@@ -2712,9 +2723,21 @@ mod error_mapping_tests {
             ditto_core::error::DittoError::provider_auth_missing("vertex"),
         );
 
-        assert_eq!(status, StatusCode::BAD_GATEWAY);
+        assert_eq!(status, HTTP_STATUS_BAD_GATEWAY);
         assert_eq!(kind, "api_error");
         assert_eq!(code, Some("provider_error"));
         assert!(message.contains("config error"));
+    }
+
+    #[test]
+    fn maps_invalid_provider_responses_as_bad_gateway_provider_errors() {
+        let (status, kind, code, message) = map_provider_error_to_openai(
+            ditto_core::error::DittoError::invalid_response_text("provider returned junk"),
+        );
+
+        assert_eq!(status, HTTP_STATUS_BAD_GATEWAY);
+        assert_eq!(kind, "api_error");
+        assert_eq!(code, Some("provider_error"));
+        assert!(message.contains("provider returned junk"));
     }
 }
