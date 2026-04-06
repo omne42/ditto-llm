@@ -66,6 +66,7 @@ struct ResolvedStreamingMultipartGatewayContext {
     local_token_budget_reserved: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn rollback_local_streaming_multipart_budgets(
     state: &GatewayHttpState,
     virtual_key_id: Option<&str>,
