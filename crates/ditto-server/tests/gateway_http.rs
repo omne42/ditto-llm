@@ -1217,6 +1217,65 @@ async fn gateway_http_admin_config_router_upsert_and_rollback() -> ditto_core::e
         Some(true)
     );
 
+    let invalid_router = serde_json::json!({
+        "router": {
+            "default_backends": [
+                {
+                    "backend": "missing-backend",
+                    "weight": 1.0
+                }
+            ],
+            "rules": []
+        }
+    });
+    let invalid_router_request = Request::builder()
+        .method("PUT")
+        .uri("/admin/config/router")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(invalid_router.to_string()))
+        .unwrap();
+    let invalid_router_response = app.clone().oneshot(invalid_router_request).await.unwrap();
+    assert_eq!(invalid_router_response.status(), StatusCode::BAD_REQUEST);
+    let invalid_router_body = to_bytes(invalid_router_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let invalid_router_json: serde_json::Value = serde_json::from_slice(&invalid_router_body)?;
+    assert!(
+        invalid_router_json["error"]["message"]
+            .as_str()
+            .is_some_and(|message| {
+                message.contains("router references unknown backends: missing-backend")
+            })
+    );
+
+    let current_after_invalid = Request::builder()
+        .method("GET")
+        .uri("/admin/config/version")
+        .header("x-admin-token", "admin-token")
+        .body(Body::empty())
+        .unwrap();
+    let current_after_invalid_response = app.clone().oneshot(current_after_invalid).await.unwrap();
+    assert_eq!(current_after_invalid_response.status(), StatusCode::OK);
+    let current_after_invalid_body =
+        to_bytes(current_after_invalid_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let current_after_invalid_json: serde_json::Value =
+        serde_json::from_slice(&current_after_invalid_body)?;
+    assert_eq!(
+        current_after_invalid_json
+            .get("version_id")
+            .and_then(|value| value.as_str()),
+        Some(bootstrap_version_id.as_str())
+    );
+    assert_eq!(
+        current_after_invalid_json
+            .get("router_rule_count")
+            .and_then(|value| value.as_u64()),
+        Some(0)
+    );
+
     let new_router_apply = serde_json::json!({
         "router": {
             "default_backends": [

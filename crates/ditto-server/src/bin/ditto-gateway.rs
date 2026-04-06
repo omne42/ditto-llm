@@ -1148,6 +1148,73 @@ router:
         assert!(err.to_string().contains("failed to parse json config"));
     }
 
+    #[test]
+    fn gateway_config_validate_rejects_unknown_router_backend_before_runtime() {
+        let config = ditto_server::gateway::GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![ditto_server::gateway::VirtualKeyConfig::new(
+                "key-1", "vk-1",
+            )],
+            router: ditto_server::gateway::RouterConfig {
+                default_backends: vec![ditto_server::gateway::RouteBackend {
+                    backend: "missing-backend".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let err = config
+            .validate()
+            .expect_err("startup validation must fail before serving traffic");
+        assert!(matches!(
+            err,
+            ditto_server::gateway::GatewayError::InvalidRequest { reason }
+                if reason.contains("router references unknown backends: missing-backend")
+        ));
+    }
+
+    #[test]
+    fn gateway_config_validate_accepts_provider_backends_as_router_targets() {
+        let config = ditto_server::gateway::GatewayConfig {
+            backends: vec![ditto_server::gateway::BackendConfig {
+                name: "primary".to_string(),
+                base_url: String::new(),
+                max_in_flight: None,
+                timeout_seconds: None,
+                headers: std::collections::BTreeMap::new(),
+                query_params: std::collections::BTreeMap::new(),
+                provider: Some("openai-compatible".to_string()),
+                provider_config: Some(ditto_core::config::ProviderConfig {
+                    base_url: Some("https://proxy.example/v1".to_string()),
+                    default_model: Some("gpt-4o-mini".to_string()),
+                    ..Default::default()
+                }),
+                model_map: std::collections::BTreeMap::new(),
+            }],
+            virtual_keys: vec![ditto_server::gateway::VirtualKeyConfig::new(
+                "key-1", "vk-1",
+            )],
+            router: ditto_server::gateway::RouterConfig {
+                default_backends: vec![ditto_server::gateway::RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        config
+            .validate()
+            .expect("startup validation should accept configured provider backends");
+    }
+
     #[cfg(feature = "gateway-config-yaml")]
     #[test]
     fn load_gateway_config_imports_litellm_yaml() {
