@@ -846,6 +846,10 @@ impl TranslationBackend {
                     model,
                     operation,
                     Some(capability),
+                ) && self.runtime.supports_runtime_capability(
+                    self.provider_name(),
+                    model,
+                    capability,
                 )
             });
         }
