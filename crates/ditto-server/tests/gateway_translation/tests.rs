@@ -572,6 +572,120 @@ async fn gateway_translation_responses_retrieve_and_delete_are_backend_scoped()
 }
 
 #[tokio::test]
+async fn gateway_translation_responses_retrieve_and_delete_are_virtual_key_scoped_even_on_same_backend()
+-> ditto_core::error::Result<()> {
+    let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");
+    primary_key.route = Some("primary".to_string());
+    let mut secondary_key =
+        ditto_server::gateway::VirtualKeyConfig::new("key-secondary", "vk-secondary");
+    secondary_key.route = Some("primary".to_string());
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![primary_key, secondary_key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-primary")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "input": "hi"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let response_id = serde_json::from_slice::<serde_json::Value>(&create_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("response id")
+        .to_string();
+    assert!(response_id.contains("_primary_"));
+
+    let secondary_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{response_id}"))
+        .header("authorization", "Bearer vk-secondary")
+        .body(Body::empty())
+        .unwrap();
+    let secondary_retrieve_response = app.clone().oneshot(secondary_retrieve).await.unwrap();
+    assert_eq!(secondary_retrieve_response.status(), StatusCode::NOT_FOUND);
+    let secondary_retrieve_body =
+        to_bytes(secondary_retrieve_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+    let secondary_retrieve_json: serde_json::Value =
+        serde_json::from_slice(&secondary_retrieve_body)?;
+    assert_eq!(
+        secondary_retrieve_json["error"]["message"].as_str(),
+        Some(
+            format!(
+                "response {response_id} not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key"
+            )
+            .as_str()
+        )
+    );
+
+    let secondary_delete = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{response_id}"))
+        .header("authorization", "Bearer vk-secondary")
+        .body(Body::empty())
+        .unwrap();
+    let secondary_delete_response = app.clone().oneshot(secondary_delete).await.unwrap();
+    assert_eq!(secondary_delete_response.status(), StatusCode::NOT_FOUND);
+
+    let owner_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{response_id}"))
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let owner_retrieve_response = app.clone().oneshot(owner_retrieve).await.unwrap();
+    assert_eq!(owner_retrieve_response.status(), StatusCode::OK);
+
+    let owner_delete = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{response_id}"))
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let owner_delete_response = app.oneshot(owner_delete).await.unwrap();
+    assert_eq!(owner_delete_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_retrieve_and_delete_are_virtual_key_scoped_within_backend()
 -> ditto_core::error::Result<()> {
     let mut first_key = ditto_server::gateway::VirtualKeyConfig::new("key-first", "vk-first");
