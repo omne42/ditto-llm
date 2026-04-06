@@ -1,14 +1,22 @@
+#[cfg(feature = "gateway-translation")]
 use std::sync::Arc;
 
+#[cfg(feature = "gateway-translation")]
 use async_trait::async_trait;
+#[cfg(feature = "gateway-translation")]
 use ditto_core::contracts::{ContentPart, FinishReason, GenerateRequest, GenerateResponse, Usage};
+#[cfg(feature = "gateway-translation")]
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
+#[cfg(feature = "gateway-translation")]
 use ditto_server::gateway::TranslationBackend;
+#[cfg(feature = "gateway-translation")]
 use futures_util::StreamExt;
 
+#[cfg(feature = "gateway-translation")]
 #[derive(Clone)]
 struct TranslationModelsStub;
 
+#[cfg(feature = "gateway-translation")]
 #[async_trait]
 impl LanguageModel for TranslationModelsStub {
     fn provider(&self) -> &str {
@@ -131,6 +139,7 @@ async fn openai_models_list_merges_across_backends() {
     mock_b.assert();
 }
 
+#[cfg(feature = "gateway-translation")]
 #[tokio::test]
 async fn openai_models_list_respects_translation_route() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
@@ -216,6 +225,7 @@ async fn openai_models_list_respects_translation_route() {
     proxy_mock.assert_calls(0);
 }
 
+#[cfg(feature = "gateway-translation")]
 #[tokio::test]
 async fn openai_models_list_excludes_translation_models_when_key_route_targets_proxy_backend() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
