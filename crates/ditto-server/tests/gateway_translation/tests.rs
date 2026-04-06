@@ -435,6 +435,143 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
 }
 
 #[tokio::test]
+async fn gateway_translation_responses_retrieve_and_delete_are_backend_scoped()
+-> ditto_core::error::Result<()> {
+    let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");
+    primary_key.route = Some("primary".to_string());
+    let mut secondary_key =
+        ditto_server::gateway::VirtualKeyConfig::new("key-secondary", "vk-secondary");
+    secondary_key.route = Some("secondary".to_string());
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![primary_key, secondary_key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+
+    let primary_create = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-primary")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+    let primary_response = app.clone().oneshot(primary_create).await.unwrap();
+    assert_eq!(primary_response.status(), StatusCode::OK);
+    let primary_body = to_bytes(primary_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let primary_id = serde_json::from_slice::<serde_json::Value>(&primary_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("primary response id")
+        .to_string();
+
+    let secondary_create = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-secondary")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+    let secondary_response = app.clone().oneshot(secondary_create).await.unwrap();
+    assert_eq!(secondary_response.status(), StatusCode::OK);
+    let secondary_body = to_bytes(secondary_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let secondary_id = serde_json::from_slice::<serde_json::Value>(&secondary_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("secondary response id")
+        .to_string();
+
+    assert_ne!(primary_id, secondary_id);
+    assert!(primary_id.contains("_primary_"));
+    assert!(secondary_id.contains("_secondary_"));
+
+    let primary_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{primary_id}"))
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let primary_retrieve_response = app.clone().oneshot(primary_retrieve).await.unwrap();
+    assert_eq!(primary_retrieve_response.status(), StatusCode::OK);
+    assert_eq!(
+        primary_retrieve_response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|value| value.to_str().ok()),
+        Some("primary")
+    );
+
+    let wrong_key_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{primary_id}"))
+        .header("authorization", "Bearer vk-secondary")
+        .body(Body::empty())
+        .unwrap();
+    let wrong_key_response = app.clone().oneshot(wrong_key_retrieve).await.unwrap();
+    assert_eq!(wrong_key_response.status(), StatusCode::NOT_FOUND);
+
+    let delete_primary = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{primary_id}"))
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+    let delete_primary_response = app.clone().oneshot(delete_primary).await.unwrap();
+    assert_eq!(delete_primary_response.status(), StatusCode::OK);
+
+    let secondary_retrieve = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{secondary_id}"))
+        .header("authorization", "Bearer vk-secondary")
+        .body(Body::empty())
+        .unwrap();
+    let secondary_retrieve_response = app.clone().oneshot(secondary_retrieve).await.unwrap();
+    assert_eq!(secondary_retrieve_response.status(), StatusCode::OK);
+    assert_eq!(
+        secondary_retrieve_response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|value| value.to_str().ok()),
+        Some("secondary")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();

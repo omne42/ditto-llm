@@ -225,9 +225,10 @@ impl GatewayConfig {
         self.observability.redaction.validate()?;
         self.observability.sampling.validate()?;
         validate_virtual_key_configs(&self.virtual_keys)?;
-        validate_virtual_key_routes(&self.virtual_keys, backend_names)?;
-        validate_guardrails_config(&self.virtual_keys, &self.router)?;
-        validate_router_against_backends(&self.router, backend_names)?;
+        for (idx, key) in self.virtual_keys.iter().enumerate() {
+            validate_virtual_key_payload(key, idx, backend_names)?;
+        }
+        validate_router_payload(&self.router, backend_names)?;
         Ok(())
     }
 }
@@ -725,42 +726,74 @@ pub(crate) fn validate_virtual_key_configs(
     Ok(())
 }
 
-pub(crate) fn validate_virtual_key_routes(
-    keys: &[VirtualKeyConfig],
+pub(crate) fn validate_virtual_key_payload(
+    key: &VirtualKeyConfig,
+    idx: usize,
     backend_names: &HashSet<String>,
 ) -> Result<(), super::GatewayError> {
-    for (idx, key) in keys.iter().enumerate() {
-        let Some(route) = key.route.as_deref() else {
-            continue;
-        };
-        let route = route.trim();
-        if route.is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: format!("virtual_keys[{idx}].route cannot be empty"),
-            });
+    let id = key.id.trim();
+    if id.is_empty() {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!("virtual_keys[{idx}].id cannot be empty"),
+        });
+    }
+
+    normalize_virtual_key_token_key(&key.token).ok_or_else(|| {
+        super::GatewayError::InvalidRequest {
+            reason: format!("virtual_keys[{idx}].token cannot be empty"),
         }
-        if !backend_names.contains(route) {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: format!("virtual_keys[{idx}].route references unknown backend: {route}"),
-            });
-        }
+    })?;
+
+    validate_virtual_key_route(key, idx, backend_names)?;
+    validate_virtual_key_guardrails(key, idx)?;
+    Ok(())
+}
+
+pub(crate) fn validate_router_payload(
+    router: &RouterConfig,
+    backend_names: &HashSet<String>,
+) -> Result<(), super::GatewayError> {
+    validate_router_against_backends(router, backend_names)?;
+    validate_router_guardrails(router)?;
+    Ok(())
+}
+
+pub(crate) fn validate_virtual_key_route(
+    key: &VirtualKeyConfig,
+    idx: usize,
+    backend_names: &HashSet<String>,
+) -> Result<(), super::GatewayError> {
+    let Some(route) = key.route.as_deref() else {
+        return Ok(());
+    };
+    let route = route.trim();
+    if route.is_empty() {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!("virtual_keys[{idx}].route cannot be empty"),
+        });
+    }
+    if !backend_names.contains(route) {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!("virtual_keys[{idx}].route references unknown backend: {route}"),
+        });
     }
 
     Ok(())
 }
 
-pub(crate) fn validate_guardrails_config(
-    keys: &[VirtualKeyConfig],
-    router: &RouterConfig,
+pub(crate) fn validate_virtual_key_guardrails(
+    key: &VirtualKeyConfig,
+    idx: usize,
 ) -> Result<(), super::GatewayError> {
-    for (idx, key) in keys.iter().enumerate() {
-        key.guardrails
-            .validate()
-            .map_err(|err| super::GatewayError::InvalidRequest {
-                reason: format!("virtual_keys[{idx}].guardrails invalid: {err}"),
-            })?;
-    }
+    key.guardrails
+        .validate()
+        .map_err(|err| super::GatewayError::InvalidRequest {
+            reason: format!("virtual_keys[{idx}].guardrails invalid: {err}"),
+        })?;
+    Ok(())
+}
 
+pub(crate) fn validate_router_guardrails(router: &RouterConfig) -> Result<(), super::GatewayError> {
     for (idx, rule) in router.rules.iter().enumerate() {
         let Some(guardrails) = rule.guardrails.as_ref() else {
             continue;

@@ -175,6 +175,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: make Responses fallback shim preserve safe multimodal and file payloads, and fail closed with an explicit error when `file_url` inputs cannot be represented as Chat Completions content.
+- Gateway MCP: reject invalid tool-call arguments JSON during auto-execution instead of coercing malformed payloads to `null`.
+- Gateway: reuse canonical backend-aware config validation for admin key upserts and `/admin/config/validate`, so virtual-key routes are checked consistently against the runtime backend snapshot.
+- Tests: add regression coverage for translation backend-scoped response IDs and shared-scope limit rollback paths already fixed on `main`.
 - Gateway translation: add regression coverage for translated `/v1/responses` contract edges so streamed creates remain queryable via `input_items`, deletable via the same gateway-scoped id, and bare upstream `response_id` values stay fail-closed.
 - Gateway: settle non-persistent control-plane token budgets to `input_tokens + response.output_tokens` on success instead of leaving the optimistic `max_output_tokens` reservation fully charged.
 - Build: realign `ditto-core` secret-resolution imports with the `secret-kit` module boundaries pinned in CI so current `cargo check`/`cargo clippy --all-features` gates compile again.

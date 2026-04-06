@@ -503,30 +503,22 @@ pub(super) async fn validate_config_payload(
             );
         }
 
-        if let Some(route) = key.route.as_deref() {
-            let route = route.trim();
-            if route.is_empty() {
-                push_validation_issue(
-                    &mut issues,
-                    "invalid_route",
-                    "virtual key route cannot be empty",
-                    Some(format!("/virtual_keys/{idx}/route")),
-                );
-            } else if !backend_names.contains(route) {
-                push_validation_issue(
-                    &mut issues,
-                    "invalid_route",
-                    format!("virtual key route references unknown backend `{route}`"),
-                    Some(format!("/virtual_keys/{idx}/route")),
-                );
-            }
+        if let Err(err) =
+            crate::gateway::config::validate_virtual_key_route(key, idx, &backend_names)
+        {
+            push_validation_issue(
+                &mut issues,
+                "invalid_route",
+                err.to_string(),
+                Some(format!("/virtual_keys/{idx}/route")),
+            );
         }
 
-        if let Err(err) = key.guardrails.validate() {
+        if let Err(err) = crate::gateway::config::validate_virtual_key_guardrails(key, idx) {
             push_validation_issue(
                 &mut issues,
                 "invalid_guardrails",
-                format!("invalid guardrails config: {err}"),
+                err.to_string(),
                 Some(format!("/virtual_keys/{idx}/guardrails")),
             );
         }
@@ -564,17 +556,13 @@ pub(super) async fn validate_config_payload(
             );
         }
 
-        for (idx, rule) in router.rules.iter().enumerate() {
-            if let Some(guardrails) = rule.guardrails.as_ref()
-                && let Err(err) = guardrails.validate()
-            {
-                push_validation_issue(
-                    &mut issues,
-                    "invalid_guardrails",
-                    format!("invalid route guardrails config: {err}"),
-                    Some(format!("/router/rules/{idx}/guardrails")),
-                );
-            }
+        if let Err(err) = crate::gateway::config::validate_router_guardrails(router) {
+            push_validation_issue(
+                &mut issues,
+                "invalid_guardrails",
+                err.to_string(),
+                Some("/router".to_string()),
+            );
         }
 
         let computed_router = router_sha256(router);
@@ -639,7 +627,7 @@ pub(super) async fn upsert_config_router(
         .into_iter()
         .collect::<std::collections::HashSet<_>>();
     let current_router = state.router_config_snapshot();
-    crate::gateway::config::validate_router_against_backends(&payload.router, &backend_names)
+    crate::gateway::config::validate_router_payload(&payload.router, &backend_names)
         .map_err(map_gateway_error)?;
     let router_changed = !router_config_equal(&current_router, &payload.router);
     let target_router_sha256 = router_sha256(&payload.router);

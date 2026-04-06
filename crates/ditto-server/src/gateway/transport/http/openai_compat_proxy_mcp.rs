@@ -215,6 +215,7 @@ async fn maybe_handle_mcp_tools_chat_completions_impl(
         let tool_calls = assistant_message
             .as_ref()
             .map(extract_chat_tool_calls_from_message)
+            .transpose()?
             .unwrap_or_default();
 
         if tool_calls.is_empty() {
@@ -380,6 +381,7 @@ async fn maybe_handle_mcp_tools_responses(
     let tool_calls = initial_json
         .as_ref()
         .map(extract_responses_tool_calls)
+        .transpose()?
         .unwrap_or_default();
 
     if tool_calls.is_empty() {
@@ -529,7 +531,7 @@ async fn maybe_handle_mcp_tools_responses(
             Err(_) => return Ok(Some(rebuild_response(status, headers, body))),
         };
 
-        let next_tool_calls = extract_responses_tool_calls(&value);
+        let next_tool_calls = extract_responses_tool_calls(&value)?;
         if next_tool_calls.is_empty() {
             return Ok(Some(rebuild_response(status, headers, body)));
         }
@@ -898,10 +900,26 @@ struct ResponsesToolCall {
     arguments: Value,
 }
 
-fn extract_responses_tool_calls(response: &Value) -> Vec<ResponsesToolCall> {
+fn parse_tool_call_arguments(arguments: Value, location: &str) -> OpenAiCompatProxyResult<Value> {
+    match arguments {
+        Value::String(text) => serde_json::from_str(&text).map_err(|err| {
+            openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("invalid_tool_arguments_json"),
+                format!("{location} returned invalid JSON tool arguments: {err}"),
+            )
+        }),
+        other => Ok(other),
+    }
+}
+
+fn extract_responses_tool_calls(
+    response: &Value,
+) -> OpenAiCompatProxyResult<Vec<ResponsesToolCall>> {
     let mut out = Vec::new();
     let Some(items) = response.get("output").and_then(|v| v.as_array()) else {
-        return out;
+        return Ok(out);
     };
 
     for (idx, item) in items.iter().enumerate() {
@@ -928,11 +946,10 @@ fn extract_responses_tool_calls(response: &Value) -> Vec<ResponsesToolCall> {
             continue;
         }
 
-        let arguments = obj.get("arguments").cloned().unwrap_or(Value::Null);
-        let arguments = match arguments {
-            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
-            other => other,
-        };
+        let arguments = parse_tool_call_arguments(
+            obj.get("arguments").cloned().unwrap_or(Value::Null),
+            &format!("responses output[{idx}].arguments"),
+        )?;
 
         out.push(ResponsesToolCall {
             call_id,
@@ -941,7 +958,7 @@ fn extract_responses_tool_calls(response: &Value) -> Vec<ResponsesToolCall> {
         });
     }
 
-    out
+    Ok(out)
 }
 
 async fn execute_mcp_tool_calls(
@@ -984,12 +1001,12 @@ async fn follow_up_via_chat_completions_to_responses(
     set_json_tools(&mut request_with_tools, params.tools_for_llm);
 
     let chat_req = responses_shim::responses_request_to_chat_completions(&request_with_tools)
-        .ok_or_else(|| {
+        .map_err(|err| {
             openai_error(
                 StatusCode::BAD_REQUEST,
                 "invalid_request_error",
                 Some("invalid_mcp_request"),
-                "missing input/messages",
+                format!("responses request cannot be mapped to chat/completions: {err}"),
             )
         })?;
     let mut chat_req = chat_req;
@@ -1142,6 +1159,7 @@ async fn follow_up_via_chat_completions_to_responses(
         let tool_calls = assistant_message
             .as_ref()
             .map(extract_chat_tool_calls_from_message)
+            .transpose()?
             .unwrap_or_default();
 
         if tool_calls.is_empty() {
@@ -1394,12 +1412,14 @@ fn extract_chat_assistant_message(response: &Value) -> Option<Value> {
         .cloned()
 }
 
-fn extract_chat_tool_calls_from_message(message: &Value) -> Vec<ChatToolCall> {
+fn extract_chat_tool_calls_from_message(
+    message: &Value,
+) -> OpenAiCompatProxyResult<Vec<ChatToolCall>> {
     let mut out = Vec::new();
 
     let tool_calls = message.get("tool_calls").and_then(|v| v.as_array());
     let Some(tool_calls) = tool_calls else {
-        return out;
+        return Ok(out);
     };
 
     for (idx, call) in tool_calls.iter().enumerate() {
@@ -1417,15 +1437,13 @@ fn extract_chat_tool_calls_from_message(message: &Value) -> Vec<ChatToolCall> {
         if name.trim().is_empty() {
             continue;
         }
-        let arguments_raw = call
-            .get("function")
-            .and_then(|v| v.get("arguments"))
-            .cloned()
-            .unwrap_or(Value::Null);
-        let arguments = match arguments_raw {
-            Value::String(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
-            other => other,
-        };
+        let arguments = parse_tool_call_arguments(
+            call.get("function")
+                .and_then(|v| v.get("arguments"))
+                .cloned()
+                .unwrap_or(Value::Null),
+            &format!("chat tool_calls[{idx}].function.arguments"),
+        )?;
         out.push(ChatToolCall {
             id,
             name,
@@ -1433,7 +1451,7 @@ fn extract_chat_tool_calls_from_message(message: &Value) -> Vec<ChatToolCall> {
         });
     }
 
-    out
+    Ok(out)
 }
 
 fn build_chat_assistant_message_from_tool_calls(tool_calls: &[ChatToolCall]) -> Option<Value> {

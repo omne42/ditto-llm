@@ -813,6 +813,85 @@ fn parse_openai_content_parts(value: &Value) -> Vec<ContentPart> {
                                     });
                                 }
                             }
+                            "input_image" => {
+                                let image_url = match obj.get("image_url") {
+                                    Some(Value::String(url)) => Some(url.trim().to_string()),
+                                    Some(Value::Object(image_url)) => image_url
+                                        .get("url")
+                                        .and_then(Value::as_str)
+                                        .map(str::trim)
+                                        .map(str::to_string),
+                                    _ => None,
+                                };
+                                if let Some(url) = image_url.filter(|url| !url.is_empty()) {
+                                    out.push(ContentPart::Image {
+                                        source: ImageSource::Url { url },
+                                    });
+                                }
+                            }
+                            "file" | "input_file" => {
+                                let file_obj =
+                                    obj.get("file").and_then(Value::as_object).unwrap_or(obj);
+                                if let Some(file_id) = file_obj
+                                    .get("file_id")
+                                    .and_then(Value::as_str)
+                                    .map(str::trim)
+                                    .filter(|file_id| !file_id.is_empty())
+                                {
+                                    out.push(ContentPart::File {
+                                        filename: file_obj
+                                            .get("filename")
+                                            .and_then(Value::as_str)
+                                            .map(str::trim)
+                                            .filter(|filename| !filename.is_empty())
+                                            .map(str::to_string),
+                                        media_type: "application/pdf".to_string(),
+                                        source: ditto_core::contracts::FileSource::FileId {
+                                            file_id: file_id.to_string(),
+                                        },
+                                    });
+                                    continue;
+                                }
+                                if let Some(file_data) = file_obj
+                                    .get("file_data")
+                                    .and_then(Value::as_str)
+                                    .map(str::trim)
+                                    .filter(|file_data| !file_data.is_empty())
+                                    && let Some((media_type, data)) =
+                                        parse_base64_data_url(file_data)
+                                {
+                                    out.push(ContentPart::File {
+                                        filename: file_obj
+                                            .get("filename")
+                                            .and_then(Value::as_str)
+                                            .map(str::trim)
+                                            .filter(|filename| !filename.is_empty())
+                                            .map(str::to_string),
+                                        media_type,
+                                        source: ditto_core::contracts::FileSource::Base64 { data },
+                                    });
+                                    continue;
+                                }
+                                if let Some(url) = file_obj
+                                    .get("file_url")
+                                    .and_then(Value::as_str)
+                                    .map(str::trim)
+                                    .filter(|url| !url.is_empty())
+                                {
+                                    out.push(ContentPart::File {
+                                        filename: file_obj
+                                            .get("filename")
+                                            .and_then(Value::as_str)
+                                            .map(str::trim)
+                                            .filter(|filename| !filename.is_empty())
+                                            .map(str::to_string),
+                                        media_type: "application/pdf".to_string(),
+                                        source: ditto_core::contracts::FileSource::Url {
+                                            url: url.to_string(),
+                                        },
+                                    });
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -823,6 +902,17 @@ fn parse_openai_content_parts(value: &Value) -> Vec<ContentPart> {
         }
         _ => Vec::new(),
     }
+}
+
+fn parse_base64_data_url(value: &str) -> Option<(String, String)> {
+    let rest = value.trim().strip_prefix("data:")?;
+    let (media_type, data) = rest.split_once(";base64,")?;
+    let media_type = media_type.trim();
+    let data = data.trim();
+    if media_type.is_empty() || data.is_empty() {
+        return None;
+    }
+    Some((media_type.to_string(), data.to_string()))
 }
 
 fn parse_openai_tools(value: &Value) -> ParseResult<Vec<Tool>> {
@@ -958,6 +1048,7 @@ fn parse_stop_sequences(value: &Value) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ditto_core::contracts::FileSource;
 
     #[test]
     fn videos_content_variant_from_path_decodes_percent_encoded_query_values() {
@@ -976,5 +1067,38 @@ mod tests {
         assert_eq!(request.limit, Some(4));
         assert_eq!(request.after.as_deref(), Some("cursor/next?page=2"));
         assert_eq!(request.order, Some(VideoListOrder::Desc));
+    }
+
+    #[test]
+    fn parse_openai_content_parts_accepts_file_objects() {
+        let parts = parse_openai_content_parts(&serde_json::json!([
+            {
+                "type": "file",
+                "file": {
+                    "file_id": "file_123"
+                }
+            },
+            {
+                "type": "input_file",
+                "file_data": "data:application/pdf;base64,AQID",
+                "filename": "doc.pdf"
+            }
+        ]));
+
+        assert!(matches!(
+            &parts[0],
+            ContentPart::File {
+                source: FileSource::FileId { file_id },
+                ..
+            } if file_id == "file_123"
+        ));
+        assert!(matches!(
+            &parts[1],
+            ContentPart::File {
+                filename: Some(filename),
+                media_type,
+                source: FileSource::Base64 { data },
+            } if filename == "doc.pdf" && media_type == "application/pdf" && data == "AQID"
+        ));
     }
 }

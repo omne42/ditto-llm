@@ -339,6 +339,163 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_when_require_approval_
 }
 
 #[tokio::test]
+async fn openai_compat_proxy_rejects_invalid_chat_tool_arguments_json_during_mcp_auto_exec() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+
+    let mcp_upstream = MockServer::start();
+    let mcp_list = mcp_upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {
+                        "tools": [{
+                            "name": "hello",
+                            "description": "hi",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "who": { "type": "string" }
+                                }
+                            }
+                        }]
+                    }
+                })
+                .to_string(),
+            );
+    });
+
+    let openai_upstream = MockServer::start();
+    let openai_initial = openai_upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .header("x-request-id", "req-1-mcp0")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "messages": [{"role":"user","content":"hi"}],
+                "stream": false,
+                "tools": [{
+                    "type": "function",
+                    "function": {
+                        "name": "hello",
+                        "description": "hi",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "who": { "type": "string" }
+                            }
+                        }
+                    }
+                }]
+            }));
+        then.status(200).header("content-type", "application/json").body(
+            json!({
+                "id": "step1",
+                "choices": [{
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": "call_0",
+                            "type": "function",
+                            "function": {
+                                "name": "hello",
+                                "arguments": "{\"who\":"
+                            }
+                        }]
+                    }
+                }]
+            })
+            .to_string(),
+        );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            openai_upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_server::gateway::http::McpServerState::new(
+            "local".to_string(),
+            mcp_upstream.url("/mcp"),
+        )
+        .expect("mcp state"),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_mcp_servers(mcp_servers);
+    let app = ditto_server::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "messages": [{"role":"user","content":"hi"}],
+        "tools": [{
+            "type": "mcp",
+            "server_url": "litellm_proxy/mcp/local",
+            "require_approval": "never"
+        }]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        payload.pointer("/error/code").and_then(|value| value.as_str()),
+        Some("invalid_tool_arguments_json")
+    );
+    assert!(
+        payload
+            .pointer("/error/message")
+            .and_then(|value| value.as_str())
+            .is_some_and(|message| message.contains("chat tool_calls[0].function.arguments")),
+        "{payload}"
+    );
+
+    mcp_list.assert();
+    openai_initial.assert();
+}
+
+#[tokio::test]
 async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions_for_responses() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
@@ -661,6 +818,155 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_when_req
     mcp_call.assert();
     openai_initial.assert();
     openai_follow_up.assert();
+}
+
+#[tokio::test]
+async fn openai_compat_proxy_rejects_invalid_responses_tool_arguments_json_during_mcp_auto_exec() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+
+    let mcp_upstream = MockServer::start();
+    let mcp_list = mcp_upstream.mock(|when, then| {
+        when.method(POST).path("/mcp").json_body(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {},
+        }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {
+                        "tools": [{
+                            "name": "hello",
+                            "description": "hi",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "who": { "type": "string" }
+                                }
+                            }
+                        }]
+                    }
+                })
+                .to_string(),
+            );
+    });
+
+    let openai_upstream = MockServer::start();
+    let openai_initial = openai_upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-test")
+            .header("x-request-id", "req-1-mcp0")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "input": "hi",
+                "stream": false,
+                "tools": [{
+                    "type": "function",
+                    "function": {
+                        "name": "hello",
+                        "description": "hi",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "who": { "type": "string" }
+                            }
+                        }
+                    }
+                }]
+            }));
+        then.status(200).header("content-type", "application/json").body(
+            json!({
+                "id": "resp-1",
+                "output": [{
+                    "type": "function_call",
+                    "call_id": "call_0",
+                    "name": "hello",
+                    "arguments": "{\"who\":"
+                }]
+            })
+            .to_string(),
+        );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            openai_upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+
+    let mut mcp_servers = HashMap::new();
+    mcp_servers.insert(
+        "local".to_string(),
+        ditto_server::gateway::http::McpServerState::new(
+            "local".to_string(),
+            mcp_upstream.url("/mcp"),
+        )
+        .expect("mcp state"),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_mcp_servers(mcp_servers);
+    let app = ditto_server::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi",
+        "tools": [{
+            "type": "mcp",
+            "server_url": "litellm_proxy/mcp/local",
+            "require_approval": "never"
+        }]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("x-request-id", "req-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        payload.pointer("/error/code").and_then(|value| value.as_str()),
+        Some("invalid_tool_arguments_json")
+    );
+    assert!(
+        payload
+            .pointer("/error/message")
+            .and_then(|value| value.as_str())
+            .is_some_and(|message| message.contains("responses output[0].arguments")),
+        "{payload}"
+    );
+
+    mcp_list.assert();
+    openai_initial.assert();
 }
 
 #[tokio::test]

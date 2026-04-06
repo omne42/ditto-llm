@@ -1035,3 +1035,160 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
     .await)
 }
 // end inline: streaming_multipart/handler.rs
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::collections::{BTreeMap, HashMap};
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use httpmock::Method::POST;
+    use httpmock::MockServer;
+
+    use crate::gateway::{
+        BackendConfig, Gateway, GatewayConfig, LimitsConfig, ProxyBackend, RouteBackend,
+        RouterConfig, VirtualKeyConfig,
+    };
+
+    fn backend_config(name: &str, base_url: String) -> BackendConfig {
+        BackendConfig {
+            name: name.to_string(),
+            base_url,
+            max_in_flight: None,
+            timeout_seconds: None,
+            headers: BTreeMap::new(),
+            query_params: BTreeMap::new(),
+            provider: None,
+            provider_config: None,
+            model_map: BTreeMap::new(),
+        }
+    }
+
+    fn multipart_audio_body(boundary: &str) -> Vec<u8> {
+        format!(
+            "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"model\"\r\n\r\n\
+whisper-1\r\n\
+--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n\
+Content-Type: audio/wav\r\n\r\n\
+{}\r\n\
+--{boundary}--\r\n",
+            "x".repeat(64)
+        )
+        .into_bytes()
+    }
+
+    fn build_key(
+        id: &str,
+        token: &str,
+        key_rpm: u32,
+        tenant_limits: LimitsConfig,
+    ) -> VirtualKeyConfig {
+        let mut key = VirtualKeyConfig::new(id, token);
+        key.tenant_id = Some("tenant-1".to_string());
+        key.limits = LimitsConfig {
+            rpm: Some(key_rpm),
+            tpm: None,
+        };
+        key.tenant_limits = Some(tenant_limits);
+        key
+    }
+
+    fn streaming_request(token: &str, boundary: &str, body: Vec<u8>) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/audio/transcriptions")
+            .header("authorization", format!("Bearer {token}"))
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .header("content-length", body.len().to_string())
+            .body(Body::from(body))
+            .expect("multipart request")
+    }
+
+    #[tokio::test]
+    async fn streaming_multipart_keeps_key_scope_unconsumed_when_tenant_scope_rejects() {
+        if ditto_core::utils::test_support::should_skip_httpmock() {
+            return;
+        }
+
+        let upstream = MockServer::start();
+        let upstream_mock = upstream.mock(|when, then| {
+            when.method(POST).path("/v1/audio/transcriptions");
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"text":"ok"}"#);
+        });
+
+        let tenant_limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+        let key_a = build_key("key-a", "vk-a", 1, tenant_limits.clone());
+        let key_b = build_key("key-b", "vk-b", 4, tenant_limits);
+
+        let config = GatewayConfig {
+            backends: vec![backend_config("primary", upstream.base_url())],
+            virtual_keys: vec![key_a.clone(), key_b],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let mut proxy_backends = HashMap::new();
+        proxy_backends.insert(
+            "primary".to_string(),
+            ProxyBackend::new(upstream.base_url()).expect("proxy backend"),
+        );
+
+        let state = GatewayHttpState::new(Gateway::new(config))
+            .with_proxy_backends(proxy_backends)
+            .with_proxy_max_body_bytes(16);
+        let minute = now_epoch_seconds() / 60;
+        let boundary = "ditto-boundary";
+
+        let first_request = streaming_request("vk-b", boundary, multipart_audio_body(boundary));
+        let (first_parts, first_body) = first_request.into_parts();
+        let first_response = handle_openai_compat_proxy_streaming_multipart(
+            state.clone(),
+            first_parts,
+            first_body,
+            "req-stream-prime".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect("first multipart request should pass");
+        assert_eq!(first_response.status(), StatusCode::OK);
+
+        let second_request = streaming_request("vk-a", boundary, multipart_audio_body(boundary));
+        let (second_parts, second_body) = second_request.into_parts();
+        let err = handle_openai_compat_proxy_streaming_multipart(
+            state.clone(),
+            second_parts,
+            second_body,
+            "req-stream-reject".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect_err("shared tenant limit should reject second multipart request");
+        assert_eq!(err.0, StatusCode::TOO_MANY_REQUESTS);
+
+        state
+            .check_and_consume_rate_limits([("key-a", &key_a.limits)], 1, minute)
+            .expect("key scope must remain available after multipart rejection");
+
+        upstream_mock.assert_calls(1);
+    }
+}
