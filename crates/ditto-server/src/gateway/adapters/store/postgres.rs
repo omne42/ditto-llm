@@ -1245,12 +1245,49 @@ impl PostgresStore {
         let now_ms_i64 = u64_to_i64(now_ms);
         let lease_until_ms = now_ms.saturating_add(lease_ttl_ms);
         let lease_until_ms_i64 = u64_to_i64(lease_until_ms);
+        let new_record = new_proxy_request_idempotency_record(
+            request_id.to_string(),
+            fingerprint.clone(),
+            fingerprint_key.to_string(),
+            owner_token.to_string(),
+            now_ms,
+            lease_until_ms,
+        );
         let mut tx = self.pool.begin().await?;
 
         sqlx::query("DELETE FROM proxy_request_idempotency WHERE expires_at_ms < $1")
             .bind(now_ms_i64)
             .execute(&mut *tx)
             .await?;
+
+        // Insert first so concurrent first-seen callers contend on the unique key instead
+        // of both observing "missing" and later overwriting each other into Acquired.
+        let inserted = sqlx::query(
+            "INSERT INTO proxy_request_idempotency (
+                 request_id,
+                 state,
+                 owner_token,
+                 lease_until_ms,
+                 expires_at_ms,
+                 updated_at_ms,
+                 record_json
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (request_id) DO NOTHING",
+        )
+        .bind(request_id)
+        .bind(proxy_request_idempotency_state_label(new_record.state))
+        .bind(owner_token)
+        .bind(lease_until_ms_i64)
+        .bind(lease_until_ms_i64)
+        .bind(now_ms_i64)
+        .bind(Json(&new_record))
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if inserted > 0 {
+            tx.commit().await?;
+            return Ok(ProxyRequestIdempotencyBeginOutcome::Acquired);
+        }
 
         let row = sqlx::query(
             "SELECT record_json
@@ -1263,34 +1300,63 @@ impl PostgresStore {
         .await?;
 
         if let Some(row) = row {
-            let Json(record): Json<ProxyRequestIdempotencyRecord> = row.try_get("record_json")?;
-            if record.fingerprint_key != fingerprint_key {
+            let Json(existing_record): Json<ProxyRequestIdempotencyRecord> =
+                row.try_get("record_json")?;
+            if existing_record.fingerprint_key != fingerprint_key {
                 tx.commit().await?;
-                return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict { record });
+                return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict {
+                    record: existing_record,
+                });
             }
-            if record.expires_at_ms >= now_ms {
-                match record.state {
+            if existing_record.expires_at_ms >= now_ms {
+                match existing_record.state {
                     ProxyRequestIdempotencyState::Completed => {
                         tx.commit().await?;
-                        return Ok(ProxyRequestIdempotencyBeginOutcome::Replay { record });
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::Replay {
+                            record: existing_record,
+                        });
                     }
                     ProxyRequestIdempotencyState::InFlight => {
                         tx.commit().await?;
-                        return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight { record });
+                        return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight {
+                            record: existing_record,
+                        });
                     }
                 }
             }
+
+            let updated = sqlx::query(
+                "UPDATE proxy_request_idempotency
+                 SET state = $2,
+                     owner_token = $3,
+                     lease_until_ms = $4,
+                     expires_at_ms = $5,
+                     updated_at_ms = $6,
+                     record_json = $7
+                 WHERE request_id = $1
+                   AND expires_at_ms < $6",
+            )
+            .bind(request_id)
+            .bind(proxy_request_idempotency_state_label(new_record.state))
+            .bind(owner_token)
+            .bind(lease_until_ms_i64)
+            .bind(lease_until_ms_i64)
+            .bind(now_ms_i64)
+            .bind(Json(&new_record))
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+
+            tx.commit().await?;
+            if updated > 0 {
+                return Ok(ProxyRequestIdempotencyBeginOutcome::Acquired);
+            }
+            return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight {
+                record: existing_record,
+            });
         }
 
-        let record = new_proxy_request_idempotency_record(
-            request_id.to_string(),
-            fingerprint.clone(),
-            fingerprint_key.to_string(),
-            owner_token.to_string(),
-            now_ms,
-            lease_until_ms,
-        );
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO proxy_request_idempotency (
                  request_id,
                  state,
@@ -1300,26 +1366,58 @@ impl PostgresStore {
                  updated_at_ms,
                  record_json
              ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (request_id) DO UPDATE SET
-                 state = EXCLUDED.state,
-                 owner_token = EXCLUDED.owner_token,
-                 lease_until_ms = EXCLUDED.lease_until_ms,
-                 expires_at_ms = EXCLUDED.expires_at_ms,
-                 updated_at_ms = EXCLUDED.updated_at_ms,
-                 record_json = EXCLUDED.record_json",
+             ON CONFLICT (request_id) DO NOTHING",
         )
         .bind(request_id)
-        .bind(proxy_request_idempotency_state_label(record.state))
+        .bind(proxy_request_idempotency_state_label(new_record.state))
         .bind(owner_token)
         .bind(lease_until_ms_i64)
         .bind(lease_until_ms_i64)
         .bind(now_ms_i64)
-        .bind(Json(&record))
+        .bind(Json(&new_record))
         .execute(&mut *tx)
-        .await?;
+        .await?
+        .rows_affected();
 
+        if inserted > 0 {
+            tx.commit().await?;
+            return Ok(ProxyRequestIdempotencyBeginOutcome::Acquired);
+        }
+
+        let row = sqlx::query(
+            "SELECT record_json
+             FROM proxy_request_idempotency
+             WHERE request_id = $1
+             FOR UPDATE",
+        )
+        .bind(request_id)
+        .fetch_optional(&mut *tx)
+        .await?;
         tx.commit().await?;
-        Ok(ProxyRequestIdempotencyBeginOutcome::Acquired)
+
+        let Some(row) = row else {
+            return Ok(ProxyRequestIdempotencyBeginOutcome::InFlight { record: new_record });
+        };
+        let Json(existing_record): Json<ProxyRequestIdempotencyRecord> =
+            row.try_get("record_json")?;
+        if existing_record.fingerprint_key != fingerprint_key {
+            return Ok(ProxyRequestIdempotencyBeginOutcome::Conflict {
+                record: existing_record,
+            });
+        }
+        if existing_record.expires_at_ms >= now_ms
+            && matches!(
+                existing_record.state,
+                ProxyRequestIdempotencyState::Completed
+            )
+        {
+            return Ok(ProxyRequestIdempotencyBeginOutcome::Replay {
+                record: existing_record,
+            });
+        }
+        Ok(ProxyRequestIdempotencyBeginOutcome::InFlight {
+            record: existing_record,
+        })
     }
 
     pub async fn get_proxy_request_idempotency(
