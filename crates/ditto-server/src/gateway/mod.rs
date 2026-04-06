@@ -526,6 +526,92 @@ mod tests {
     }
 
     #[test]
+    fn replace_router_config_drops_existing_scope_cache_entries() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.cache.enabled = true;
+        key.cache.ttl_seconds = Some(60);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", TestBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let prepared = match gateway
+            .prepare_handle_request(&request)
+            .expect("request should pass")
+        {
+            GatewayPreparedRequest::Call(prepared) => prepared,
+            GatewayPreparedRequest::Cached { .. } => panic!("expected backend call"),
+        };
+        let cache_key = prepared
+            .cache_key
+            .clone()
+            .expect("cache should be enabled for prepared call");
+
+        gateway.complete_handle_success(
+            &prepared,
+            &GatewayResponse {
+                content: "ok".to_string(),
+                output_tokens: 1,
+                backend: "primary".to_string(),
+                cached: false,
+            },
+        );
+
+        let now = gateway.clock.now_epoch_seconds();
+        assert!(
+            lock_unpoisoned(gateway.cache.as_ref())
+                .get("key-1", &cache_key, now)
+                .is_some()
+        );
+
+        gateway.replace_router_config(router::RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: vec![RouteRule {
+                model_prefix: "gpt-test".to_string(),
+                exact: true,
+                backend: "primary".to_string(),
+                backends: Vec::new(),
+                guardrails: None,
+            }],
+        });
+
+        assert!(
+            lock_unpoisoned(gateway.cache.as_ref())
+                .get("key-1", &cache_key, now)
+                .is_none()
+        );
+        assert!(matches!(
+            gateway.prepare_handle_request(&request),
+            Ok(GatewayPreparedRequest::Call(_))
+        ));
+    }
+
+    #[test]
     fn poisoned_mutex_panics_instead_of_recovering() {
         let mutex = Arc::new(Mutex::new(()));
         let poison = Arc::clone(&mutex);
@@ -769,6 +855,16 @@ impl GatewayMutation<'_> {
 
     pub(crate) fn replace_router_config(&mut self, router: RouterConfig) {
         self.control_plane.replace_router_config(router);
+        let mut cache = lock_unpoisoned(self.cache);
+        for scope in self
+            .control_plane
+            .config
+            .virtual_keys
+            .iter()
+            .map(|key| key.id.as_str())
+        {
+            cache.remove_scope(scope);
+        }
     }
 
     pub(crate) fn upsert_virtual_key(&mut self, key: VirtualKeyConfig) -> bool {
