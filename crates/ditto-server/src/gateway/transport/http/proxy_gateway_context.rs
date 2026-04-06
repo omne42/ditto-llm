@@ -65,6 +65,23 @@ struct ResolvedGatewayContextLocals {
     local_cost_budget_reserved: bool,
 }
 
+fn model_from_request_path(path_and_query: &str) -> Option<&str> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query)
+        .trim_end_matches('/');
+    let model = path.strip_prefix("/v1/models/")?.trim();
+    if model.is_empty() { None } else { Some(model) }
+}
+
+fn effective_request_model<'a>(path_and_query: &'a str, model: Option<&'a str>) -> Option<&'a str> {
+    model
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .or_else(|| model_from_request_path(path_and_query))
+}
+
 pub(super) async fn resolve_openai_compat_proxy_gateway_preamble(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
@@ -136,6 +153,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
     } = request;
     #[cfg(not(feature = "gateway-costing"))]
     let _ = (&service_tier, max_output_tokens);
+    let routed_model = effective_request_model(path_and_query, model.as_deref());
 
     let gateway_preamble = resolve_openai_compat_proxy_gateway_preamble(state, parts).await?;
     let strip_authorization = gateway_preamble.strip_authorization;
@@ -266,9 +284,9 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 ));
             }
 
-            let guardrails = state.guardrails_for_model(model.as_deref(), key);
+            let guardrails = state.guardrails_for_model(routed_model, key);
 
-            if let Some(model_id) = model.as_deref()
+            if let Some(model_id) = routed_model
                 && let Some(reason) = guardrails.check_model(model_id)
             {
                 state.record_guardrail_blocked();
@@ -411,7 +429,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
 
             let backends = state
                 .select_backends_for_model_seeded(
-                    model.as_deref().unwrap_or_default(),
+                    routed_model.unwrap_or_default(),
                     Some(key),
                     Some(request_id),
                 )
@@ -431,7 +449,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                                     "pricing not configured for cost budgets",
                                 ));
                             }
-                            if model.as_deref().is_none() {
+                            if routed_model.is_none() {
                                 return Err(openai_error(
                                     StatusCode::BAD_REQUEST,
                                     "invalid_request_error",
@@ -442,7 +460,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
 
                             estimate_charge_cost_usd_micros(
                                 state,
-                                model.as_deref(),
+                                routed_model,
                                 input_tokens_estimate,
                                 max_output_tokens,
                                 service_tier.as_deref(),
@@ -461,7 +479,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 } else {
                     estimate_charge_cost_usd_micros(
                         state,
-                        model.as_deref(),
+                        routed_model,
                         input_tokens_estimate,
                         max_output_tokens,
                         service_tier.as_deref(),
@@ -651,7 +669,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         } else {
             let backends = state
                 .select_backends_for_model_seeded(
-                    model.as_deref().unwrap_or_default(),
+                    routed_model.unwrap_or_default(),
                     None,
                     Some(request_id),
                 )
@@ -660,7 +678,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(feature = "gateway-costing")]
             let charge_cost_usd_micros = estimate_charge_cost_usd_micros(
                 state,
-                model.as_deref(),
+                routed_model,
                 input_tokens_estimate,
                 max_output_tokens,
                 service_tier.as_deref(),

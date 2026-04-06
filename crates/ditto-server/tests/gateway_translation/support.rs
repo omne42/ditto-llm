@@ -1293,6 +1293,89 @@ async fn gateway_translation_models_retrieve_unknown() -> ditto_core::error::Res
 }
 
 #[tokio::test]
+async fn gateway_translation_models_retrieve_uses_model_path_for_routing()
+-> ditto_core::error::Result<()> {
+    use std::collections::BTreeMap;
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![ditto_server::gateway::VirtualKeyConfig::new(
+            "key-1",
+            "vk-1",
+        )],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: vec![ditto_server::gateway::RouteRule {
+                model_prefix: "secondary/".to_string(),
+                exact: false,
+                backend: String::new(),
+                backends: vec![RouteBackend {
+                    backend: "secondary".to_string(),
+                    weight: 1.0,
+                }],
+                guardrails: None,
+            }],
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+
+    let mut primary_map = BTreeMap::new();
+    primary_map.insert("gpt-4o-mini".to_string(), "primary-model".to_string());
+    let mut secondary_map = BTreeMap::new();
+    secondary_map.insert("claude-3.5-sonnet".to_string(), "secondary-model".to_string());
+
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)).with_model_map(primary_map),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)).with_model_map(secondary_map),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/v1/models/secondary/secondary-model")
+        .header("authorization", "Bearer vk-1")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("secondary")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("secondary/secondary-model")
+    );
+    assert_eq!(
+        parsed.get("owned_by").and_then(|v| v.as_str()),
+        Some("secondary")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
