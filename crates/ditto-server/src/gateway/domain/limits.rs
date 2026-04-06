@@ -214,12 +214,18 @@ mod tests {
             Some(1)
         );
 
+        limiter
+            .check_and_consume("user:u1", &tight, 1, 42)
+            .expect("prime tight scope");
         let err = limiter.check_and_consume_many([("key", &limited), ("user:u1", &tight)], 1, 42);
         assert!(matches!(err, Err(GatewayError::RateLimited { .. })));
         assert_eq!(
             limiter.usage.get("key").map(|usage| usage.requests),
             Some(1)
         );
-        assert!(!limiter.usage.contains_key("user:u1"));
+        assert_eq!(
+            limiter.usage.get("user:u1").map(|usage| usage.requests),
+            Some(1)
+        );
     }
 }

@@ -63,6 +63,31 @@ struct ResolvedStreamingMultipartGatewayContext {
     user_limits_scope: Option<(String, super::LimitsConfig)>,
     backend_candidates: Vec<String>,
     strip_authorization: bool,
+    local_token_budget_reserved: bool,
+}
+
+fn rollback_local_streaming_multipart_budgets(
+    state: &GatewayHttpState,
+    virtual_key_id: Option<&str>,
+    budget: Option<&super::BudgetConfig>,
+    tenant_budget_scope: &Option<(String, super::BudgetConfig)>,
+    project_budget_scope: &Option<(String, super::BudgetConfig)>,
+    user_budget_scope: &Option<(String, super::BudgetConfig)>,
+    charge_tokens: u32,
+    #[cfg(feature = "gateway-costing")] charge_cost_usd_micros: Option<u64>,
+) {
+    let budget_scopes = collect_budget_scopes(
+        virtual_key_id,
+        budget,
+        tenant_budget_scope,
+        project_budget_scope,
+        user_budget_scope,
+    );
+    state.rollback_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens));
+    #[cfg(feature = "gateway-costing")]
+    if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+        state.rollback_budget_cost(budget_scopes, charge_cost_usd_micros);
+    }
 }
 
 pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
@@ -137,6 +162,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         user_limits_scope,
         backend_candidates,
         strip_authorization,
+        local_token_budget_reserved,
     } = {
         state.record_request();
 
@@ -314,28 +340,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             }
         }
 
+        let budget = key.as_ref().map(|key| key.budget.clone());
+        let mut local_token_budget_reserved = false;
         if !use_persistent_budget {
-            if let (Some(key), Some(budget)) = (key.as_ref(), key.as_ref().map(|key| &key.budget))
+            let budget_scopes = collect_budget_scopes(
+                virtual_key_id.as_deref(),
+                budget.as_ref(),
+                &tenant_budget_scope,
+                &project_budget_scope,
+                &user_budget_scope,
+            );
+            if !budget_scopes.is_empty()
                 && let Err(err) =
-                    state.can_spend_budget_tokens(&key.id, budget, u64::from(charge_tokens))
-            {
-                state.record_budget_exceeded();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(Some(&key.id), None, &metrics_path);
-                    metrics.record_proxy_budget_exceeded(Some(&key.id), None, &metrics_path);
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
-            }
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref()
-                && let Err(err) =
-                    state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
+                    state.reserve_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens))
             {
                 state.record_budget_exceeded();
                 let mapped = map_openai_gateway_error(err);
@@ -355,53 +372,9 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                 }
                 return Err(mapped);
             }
-            if let Some((scope, budget)) = project_budget_scope.as_ref()
-                && let Err(err) =
-                    state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
-            {
-                state.record_budget_exceeded();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
-                    metrics.record_proxy_budget_exceeded(
-                        virtual_key_id.as_deref(),
-                        None,
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
-            }
-            if let Some((scope, budget)) = user_budget_scope.as_ref()
-                && let Err(err) =
-                    state.can_spend_budget_tokens(scope, budget, u64::from(charge_tokens))
-            {
-                state.record_budget_exceeded();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
-                    metrics.record_proxy_budget_exceeded(
-                        virtual_key_id.as_deref(),
-                        None,
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
-            }
+            local_token_budget_reserved = !budget_scopes.is_empty();
         }
 
-        let budget = key.as_ref().map(|key| key.budget.clone());
         let backends = state
             .select_backends_for_model_seeded("", key.as_ref(), Some(&request_id))
             .map_err(map_openai_gateway_error)?;
@@ -418,6 +391,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             user_limits_scope,
             backend_candidates: backends,
             strip_authorization,
+            local_token_budget_reserved,
         }
     };
 
@@ -630,6 +604,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             ),
         ))]
         rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+        if local_token_budget_reserved {
+            rollback_local_streaming_multipart_budgets(
+                &state,
+                virtual_key_id.as_deref(),
+                budget.as_ref(),
+                &tenant_budget_scope,
+                &project_budget_scope,
+                &user_budget_scope,
+                charge_tokens,
+                #[cfg(feature = "gateway-costing")]
+                charge_cost_usd_micros,
+            );
+        }
         let err = openai_error(
             StatusCode::BAD_GATEWAY,
             "api_error",
@@ -670,6 +657,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             ),
         ))]
         rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+        if local_token_budget_reserved {
+            rollback_local_streaming_multipart_budgets(
+                &state,
+                virtual_key_id.as_deref(),
+                budget.as_ref(),
+                &tenant_budget_scope,
+                &project_budget_scope,
+                &user_budget_scope,
+                charge_tokens,
+                #[cfg(feature = "gateway-costing")]
+                charge_cost_usd_micros,
+            );
+        }
         let err = openai_error(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
@@ -707,6 +707,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                 ),
             ))]
             rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+            if local_token_budget_reserved {
+                rollback_local_streaming_multipart_budgets(
+                    &state,
+                    virtual_key_id.as_deref(),
+                    budget.as_ref(),
+                    &tenant_budget_scope,
+                    &project_budget_scope,
+                    &user_budget_scope,
+                    charge_tokens,
+                    #[cfg(feature = "gateway-costing")]
+                    charge_cost_usd_micros,
+                );
+            }
             let err = openai_error(
                 StatusCode::BAD_GATEWAY,
                 "api_error",
@@ -812,6 +825,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                 ),
             ))]
             rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+            if local_token_budget_reserved {
+                rollback_local_streaming_multipart_budgets(
+                    &state,
+                    virtual_key_id.as_deref(),
+                    budget.as_ref(),
+                    &tenant_budget_scope,
+                    &project_budget_scope,
+                    &user_budget_scope,
+                    charge_tokens,
+                    #[cfg(feature = "gateway-costing")]
+                    charge_cost_usd_micros,
+                );
+            }
             return Err(mapped);
         }
     };
@@ -864,33 +890,35 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
     }
 
     if token_budget_reservation_ids.is_empty()
-        && spend_tokens
         && !use_persistent_budget
-        && let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone())
+        && local_token_budget_reserved
     {
-        state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
-        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-            state.spend_budget_tokens(scope, budget, spent_tokens);
-        }
-        if let Some((scope, budget)) = project_budget_scope.as_ref() {
-            state.spend_budget_tokens(scope, budget, spent_tokens);
-        }
-        if let Some((scope, budget)) = user_budget_scope.as_ref() {
-            state.spend_budget_tokens(scope, budget, spent_tokens);
+        let budget_scopes = collect_budget_scopes(
+            virtual_key_id.as_deref(),
+            budget.as_ref(),
+            &tenant_budget_scope,
+            &project_budget_scope,
+            &user_budget_scope,
+        );
+        if spend_tokens {
+            state.settle_budget_tokens(
+                budget_scopes.clone(),
+                u64::from(charge_tokens),
+                spent_tokens,
+            );
+        } else {
+            state.rollback_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens));
         }
 
         #[cfg(feature = "gateway-costing")]
-        if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-            state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-            }
-            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-            }
-            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-            }
+        if spend_tokens {
+            state.settle_budget_cost(
+                budget_scopes,
+                charge_cost_usd_micros.unwrap_or_default(),
+                spent_cost_usd_micros,
+            );
+        } else {
+            state.rollback_budget_cost(budget_scopes, charge_cost_usd_micros.unwrap_or_default());
         }
     }
 

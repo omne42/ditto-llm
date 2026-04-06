@@ -33,6 +33,9 @@ pub(super) async fn attempt_translation_backend(
     let tenant_budget_scope = params.tenant_budget_scope;
     let project_budget_scope = params.project_budget_scope;
     let user_budget_scope = params.user_budget_scope;
+    let local_token_budget_reserved = params.local_token_budget_reserved;
+    #[cfg(feature = "gateway-costing")]
+    let local_cost_budget_reserved = params.local_cost_budget_reserved;
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
 
     #[cfg(any(
@@ -2701,35 +2704,37 @@ pub(super) async fn attempt_translation_backend(
                 spent_tokens,
             )
             .await;
-        } else if spend_tokens {
-            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
+        } else if local_token_budget_reserved {
+            let budget_scopes = collect_budget_scopes(
+                virtual_key_id.as_deref(),
+                budget.as_ref(),
+                tenant_budget_scope,
+                project_budget_scope,
+                user_budget_scope,
+            );
+            if spend_tokens {
+                state.settle_budget_tokens(
+                    budget_scopes.clone(),
+                    u64::from(charge_tokens),
+                    spent_tokens,
+                );
+            } else {
+                state.rollback_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens));
             }
 
             #[cfg(feature = "gateway-costing")]
-            if !use_persistent_budget && let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
-                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+            if local_cost_budget_reserved {
+                if spend_tokens {
+                    state.settle_budget_cost(
+                        budget_scopes,
+                        charge_cost_usd_micros.unwrap_or_default(),
+                        spent_cost_usd_micros,
+                    );
+                } else {
+                    state.rollback_budget_cost(
+                        budget_scopes,
+                        charge_cost_usd_micros.unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -2739,35 +2744,37 @@ pub(super) async fn attempt_translation_backend(
             feature = "gateway-store-mysql",
             feature = "gateway-store-redis"
         )))]
-        if spend_tokens {
-            if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
-            }
-            if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                state.spend_budget_tokens(scope, budget, spent_tokens);
+        if local_token_budget_reserved {
+            let budget_scopes = collect_budget_scopes(
+                virtual_key_id.as_deref(),
+                budget.as_ref(),
+                tenant_budget_scope,
+                project_budget_scope,
+                user_budget_scope,
+            );
+            if spend_tokens {
+                state.settle_budget_tokens(
+                    budget_scopes.clone(),
+                    u64::from(charge_tokens),
+                    spent_tokens,
+                );
+            } else {
+                state.rollback_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens));
             }
 
             #[cfg(feature = "gateway-costing")]
-            if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                if let (Some(virtual_key_id), Some(budget)) =
-                    (virtual_key_id.clone(), budget.clone())
-                {
-                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                }
-                if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+            if local_cost_budget_reserved {
+                if spend_tokens {
+                    state.settle_budget_cost(
+                        budget_scopes,
+                        charge_cost_usd_micros.unwrap_or_default(),
+                        spent_cost_usd_micros,
+                    );
+                } else {
+                    state.rollback_budget_cost(
+                        budget_scopes,
+                        charge_cost_usd_micros.unwrap_or_default(),
+                    );
                 }
             }
         }
