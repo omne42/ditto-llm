@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Build: switch `ditto-core` and gateway secret-resolution imports to `secret-kit`'s public re-exports so current `cargo check`/`cargo clippy --all-features` gates compile again.
 - Build: restore workspace `--all-features` compatibility after `omne-fs`/`secret-kit`/`i18n-runtime-kit` API drift by updating runtime resource bootstrapping, secret resolution call sites, and gateway-translation imports to the current crate boundaries.
 - Gateway: make control-plane validation and rollback fail closed by centralizing route/guardrails/backend checks, restoring runtime rate-limit/cache/budget state on persistence failures, snapshotting runtime-injected backends for admin/config validation, and adding regression coverage for the restored runtime state.
 - Gateway translation: namespace model and stored-response identity by backend, scope `/v1/models*` to the selected virtual-key route, fail closed request-id replay when a streamed response cannot be snapshotted for dedup, and align translation integration coverage with fail-closed virtual-key auth.
