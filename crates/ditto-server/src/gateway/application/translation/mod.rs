@@ -1484,6 +1484,10 @@ pub fn responses_input_items_from_value(input: &Value) -> ParseResult<Vec<Value>
     request_shaping::responses_input_items_from_value(input)
 }
 
+pub(crate) fn decoded_query_pairs(query: &str) -> Vec<(String, String)> {
+    request_shaping::decoded_query_pairs(query)
+}
+
 pub fn videos_create_request_to_request(request: &Value) -> ParseResult<VideoGenerationRequest> {
     request_shaping::videos_create_request_to_request(request)
 }

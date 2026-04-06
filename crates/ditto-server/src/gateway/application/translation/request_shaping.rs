@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use serde_json::{Map, Value};
+use url::form_urlencoded;
 
 use crate::gateway::multipart::{MultipartPart, parse_multipart_form};
 use ditto_core::contracts::{
@@ -14,6 +15,19 @@ use ditto_core::types::{
 
 use super::ParseResult;
 use super::openai_provider_options::apply_openai_request_provider_options;
+
+pub(crate) fn decoded_query_pairs(query: &str) -> Vec<(String, String)> {
+    form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect()
+}
+
+fn decoded_query_pairs_from_path(path_and_query: &str) -> Vec<(String, String)> {
+    path_and_query
+        .split_once('?')
+        .map(|(_, query)| decoded_query_pairs(query))
+        .unwrap_or_default()
+}
 
 pub(super) fn multipart_extract_text_field(
     content_type: &str,
@@ -605,22 +619,13 @@ pub(super) fn videos_remix_request_to_request(request: &Value) -> ParseResult<Vi
 pub(super) fn videos_content_variant_from_path(
     path_and_query: &str,
 ) -> ParseResult<Option<VideoContentVariant>> {
-    let query = match path_and_query.split_once('?') {
-        Some((_, query)) => query,
-        None => return Ok(None),
-    };
-
     let mut variant = None;
-    for pair in query.split('&') {
-        if pair.is_empty() {
-            continue;
-        }
-        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+    for (key, value) in decoded_query_pairs_from_path(path_and_query) {
         if key != "variant" || value.is_empty() {
             continue;
         }
 
-        variant = Some(match value {
+        variant = Some(match value.as_str() {
             "video" => VideoContentVariant::Video,
             "thumbnail" => VideoContentVariant::Thumbnail,
             "spritesheet" => VideoContentVariant::Spritesheet,
@@ -636,20 +641,9 @@ pub(super) fn videos_content_variant_from_path(
 }
 
 pub(super) fn videos_list_request_from_path(path_and_query: &str) -> ParseResult<VideoListRequest> {
-    let query = match path_and_query.split_once('?') {
-        Some((_, query)) => query,
-        None => {
-            return Ok(VideoListRequest::default());
-        }
-    };
-
     let mut request = VideoListRequest::default();
-    for pair in query.split('&') {
-        if pair.is_empty() {
-            continue;
-        }
-        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-        match key {
+    for (key, value) in decoded_query_pairs_from_path(path_and_query) {
+        match key.as_str() {
             "limit" if !value.is_empty() => {
                 request.limit = Some(
                     value
@@ -661,7 +655,7 @@ pub(super) fn videos_list_request_from_path(path_and_query: &str) -> ParseResult
                 request.after = Some(value.to_string());
             }
             "order" if !value.is_empty() => {
-                request.order = Some(match value {
+                request.order = Some(match value.as_str() {
                     "asc" => VideoListOrder::Asc,
                     "desc" => VideoListOrder::Desc,
                     _ => {
@@ -676,6 +670,30 @@ pub(super) fn videos_list_request_from_path(path_and_query: &str) -> ParseResult
     }
 
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn videos_content_variant_from_path_decodes_percent_encoded_query_values() {
+        let variant =
+            videos_content_variant_from_path("/v1/videos/video_1/content?variant=sprite%73heet")
+                .expect("variant parse");
+        assert_eq!(variant, Some(VideoContentVariant::Spritesheet));
+    }
+
+    #[test]
+    fn videos_list_request_from_path_decodes_percent_encoded_cursor() {
+        let request = videos_list_request_from_path(
+            "/v1/videos?after=cursor%2Fnext%3Fpage%3D2&order=desc&limit=4",
+        )
+        .expect("videos list request");
+        assert_eq!(request.limit, Some(4));
+        assert_eq!(request.after.as_deref(), Some("cursor/next?page=2"));
+        assert_eq!(request.order, Some(VideoListOrder::Desc));
+    }
 }
 
 fn parse_image_response_format(value: &str) -> ParseResult<ImageResponseFormat> {
