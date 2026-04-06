@@ -301,6 +301,20 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
 
+    fn expect_invalid_response_catalog<'a>(
+        err: &'a DittoError,
+        expected_code: &str,
+    ) -> structured_text_kit::CatalogTextRef<'a> {
+        let DittoError::InvalidResponse(message) = err else {
+            panic!("expected invalid response, got {err}");
+        };
+        let text = message
+            .as_catalog()
+            .expect("expected catalog-backed invalid response");
+        assert_eq!(text.code(), expected_code);
+        text
+    }
+
     #[cfg(feature = "provider-openai")]
     #[test]
     fn builder_assembly_accepts_response_only_openai_model() {
@@ -364,10 +378,11 @@ mod tests {
         ))
         .expect_err("unknown custom provider should fail closed");
 
-        assert!(
-            err.to_string()
-                .contains("unsupported provider backend: yunwu-openai")
+        let text = expect_invalid_response_catalog(
+            &err,
+            "error_detail.builder.unsupported_provider_backend",
         );
+        assert_eq!(text.text_arg("provider"), Some("yunwu-openai"));
     }
 
     #[cfg(feature = "provider-openai-compatible")]

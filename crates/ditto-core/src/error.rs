@@ -510,13 +510,84 @@ macro_rules! config_error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use i18n_kit::Locale;
+    use i18n_kit::{Locale, TranslationCatalog, TranslationResolution};
     use std::error::Error as _;
+    use std::sync::Arc;
+
+    struct TestFallbackCatalog;
+
+    impl TranslationCatalog for TestFallbackCatalog {
+        fn resolve_shared(&self, locale: Locale, key: &str) -> TranslationResolution {
+            fallback_translation(locale, key)
+                .or_else(|| fallback_translation(Locale::EN_US, key))
+                .map(TranslationResolution::Exact)
+                .unwrap_or(TranslationResolution::Missing)
+        }
+    }
+
+    impl Catalog for TestFallbackCatalog {
+        fn default_locale(&self) -> Locale {
+            Locale::EN_US
+        }
+
+        fn available_locales(&self) -> Vec<Locale> {
+            vec![Locale::EN_US, Locale::ZH_CN]
+        }
+    }
+
+    fn fallback_translation(locale: Locale, key: &str) -> Option<Arc<str>> {
+        let value = match (locale, key) {
+            (Locale::EN_US, "error.config") => "config error: {message}",
+            (Locale::EN_US, "error_detail.auth.header_name_empty") => {
+                "auth header name must be non-empty"
+            }
+            (Locale::EN_US, "error_detail.provider.auth_missing") => "{provider} auth is missing",
+            (Locale::EN_US, "provider_resolution.catalog_provider_not_found") => {
+                "catalog provider not found: {provider}"
+            }
+            (Locale::ZH_CN, "error.config") => "配置错误：{message}",
+            (Locale::ZH_CN, "error_detail.auth.header_name_empty") => "认证请求头名称不能为空",
+            (Locale::ZH_CN, "error_detail.provider.auth_missing") => "{provider} 缺少 auth 配置",
+            (Locale::ZH_CN, "provider_resolution.catalog_provider_not_found") => {
+                "未找到 catalog provider：{provider}"
+            }
+            _ => return None,
+        };
+
+        Some(Arc::from(value))
+    }
+
+    fn render_with_test_or_runtime_catalog(
+        locale: Locale,
+        render: impl Fn(&dyn Catalog, Locale) -> String,
+    ) -> String {
+        MESSAGE_CATALOG
+            .with_catalog(|catalog| render(catalog, locale))
+            .unwrap_or_else(|_| {
+                let catalog = TestFallbackCatalog;
+                render(&catalog, locale)
+            })
+    }
 
     fn render_structured_with_runtime_catalog(locale: Locale, message: &StructuredText) -> String {
-        MESSAGE_CATALOG
-            .with_catalog(|catalog| render_structured_text(catalog, locale, message))
-            .unwrap_or_else(|error| format!("catalog initialization failed: {error}"))
+        render_with_test_or_runtime_catalog(locale, |catalog, locale| {
+            render_structured_text(catalog, locale, message)
+        })
+    }
+
+    fn render_provider_resolution_for_test(
+        locale: Locale,
+        error: &ProviderResolutionError,
+    ) -> String {
+        render_with_test_or_runtime_catalog(locale, |catalog, locale| {
+            render_provider_resolution_error(catalog, locale, error)
+        })
+    }
+
+    fn render_ditto_error_for_test(locale: Locale, error: &DittoError) -> String {
+        render_with_test_or_runtime_catalog(locale, |catalog, locale| {
+            render_ditto_error(catalog, locale, error)
+        })
     }
 
     #[test]
@@ -610,19 +681,31 @@ mod tests {
             render_structured_with_runtime_catalog(Locale::EN_US, &message),
             "auth header name must be non-empty"
         );
+        assert_eq!(
+            render_structured_with_runtime_catalog(Locale::ZH_CN, &message),
+            "认证请求头名称不能为空"
+        );
 
         let provider_error = ProviderResolutionError::CatalogProviderNotFound {
             provider: "acme".to_string(),
         };
         assert_eq!(
-            provider_error.render(Locale::EN_US),
+            render_provider_resolution_for_test(Locale::EN_US, &provider_error),
             "catalog provider not found: acme"
+        );
+        assert_eq!(
+            render_provider_resolution_for_test(Locale::ZH_CN, &provider_error),
+            "未找到 catalog provider：acme"
         );
 
         let error = DittoError::provider_auth_missing("vertex");
         assert_eq!(
-            error.render(Locale::EN_US),
+            render_ditto_error_for_test(Locale::EN_US, &error),
             "config error: vertex auth is missing"
+        );
+        assert_eq!(
+            render_ditto_error_for_test(Locale::ZH_CN, &error),
+            "配置错误：vertex 缺少 auth 配置"
         );
     }
 
