@@ -1,5 +1,3 @@
-use axum::http::Method;
-
 use ditto_core::contracts::{CapabilityKind, OperationKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +36,25 @@ pub enum TranslationEndpointRequirement {
     None,
     RuntimeCapability(&'static [CapabilityKind]),
     FilesApi,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TranslationHttpMethod {
+    Get,
+    Post,
+    Delete,
+    Other,
+}
+
+impl TranslationHttpMethod {
+    pub fn from_http_name(method: &str) -> Self {
+        match method {
+            "GET" => Self::Get,
+            "POST" => Self::Post,
+            "DELETE" => Self::Delete,
+            _ => Self::Other,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,10 +168,10 @@ pub fn is_files_path(path_and_query: &str) -> bool {
 }
 
 pub fn translation_endpoint_descriptor(
-    method: &Method,
+    method: TranslationHttpMethod,
     path_and_query: &str,
 ) -> Option<TranslationEndpointDescriptor> {
-    if *method == Method::POST {
+    if method == TranslationHttpMethod::Post {
         if is_chat_completions_path(path_and_query) {
             return Some(TranslationEndpointDescriptor {
                 kind: TranslationEndpointKind::ChatCompletions,
@@ -315,7 +332,7 @@ pub fn translation_endpoint_descriptor(
                 requirement: TranslationEndpointRequirement::FilesApi,
             });
         }
-    } else if *method == Method::GET {
+    } else if method == TranslationHttpMethod::Get {
         if is_batches_path(path_and_query) {
             return Some(TranslationEndpointDescriptor {
                 kind: TranslationEndpointKind::BatchesRoot,
@@ -410,7 +427,9 @@ pub fn translation_endpoint_descriptor(
                 requirement: TranslationEndpointRequirement::FilesApi,
             });
         }
-    } else if *method == Method::DELETE && videos_retrieve_id(path_and_query).is_some() {
+    } else if method == TranslationHttpMethod::Delete
+        && videos_retrieve_id(path_and_query).is_some()
+    {
         return Some(TranslationEndpointDescriptor {
             kind: TranslationEndpointKind::VideoRetrieve,
             runtime_operation: Some(OperationKind::VIDEO_GENERATION),
@@ -418,13 +437,16 @@ pub fn translation_endpoint_descriptor(
                 VIDEO_GENERATION_RUNTIME_CAPABILITIES,
             ),
         });
-    } else if *method == Method::DELETE && responses_retrieve_id(path_and_query).is_some() {
+    } else if method == TranslationHttpMethod::Delete
+        && responses_retrieve_id(path_and_query).is_some()
+    {
         return Some(TranslationEndpointDescriptor {
             kind: TranslationEndpointKind::ResponsesRetrieve,
             runtime_operation: None,
             requirement: TranslationEndpointRequirement::None,
         });
-    } else if *method == Method::DELETE && files_retrieve_id(path_and_query).is_some() {
+    } else if method == TranslationHttpMethod::Delete && files_retrieve_id(path_and_query).is_some()
+    {
         return Some(TranslationEndpointDescriptor {
             kind: TranslationEndpointKind::FilesRetrieve,
             runtime_operation: None,
@@ -552,4 +574,38 @@ pub fn files_content_id(path_and_query: &str) -> Option<String> {
         return None;
     }
     Some(file_id.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TranslationEndpointKind, TranslationHttpMethod, translation_endpoint_descriptor};
+
+    #[test]
+    fn translation_http_method_parses_common_http_names() {
+        assert_eq!(
+            TranslationHttpMethod::from_http_name("GET"),
+            TranslationHttpMethod::Get
+        );
+        assert_eq!(
+            TranslationHttpMethod::from_http_name("POST"),
+            TranslationHttpMethod::Post
+        );
+        assert_eq!(
+            TranslationHttpMethod::from_http_name("DELETE"),
+            TranslationHttpMethod::Delete
+        );
+        assert_eq!(
+            TranslationHttpMethod::from_http_name("PATCH"),
+            TranslationHttpMethod::Other
+        );
+    }
+
+    #[test]
+    fn translation_endpoint_descriptor_uses_internal_http_method_enum() {
+        let descriptor =
+            translation_endpoint_descriptor(TranslationHttpMethod::Post, "/v1/responses")
+                .expect("responses create descriptor");
+
+        assert_eq!(descriptor.kind, TranslationEndpointKind::ResponsesCreate);
+    }
 }
