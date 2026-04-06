@@ -1,7 +1,7 @@
 //! Gateway module (feature-gated).
 
-pub mod adapters;
-pub mod application;
+mod adapters;
+mod application;
 #[doc(hidden)]
 pub mod budget;
 #[doc(hidden)]
@@ -10,7 +10,7 @@ pub mod config;
 pub mod contracts;
 #[cfg(feature = "gateway-costing")]
 pub mod costing;
-pub mod domain;
+mod domain;
 #[doc(hidden)]
 pub mod guardrails;
 #[doc(hidden)]
@@ -60,9 +60,8 @@ pub mod store_types;
 #[cfg(feature = "gateway-tokenizer")]
 pub mod token_count;
 #[cfg(feature = "gateway-translation")]
-#[doc(hidden)]
-pub mod translation;
-pub mod transport;
+mod translation;
+mod transport;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};

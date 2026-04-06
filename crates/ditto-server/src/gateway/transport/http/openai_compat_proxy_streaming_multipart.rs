@@ -127,6 +127,8 @@ struct ResolvedStreamingMultipartGatewayContext {
     backend_candidates: Vec<String>,
     strip_authorization: bool,
     local_token_budget_reserved: bool,
+    buffered_body: Bytes,
+    model: Option<String>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -172,12 +174,11 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         .and_then(|value| value.to_str().ok())
         .and_then(|raw| raw.parse::<usize>().ok())
         .unwrap_or(0);
-    let buffered_body = buffer_streaming_multipart_body(body, content_length).await?;
     let content_type = parts
         .headers
         .get("content-type")
-        .and_then(|value| value.to_str().ok());
-    let model = multipart_request_model(&path_and_query, content_type, &buffered_body)?;
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
     let charge_tokens = estimate_tokens_from_length(content_length);
 
     #[cfg(feature = "gateway-store-sqlite")]
@@ -226,6 +227,8 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         backend_candidates,
         strip_authorization,
         local_token_budget_reserved,
+        buffered_body,
+        model,
     } = {
         state.record_request();
 
@@ -345,6 +348,10 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             }
         }
 
+        let buffered_body = buffer_streaming_multipart_body(body, content_length).await?;
+        let model =
+            multipart_request_model(&path_and_query, content_type.as_deref(), &buffered_body)?;
+
         if let Some(key) = key.as_ref() {
             let guardrails = state.guardrails_for_model(model.as_deref(), key);
 
@@ -413,7 +420,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             if guardrails.validate_schema
                 && let Some(reason) = validate_openai_multipart_request_schema(
                     &path_and_query,
-                    content_type,
+                    content_type.as_deref(),
                     &buffered_body,
                 )
             {
@@ -589,8 +596,12 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             backend_candidates: backends,
             strip_authorization,
             local_token_budget_reserved,
+            buffered_body,
+            model,
         }
     };
+
+    let _ = &model;
 
     #[cfg(not(feature = "gateway-store-redis"))]
     let _ = (
