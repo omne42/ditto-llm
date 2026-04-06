@@ -54,6 +54,6 @@
 ## Layout Constraint
 
 - provider transport quirks 应留在 `provider_transport/`、`providers/` 与 `runtime/` 邻近位置，不要塞进共享基础库。
-- `crates/ditto-server/src/gateway/` 下的 `domain / application / transport / adapters` 是仓内实现分层；外部调用方应依赖 `ditto_server::gateway::*` 的根级公开 facade，而不是冻结这些内部目录路径。
+- `crates/ditto-server/src/gateway/` 下的 `domain / application / transport / adapters` 是仓内私有实现分层；外部调用方应依赖 `ditto_server::gateway::*` 的根级公开 facade 与兼容 shim，而不是冻结这些内部目录路径。
 - checked-in contracts 和 catalog 产物必须与 Rust 实现源码分开维护。
 - `docs/book/` 只能由 `docs/src/` 生成，不应手工改动。

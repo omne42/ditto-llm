@@ -2635,22 +2635,6 @@ pub fn provider_response_id(response: &GenerateResponse, fallback: &str) -> Stri
         .unwrap_or_else(|| fallback.to_string())
 }
 
-pub fn provider_response_id_from_chunk(
-    chunk: &ditto_core::contracts::StreamChunk,
-) -> Option<String> {
-    match chunk {
-        ditto_core::contracts::StreamChunk::ResponseId { id } => {
-            let id = id.trim();
-            if id.is_empty() {
-                None
-            } else {
-                Some(id.to_string())
-            }
-        }
-        _ => None,
-    }
-}
-
 pub fn map_provider_error_to_openai(
     err: ditto_core::error::DittoError,
 ) -> (u16, &'static str, Option<&'static str>, String) {
