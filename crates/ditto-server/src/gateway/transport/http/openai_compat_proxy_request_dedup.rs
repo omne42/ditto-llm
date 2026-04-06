@@ -938,3 +938,70 @@ fn now_epoch_millis() -> u64 {
         .try_into()
         .unwrap_or(u64::MAX)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn oversized_stream_records_replay_unavailable_outcome() {
+        let store = Arc::new(LocalProxyRequestIdempotencyStore::default());
+        let persistence: ProxyRequestDedupPersistence = store.clone();
+        let request_id = "req-dedup-overflow";
+        let owner_token = "owner-1";
+
+        let fingerprint = ProxyRequestFingerprint {
+            method: "POST".to_string(),
+            path: "/v1/responses".to_string(),
+            virtual_key_id: Some("key-1".to_string()),
+            upstream_headers: Vec::new(),
+            body_sha256: "body".to_string(),
+        };
+        let outcome = store
+            .begin_proxy_request_idempotency(
+                request_id,
+                &fingerprint,
+                "fingerprint",
+                owner_token,
+                now_epoch_millis(),
+                REQUEST_DEDUP_LEASE_TTL_MS,
+            )
+            .await
+            .expect("begin dedup");
+        assert!(matches!(
+            outcome,
+            ProxyRequestIdempotencyBeginOutcome::Acquired
+        ));
+
+        let body = Body::from_stream(futures_util::stream::iter(vec![
+            Ok::<Bytes, std::io::Error>(Bytes::from_static(b"1234")),
+            Ok::<Bytes, std::io::Error>(Bytes::from_static(b"56")),
+        ]));
+        let response = axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .body(body)
+            .expect("response");
+
+        let wrapped = wrap_response_for_request_dedup(
+            response,
+            ProxyRequestDedupLeader::new(persistence, request_id, owner_token, 4),
+        );
+        let bytes = to_bytes(wrapped.into_body(), usize::MAX)
+            .await
+            .expect("consume wrapped response");
+        assert_eq!(bytes.as_ref(), b"123456");
+
+        let record = store
+            .get_proxy_request_idempotency(request_id, now_epoch_millis())
+            .await
+            .expect("load record")
+            .expect("completed record");
+        let replay = response_from_idempotency_record(record, true)
+            .expect_err("overflowed response should replay as unavailable");
+        assert_eq!(replay.0, StatusCode::CONFLICT);
+        assert_eq!(
+            replay.1.error.code.as_deref(),
+            Some("request_id_replay_unavailable")
+        );
+    }
+}

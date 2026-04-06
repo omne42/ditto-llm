@@ -43,6 +43,72 @@ fn dedup_test_stream_request(request_id: &str, input: &str) -> Request<Body> {
 }
 
 #[cfg(feature = "gateway-store-sqlite")]
+async fn start_chunked_upstream(
+    content_type: &'static str,
+    chunks: &'static [&'static [u8]],
+) -> (
+    String,
+    std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    tokio::task::JoinHandle<()>,
+) {
+    use std::convert::Infallible;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use axum::extract::State;
+    use axum::response::IntoResponse;
+    use axum::routing::post;
+    use bytes::Bytes;
+
+    #[derive(Clone)]
+    struct ChunkedUpstreamState {
+        hits: Arc<AtomicUsize>,
+        content_type: &'static str,
+        chunks: &'static [&'static [u8]],
+    }
+
+    async fn handler(
+        State(state): State<ChunkedUpstreamState>,
+        req: Request<Body>,
+    ) -> impl IntoResponse {
+        assert_eq!(
+            req.headers()
+                .get("authorization")
+                .and_then(|value| value.to_str().ok()),
+            Some("Bearer sk-test")
+        );
+        state.hits.fetch_add(1, Ordering::SeqCst);
+
+        let stream = futures_util::stream::iter(state.chunks.iter().copied().map(|chunk| {
+            Ok::<Bytes, Infallible>(Bytes::copy_from_slice(chunk))
+        }));
+        axum::response::Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", state.content_type)
+            .body(Body::from_stream(stream))
+            .expect("chunked response")
+    }
+
+    let hits = Arc::new(AtomicUsize::new(0));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind chunked upstream");
+    let addr = listener.local_addr().expect("chunked upstream addr");
+    let app = axum::Router::new()
+        .route("/v1/responses", post(handler))
+        .with_state(ChunkedUpstreamState {
+            hits: hits.clone(),
+            content_type,
+            chunks,
+        });
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("serve chunked upstream");
+    });
+
+    (format!("http://{addr}"), hits, server)
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
 #[tokio::test]
 async fn openai_compat_proxy_replays_completed_request_by_client_request_id() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
@@ -542,6 +608,85 @@ async fn openai_compat_proxy_replays_when_only_trace_headers_change() {
     );
 
     mock.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn openai_compat_proxy_replays_chunked_non_sse_request_without_content_length() {
+    use std::sync::atomic::Ordering;
+
+    let (base_url, hits, upstream) = start_chunked_upstream(
+        "application/json",
+        &[br#"{"id":"resp-"#, br#"chunked"}"#],
+    )
+    .await;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("gateway.sqlite");
+    let store = ditto_server::gateway::SqliteStore::new(&db_path);
+    store.init().await.expect("init sqlite");
+
+    let config = GatewayConfig {
+        backends: vec![backend_config("primary", base_url, "Bearer sk-test")],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_sqlite_store(store);
+    let app = ditto_server::gateway::http::router(state);
+
+    let first = app
+        .clone()
+        .oneshot(dedup_test_request("req-dedup-chunked-json", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    assert_eq!(
+        first
+            .headers()
+            .get("content-length")
+            .and_then(|value| value.to_str().ok()),
+        None
+    );
+    assert_eq!(
+        first
+            .headers()
+            .get("x-ditto-request-dedup")
+            .and_then(|value| value.to_str().ok()),
+        Some("leader")
+    );
+    let first_body = to_bytes(first.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(first_body.as_ref(), br#"{"id":"resp-chunked"}"#);
+
+    let second = app
+        .oneshot(dedup_test_request("req-dedup-chunked-json", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    assert_eq!(
+        second
+            .headers()
+            .get("x-ditto-request-dedup")
+            .and_then(|value| value.to_str().ok()),
+        Some("replay")
+    );
+    let second_body = to_bytes(second.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(second_body.as_ref(), br#"{"id":"resp-chunked"}"#);
+
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    upstream.abort();
 }
 
 #[cfg(feature = "gateway-store-sqlite")]
