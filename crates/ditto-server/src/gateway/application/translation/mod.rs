@@ -1646,6 +1646,7 @@ pub fn video_delete_response_to_openai(response: &VideoDeleteResponse) -> Value 
     })
 }
 
+#[cfg(feature = "gateway-tokenizer")]
 pub fn responses_input_tokens_to_openai(input_tokens: u32) -> Value {
     serde_json::json!({
         "object": "response.input_tokens",
