@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use ditto_core::config::{Env, ProviderConfig};
-use secret_kit::resolve_secret;
+use secret_kit::spec::resolve_secret;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
