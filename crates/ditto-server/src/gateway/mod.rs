@@ -731,8 +731,7 @@ pub struct Gateway {
 
 #[derive(Clone)]
 pub(crate) struct GatewayRuntimeSnapshot {
-    virtual_keys: Vec<VirtualKeyConfig>,
-    router: RouterConfig,
+    pub(crate) config: GatewayConfig,
     limits: RateLimiter,
     cache: ResponseCache,
     budget: BudgetTracker,
@@ -749,7 +748,23 @@ impl GatewayMutation<'_> {
     }
 
     pub(crate) fn replace_virtual_keys(&mut self, keys: Vec<VirtualKeyConfig>) {
+        let existing_scopes = self
+            .control_plane
+            .config
+            .virtual_keys
+            .iter()
+            .map(|key| key.id.clone())
+            .collect::<HashSet<_>>();
+        let next_scopes = keys
+            .iter()
+            .map(|key| key.id.clone())
+            .collect::<HashSet<_>>();
+
         self.control_plane.replace_virtual_keys(keys);
+        let mut cache = lock_unpoisoned(self.cache);
+        for scope in existing_scopes.union(&next_scopes) {
+            cache.remove_scope(scope);
+        }
     }
 
     pub(crate) fn replace_router_config(&mut self, router: RouterConfig) {
@@ -772,6 +787,30 @@ impl GatewayMutation<'_> {
 
     pub(crate) fn remove_virtual_key(&mut self, id: &str) -> Option<VirtualKeyConfig> {
         self.control_plane.remove_virtual_key(id)
+    }
+}
+
+impl GatewayRuntimeSnapshot {
+    fn mutate_control_plane<R>(&self, f: impl FnOnce(&mut GatewayMutation<'_>) -> R) -> (Self, R) {
+        let mut control_plane = GatewayControlPlane::new(self.config.clone());
+        let cache = Mutex::new(self.cache.clone());
+        let result = {
+            let mut mutation = GatewayMutation {
+                control_plane: &mut control_plane,
+                cache: &cache,
+            };
+            f(&mut mutation)
+        };
+
+        (
+            Self {
+                config: control_plane.config_snapshot(),
+                limits: self.limits.clone(),
+                cache: lock_unpoisoned(&cache).clone(),
+                budget: self.budget.clone(),
+            },
+            result,
+        )
     }
 }
 
@@ -833,6 +872,38 @@ impl Gateway {
         result
     }
 
+    fn validate_control_plane_config(&self, config: &GatewayConfig) -> Result<(), GatewayError> {
+        let backend_names = self
+            .with_control_plane(GatewayControlPlane::backend_names)
+            .into_iter()
+            .collect::<HashSet<_>>();
+        config.validate_with_backend_names(&backend_names)
+    }
+
+    pub(crate) fn validate_runtime_snapshot(
+        &self,
+        snapshot: &GatewayRuntimeSnapshot,
+    ) -> Result<(), GatewayError> {
+        self.validate_control_plane_config(&snapshot.config)
+    }
+
+    pub(crate) fn stage_control_plane_mutation<R>(
+        &self,
+        f: impl FnOnce(&mut GatewayMutation<'_>) -> R,
+    ) -> (GatewayRuntimeSnapshot, R) {
+        self.runtime_snapshot().mutate_control_plane(f)
+    }
+
+    fn try_mutate_control_plane<R>(
+        &self,
+        f: impl FnOnce(&mut GatewayMutation<'_>) -> R,
+    ) -> Result<R, GatewayError> {
+        let (staged, result) = self.stage_control_plane_mutation(f);
+        self.validate_runtime_snapshot(&staged)?;
+        self.restore_runtime_snapshot(&staged);
+        Ok(result)
+    }
+
     pub fn register_backend(&mut self, name: impl Into<String>, backend: impl Backend + 'static) {
         let control_plane = self
             .control_plane
@@ -853,8 +924,7 @@ impl Gateway {
 
     pub(crate) fn runtime_snapshot(&self) -> GatewayRuntimeSnapshot {
         self.with_control_plane(|control_plane| GatewayRuntimeSnapshot {
-            virtual_keys: control_plane.list_virtual_keys(),
-            router: control_plane.router_config(),
+            config: control_plane.config_snapshot(),
             limits: lock_unpoisoned(&self.limits).clone(),
             cache: lock_unpoisoned(&self.cache).clone(),
             budget: lock_unpoisoned(&self.budget).clone(),
@@ -870,7 +940,15 @@ impl Gateway {
     }
 
     pub fn replace_virtual_keys(&self, keys: Vec<VirtualKeyConfig>) {
-        self.mutate_control_plane(|mutation| mutation.replace_virtual_keys(keys));
+        self.try_replace_virtual_keys(keys)
+            .unwrap_or_else(|err| panic!("invalid gateway virtual key replacement: {err}"));
+    }
+
+    pub fn try_replace_virtual_keys(
+        &self,
+        keys: Vec<VirtualKeyConfig>,
+    ) -> Result<(), GatewayError> {
+        self.try_mutate_control_plane(|mutation| mutation.replace_virtual_keys(keys))
     }
 
     pub fn router_config(&self) -> RouterConfig {
@@ -878,7 +956,12 @@ impl Gateway {
     }
 
     pub fn replace_router_config(&self, router: RouterConfig) {
-        self.mutate_control_plane(|mutation| mutation.replace_router_config(router));
+        self.try_replace_router_config(router)
+            .unwrap_or_else(|err| panic!("invalid gateway router replacement: {err}"));
+    }
+
+    pub fn try_replace_router_config(&self, router: RouterConfig) -> Result<(), GatewayError> {
+        self.try_mutate_control_plane(|mutation| mutation.replace_router_config(router))
     }
 
     pub fn backend_names(&self) -> Vec<String> {
@@ -891,7 +974,12 @@ impl Gateway {
     }
 
     pub fn upsert_virtual_key(&self, key: VirtualKeyConfig) -> bool {
-        self.mutate_control_plane(|mutation| mutation.upsert_virtual_key(key))
+        self.try_upsert_virtual_key(key)
+            .unwrap_or_else(|err| panic!("invalid gateway virtual key upsert: {err}"))
+    }
+
+    pub fn try_upsert_virtual_key(&self, key: VirtualKeyConfig) -> Result<bool, GatewayError> {
+        self.try_mutate_control_plane(|mutation| mutation.upsert_virtual_key(key))
     }
 
     pub fn remove_virtual_key(&self, id: &str) -> Option<VirtualKeyConfig> {
@@ -901,12 +989,14 @@ impl Gateway {
     pub(crate) fn restore_runtime_snapshot(&self, snapshot: &GatewayRuntimeSnapshot) {
         {
             let mut control_plane = write_unpoisoned(&self.control_plane);
-            control_plane.replace_virtual_keys(snapshot.virtual_keys.clone());
-            control_plane.replace_router_config(snapshot.router.clone());
+            control_plane.config = snapshot.config.clone();
+            control_plane.router = Router::new(snapshot.config.router.clone());
+            control_plane.rebuild_virtual_key_token_index();
         }
         *lock_unpoisoned(&self.limits) = snapshot.limits.clone();
         *lock_unpoisoned(&self.cache) = snapshot.cache.clone();
         *lock_unpoisoned(&self.budget) = snapshot.budget.clone();
+        self.prune_internal_scopes();
     }
 
     fn prune_internal_scopes(&self) {
@@ -969,65 +1059,42 @@ impl Gateway {
         let minute = now / 60;
         let tokens = request.total_tokens();
 
+        let mut rate_limit_scopes = vec![(&key.id[..], &key.limits)];
+        let tenant_limit_scope = key
+            .tenant_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .zip(key.tenant_limits.as_ref())
+            .map(|(tenant_id, limits)| (format!("tenant:{tenant_id}"), limits));
+        if let Some((scope, limits)) = tenant_limit_scope.as_ref() {
+            rate_limit_scopes.push((scope.as_str(), *limits));
+        }
+        let project_limit_scope = key
+            .project_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .zip(key.project_limits.as_ref())
+            .map(|(project_id, limits)| (format!("project:{project_id}"), limits));
+        if let Some((scope, limits)) = project_limit_scope.as_ref() {
+            rate_limit_scopes.push((scope.as_str(), *limits));
+        }
+        let user_limit_scope = key
+            .user_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .zip(key.user_limits.as_ref())
+            .map(|(user_id, limits)| (format!("user:{user_id}"), limits));
+        if let Some((scope, limits)) = user_limit_scope.as_ref() {
+            rate_limit_scopes.push((scope.as_str(), *limits));
+        }
         if let Err(err) =
-            lock_unpoisoned(&self.limits).check_and_consume(&key.id, &key.limits, tokens, minute)
+            lock_unpoisoned(&self.limits).check_and_consume_many(rate_limit_scopes, tokens, minute)
         {
             lock_unpoisoned(&self.observability).record_rate_limited();
             return Err(err);
-        }
-
-        if let (Some(tenant_id), Some(tenant_limits)) = (
-            key.tenant_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.tenant_limits.as_ref(),
-        ) {
-            let scope = format!("tenant:{tenant_id}");
-            if let Err(err) = lock_unpoisoned(&self.limits).check_and_consume(
-                &scope,
-                tenant_limits,
-                tokens,
-                minute,
-            ) {
-                lock_unpoisoned(&self.observability).record_rate_limited();
-                return Err(err);
-            }
-        }
-
-        if let (Some(project_id), Some(project_limits)) = (
-            key.project_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.project_limits.as_ref(),
-        ) {
-            let scope = format!("project:{project_id}");
-            if let Err(err) = lock_unpoisoned(&self.limits).check_and_consume(
-                &scope,
-                project_limits,
-                tokens,
-                minute,
-            ) {
-                lock_unpoisoned(&self.observability).record_rate_limited();
-                return Err(err);
-            }
-        }
-
-        if let (Some(user_id), Some(user_limits)) = (
-            key.user_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty()),
-            key.user_limits.as_ref(),
-        ) {
-            let scope = format!("user:{user_id}");
-            if let Err(err) =
-                lock_unpoisoned(&self.limits).check_and_consume(&scope, user_limits, tokens, minute)
-            {
-                lock_unpoisoned(&self.observability).record_rate_limited();
-                return Err(err);
-            }
         }
 
         let guardrails = control_plane

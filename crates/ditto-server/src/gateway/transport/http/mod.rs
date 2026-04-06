@@ -434,14 +434,16 @@ impl GatewayHttpState {
         self.observability_policy.redact_prometheus_render(rendered)
     }
 
-    pub(crate) fn check_and_consume_rate_limit(
+    pub(crate) fn check_and_consume_rate_limits<'a, I>(
         &self,
-        scope: &str,
-        limits: &super::LimitsConfig,
+        scopes: I,
         tokens: u32,
         minute: u64,
-    ) -> Result<(), GatewayError> {
-        lock_unpoisoned(&self.limits).check_and_consume(scope, limits, tokens, minute)
+    ) -> Result<(), GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::LimitsConfig)>,
+    {
+        lock_unpoisoned(&self.limits).check_and_consume_many(scopes, tokens, minute)
     }
 
     pub(crate) fn can_spend_budget_tokens(

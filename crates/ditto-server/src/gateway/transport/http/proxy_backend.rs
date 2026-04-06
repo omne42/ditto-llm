@@ -566,31 +566,31 @@ pub(super) async fn attempt_proxy_backend(
             feature = "gateway-store-mysql",
             feature = "gateway-store-redis"
         )))]
-        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-            if spend_tokens {
-                state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone())
+            && spend_tokens
+        {
+            state.spend_budget_tokens(&virtual_key_id, &budget, u64::from(charge_tokens));
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
+                state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, u64::from(charge_tokens));
-                }
-
-                #[cfg(feature = "gateway-costing")]
-                if let Some(charge_cost_usd_micros) = charge_cost_usd_micros {
-                    state.spend_budget_cost(&virtual_key_id, &budget, charge_cost_usd_micros);
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
-                    }
+                    state.spend_budget_cost(scope, budget, charge_cost_usd_micros);
                 }
             }
         }
@@ -1257,48 +1257,38 @@ pub(super) async fn attempt_proxy_backend(
                     )))]
                     if let (Some(virtual_key_id), Some(budget)) =
                         (self.virtual_key_id.clone(), self.budget.clone())
+                        && self.spend_tokens
                     {
-                        if self.spend_tokens {
-                            self.state
-                                .spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                        self.state
+                            .spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                        if let Some((scope, budget)) = self.tenant_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+                        if let Some((scope, budget)) = self.project_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+                        if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
+                            self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                        }
+
+                        #[cfg(feature = "gateway-costing")]
+                        if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                            self.state.spend_budget_cost(
+                                &virtual_key_id,
+                                &budget,
+                                spent_cost_usd_micros,
+                            );
                             if let Some((scope, budget)) = self.tenant_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = self.project_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                             if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
-                                self.state.spend_budget_tokens(scope, budget, spent_tokens);
-                            }
-
-                            #[cfg(feature = "gateway-costing")]
-                            if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                                self.state.spend_budget_cost(
-                                    &virtual_key_id,
-                                    &budget,
-                                    spent_cost_usd_micros,
-                                );
-                                if let Some((scope, budget)) = self.tenant_budget_scope.as_ref() {
-                                    self.state.spend_budget_cost(
-                                        scope,
-                                        budget,
-                                        spent_cost_usd_micros,
-                                    );
-                                }
-                                if let Some((scope, budget)) = self.project_budget_scope.as_ref() {
-                                    self.state.spend_budget_cost(
-                                        scope,
-                                        budget,
-                                        spent_cost_usd_micros,
-                                    );
-                                }
-                                if let Some((scope, budget)) = self.user_budget_scope.as_ref() {
-                                    self.state.spend_budget_cost(
-                                        scope,
-                                        budget,
-                                        spent_cost_usd_micros,
-                                    );
-                                }
+                                self.state
+                                    .spend_budget_cost(scope, budget, spent_cost_usd_micros);
                             }
                         }
                     }
@@ -2003,31 +1993,31 @@ pub(super) async fn attempt_proxy_backend(
             feature = "gateway-store-mysql",
             feature = "gateway-store-redis"
         )))]
-        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
-            if spend_tokens {
-                state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+        if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone())
+            && spend_tokens
+        {
+            state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+            if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = project_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+            if let Some((scope, budget)) = user_budget_scope.as_ref() {
+                state.spend_budget_tokens(scope, budget, spent_tokens);
+            }
+
+            #[cfg(feature = "gateway-costing")]
+            if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
+                state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
                 if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
                 if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                    state.spend_budget_tokens(scope, budget, spent_tokens);
-                }
-
-                #[cfg(feature = "gateway-costing")]
-                if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
-                    state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
-                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = project_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                    }
-                    if let Some((scope, budget)) = user_budget_scope.as_ref() {
-                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
-                    }
+                    state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                 }
             }
         }

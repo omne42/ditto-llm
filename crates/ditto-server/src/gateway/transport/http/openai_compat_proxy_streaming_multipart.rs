@@ -276,72 +276,24 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         }
 
         if !use_redis_budget {
-            if let (Some(key), Some(limits)) = (key.as_ref(), limits.as_ref())
-                && let Err(err) =
-                    state.check_and_consume_rate_limit(&key.id, limits, charge_tokens, minute)
-            {
-                state.record_rate_limited();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(Some(&key.id), None, &metrics_path);
-                    metrics.record_proxy_rate_limited(Some(&key.id), None, &metrics_path);
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
+            let mut rate_limit_scopes = Vec::new();
+            if let (Some(key), Some(limits)) = (key.as_ref(), limits.as_ref()) {
+                rate_limit_scopes.push((key.id.as_str(), limits));
             }
-            if let Some((scope, limits)) = tenant_limits_scope.as_ref()
-                && let Err(err) =
-                    state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
-            {
-                state.record_rate_limited();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
-                    metrics.record_proxy_rate_limited(
-                        virtual_key_id.as_deref(),
-                        None,
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
+            if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
+                rate_limit_scopes.push((scope.as_str(), limits));
             }
-            if let Some((scope, limits)) = project_limits_scope.as_ref()
-                && let Err(err) =
-                    state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
-            {
-                state.record_rate_limited();
-                let mapped = map_openai_gateway_error(err);
-                #[cfg(feature = "gateway-metrics-prometheus")]
-                if let Some(metrics) = state.proxy.metrics.as_ref() {
-                    let duration = metrics_timer_start.elapsed();
-                    let status = mapped.0.as_u16();
-                    let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
-                    metrics.record_proxy_rate_limited(
-                        virtual_key_id.as_deref(),
-                        None,
-                        &metrics_path,
-                    );
-                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
-                    metrics.observe_proxy_request_duration(&metrics_path, duration);
-                }
-                return Err(mapped);
+            if let Some((scope, limits)) = project_limits_scope.as_ref() {
+                rate_limit_scopes.push((scope.as_str(), limits));
             }
-            if let Some((scope, limits)) = user_limits_scope.as_ref()
-                && let Err(err) =
-                    state.check_and_consume_rate_limit(scope, limits, charge_tokens, minute)
-            {
+            if let Some((scope, limits)) = user_limits_scope.as_ref() {
+                rate_limit_scopes.push((scope.as_str(), limits));
+            }
+            if let Err(err) = state.check_and_consume_rate_limits(
+                rate_limit_scopes.into_iter(),
+                charge_tokens,
+                minute,
+            ) {
                 state.record_rate_limited();
                 let mapped = map_openai_gateway_error(err);
                 #[cfg(feature = "gateway-metrics-prometheus")]

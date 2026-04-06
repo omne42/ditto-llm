@@ -374,14 +374,6 @@ async fn persist_control_plane_state(
     Ok(())
 }
 
-fn restore_gateway_runtime(
-    state: &GatewayHttpState,
-    snapshot: &crate::gateway::GatewayRuntimeSnapshot,
-) {
-    state.gateway.restore_runtime_snapshot(snapshot);
-    state.sync_control_plane_from_gateway();
-}
-
 fn storage_error_message(err: &(StatusCode, Json<ErrorResponse>)) -> String {
     err.1.error.message.clone()
 }
@@ -394,24 +386,14 @@ pub(super) async fn apply_control_plane_change<T>(
     ) -> Result<T, (StatusCode, Json<ErrorResponse>)>,
 ) -> Result<(T, ConfigVersionInfo), (StatusCode, Json<ErrorResponse>)> {
     let previous = state.gateway.runtime_snapshot();
-    let result = state.gateway.mutate_control_plane(mutate);
+    let (staged, result) = state.gateway.stage_control_plane_mutation(mutate);
 
     let value = match result {
         Ok(value) => value,
-        Err(err) => {
-            restore_gateway_runtime(state, &previous);
-            return Err(err);
-        }
+        Err(err) => return Err(err),
     };
 
-    state.sync_control_plane_from_gateway();
-    let current = state.gateway.config_snapshot();
-    let backend_names = state
-        .backend_names_snapshot()
-        .into_iter()
-        .collect::<std::collections::HashSet<_>>();
-    if let Err(err) = current.validate_with_backend_names(&backend_names) {
-        restore_gateway_runtime(state, &previous);
+    if let Err(err) = state.gateway.validate_runtime_snapshot(&staged) {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
             "invalid_request",
@@ -419,19 +401,26 @@ pub(super) async fn apply_control_plane_change<T>(
         ));
     }
 
-    match persist_control_plane_state(state, &current.virtual_keys, &current.router).await {
+    match persist_control_plane_state(state, &staged.config.virtual_keys, &staged.config.router)
+        .await
+    {
         Ok(()) => {
+            state.gateway.restore_runtime_snapshot(&staged);
+            state.sync_control_plane_from_gateway();
             let version = state.config_versions.lock().await.push_snapshot(
-                current.virtual_keys,
-                current.router,
+                staged.config.virtual_keys,
+                staged.config.router,
                 reason,
             );
             Ok((value, version))
         }
         Err(err) => {
-            restore_gateway_runtime(state, &previous);
-            let rollback =
-                persist_control_plane_state(state, &previous.virtual_keys, &previous.router).await;
+            let rollback = persist_control_plane_state(
+                state,
+                &previous.config.virtual_keys,
+                &previous.config.router,
+            )
+            .await;
             if let Err(rollback_err) = rollback {
                 return Err(error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -540,6 +529,64 @@ mod tests {
             .expect_err("restored budget should still block overspend");
 
         assert!(matches!(second, GatewayError::BudgetExceeded { .. }));
+    }
+
+    #[tokio::test]
+    async fn validation_failure_does_not_mutate_live_runtime() {
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", EchoBackend);
+        let state = GatewayHttpState::new(gateway);
+
+        let err = apply_control_plane_change(&state, "test.invalid_router", |gateway| {
+            gateway.replace_router_config(RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "missing".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            });
+            Ok(())
+        })
+        .await
+        .expect_err("invalid router should fail validation");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            state
+                .gateway
+                .router_config()
+                .default_backends
+                .first()
+                .map(|backend| backend.backend.as_str()),
+            Some("primary")
+        );
+        state
+            .gateway
+            .handle(GatewayRequest {
+                virtual_key: "vk-1".to_string(),
+                model: "gpt-test".to_string(),
+                prompt: "still-routable".to_string(),
+                input_tokens: 1,
+                max_output_tokens: 1,
+                passthrough: false,
+            })
+            .await
+            .expect("live runtime should keep the last valid config");
     }
 
     #[cfg(feature = "gateway-store-sqlite")]

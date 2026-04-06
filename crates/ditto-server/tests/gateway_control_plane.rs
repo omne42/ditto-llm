@@ -230,6 +230,42 @@ async fn user_rate_limit_tpm_blocks_second_request() {
 }
 
 #[tokio::test]
+async fn rate_limit_rejection_does_not_consume_other_scopes() {
+    let mut key = base_key();
+    key.tenant_id = Some("tenant-1".to_string());
+    key.user_id = Some("user-1".to_string());
+    key.limits = LimitsConfig {
+        rpm: Some(1),
+        tpm: None,
+    };
+    key.tenant_limits = Some(LimitsConfig {
+        rpm: Some(1),
+        tpm: None,
+    });
+    key.user_limits = Some(LimitsConfig {
+        rpm: None,
+        tpm: Some(5),
+    });
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 240 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let err = gateway.handle(request.clone()).await.unwrap_err();
+    assert!(matches!(err, GatewayError::RateLimited { .. }));
+
+    let mut recovered = request;
+    recovered.input_tokens = 2;
+    recovered.max_output_tokens = 2;
+    let response = gateway.handle(recovered).await.unwrap();
+    assert_eq!(response.content, "ok");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn cache_hit_skips_backend() {
     let mut key = base_key();
     key.cache = CacheConfig {
@@ -314,6 +350,103 @@ async fn upsert_virtual_key_cache_config_change_clears_stale_scope_cache() {
 }
 
 #[tokio::test]
+async fn replace_virtual_keys_cache_config_change_clears_stale_scope_cache() {
+    let mut key = base_key();
+    key.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(60),
+        ..CacheConfig::default()
+    };
+    let config = base_config(key);
+    let clock = Box::new(FixedClock { now: 300 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, calls) = StaticBackend::new("cached");
+    gateway.register_backend("primary", backend);
+
+    let request = base_request();
+    let first = gateway.handle(request.clone()).await.unwrap();
+    let second = gateway.handle(request.clone()).await.unwrap();
+    assert!(!first.cached);
+    assert!(second.cached);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    let mut updated = base_key();
+    updated.cache = CacheConfig {
+        enabled: true,
+        ttl_seconds: Some(5),
+        max_entries: 1,
+        ..CacheConfig::default()
+    };
+    gateway
+        .try_replace_virtual_keys(vec![updated])
+        .expect("replace should validate");
+
+    let third = gateway.handle(request.clone()).await.unwrap();
+    let fourth = gateway.handle(request).await.unwrap();
+    assert!(!third.cached);
+    assert!(fourth.cached);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn try_upsert_virtual_key_rejects_invalid_route_without_mutating_runtime() {
+    let config = base_config(base_key());
+    let clock = Box::new(FixedClock { now: 420 });
+    let mut gateway = Gateway::with_clock(config, clock);
+
+    let (backend, calls) = StaticBackend::new("ok");
+    gateway.register_backend("primary", backend);
+
+    let mut invalid = VirtualKeyConfig::new("key-2", "vk-2");
+    invalid.route = Some("missing".to_string());
+    let err = gateway.try_upsert_virtual_key(invalid).unwrap_err();
+    assert!(matches!(err, GatewayError::InvalidRequest { .. }));
+
+    assert_eq!(gateway.list_virtual_keys().len(), 1);
+    let response = gateway.handle(base_request()).await.unwrap();
+    assert_eq!(response.content, "ok");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn try_replace_virtual_keys_rejects_invalid_keys_without_mutating_runtime() {
+    let config = base_config(base_key());
+    let clock = Box::new(FixedClock { now: 420 });
+    let gateway = Gateway::with_clock(config, clock);
+
+    let mut invalid = base_key();
+    invalid.route = Some("missing".to_string());
+    let err = gateway.try_replace_virtual_keys(vec![invalid]).unwrap_err();
+    assert!(matches!(err, GatewayError::InvalidRequest { .. }));
+
+    assert_eq!(gateway.list_virtual_keys().len(), 1);
+    assert_eq!(gateway.list_virtual_keys()[0].token.as_str(), "vk-1");
+}
+
+#[tokio::test]
+async fn try_replace_router_config_rejects_invalid_router_without_mutating_runtime() {
+    let config = base_config(base_key());
+    let clock = Box::new(FixedClock { now: 420 });
+    let gateway = Gateway::with_clock(config, clock);
+
+    let invalid = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "missing".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+    let err = gateway.try_replace_router_config(invalid).unwrap_err();
+    assert!(matches!(err, GatewayError::InvalidRequest { .. }));
+
+    assert_eq!(
+        gateway.router_config().default_backends[0].backend,
+        "primary"
+    );
+}
+
+#[tokio::test]
 async fn budget_limit_blocks_request() {
     let mut key = base_key();
     key.budget = BudgetConfig {
@@ -357,14 +490,14 @@ async fn project_budget_is_shared_across_virtual_keys() {
     let mut key_1 = base_key();
     key_1.project_id = Some("project-1".to_string());
     key_1.project_budget = Some(BudgetConfig {
-        total_tokens: Some(15),
+        total_tokens: Some(10),
         total_usd_micros: None,
     });
 
     let mut key_2 = VirtualKeyConfig::new("key-2", "vk-2");
     key_2.project_id = Some("project-1".to_string());
     key_2.project_budget = Some(BudgetConfig {
-        total_tokens: Some(15),
+        total_tokens: Some(10),
         total_usd_micros: None,
     });
 
