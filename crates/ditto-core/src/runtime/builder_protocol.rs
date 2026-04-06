@@ -301,6 +301,7 @@ mod tests {
     #[allow(unused_imports)]
     use super::*;
 
+    #[allow(dead_code)]
     fn expect_invalid_response_catalog<'a>(
         err: &'a DittoError,
         expected_code: &str,
