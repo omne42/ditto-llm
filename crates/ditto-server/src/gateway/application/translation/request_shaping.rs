@@ -672,30 +672,6 @@ pub(super) fn videos_list_request_from_path(path_and_query: &str) -> ParseResult
     Ok(request)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn videos_content_variant_from_path_decodes_percent_encoded_query_values() {
-        let variant =
-            videos_content_variant_from_path("/v1/videos/video_1/content?variant=sprite%73heet")
-                .expect("variant parse");
-        assert_eq!(variant, Some(VideoContentVariant::Spritesheet));
-    }
-
-    #[test]
-    fn videos_list_request_from_path_decodes_percent_encoded_cursor() {
-        let request = videos_list_request_from_path(
-            "/v1/videos?after=cursor%2Fnext%3Fpage%3D2&order=desc&limit=4",
-        )
-        .expect("videos list request");
-        assert_eq!(request.limit, Some(4));
-        assert_eq!(request.after.as_deref(), Some("cursor/next?page=2"));
-        assert_eq!(request.order, Some(VideoListOrder::Desc));
-    }
-}
-
 fn parse_image_response_format(value: &str) -> ParseResult<ImageResponseFormat> {
     match value.trim() {
         "url" => Ok(ImageResponseFormat::Url),
@@ -976,5 +952,29 @@ fn parse_stop_sequences(value: &Value) -> Option<Vec<String>> {
             if out.is_empty() { None } else { Some(out) }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn videos_content_variant_from_path_decodes_percent_encoded_query_values() {
+        let variant =
+            videos_content_variant_from_path("/v1/videos/video_1/content?variant=sprite%73heet")
+                .expect("variant parse");
+        assert_eq!(variant, Some(VideoContentVariant::Spritesheet));
+    }
+
+    #[test]
+    fn videos_list_request_from_path_decodes_percent_encoded_cursor() {
+        let request = videos_list_request_from_path(
+            "/v1/videos?after=cursor%2Fnext%3Fpage%3D2&order=desc&limit=4",
+        )
+        .expect("videos list request");
+        assert_eq!(request.limit, Some(4));
+        assert_eq!(request.after.as_deref(), Some("cursor/next?page=2"));
+        assert_eq!(request.order, Some(VideoListOrder::Desc));
     }
 }
