@@ -639,7 +639,7 @@ pub(crate) async fn resolve_cli_secret(
         return Ok(raw);
     }
 
-    let resolved = secret_kit::resolve_secret(raw.as_str(), env)
+    let resolved = secret_kit::spec::resolve_secret(raw.as_str(), env)
         .await
         .map(|secret| secret.into_owned())
         .map_err(|err| {
