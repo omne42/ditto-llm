@@ -70,9 +70,11 @@ Gateway 的 HTTP 路由见 `crates/ditto-server/src/gateway/transport/http/route
 
 补充说明：
 
+- `GET /v1/models`、`GET /v1/models/*` 只暴露“当前 virtual key 经过 router 规则后实际可路由到”的 translation models；没有被当前 key 命中的 translation backend 不会出现在模型列表里。
 - `POST /v1/responses/input_tokens` 是 best-effort 估算：启用 `gateway-tokenizer` 时尽量按模型计数，否则显式返回 `unsupported_endpoint`，不会发起上游 provider 调用。
-- `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store，只保证读写“同一 gateway instance 内由 translation create 生成”的 response（含 streaming create），并要求调用方使用该 gateway 返回的 gateway-scoped response id。
-- 这个 local store 目前是进程内内存 LRU，最多保留 128 条 translated responses；超过上限后会按最近最少使用顺序淘汰，旧的 response id 可能因此变成不可读/不可删。
+- `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store。这个 surface 不是跨实例、跨进程、跨重启的持久化 response store。
+- 它只保证读写“同一 gateway instance 内由 translation `POST /v1/responses` create 生成”的 response（含 streaming create），并要求调用方使用该 gateway 返回的 gateway-scoped response id。
+- 这个 local store 目前是进程内内存 LRU，最多保留 128 条 translated responses；进程重启、跨实例访问或超过容量被淘汰后，旧的 response id 都可能变成不可读/不可删。
 
 ## Anthropic Messages（compat）
 

@@ -1,5 +1,18 @@
 use super::*;
 
+#[cfg(feature = "gateway-translation")]
+fn translation_model_is_routable(
+    state: &GatewayHttpState,
+    key: &VirtualKeyConfig,
+    request_id: &str,
+    request_model_id: &str,
+    backend_name: &str,
+) -> bool {
+    state
+        .select_backends_for_model_seeded(request_model_id, Some(key), Some(request_id))
+        .is_ok_and(|backends| backends.iter().any(|candidate| candidate == backend_name))
+}
+
 pub(super) async fn handle_openai_models_list(
     State(state): State<GatewayHttpState>,
     req: axum::http::Request<Body>,
@@ -34,7 +47,7 @@ pub(super) async fn handle_openai_models_list(
             )
         })?;
     let strip_authorization = true;
-    let key_route = key.route;
+    let key_route = key.route.clone();
 
     let mut base_headers = parts.headers.clone();
     sanitize_proxy_headers(&mut base_headers, strip_authorization);
@@ -142,10 +155,10 @@ pub(super) async fn handle_openai_models_list(
     }
 
     #[cfg(feature = "gateway-translation")]
-    let has_translation_backends = !state.backends.translation_backends.is_empty();
+    let mut translation_backends_in_response = std::collections::BTreeSet::<String>::new();
 
     #[cfg(feature = "gateway-translation")]
-    if has_translation_backends {
+    if !state.backends.translation_backends.is_empty() {
         let mut translation_backend_names = state
             .backends
             .translation_backends
@@ -155,19 +168,17 @@ pub(super) async fn handle_openai_models_list(
         translation_backend_names.sort();
 
         for backend_name in translation_backend_names {
-            if key_route
-                .as_deref()
-                .is_some_and(|route| route != backend_name.as_str())
-            {
-                continue;
-            }
             let Some(backend) = state.backends.translation_backends.get(&backend_name) else {
                 continue;
             };
             let models =
                 super::translation::collect_models_from_translation_backend(&backend_name, backend);
             for (id, owned_by) in models {
+                if !translation_model_is_routable(&state, &key, &request_id, &id, &backend_name) {
+                    continue;
+                }
                 models_by_id.entry(id.to_string()).or_insert_with(|| {
+                    translation_backends_in_response.insert(backend_name.clone());
                     super::translation::model_to_openai(&id, &owned_by, created)
                 });
             }
@@ -205,14 +216,19 @@ pub(super) async fn handle_openai_models_list(
         axum::http::HeaderValue::from_static("application/json"),
     );
     #[cfg(feature = "gateway-translation")]
-    if has_translation_backends {
-        response.headers_mut().insert(
-            "x-ditto-translation",
-            key_route
-                .as_deref()
-                .and_then(|route| axum::http::HeaderValue::from_str(route).ok())
-                .unwrap_or_else(|| axum::http::HeaderValue::from_static("multi")),
-        );
+    if !translation_backends_in_response.is_empty() {
+        let translation_header = if translation_backends_in_response.len() == 1 {
+            translation_backends_in_response
+                .iter()
+                .next()
+                .and_then(|backend| axum::http::HeaderValue::from_str(backend).ok())
+                .unwrap_or_else(|| axum::http::HeaderValue::from_static("multi"))
+        } else {
+            axum::http::HeaderValue::from_static("multi")
+        };
+        response
+            .headers_mut()
+            .insert("x-ditto-translation", translation_header);
     }
     if let Ok(value) = axum::http::HeaderValue::from_str(&request_id) {
         response.headers_mut().insert("x-request-id", value);
