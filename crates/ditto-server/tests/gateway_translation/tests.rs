@@ -1933,6 +1933,81 @@ async fn gateway_translation_spends_tenant_budget_scope() -> ditto_core::error::
 }
 
 #[tokio::test]
+async fn gateway_translation_invalid_request_does_not_consume_tenant_budget_scope()
+-> ditto_core::error::Result<()> {
+    let valid_payload = json!({
+        "model": "gpt-4o-mini",
+        "max_output_tokens": 0,
+        "input": "hi"
+    });
+    let valid_payload_text = valid_payload.to_string();
+    #[cfg(feature = "gateway-tokenizer")]
+    let charge_tokens = ditto_server::gateway::token_count::estimate_input_tokens(
+        "/v1/responses",
+        "gpt-4o-mini",
+        &valid_payload,
+    )
+    .unwrap_or(((valid_payload_text.len().saturating_add(3)) / 4) as u32) as u64;
+    #[cfg(not(feature = "gateway-tokenizer"))]
+    let charge_tokens = ((valid_payload_text.len().saturating_add(3)) / 4) as u64;
+
+    let mut key = ditto_server::gateway::VirtualKeyConfig::new("key-1", "vk-1");
+    key.tenant_id = Some("tenant-1".to_string());
+    key.tenant_budget = Some(ditto_server::gateway::BudgetConfig {
+        total_tokens: Some(charge_tokens),
+        ..ditto_server::gateway::BudgetConfig::default()
+    });
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![key],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let invalid_payload = json!({
+        "model": "gpt-4o-mini"
+    });
+    let invalid_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(invalid_payload.to_string()))
+        .unwrap();
+    let invalid_response = app.clone().oneshot(invalid_request).await.unwrap();
+    assert_eq!(invalid_response.status(), StatusCode::BAD_REQUEST);
+
+    let valid_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(valid_payload_text))
+        .unwrap();
+    let valid_response = app.oneshot(valid_request).await.unwrap();
+    assert_eq!(valid_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_images_generations_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
     let mut translation_backends = HashMap::new();
