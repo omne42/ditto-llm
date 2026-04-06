@@ -1346,7 +1346,7 @@ async fn gateway_translation_models_retrieve_uses_model_path_for_routing()
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/models/secondary/secondary-model")
+        .uri("/v1/models/secondary%2Fsecondary-model")
         .header("authorization", "Bearer vk-1")
         .body(Body::empty())
         .unwrap();
