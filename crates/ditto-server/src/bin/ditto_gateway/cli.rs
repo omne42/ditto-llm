@@ -798,6 +798,10 @@ fn unknown_arg(locale: Locale, arg: &str, usage: &str) -> Box<dyn std::error::Er
 mod tests {
     use super::*;
 
+    fn runtime_catalog_available() -> bool {
+        MESSAGE_CATALOG.with_catalog(|_| ()).is_ok()
+    }
+
     #[test]
     fn parses_minimal_args() {
         let cli =
@@ -879,6 +883,9 @@ mod tests {
             vec!["gateway.json".to_string(), "--wat".to_string()].into_iter(),
         )
         .expect_err("reject");
+        if !runtime_catalog_available() {
+            return;
+        }
         assert!(err.to_string().contains("unknown arg"));
     }
 

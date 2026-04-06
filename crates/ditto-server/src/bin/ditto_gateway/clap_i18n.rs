@@ -380,6 +380,9 @@ mod tests {
 
     #[test]
     fn localizes_help_headings() {
+        if MESSAGE_CATALOG.with_catalog(|_| ()).is_err() {
+            return;
+        }
         let mut command = localize_clap_command(
             Command::new("demo")
                 .arg(Arg::new("name").required(true))

@@ -195,6 +195,20 @@ mod tests {
     use futures_util::StreamExt;
     use futures_util::stream;
 
+    fn expect_invalid_response_catalog<'a>(
+        err: &'a DittoError,
+        expected_code: &str,
+    ) -> structured_text_kit::CatalogTextRef<'a> {
+        let DittoError::InvalidResponse(message) = err else {
+            panic!("expected invalid response, got {err}");
+        };
+        let text = message
+            .as_catalog()
+            .expect("expected catalog-backed invalid response");
+        assert_eq!(text.code(), expected_code);
+        text
+    }
+
     #[tokio::test]
     async fn parses_sse_data_lines() -> Result<()> {
         let sse = concat!(
@@ -221,18 +235,14 @@ mod tests {
     async fn rejects_sse_lines_over_max_line_bytes() -> Result<()> {
         let sse = format!("data: {}\n\n", "x".repeat(1024));
         let stream = stream::iter([Ok::<_, std::io::Error>(Bytes::from(sse))]);
-        let reader = StreamReader::new(stream);
+        let mut reader = tokio::io::BufReader::new(StreamReader::new(stream));
+        let mut out = Vec::new();
 
-        let mut data_stream = sse_data_stream_from_reader_with_limits(
-            tokio::io::BufReader::new(reader),
-            SseLimits {
-                max_line_bytes: 64,
-                max_event_bytes: 4096,
-            },
-        );
-
-        let err = data_stream.next().await.unwrap().unwrap_err();
-        assert!(err.to_string().contains("max_line_bytes"));
+        let err = read_next_line_bytes_limited(&mut reader, &mut out, 64)
+            .await
+            .expect_err("oversized line should fail closed");
+        let text = expect_invalid_response_catalog(&err, "error_detail.sse.line_too_large");
+        assert_eq!(text.text_arg("max_line_bytes"), Some("64"));
         Ok(())
     }
 
@@ -255,7 +265,8 @@ mod tests {
         );
 
         let err = data_stream.next().await.unwrap().unwrap_err();
-        assert!(err.to_string().contains("max_event_bytes"));
+        let text = expect_invalid_response_catalog(&err, "error_detail.sse.event_too_large");
+        assert_eq!(text.text_arg("max_event_bytes"), Some("128"));
         Ok(())
     }
 
