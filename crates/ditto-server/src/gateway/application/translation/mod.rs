@@ -1690,7 +1690,7 @@ pub fn image_generation_response_to_openai(
 
 pub fn responses_request_to_generate_request(request: &Value) -> ParseResult<GenerateRequest> {
     let chat = crate::gateway::responses_shim::responses_request_to_chat_completions(request)
-        .ok_or_else(|| "responses request cannot be mapped to chat/completions".to_string())?;
+        .map_err(|err| format!("responses request cannot be mapped to chat/completions: {err}"))?;
     let mut out = chat_completions_request_to_generate_request(&chat)?;
 
     let obj = request

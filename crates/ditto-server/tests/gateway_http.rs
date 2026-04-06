@@ -962,8 +962,85 @@ async fn gateway_http_admin_key_upsert_rejects_unknown_route() -> ditto_core::er
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let payload: serde_json::Value = serde_json::from_slice(&body)?;
     assert!(payload["error"]["message"].as_str().is_some_and(|message| {
-        message.contains("virtual_keys[1].route references unknown backend")
+        message.contains("virtual_keys[0].route references unknown backend")
     }));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_config_validate_checks_virtual_key_route_against_runtime_backend_snapshot()
+-> ditto_core::error::Result<()> {
+    let upstream = MockServer::start();
+    let backend = ProxyBackend::new(upstream.base_url()).expect("proxy backend");
+    let state = GatewayHttpState::new(Gateway::new(base_config_without_keys()))
+        .with_admin_token("admin-token")
+        .with_proxy_backends(HashMap::from([("primary".to_string(), backend)]));
+    let app = ditto_server::gateway::http::router(state);
+
+    let mut key = VirtualKeyConfig::new("key-route", "vk-route");
+    key.route = Some("missing-backend".to_string());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "virtual_keys": [key]
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(payload["valid"].as_bool(), Some(false));
+    assert!(payload["issues"].as_array().is_some_and(|issues| {
+        issues.iter().any(|issue| {
+            issue["code"] == "invalid_route"
+                && issue["path"] == "/virtual_keys/0/route"
+                && issue["message"].as_str().is_some_and(|message| {
+                    message.contains("virtual_keys[0].route references unknown backend")
+                })
+        })
+    }));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_config_validate_accepts_virtual_key_route_from_runtime_backend_snapshot()
+-> ditto_core::error::Result<()> {
+    let upstream = MockServer::start();
+    let backend = ProxyBackend::new(upstream.base_url()).expect("proxy backend");
+    let state = GatewayHttpState::new(Gateway::new(base_config_without_keys()))
+        .with_admin_token("admin-token")
+        .with_proxy_backends(HashMap::from([("primary".to_string(), backend)]));
+    let app = ditto_server::gateway::http::router(state);
+    let mut key = VirtualKeyConfig::new("key-route", "vk-route");
+    key.route = Some("primary".to_string());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/admin/config/validate")
+        .header("x-admin-token", "admin-token")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "virtual_keys": [key]
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let payload: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(payload["valid"].as_bool(), Some(true));
+    assert_eq!(payload["issues"].as_array().map(Vec::len), Some(0));
 
     Ok(())
 }

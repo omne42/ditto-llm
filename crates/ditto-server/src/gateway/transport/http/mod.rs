@@ -475,6 +475,7 @@ impl GatewayHttpState {
         lock_unpoisoned(&self.budget).refund_many(scopes, reserved_tokens);
     }
 
+    #[cfg(feature = "gateway-costing")]
     pub(crate) fn reserve_budget_cost<'a, I>(
         &self,
         scopes: I,
@@ -486,6 +487,7 @@ impl GatewayHttpState {
         lock_unpoisoned(&self.budget).reserve_cost_many(scopes, usd_micros)
     }
 
+    #[cfg(feature = "gateway-costing")]
     pub(crate) fn settle_budget_cost<'a, I>(
         &self,
         scopes: I,
@@ -501,6 +503,7 @@ impl GatewayHttpState {
         );
     }
 
+    #[cfg(feature = "gateway-costing")]
     pub(crate) fn rollback_budget_cost<'a, I>(&self, scopes: I, reserved_usd_micros: u64)
     where
         I: IntoIterator<Item = (&'a str, &'a super::BudgetConfig)>,

@@ -409,6 +409,83 @@ mod tests {
     }
 
     #[test]
+    fn prepare_handle_request_keeps_key_scope_unconsumed_when_tenant_scope_rejects() {
+        let shared_tenant_limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+
+        let mut key_a = VirtualKeyConfig::new("key-a", "vk-a");
+        key_a.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+        key_a.tenant_id = Some("tenant-1".to_string());
+        key_a.tenant_limits = Some(shared_tenant_limits.clone());
+
+        let mut key_b = VirtualKeyConfig::new("key-b", "vk-b");
+        key_b.limits = LimitsConfig {
+            rpm: Some(4),
+            tpm: None,
+        };
+        key_b.tenant_id = Some("tenant-1".to_string());
+        key_b.tenant_limits = Some(shared_tenant_limits);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key_a.clone(), key_b],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", TestBackend);
+
+        let prime_request = GatewayRequest {
+            virtual_key: "vk-b".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "prime tenant".to_string(),
+            input_tokens: 0,
+            max_output_tokens: 1,
+            passthrough: false,
+        };
+        let rejected_request = GatewayRequest {
+            virtual_key: "vk-a".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "should fail on tenant".to_string(),
+            input_tokens: 0,
+            max_output_tokens: 1,
+            passthrough: false,
+        };
+
+        let prepared = gateway
+            .prepare_handle_request(&prime_request)
+            .expect("shared tenant prime should pass");
+        let GatewayPreparedRequest::Call(prepared) = prepared else {
+            panic!("expected backend call for prime request");
+        };
+        gateway.complete_handle_failure(&prepared);
+
+        let err = match gateway.prepare_handle_request(&rejected_request) {
+            Ok(_) => panic!("shared tenant limit should reject second key"),
+            Err(err) => err,
+        };
+        assert!(matches!(err, GatewayError::RateLimited { .. }));
+
+        let minute = gateway.clock.now_epoch_seconds() / 60;
+        lock_unpoisoned(&gateway.limits)
+            .check_and_consume("key-a", &key_a.limits, 1, minute)
+            .expect("key scope must remain available after tenant-scope rejection");
+    }
+
+    #[test]
     fn complete_handle_success_settles_reserved_budget_to_actual_output_tokens() {
         let mut key = VirtualKeyConfig::new("key-1", "vk-1");
         key.budget.total_tokens = Some(7);

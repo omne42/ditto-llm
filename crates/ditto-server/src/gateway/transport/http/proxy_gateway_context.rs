@@ -48,6 +48,23 @@ struct OpenAiCompatProxyGatewayPreamble {
     key: Option<super::VirtualKeyConfig>,
 }
 
+struct ResolvedGatewayContextLocals {
+    virtual_key_id: Option<String>,
+    limits: Option<super::LimitsConfig>,
+    budget: Option<super::BudgetConfig>,
+    tenant_budget_scope: Option<(String, super::BudgetConfig)>,
+    project_budget_scope: Option<(String, super::BudgetConfig)>,
+    user_budget_scope: Option<(String, super::BudgetConfig)>,
+    tenant_limits_scope: Option<(String, super::LimitsConfig)>,
+    project_limits_scope: Option<(String, super::LimitsConfig)>,
+    user_limits_scope: Option<(String, super::LimitsConfig)>,
+    backend_candidates: Vec<String>,
+    charge_cost_usd_micros: Option<u64>,
+    local_token_budget_reserved: bool,
+    #[cfg(feature = "gateway-costing")]
+    local_cost_budget_reserved: bool,
+}
+
 async fn resolve_openai_compat_proxy_gateway_preamble(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
@@ -149,21 +166,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         })
         .unwrap_or_default();
 
-    let (
-        virtual_key_id,
-        limits,
-        budget,
-        tenant_budget_scope,
-        project_budget_scope,
-        user_budget_scope,
-        tenant_limits_scope,
-        project_limits_scope,
-        user_limits_scope,
-        backend_candidates,
-        charge_cost_usd_micros,
-        local_token_budget_reserved,
-        local_cost_budget_reserved,
-    ) = {
+    let resolved = {
         if let Some(key) = key.as_ref() {
             let virtual_key_id = Some(key.id.clone());
             let limits = Some(key.limits.clone());
@@ -510,6 +513,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             let charge_cost_usd_micros: Option<u64> = None;
 
             let mut local_token_budget_reserved = false;
+            #[cfg(feature = "gateway-costing")]
             let mut local_cost_budget_reserved = false;
 
             if !use_persistent_budget {
@@ -628,7 +632,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 }
             }
 
-            (
+            ResolvedGatewayContextLocals {
                 virtual_key_id,
                 limits,
                 budget,
@@ -638,11 +642,12 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 tenant_limits_scope,
                 project_limits_scope,
                 user_limits_scope,
-                backends,
+                backend_candidates: backends,
                 charge_cost_usd_micros,
                 local_token_budget_reserved,
+                #[cfg(feature = "gateway-costing")]
                 local_cost_budget_reserved,
-            )
+            }
         } else {
             let backends = state
                 .select_backends_for_model_seeded(
@@ -664,41 +669,42 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
 
-            (
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                backends,
+            ResolvedGatewayContextLocals {
+                virtual_key_id: None,
+                limits: None,
+                budget: None,
+                tenant_budget_scope: None,
+                project_budget_scope: None,
+                user_budget_scope: None,
+                tenant_limits_scope: None,
+                project_limits_scope: None,
+                user_limits_scope: None,
+                backend_candidates: backends,
                 charge_cost_usd_micros,
-                false,
-                false,
-            )
+                local_token_budget_reserved: false,
+                #[cfg(feature = "gateway-costing")]
+                local_cost_budget_reserved: false,
+            }
         }
     };
 
     Ok(ResolvedGatewayContext {
-        virtual_key_id,
+        virtual_key_id: resolved.virtual_key_id,
         #[cfg(feature = "gateway-translation")]
         response_owner,
-        limits,
-        budget,
-        tenant_budget_scope,
-        project_budget_scope,
-        user_budget_scope,
-        tenant_limits_scope,
-        project_limits_scope,
-        user_limits_scope,
-        backend_candidates,
+        limits: resolved.limits,
+        budget: resolved.budget,
+        tenant_budget_scope: resolved.tenant_budget_scope,
+        project_budget_scope: resolved.project_budget_scope,
+        user_budget_scope: resolved.user_budget_scope,
+        tenant_limits_scope: resolved.tenant_limits_scope,
+        project_limits_scope: resolved.project_limits_scope,
+        user_limits_scope: resolved.user_limits_scope,
+        backend_candidates: resolved.backend_candidates,
         strip_authorization,
-        charge_cost_usd_micros,
-        local_token_budget_reserved,
+        charge_cost_usd_micros: resolved.charge_cost_usd_micros,
+        local_token_budget_reserved: resolved.local_token_budget_reserved,
         #[cfg(feature = "gateway-costing")]
-        local_cost_budget_reserved,
+        local_cost_budget_reserved: resolved.local_cost_budget_reserved,
     })
 }

@@ -158,12 +158,17 @@ pub fn should_attempt_responses_shim(
     )
 }
 
-pub fn responses_request_to_chat_completions(request: &Value) -> Option<Value> {
-    let obj = request.as_object()?;
+pub fn responses_request_to_chat_completions(request: &Value) -> Result<Value, String> {
+    let obj = request
+        .as_object()
+        .ok_or_else(|| "responses request must be a JSON object".to_string())?;
 
     let mut out = Map::<String, Value>::new();
 
-    let model = obj.get("model")?.clone();
+    let model = obj
+        .get("model")
+        .cloned()
+        .ok_or_else(|| "responses request missing model".to_string())?;
     out.insert("model".to_string(), model);
 
     if let Some(temperature) = obj.get("temperature") {
@@ -217,7 +222,7 @@ pub fn responses_request_to_chat_completions(request: &Value) -> Option<Value> {
     }
 
     if let Some(input) = obj.get("input") {
-        append_messages_from_responses_input(&mut messages, input);
+        append_messages_from_responses_input(&mut messages, input)?;
     } else if let Some(existing) = obj.get("messages")
         && let Some(arr) = existing.as_array()
     {
@@ -225,11 +230,11 @@ pub fn responses_request_to_chat_completions(request: &Value) -> Option<Value> {
     }
 
     if messages.is_empty() {
-        return None;
+        return Err("responses request missing input/messages".to_string());
     }
 
     out.insert("messages".to_string(), Value::Array(messages));
-    Some(Value::Object(out))
+    Ok(Value::Object(out))
 }
 
 pub fn chat_completions_response_to_responses(chat_response: &Value) -> Option<Value> {
@@ -447,7 +452,7 @@ pub fn chat_completions_sse_to_responses_sse(
     )
 }
 
-fn append_messages_from_responses_input(out: &mut Vec<Value>, input: &Value) {
+fn append_messages_from_responses_input(out: &mut Vec<Value>, input: &Value) -> Result<(), String> {
     match input {
         Value::String(text) => {
             if !text.trim().is_empty() {
@@ -463,44 +468,194 @@ fn append_messages_from_responses_input(out: &mut Vec<Value>, input: &Value) {
                         }
                     }
                     Value::Object(obj) => {
-                        let role = obj
-                            .get("role")
-                            .and_then(Value::as_str)
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty());
-                        let Some(role) = role else {
-                            continue;
-                        };
-                        let content = extract_message_text(obj).unwrap_or_default();
-                        out.push(serde_json::json!({"role": role, "content": content}));
+                        if let Some(message) = responses_input_object_to_chat_message(obj)? {
+                            out.push(message);
+                        }
                     }
-                    _ => {}
+                    other => {
+                        return Err(format!("unsupported responses input item: {}", other));
+                    }
                 }
             }
         }
-        _ => {}
+        Value::Object(obj) => {
+            if let Some(message) = responses_input_object_to_chat_message(obj)? {
+                out.push(message);
+            }
+        }
+        _ => return Err("responses input must be a string, object, or array".to_string()),
+    }
+
+    Ok(())
+}
+
+fn responses_input_object_to_chat_message(
+    obj: &Map<String, Value>,
+) -> Result<Option<Value>, String> {
+    let role = obj
+        .get("role")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|role| !role.is_empty())
+        .map(str::to_string);
+    let item_type = obj
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+
+    if item_type == "message" || role.is_some() {
+        let role = role.ok_or_else(|| "responses message missing role".to_string())?;
+        let content = responses_message_content_to_chat_content(obj)?;
+        return Ok(Some(serde_json::json!({
+            "role": role,
+            "content": content,
+        })));
+    }
+
+    if let Some(content_part) = responses_content_part_to_chat_content(obj)? {
+        return Ok(Some(serde_json::json!({
+            "role": "user",
+            "content": [content_part],
+        })));
+    }
+
+    Ok(None)
+}
+
+fn responses_message_content_to_chat_content(obj: &Map<String, Value>) -> Result<Value, String> {
+    let Some(content) = obj.get("content") else {
+        return Ok(Value::String(String::new()));
+    };
+
+    match content {
+        Value::String(text) => Ok(Value::String(text.clone())),
+        Value::Array(parts) => {
+            let mut out = Vec::with_capacity(parts.len());
+            for part in parts {
+                let part_obj = part
+                    .as_object()
+                    .ok_or_else(|| "responses message content items must be objects".to_string())?;
+                let Some(content_part) = responses_content_part_to_chat_content(part_obj)? else {
+                    return Err("responses message content item is unsupported".to_string());
+                };
+                out.push(content_part);
+            }
+            Ok(Value::Array(out))
+        }
+        Value::Object(part_obj) => {
+            let Some(content_part) = responses_content_part_to_chat_content(part_obj)? else {
+                return Err("responses message content item is unsupported".to_string());
+            };
+            Ok(Value::Array(vec![content_part]))
+        }
+        _ => Err("responses message content must be a string, object, or array".to_string()),
     }
 }
 
-fn extract_message_text(obj: &Map<String, Value>) -> Option<String> {
-    if let Some(text) = obj.get("content").and_then(Value::as_str) {
-        return Some(text.to_string());
+fn responses_content_part_to_chat_content(
+    obj: &Map<String, Value>,
+) -> Result<Option<Value>, String> {
+    if let Some(text) = obj.get("text").and_then(Value::as_str) {
+        return Ok((!text.is_empty()).then(|| {
+            serde_json::json!({
+                "type": "text",
+                "text": text,
+            })
+        }));
     }
 
-    let parts = obj.get("content").and_then(Value::as_array)?;
-    let mut out = String::new();
-    for part in parts {
-        match part {
-            Value::String(text) => out.push_str(text),
-            Value::Object(obj) => {
-                if let Some(text) = obj.get("text").and_then(Value::as_str) {
-                    out.push_str(text);
-                }
-            }
-            _ => {}
+    let item_type = obj
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    match item_type {
+        "" => Ok(None),
+        "text" | "input_text" | "output_text" => {
+            let text = obj
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .ok_or_else(|| format!("{item_type} content missing text"))?;
+            Ok(Some(serde_json::json!({
+                "type": "text",
+                "text": text,
+            })))
         }
+        "input_image" | "image_url" => {
+            let image_url = match obj.get("image_url") {
+                Some(Value::String(url)) => Some(url.trim().to_string()),
+                Some(Value::Object(image_url)) => image_url
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .map(str::to_string),
+                _ => None,
+            }
+            .filter(|url| !url.is_empty())
+            .ok_or_else(|| format!("{item_type} content missing image_url"))?;
+            Ok(Some(serde_json::json!({
+                "type": "image_url",
+                "image_url": { "url": image_url },
+            })))
+        }
+        "input_file" | "file" => {
+            if let Some(file_id) = obj
+                .get("file_id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|file_id| !file_id.is_empty())
+            {
+                return Ok(Some(serde_json::json!({
+                    "type": "file",
+                    "file": { "file_id": file_id },
+                })));
+            }
+
+            if let Some(file_data) = obj
+                .get("file_data")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|file_data| !file_data.is_empty())
+            {
+                let mut file = serde_json::Map::from_iter([(
+                    "file_data".to_string(),
+                    Value::String(file_data.to_string()),
+                )]);
+                if let Some(filename) = obj
+                    .get("filename")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|filename| !filename.is_empty())
+                {
+                    file.insert("filename".to_string(), Value::String(filename.to_string()));
+                }
+                return Ok(Some(Value::Object(serde_json::Map::from_iter([
+                    ("type".to_string(), Value::String("file".to_string())),
+                    ("file".to_string(), Value::Object(file)),
+                ]))));
+            }
+
+            if obj
+                .get("file_url")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .is_some_and(|url| !url.is_empty())
+            {
+                return Err(
+                    "responses input_file.file_url cannot be shimmed to chat/completions"
+                        .to_string(),
+                );
+            }
+
+            Err(format!("{item_type} content missing file_id or file_data"))
+        }
+        other => Err(format!(
+            "responses content type `{other}` cannot be shimmed to chat/completions"
+        )),
     }
-    Some(out)
 }
 
 fn map_finish_reason_to_status(finish_reason: &str) -> (&'static str, Option<Value>) {
@@ -653,4 +808,76 @@ fn sse_event_bytes(value: Value) -> Bytes {
     out.extend_from_slice(&json);
     out.extend_from_slice(b"\n\n");
     out.freeze()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn responses_request_to_chat_completions_preserves_multimodal_input() {
+        let request = json!({
+            "model": "gpt-4o-mini",
+            "instructions": "be concise",
+            "input": [{
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "describe"},
+                    {"type": "input_image", "image_url": "https://example.com/cat.png", "detail": "high"}
+                ]
+            }]
+        });
+
+        let mapped = responses_request_to_chat_completions(&request).expect("shim request");
+        let messages = mapped
+            .get("messages")
+            .and_then(Value::as_array)
+            .expect("messages");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages[0].get("role").and_then(Value::as_str),
+            Some("system")
+        );
+        assert_eq!(
+            messages[1].get("role").and_then(Value::as_str),
+            Some("user")
+        );
+        let content = messages[1]
+            .get("content")
+            .and_then(Value::as_array)
+            .expect("content");
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0].get("type").and_then(Value::as_str), Some("text"));
+        assert_eq!(
+            content[1].get("type").and_then(Value::as_str),
+            Some("image_url")
+        );
+        assert_eq!(
+            content[1]
+                .get("image_url")
+                .and_then(|value| value.get("url"))
+                .and_then(Value::as_str),
+            Some("https://example.com/cat.png")
+        );
+    }
+
+    #[test]
+    fn responses_request_to_chat_completions_rejects_file_url_input() {
+        let request = json!({
+            "model": "gpt-4o-mini",
+            "input": [{
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_file", "file_url": "https://example.com/file.pdf"}
+                ]
+            }]
+        });
+
+        let err =
+            responses_request_to_chat_completions(&request).expect_err("file_url should fail");
+        assert!(err.contains("file_url"));
+    }
 }

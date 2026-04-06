@@ -261,15 +261,17 @@ pub(super) async fn attempt_proxy_backend(
         && let Some(parsed_json) = parsed_json.as_ref()
     {
         let _ = proxy_permits.take();
-        let Some(mut chat_body) =
-            responses_shim::responses_request_to_chat_completions(parsed_json)
-        else {
-            return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
-                StatusCode::BAD_GATEWAY,
-                "api_error",
-                Some("invalid_responses_request"),
-                "responses request cannot be mapped to chat/completions",
-            ))));
+        let mut chat_body = match responses_shim::responses_request_to_chat_completions(parsed_json)
+        {
+            Ok(chat_body) => chat_body,
+            Err(err) => {
+                return Ok(BackendAttemptOutcome::Continue(Some(openai_error(
+                    StatusCode::BAD_GATEWAY,
+                    "api_error",
+                    Some("invalid_responses_request"),
+                    format!("responses request cannot be mapped to chat/completions: {err}"),
+                ))));
+            }
         };
 
         if let Some(mapped_model) = chat_body

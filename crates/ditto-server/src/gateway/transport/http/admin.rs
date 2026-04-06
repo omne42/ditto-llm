@@ -2014,6 +2014,12 @@ pub(super) async fn upsert_key(
             key.tenant_id = Some(admin_tenant.to_string());
         }
     }
+    let backend_names = state
+        .backend_names_snapshot()
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    crate::gateway::config::validate_virtual_key_payload(&key, 0, &backend_names)
+        .map_err(map_gateway_error)?;
     let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
         Ok(gateway.upsert_virtual_key(key.clone()))
     })
@@ -2079,6 +2085,12 @@ pub(super) async fn upsert_key_with_id(
             key.tenant_id = Some(admin_tenant.to_string());
         }
     }
+    let backend_names = state
+        .backend_names_snapshot()
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    crate::gateway::config::validate_virtual_key_payload(&key, 0, &backend_names)
+        .map_err(map_gateway_error)?;
     let (inserted, _) = apply_control_plane_change(&state, "admin.key.upsert", |gateway| {
         Ok(gateway.upsert_virtual_key(key.clone()))
     })

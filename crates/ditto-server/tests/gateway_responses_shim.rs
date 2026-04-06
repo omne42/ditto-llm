@@ -139,6 +139,165 @@ async fn responses_shim_falls_back_to_chat_completions_non_streaming() {
 }
 
 #[tokio::test]
+async fn responses_shim_preserves_multimodal_input_when_falling_back() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(POST).path("/v1/responses");
+        then.status(404).body("not found");
+    });
+    let chat_mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/chat/completions")
+            .header("authorization", "Bearer sk-test")
+            .json_body(json!({
+                "model": "gpt-4o-mini",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "describe this"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": { "url": "https://example.com/cat.png" }
+                        },
+                        {
+                            "type": "file",
+                            "file": {
+                                "file_id": "file_123"
+                            }
+                        }
+                    ]
+                }]
+            }));
+        then.status(200)
+            .header("content-type", "application/json")
+            .body(
+                r#"{"id":"chatcmpl-2","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}"#,
+            );
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "describe this"},
+                {"type": "input_image", "image_url": "https://example.com/cat.png"},
+                {"type": "input_file", "file_id": "file_123"}
+            ]
+        }]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    chat_mock.assert();
+}
+
+#[tokio::test]
+async fn responses_shim_rejects_unshimmable_file_urls() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+    let upstream = MockServer::start();
+    upstream.mock(|when, then| {
+        when.method(POST).path("/v1/responses");
+        then.status(404).body("not found");
+    });
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway).with_proxy_backends(proxy_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let body = json!({
+        "model": "gpt-4o-mini",
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_file",
+                    "file_url": "https://example.com/doc.pdf"
+                }
+            ]
+        }]
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&body).expect("json");
+    assert!(
+        value
+            .pointer("/error/message")
+            .and_then(|value| value.as_str())
+            .is_some_and(|message| message.contains("file_url"))
+    );
+}
+
+#[tokio::test]
 async fn responses_shim_falls_back_to_chat_completions_streaming() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
