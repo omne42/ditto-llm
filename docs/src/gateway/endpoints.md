@@ -75,6 +75,8 @@ Gateway 的 HTTP 路由见 `crates/ditto-server/src/gateway/transport/http/route
 - `GET /v1/responses/*`、`GET /v1/responses/*/input_items`、`DELETE /v1/responses/*` 当前走 best-effort local store。这个 surface 不是跨实例、跨进程、跨重启的持久化 response store。
 - 它只保证读写“同一 gateway instance 内由 translation `POST /v1/responses` create 生成”的 response（含 streaming create），并要求调用方使用该 gateway 返回的 gateway-scoped response id。
 - 这个 local store 目前是进程内内存 LRU，最多保留 128 条 translated responses；进程重启、跨实例访问或超过容量被淘汰后，旧的 response id 都可能变成不可读/不可删。
+- translated `/v1/files*`、`/v1/videos*`、`/v1/batches*` 的 list/retrieve/delete/content/remix/cancel 现在默认按 gateway-local owner tracking fail-closed：只暴露“同一 gateway instance 内由同一个 virtual key 创建或派生出来”的资源 id。
+- 这意味着它们不会再直接透传共享上游资源空间；但如果进程重启、切换实例，或者资源不是经由当前 gateway 创建，后续 retrieve/list 可能返回空或 `*_not_found`。
 
 ## Anthropic Messages（compat）
 

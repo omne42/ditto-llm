@@ -346,6 +346,223 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
 }
 
 #[tokio::test]
+async fn gateway_translation_owned_resource_ids_are_scoped_and_owner_bound(
+) -> ditto_core::error::Result<()> {
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![
+            ditto_server::gateway::VirtualKeyConfig::new("key-1", "vk-1"),
+            ditto_server::gateway::VirtualKeyConfig::new("key-2", "vk-2"),
+        ],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_file_client(Arc::new(FakeFileClient))
+            .with_batch_client(Arc::new(FakeBatchClient))
+            .with_video_generation_model(Arc::new(FakeVideoGenerationModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let file_id = create_owned_translation_file(app.clone()).await?;
+    assert!(file_id.starts_with("file_ditto_"));
+
+    let list_files_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/files")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_files_response.status(), StatusCode::OK);
+    let list_files_body = to_bytes(list_files_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_files_json: serde_json::Value = serde_json::from_slice(&list_files_body)?;
+    assert_eq!(
+        list_files_json
+            .get("data")
+            .and_then(|value| value.as_array())
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("id"))
+            .and_then(|value| value.as_str()),
+        Some(file_id.as_str())
+    );
+
+    let raw_file_request = Request::builder()
+        .method("GET")
+        .uri("/v1/files/file_fake")
+        .body(Body::empty())
+        .unwrap();
+    let raw_file_response = app.clone().oneshot(raw_file_request).await.unwrap();
+    assert_eq!(raw_file_response.status(), StatusCode::NOT_FOUND);
+
+    let file_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/files/{file_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let file_response = app.clone().oneshot(file_request).await.unwrap();
+    assert_eq!(file_response.status(), StatusCode::OK);
+    let file_body = to_bytes(file_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let file_json: serde_json::Value = serde_json::from_slice(&file_body)?;
+    assert_eq!(file_json.get("id").and_then(|value| value.as_str()), Some(file_id.as_str()));
+
+    let foreign_file_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/files/{file_id}"))
+        .header(axum::http::header::AUTHORIZATION, "Bearer vk-2")
+        .body(Body::empty())
+        .unwrap();
+    let foreign_file_response = app.clone().oneshot(foreign_file_request).await.unwrap();
+    assert_eq!(foreign_file_response.status(), StatusCode::NOT_FOUND);
+
+    let batch_id = create_owned_translation_batch(app.clone()).await?;
+    assert!(batch_id.starts_with("batch_ditto_"));
+
+    let batch_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/batches/{batch_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(batch_response.status(), StatusCode::OK);
+    let batch_body = to_bytes(batch_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let batch_json: serde_json::Value = serde_json::from_slice(&batch_body)?;
+    assert_eq!(
+        batch_json.get("id").and_then(|value| value.as_str()),
+        Some(batch_id.as_str())
+    );
+
+    let batch_list_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/batches?after={batch_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(batch_list_response.status(), StatusCode::OK);
+    let batch_list_body = to_bytes(batch_list_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let batch_list_json: serde_json::Value = serde_json::from_slice(&batch_list_body)?;
+    let batch_item = batch_list_json
+        .get("data")
+        .and_then(|value| value.as_array())
+        .and_then(|items| items.first())
+        .expect("batch item");
+    assert_eq!(batch_item.get("id").and_then(|value| value.as_str()), Some(batch_id.as_str()));
+    assert_eq!(
+        batch_item
+            .get("input_file_id")
+            .and_then(|value| value.as_str()),
+        Some(file_id.as_str())
+    );
+
+    let video_id = create_owned_translation_video(app.clone()).await?;
+    assert!(video_id.starts_with("video_ditto_"));
+
+    let video_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/videos/{video_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(video_response.status(), StatusCode::OK);
+    let video_body = to_bytes(video_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let video_json: serde_json::Value = serde_json::from_slice(&video_body)?;
+    assert_eq!(
+        video_json.get("id").and_then(|value| value.as_str()),
+        Some(video_id.as_str())
+    );
+
+    let remix_payload = json!({ "prompt": "change angle" });
+    let remix_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/videos/{video_id}/remix"))
+                .header("content-type", "application/json")
+                .body(Body::from(remix_payload.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(remix_response.status(), StatusCode::OK);
+    let remix_body = to_bytes(remix_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let remix_json: serde_json::Value = serde_json::from_slice(&remix_body)?;
+    assert!(
+        remix_json
+            .get("id")
+            .and_then(|value| value.as_str())
+            .is_some_and(|value| value.starts_with("video_ditto_"))
+    );
+    assert_eq!(
+        remix_json
+            .get("remixed_from_video_id")
+            .and_then(|value| value.as_str()),
+        Some(video_id.as_str())
+    );
+
+    let video_content_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/videos/{video_id}/content?variant=thumbnail"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(video_content_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn gateway_translation_responses_scoped_ids_isolate_same_provider_backends()
 -> ditto_core::error::Result<()> {
     let mut primary_key = ditto_server::gateway::VirtualKeyConfig::new("key-primary", "vk-primary");
@@ -1277,7 +1494,10 @@ async fn gateway_translation_videos_create_json() -> ditto_core::error::Result<(
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("vid_json"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("video_ditto_7_primary_vid_json")
+    );
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("video"));
     assert_eq!(
         parsed.get("model").and_then(|v| v.as_str()),
@@ -1325,7 +1545,7 @@ async fn gateway_translation_videos_create_multipart() -> ditto_core::error::Res
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(
         parsed.get("id").and_then(|v| v.as_str()),
-        Some("vid_multipart")
+        Some("video_ditto_7_primary_vid_multipart")
     );
     assert_eq!(parsed.get("seconds").and_then(|v| v.as_str()), Some("6"));
     Ok(())
@@ -1345,10 +1565,11 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_video(app.clone()).await?;
 
     let list_request = Request::builder()
         .method("GET")
-        .uri("/v1/videos?limit=2&after=vid_111&order=desc")
+        .uri(format!("/v1/videos?limit=2&after={created_id}&order=desc"))
         .body(Body::empty())
         .unwrap();
     let list_response = app.clone().oneshot(list_request).await.unwrap();
@@ -1362,13 +1583,18 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
         Some("list")
     );
     assert_eq!(
-        list_parsed.get("last_id").and_then(|v| v.as_str()),
-        Some("vid_123")
+        list_parsed
+            .get("data")
+            .and_then(|v| v.as_array())
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("id"))
+            .and_then(|v| v.as_str()),
+        Some(created_id.as_str())
     );
 
     let get_request = Request::builder()
         .method("GET")
-        .uri("/v1/videos/vid_123")
+        .uri(format!("/v1/videos/{created_id}"))
         .body(Body::empty())
         .unwrap();
     let get_response = app.clone().oneshot(get_request).await.unwrap();
@@ -1379,7 +1605,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
     let get_parsed: serde_json::Value = serde_json::from_slice(&get_body)?;
     assert_eq!(
         get_parsed.get("id").and_then(|v| v.as_str()),
-        Some("vid_123")
+        Some(created_id.as_str())
     );
     assert_eq!(
         get_parsed.get("status").and_then(|v| v.as_str()),
@@ -1388,7 +1614,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
 
     let delete_request = Request::builder()
         .method("DELETE")
-        .uri("/v1/videos/vid_123")
+        .uri(format!("/v1/videos/{created_id}"))
         .body(Body::empty())
         .unwrap();
     let delete_response = app.oneshot(delete_request).await.unwrap();
@@ -1423,10 +1649,11 @@ async fn gateway_translation_videos_content_download() -> ditto_core::error::Res
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_video(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/videos/vid_123/content?variant=thumbnail")
+        .uri(format!("/v1/videos/{created_id}/content?variant=thumbnail"))
         .body(Body::empty())
         .unwrap();
 
@@ -1459,10 +1686,11 @@ async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_c
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_video(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/videos/vid_123/content?variant=poster")
+        .uri(format!("/v1/videos/{created_id}/content?variant=poster"))
         .body(Body::empty())
         .unwrap();
 
@@ -1494,13 +1722,14 @@ async fn gateway_translation_videos_remix_json() -> ditto_core::error::Result<()
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_video(app.clone()).await?;
 
     let payload = json!({
         "prompt": "change angle"
     });
     let request = Request::builder()
         .method("POST")
-        .uri("/v1/videos/vid_123/remix")
+        .uri(format!("/v1/videos/{created_id}/remix"))
         .header("content-type", "application/json")
         .body(Body::from(payload.to_string()))
         .unwrap();
@@ -1509,10 +1738,13 @@ async fn gateway_translation_videos_remix_json() -> ditto_core::error::Result<()
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("vid_remix"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("video_ditto_7_primary_vid_remix")
+    );
     assert_eq!(
         parsed.get("remixed_from_video_id").and_then(|v| v.as_str()),
-        Some("vid_123")
+        Some(created_id.as_str())
     );
     assert_eq!(
         parsed.get("prompt").and_then(|v| v.as_str()),
@@ -1750,16 +1982,18 @@ async fn gateway_translation_batches_create() -> ditto_core::error::Result<()> {
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_batch_client(Arc::new(FakeBatchClient)),
+            .with_batch_client(Arc::new(FakeBatchClient))
+            .with_file_client(Arc::new(FakeFileClient)),
     );
 
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let file_id = create_owned_translation_file(app.clone()).await?;
 
     let payload = json!({
-        "input_file_id": "file_123",
+        "input_file_id": file_id,
         "endpoint": "/v1/chat/completions",
         "completion_window": "24h"
     });
@@ -1786,7 +2020,7 @@ async fn gateway_translation_batches_create() -> ditto_core::error::Result<()> {
     assert_eq!(parsed.get("object").and_then(|v| v.as_str()), Some("batch"));
     assert_eq!(
         parsed.get("id").and_then(|v| v.as_str()),
-        Some("batch_created")
+        Some("batch_ditto_7_primary_batch_created")
     );
     Ok(())
 }
@@ -1798,17 +2032,19 @@ async fn gateway_translation_batches_list() -> ditto_core::error::Result<()> {
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_batch_client(Arc::new(FakeBatchClient)),
+            .with_batch_client(Arc::new(FakeBatchClient))
+            .with_file_client(Arc::new(FakeFileClient)),
     );
 
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_batch(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/batches?limit=2&after=batch_111")
+        .uri(format!("/v1/batches?limit=2&after={created_id}"))
         .body(Body::empty())
         .unwrap();
 
@@ -1823,11 +2059,11 @@ async fn gateway_translation_batches_list() -> ditto_core::error::Result<()> {
             .get("data")
             .and_then(|v| v.as_array())
             .map(|v| v.len()),
-        Some(2)
+        Some(1)
     );
     assert_eq!(
         parsed.get("last_id").and_then(|v| v.as_str()),
-        Some("batch_2")
+        Some(created_id.as_str())
     );
     Ok(())
 }
@@ -1839,17 +2075,19 @@ async fn gateway_translation_batches_retrieve() -> ditto_core::error::Result<()>
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_batch_client(Arc::new(FakeBatchClient)),
+            .with_batch_client(Arc::new(FakeBatchClient))
+            .with_file_client(Arc::new(FakeFileClient)),
     );
 
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_batch(app.clone()).await?;
 
     let request = Request::builder()
         .method("GET")
-        .uri("/v1/batches/batch_123")
+        .uri(format!("/v1/batches/{created_id}"))
         .body(Body::empty())
         .unwrap();
 
@@ -1857,7 +2095,10 @@ async fn gateway_translation_batches_retrieve() -> ditto_core::error::Result<()>
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("batch_123"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some(created_id.as_str())
+    );
     Ok(())
 }
 
@@ -1868,17 +2109,19 @@ async fn gateway_translation_batches_cancel() -> ditto_core::error::Result<()> {
     translation_backends.insert(
         "primary".to_string(),
         TranslationBackend::new("fake", Arc::new(FakeModel))
-            .with_batch_client(Arc::new(FakeBatchClient)),
+            .with_batch_client(Arc::new(FakeBatchClient))
+            .with_file_client(Arc::new(FakeFileClient)),
     );
 
     let state = GatewayHttpState::new(gateway)
         .with_proxy_backends(HashMap::new())
         .with_translation_backends(translation_backends);
     let app = authorized_test_app(state);
+    let created_id = create_owned_translation_batch(app.clone()).await?;
 
     let request = Request::builder()
         .method("POST")
-        .uri("/v1/batches/batch_123/cancel")
+        .uri(format!("/v1/batches/{created_id}/cancel"))
         .body(Body::empty())
         .unwrap();
 
@@ -1886,7 +2129,10 @@ async fn gateway_translation_batches_cancel() -> ditto_core::error::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("batch_123"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some(created_id.as_str())
+    );
     Ok(())
 }
 
