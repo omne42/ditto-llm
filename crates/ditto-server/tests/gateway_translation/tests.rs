@@ -1,3 +1,12 @@
+fn streamed_response_id_from_sse(body: &[u8]) -> String {
+    let text = String::from_utf8_lossy(body);
+    let start = text.find("resp_ditto_").expect("streamed response id");
+    text[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect()
+}
+
 #[tokio::test]
 async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
@@ -122,12 +131,7 @@ async fn gateway_translation_streamed_responses_can_be_retrieved() -> ditto_core
     let create_body = to_bytes(create_response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let create_text = String::from_utf8_lossy(&create_body).to_string();
-    let start = create_text.find("resp_ditto_").expect("streamed response id");
-    let created_id = create_text[start..]
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
-        .collect::<String>();
+    let created_id = streamed_response_id_from_sse(&create_body);
     assert!(created_id.starts_with("resp_ditto_"));
 
     let retrieve_request = Request::builder()
@@ -150,6 +154,173 @@ async fn gateway_translation_streamed_responses_can_be_retrieved() -> ditto_core
             .get("output_text")
             .and_then(|value| value.as_str()),
         Some("hello")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_streamed_responses_input_items_and_delete()
+-> ditto_core::error::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "input": "hi"
+    });
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created_id = streamed_response_id_from_sse(&create_body);
+
+    let input_items_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}/input_items"))
+        .body(Body::empty())
+        .unwrap();
+    let input_items_response = app.clone().oneshot(input_items_request).await.unwrap();
+    assert_eq!(input_items_response.status(), StatusCode::OK);
+    assert_eq!(
+        input_items_response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|value| value.to_str().ok()),
+        Some("primary")
+    );
+    let input_items_body = to_bytes(input_items_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let input_items_parsed: serde_json::Value = serde_json::from_slice(&input_items_body)?;
+    assert_eq!(
+        input_items_parsed
+            .get("data")
+            .and_then(|value| value.as_array())
+            .and_then(|items| items.first())
+            .and_then(|value| value.get("content"))
+            .and_then(|value| value.as_array())
+            .and_then(|items| items.first())
+            .and_then(|value| value.get("text"))
+            .and_then(|value| value.as_str()),
+        Some("hi")
+    );
+
+    let delete_request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/v1/responses/{created_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let delete_response = app.clone().oneshot(delete_request).await.unwrap();
+    assert_eq!(delete_response.status(), StatusCode::OK);
+    let delete_body = to_bytes(delete_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let delete_parsed: serde_json::Value = serde_json::from_slice(&delete_body)?;
+    assert_eq!(
+        delete_parsed.get("id").and_then(|value| value.as_str()),
+        Some(created_id.as_str())
+    );
+    assert_eq!(
+        delete_parsed.get("deleted").and_then(|value| value.as_bool()),
+        Some(true)
+    );
+
+    let retrieve_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let retrieve_response = app.oneshot(retrieve_request).await.unwrap();
+    assert_eq!(retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_responses_require_gateway_scoped_ids()
+-> ditto_core::error::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let create_request = Request::builder()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "input": "hi"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let created_id = serde_json::from_slice::<serde_json::Value>(&create_body)?
+        .get("id")
+        .and_then(|value| value.as_str())
+        .expect("response id")
+        .to_string();
+    let raw_response_id = created_id
+        .split_once("_primary_")
+        .map(|(_, response_id)| response_id)
+        .expect("gateway-scoped response id")
+        .to_string();
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{raw_response_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed
+            .get("error")
+            .and_then(|value| value.get("message"))
+            .and_then(|value| value.as_str()),
+        Some(
+            format!(
+                "response {raw_response_id} not found; translated response retrieval requires a gateway-scoped id from a /v1/responses create on the same gateway instance and virtual key"
+            )
+            .as_str(),
+        )
     );
 
     Ok(())

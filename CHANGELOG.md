@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway translation: add regression coverage for translated `/v1/responses` contract edges so streamed creates remain queryable via `input_items`, deletable via the same gateway-scoped id, and bare upstream `response_id` values stay fail-closed.
 - Gateway: settle non-persistent control-plane token budgets to `input_tokens + response.output_tokens` on success instead of leaving the optimistic `max_output_tokens` reservation fully charged.
 - Build: realign `ditto-core` secret-resolution imports with the `secret-kit` module boundaries pinned in CI so current `cargo check`/`cargo clippy --all-features` gates compile again.
 - Build: restore workspace `--all-features` compatibility after `omne-fs`/`secret-kit`/`i18n-runtime-kit` API drift by updating runtime resource bootstrapping, secret resolution call sites, and gateway-translation imports to the current crate boundaries.
