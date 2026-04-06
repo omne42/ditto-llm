@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
 use i18n_kit::{Catalog, FallbackStrategy, Locale, TemplateArg};
+#[allow(deprecated)]
 use i18n_runtime_kit::{CatalogInitError, CatalogLocaleError, LazyCatalog, bootstrap_i18n_catalog};
 use text_assets_kit::{DataRootOptions, ResourceManifest, TextResource, ensure_data_root};
 
@@ -10,6 +11,7 @@ use crate::error::{DittoError, Result};
 const DATA_ROOT_DIR_NAME: &str = ".omne_data";
 const DATA_ROOT_ENV_VAR: &str = "OMNE_DATA_DIR";
 
+#[allow(deprecated)]
 pub struct RuntimeMessageCatalog {
     inner: LazyCatalog,
 }
@@ -17,6 +19,7 @@ pub struct RuntimeMessageCatalog {
 pub static MESSAGE_CATALOG: LazyLock<RuntimeMessageCatalog> =
     LazyLock::new(|| RuntimeMessageCatalog::new(load_default_message_catalog));
 
+#[allow(deprecated)]
 impl RuntimeMessageCatalog {
     pub fn new<I>(initializer: I) -> Self
     where
@@ -108,7 +111,7 @@ pub fn bootstrap_runtime_assets_with_options(options: &DataRootOptions) -> Resul
             "error" => err.to_string()
         )
     })?;
-    let _ = MESSAGE_CATALOG.replace(i18n_catalog);
+    MESSAGE_CATALOG.replace(i18n_catalog);
 
     Ok(RuntimeAssets {
         data_root,

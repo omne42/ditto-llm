@@ -458,15 +458,13 @@ pub fn ui_message_stream_v1_sse_with_options(
 
 /// Build an `axum` streaming response for UI Message Stream v1 (SSE + headers).
 ///
-/// Enabled when either:
-/// - `ditto-server` is built with `--features gateway` (which pulls in `ditto-core` + `axum`), or
-/// - `ditto-core` is built with `--features sdk-axum` (SDK-only axum helper).
-#[cfg(any(feature = "gateway", feature = "sdk-axum"))]
+/// Enabled only when `ditto-core` opts into the SDK-side `axum` helper surface.
+#[cfg(feature = "sdk-axum")]
 pub fn ui_message_stream_v1_sse_response(stream: StreamResult) -> axum::response::Response {
     ui_message_stream_v1_sse_response_with_options(stream, UiMessageStreamV1Options::default())
 }
 
-#[cfg(any(feature = "gateway", feature = "sdk-axum"))]
+#[cfg(feature = "sdk-axum")]
 pub fn ui_message_stream_v1_sse_response_with_options(
     stream: StreamResult,
     options: UiMessageStreamV1Options,
