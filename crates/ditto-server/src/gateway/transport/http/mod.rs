@@ -330,6 +330,7 @@ impl GatewayProxyRuntimeState {
 pub struct GatewayHttpState {
     gateway: Arc<Gateway>,
     control_plane: Arc<RwLock<GatewayControlPlaneSnapshot>>,
+    control_plane_writes: Arc<Mutex<()>>,
     limits: Arc<StdMutex<RateLimiter>>,
     budget: Arc<StdMutex<BudgetTracker>>,
     observability: Arc<StdMutex<Observability>>,
@@ -376,6 +377,7 @@ impl GatewayHttpState {
         Self {
             gateway: Arc::new(gateway),
             control_plane: Arc::new(RwLock::new(control_plane)),
+            control_plane_writes: Arc::new(Mutex::new(())),
             limits,
             budget,
             observability,
@@ -415,6 +417,10 @@ impl GatewayHttpState {
 
     pub(crate) fn record_backend_call(&self) {
         lock_unpoisoned(&self.observability).record_backend_call();
+    }
+
+    pub(super) async fn lock_control_plane_writes(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.control_plane_writes.lock().await
     }
 
     pub(crate) fn observability_snapshot(&self) -> ObservabilitySnapshot {

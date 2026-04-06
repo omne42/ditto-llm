@@ -176,6 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Gateway: serialize admin control-plane mutations so runtime snapshotting, persistence, and version-history updates cannot interleave across concurrent writes.
 - Gateway: make Responses fallback shim preserve safe multimodal and file payloads, and fail closed with an explicit error when `file_url` inputs cannot be represented as Chat Completions content.
 - Gateway MCP: reject invalid tool-call arguments JSON during auto-execution instead of coercing malformed payloads to `null`.
 - Gateway: reuse canonical backend-aware config validation for admin key upserts and `/admin/config/validate`, so virtual-key routes are checked consistently against the runtime backend snapshot.
