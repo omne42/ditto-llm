@@ -49,6 +49,69 @@ fn estimate_tokens_from_length(len: usize) -> u32 {
         estimate as u32
     }
 }
+
+async fn buffer_streaming_multipart_body(
+    body: Body,
+    content_length: usize,
+) -> Result<Bytes, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let mut buffered = bytes::BytesMut::with_capacity(content_length.min(64 * 1024));
+    let mut stream = body.into_data_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|err| {
+            openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_request"),
+                format!("failed to read multipart request body: {err}"),
+            )
+        })?;
+        buffered.extend_from_slice(&chunk);
+    }
+
+    Ok(buffered.freeze())
+}
+
+fn multipart_request_model(
+    path_and_query: &str,
+    content_type: Option<&str>,
+    body: &Bytes,
+) -> Result<Option<String>, (StatusCode, Json<OpenAiErrorResponse>)> {
+    let path = path_and_query
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(path_and_query)
+        .trim_end_matches('/');
+    if path != "/v1/audio/transcriptions" && path != "/v1/audio/translations" {
+        return Ok(None);
+    }
+
+    let Some(content_type) = content_type else {
+        return Ok(None);
+    };
+
+    let parts =
+        super::super::multipart::parse_multipart_form(content_type, body).map_err(|err| {
+            openai_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                Some("invalid_request"),
+                err,
+            )
+        })?;
+    for part in parts {
+        if part.name == "model" && part.filename.is_none() {
+            let model = String::from_utf8_lossy(part.data.as_ref())
+                .trim()
+                .to_string();
+            if !model.is_empty() {
+                return Ok(Some(model));
+            }
+        }
+    }
+    Ok(None)
+}
+
 // end inline: streaming_multipart/preamble.rs
 // inlined from streaming_multipart/handler.rs
 struct ResolvedStreamingMultipartGatewayContext {
@@ -103,19 +166,18 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         super::super::metrics_prometheus::normalize_proxy_path_label(&path_and_query);
     #[cfg(feature = "gateway-metrics-prometheus")]
     let metrics_timer_start = Instant::now();
-    #[cfg(any(
-        feature = "gateway-store-sqlite",
-        feature = "gateway-store-postgres",
-        feature = "gateway-store-mysql",
-        feature = "gateway-store-redis"
-    ))]
-    let model: Option<String> = None;
     let content_length = parts
         .headers
         .get("content-length")
         .and_then(|value| value.to_str().ok())
         .and_then(|raw| raw.parse::<usize>().ok())
         .unwrap_or(0);
+    let buffered_body = buffer_streaming_multipart_body(body, content_length).await?;
+    let content_type = parts
+        .headers
+        .get("content-type")
+        .and_then(|value| value.to_str().ok());
+    let model = multipart_request_model(&path_and_query, content_type, &buffered_body)?;
     let charge_tokens = estimate_tokens_from_length(content_length);
 
     #[cfg(feature = "gateway-store-sqlite")]
@@ -167,32 +229,13 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
     } = {
         state.record_request();
 
-        let strip_authorization = true;
-        let token = extract_virtual_key(&parts.headers).ok_or_else(|| {
-            openai_error(
-                StatusCode::UNAUTHORIZED,
-                "authentication_error",
-                Some("invalid_api_key"),
-                "missing virtual key",
+        let gateway_preamble =
+            super::proxy_gateway_context::resolve_openai_compat_proxy_gateway_preamble(
+                &state, &parts,
             )
-        })?;
-        let key = state.virtual_key_by_token(&token).ok_or_else(|| {
-            openai_error(
-                StatusCode::UNAUTHORIZED,
-                "authentication_error",
-                Some("invalid_api_key"),
-                "unauthorized virtual key",
-            )
-        })?;
-        if !key.enabled {
-            return Err(openai_error(
-                StatusCode::UNAUTHORIZED,
-                "authentication_error",
-                Some("invalid_api_key"),
-                "virtual key disabled",
-            ));
-        }
-        let key = Some(key);
+            .await?;
+        let strip_authorization = gateway_preamble.strip_authorization;
+        let key = gateway_preamble.key;
 
         let virtual_key_id = key.as_ref().map(|key| key.id.clone());
         let limits = key.as_ref().map(|key| key.limits.clone());
@@ -302,6 +345,139 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             }
         }
 
+        if let Some(key) = key.as_ref() {
+            let guardrails = state.guardrails_for_model(model.as_deref(), key);
+
+            if let Some(model_id) = model.as_deref()
+                && let Some(reason) = guardrails.check_model(model_id)
+            {
+                state.record_guardrail_blocked();
+                let err = openai_error(
+                    StatusCode::FORBIDDEN,
+                    "policy_error",
+                    Some("guardrail_rejected"),
+                    reason,
+                );
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
+                    let duration = metrics_timer_start.elapsed();
+                    let status = err.0.as_u16();
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                    metrics.record_proxy_guardrail_blocked(
+                        Some(&key.id),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
+                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
+                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                }
+                return Err(err);
+            }
+
+            if let Some(limit) = guardrails.max_input_tokens
+                && charge_tokens > limit
+            {
+                state.record_guardrail_blocked();
+                let err = openai_error(
+                    StatusCode::FORBIDDEN,
+                    "policy_error",
+                    Some("guardrail_rejected"),
+                    format!("input_tokens>{limit}"),
+                );
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
+                    let duration = metrics_timer_start.elapsed();
+                    let status = err.0.as_u16();
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                    metrics.record_proxy_guardrail_blocked(
+                        Some(&key.id),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
+                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
+                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                }
+                return Err(err);
+            }
+
+            if guardrails.validate_schema
+                && let Some(reason) = validate_openai_multipart_request_schema(
+                    &path_and_query,
+                    content_type,
+                    &buffered_body,
+                )
+            {
+                state.record_guardrail_blocked();
+                let err = openai_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request_error",
+                    Some("invalid_request"),
+                    reason,
+                );
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
+                    let duration = metrics_timer_start.elapsed();
+                    let status = err.0.as_u16();
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                    metrics.record_proxy_guardrail_blocked(
+                        Some(&key.id),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
+                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
+                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                }
+                return Err(err);
+            }
+
+            if guardrails.has_text_filters()
+                && let Ok(text) = std::str::from_utf8(&buffered_body)
+                && let Some(reason) = guardrails.check_text(text)
+            {
+                state.record_guardrail_blocked();
+                let err = openai_error(
+                    StatusCode::FORBIDDEN,
+                    "policy_error",
+                    Some("guardrail_rejected"),
+                    reason,
+                );
+                #[cfg(feature = "gateway-metrics-prometheus")]
+                if let Some(metrics) = state.proxy.metrics.as_ref() {
+                    let duration = metrics_timer_start.elapsed();
+                    let status = err.0.as_u16();
+                    let mut metrics = metrics.lock().await;
+                    metrics.record_proxy_request(Some(&key.id), model.as_deref(), &metrics_path);
+                    metrics.record_proxy_guardrail_blocked(
+                        Some(&key.id),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
+                    metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
+                    metrics.observe_proxy_request_duration(&metrics_path, duration);
+                }
+                return Err(err);
+            }
+        }
+
         if !use_redis_budget {
             let mut rate_limit_scopes = Vec::new();
             if let (Some(key), Some(limits)) = (key.as_ref(), limits.as_ref()) {
@@ -328,13 +504,21 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
+                    metrics.record_proxy_request(
+                        virtual_key_id.as_deref(),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
                     metrics.record_proxy_rate_limited(
                         virtual_key_id.as_deref(),
-                        None,
+                        model.as_deref(),
                         &metrics_path,
                     );
                     metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
                 return Err(mapped);
@@ -362,13 +546,21 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                     let duration = metrics_timer_start.elapsed();
                     let status = mapped.0.as_u16();
                     let mut metrics = metrics.lock().await;
-                    metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
+                    metrics.record_proxy_request(
+                        virtual_key_id.as_deref(),
+                        model.as_deref(),
+                        &metrics_path,
+                    );
                     metrics.record_proxy_budget_exceeded(
                         virtual_key_id.as_deref(),
-                        None,
+                        model.as_deref(),
                         &metrics_path,
                     );
                     metrics.record_proxy_response_status_by_path(&metrics_path, status);
+                    if let Some(model) = model.as_deref() {
+                        metrics.record_proxy_response_status_by_model(model, status);
+                        metrics.observe_proxy_request_duration_by_model(model, duration);
+                    }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
                 return Err(mapped);
@@ -377,7 +569,11 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         }
 
         let backends = state
-            .select_backends_for_model_seeded("", key.as_ref(), Some(&request_id))
+            .select_backends_for_model_seeded(
+                model.as_deref().unwrap_or_default(),
+                key.as_ref(),
+                Some(&request_id),
+            )
             .map_err(map_openai_gateway_error)?;
 
         ResolvedStreamingMultipartGatewayContext {
@@ -432,9 +628,21 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             let duration = metrics_timer_start.elapsed();
             let status = mapped.0.as_u16();
             let mut metrics = metrics.lock().await;
-            metrics.record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
-            metrics.record_proxy_rate_limited(virtual_key_id.as_deref(), None, &metrics_path);
+            metrics.record_proxy_request(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
+            metrics.record_proxy_rate_limited(
+                virtual_key_id.as_deref(),
+                model.as_deref(),
+                &metrics_path,
+            );
             metrics.record_proxy_response_status_by_path(&metrics_path, status);
+            if let Some(model) = model.as_deref() {
+                metrics.record_proxy_response_status_by_model(model, status);
+                metrics.observe_proxy_request_duration_by_model(model, duration);
+            }
             metrics.observe_proxy_request_duration(&metrics_path, duration);
         }
         return Err(mapped);
@@ -442,10 +650,11 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     if let Some(metrics) = state.proxy.metrics.as_ref() {
-        metrics
-            .lock()
-            .await
-            .record_proxy_request(virtual_key_id.as_deref(), None, &metrics_path);
+        metrics.lock().await.record_proxy_request(
+            virtual_key_id.as_deref(),
+            model.as_deref(),
+            &metrics_path,
+        );
     }
 
     #[cfg(any(
@@ -768,10 +977,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
     apply_backend_headers(&mut outgoing_headers, backend.headers());
     insert_request_id(&mut outgoing_headers, &request_id);
 
-    let data_stream = body
-        .into_data_stream()
-        .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
-    let outgoing_body = reqwest::Body::wrap_stream(data_stream);
+    let outgoing_body = reqwest::Body::from(buffered_body.clone());
 
     #[cfg(feature = "gateway-metrics-prometheus")]
     let backend_timer_start = Instant::now();
@@ -988,7 +1194,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             "attempted_backends": [&backend_name],
             "method": parts.method.as_str(),
             "path": &path_and_query,
-            "model": Value::Null,
+            "model": model.as_deref(),
             "status": status.as_u16(),
             "charge_tokens": charge_tokens,
             "spent_tokens": spent_tokens,
@@ -1048,8 +1254,8 @@ mod tests {
     use httpmock::MockServer;
 
     use crate::gateway::{
-        BackendConfig, Gateway, GatewayConfig, LimitsConfig, ProxyBackend, RouteBackend,
-        RouterConfig, VirtualKeyConfig,
+        BackendConfig, Gateway, GatewayConfig, GuardrailsConfig, LimitsConfig, ProxyBackend,
+        RouteBackend, RouteRule, RouterConfig, VirtualKeyConfig,
     };
 
     fn backend_config(name: &str, base_url: String) -> BackendConfig {
@@ -1097,6 +1303,18 @@ Content-Type: audio/wav\r\n\r\n\
         key
     }
 
+    fn multipart_audio_body_without_model(boundary: &str) -> Vec<u8> {
+        format!(
+            "--{boundary}\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n\
+Content-Type: audio/wav\r\n\r\n\
+{}\r\n\
+--{boundary}--\r\n",
+            "x".repeat(64)
+        )
+        .into_bytes()
+    }
+
     fn streaming_request(token: &str, boundary: &str, body: Vec<u8>) -> Request<Body> {
         Request::builder()
             .method("POST")
@@ -1109,6 +1327,24 @@ Content-Type: audio/wav\r\n\r\n\
             .header("content-length", body.len().to_string())
             .body(Body::from(body))
             .expect("multipart request")
+    }
+
+    fn passthrough_request(boundary: &str, body: Vec<u8>) -> Request<Body> {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/v1/audio/transcriptions")
+            .header("authorization", "Bearer upstream-token")
+            .header(
+                "content-type",
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .header("content-length", body.len().to_string())
+            .body(Body::from(body))
+            .expect("multipart request");
+        request
+            .extensions_mut()
+            .insert(InternalUpstreamAuthPassthrough);
+        request
     }
 
     #[tokio::test]
@@ -1190,5 +1426,134 @@ Content-Type: audio/wav\r\n\r\n\
             .expect("key scope must remain available after multipart rejection");
 
         upstream_mock.assert_calls(1);
+    }
+
+    #[tokio::test]
+    async fn streaming_multipart_uses_model_routing_and_passthrough_auth() {
+        if ditto_core::utils::test_support::should_skip_httpmock() {
+            return;
+        }
+
+        let primary = MockServer::start();
+        let whisper = MockServer::start();
+        let primary_mock = primary.mock(|when, then| {
+            when.method(POST).path("/v1/audio/transcriptions");
+            then.status(500);
+        });
+        let whisper_mock = whisper.mock(|when, then| {
+            when.method(POST)
+                .path("/v1/audio/transcriptions")
+                .header("authorization", "Bearer upstream-token");
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"text":"ok"}"#);
+        });
+
+        let config = GatewayConfig {
+            backends: vec![
+                backend_config("primary", primary.base_url()),
+                backend_config("whisper", whisper.base_url()),
+            ],
+            virtual_keys: Vec::new(),
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: vec![RouteRule {
+                    model_prefix: "whisper-1".to_string(),
+                    exact: true,
+                    backend: "whisper".to_string(),
+                    backends: Vec::new(),
+                    guardrails: None,
+                }],
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let mut proxy_backends = HashMap::new();
+        proxy_backends.insert(
+            "primary".to_string(),
+            ProxyBackend::new(primary.base_url()).expect("primary backend"),
+        );
+        proxy_backends.insert(
+            "whisper".to_string(),
+            ProxyBackend::new(whisper.base_url()).expect("whisper backend"),
+        );
+
+        let state = GatewayHttpState::new(Gateway::new(config))
+            .with_proxy_backends(proxy_backends)
+            .with_proxy_max_body_bytes(16);
+        let boundary = "ditto-boundary";
+        let request = passthrough_request(boundary, multipart_audio_body(boundary));
+        let (parts, body) = request.into_parts();
+        let response = handle_openai_compat_proxy_streaming_multipart(
+            state,
+            parts,
+            body,
+            "req-stream-route".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect("multipart passthrough request should succeed");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        primary_mock.assert_calls(0);
+        whisper_mock.assert_calls(1);
+    }
+
+    #[tokio::test]
+    async fn streaming_multipart_invalid_schema_does_not_consume_rate_limit() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+        key.guardrails = GuardrailsConfig {
+            validate_schema: true,
+            ..GuardrailsConfig::default()
+        };
+
+        let config = GatewayConfig {
+            backends: vec![backend_config("primary", "http://127.0.0.1:9".to_string())],
+            virtual_keys: vec![key.clone()],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let state = GatewayHttpState::new(Gateway::new(config)).with_proxy_max_body_bytes(16);
+        let boundary = "ditto-boundary";
+        let request = streaming_request(
+            "vk-1",
+            boundary,
+            multipart_audio_body_without_model(boundary),
+        );
+        let (parts, body) = request.into_parts();
+        let err = handle_openai_compat_proxy_streaming_multipart(
+            state.clone(),
+            parts,
+            body,
+            "req-stream-invalid".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect_err("multipart request missing model should fail validation");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+
+        let minute = now_epoch_seconds() / 60;
+        state
+            .check_and_consume_rate_limits([("key-1", &key.limits)], 1, minute)
+            .expect("invalid multipart request must not consume key rate limit");
     }
 }

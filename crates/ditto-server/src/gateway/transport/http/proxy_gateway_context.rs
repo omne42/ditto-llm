@@ -43,9 +43,9 @@ pub(super) struct ResolveOpenAiCompatProxyGatewayContextRequest<'a> {
 }
 
 #[derive(Debug, Clone)]
-struct OpenAiCompatProxyGatewayPreamble {
-    strip_authorization: bool,
-    key: Option<super::VirtualKeyConfig>,
+pub(super) struct OpenAiCompatProxyGatewayPreamble {
+    pub(super) strip_authorization: bool,
+    pub(super) key: Option<super::VirtualKeyConfig>,
 }
 
 struct ResolvedGatewayContextLocals {
@@ -65,7 +65,7 @@ struct ResolvedGatewayContextLocals {
     local_cost_budget_reserved: bool,
 }
 
-async fn resolve_openai_compat_proxy_gateway_preamble(
+pub(super) async fn resolve_openai_compat_proxy_gateway_preamble(
     state: &GatewayHttpState,
     parts: &axum::http::request::Parts,
 ) -> Result<OpenAiCompatProxyGatewayPreamble, (StatusCode, Json<OpenAiErrorResponse>)> {
@@ -264,46 +264,6 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                         "cost budgets are token-based and do not support {path} (disable total_usd_micros or use token budgets)"
                     ),
                 ));
-            }
-
-            if !use_redis_budget {
-                let mut rate_limit_scopes = vec![(&key.id[..], &key.limits)];
-                if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
-                    rate_limit_scopes.push((scope.as_str(), limits));
-                }
-                if let Some((scope, limits)) = project_limits_scope.as_ref() {
-                    rate_limit_scopes.push((scope.as_str(), limits));
-                }
-                if let Some((scope, limits)) = user_limits_scope.as_ref() {
-                    rate_limit_scopes.push((scope.as_str(), limits));
-                }
-                if let Err(err) = state.check_and_consume_rate_limits(
-                    rate_limit_scopes.into_iter(),
-                    charge_tokens,
-                    minute,
-                ) {
-                    state.record_rate_limited();
-                    let mapped = map_openai_gateway_error(err);
-                    #[cfg(feature = "gateway-metrics-prometheus")]
-                    if let Some(metrics) = state.proxy.metrics.as_ref() {
-                        let duration = metrics_timer_start.elapsed();
-                        let status = mapped.0.as_u16();
-                        let mut metrics = metrics.lock().await;
-                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
-                        metrics.record_proxy_rate_limited(
-                            Some(&key.id),
-                            model.as_deref(),
-                            metrics_path,
-                        );
-                        metrics.record_proxy_response_status_by_path(metrics_path, status);
-                        if let Some(model) = model.as_deref() {
-                            metrics.record_proxy_response_status_by_model(model, status);
-                            metrics.observe_proxy_request_duration_by_model(model, duration);
-                        }
-                        metrics.observe_proxy_request_duration(metrics_path, duration);
-                    }
-                    return Err(mapped);
-                }
             }
 
             let guardrails = state.guardrails_for_model(model.as_deref(), key);
@@ -511,6 +471,46 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             };
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
+
+            if !use_redis_budget {
+                let mut rate_limit_scopes = vec![(&key.id[..], &key.limits)];
+                if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                if let Some((scope, limits)) = project_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                if let Some((scope, limits)) = user_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                if let Err(err) = state.check_and_consume_rate_limits(
+                    rate_limit_scopes.into_iter(),
+                    charge_tokens,
+                    minute,
+                ) {
+                    state.record_rate_limited();
+                    let mapped = map_openai_gateway_error(err);
+                    #[cfg(feature = "gateway-metrics-prometheus")]
+                    if let Some(metrics) = state.proxy.metrics.as_ref() {
+                        let duration = metrics_timer_start.elapsed();
+                        let status = mapped.0.as_u16();
+                        let mut metrics = metrics.lock().await;
+                        metrics.record_proxy_request(Some(&key.id), model.as_deref(), metrics_path);
+                        metrics.record_proxy_rate_limited(
+                            Some(&key.id),
+                            model.as_deref(),
+                            metrics_path,
+                        );
+                        metrics.record_proxy_response_status_by_path(metrics_path, status);
+                        if let Some(model) = model.as_deref() {
+                            metrics.record_proxy_response_status_by_model(model, status);
+                            metrics.observe_proxy_request_duration_by_model(model, duration);
+                        }
+                        metrics.observe_proxy_request_duration(metrics_path, duration);
+                    }
+                    return Err(mapped);
+                }
+            }
 
             let mut local_token_budget_reserved = false;
             #[cfg(feature = "gateway-costing")]
