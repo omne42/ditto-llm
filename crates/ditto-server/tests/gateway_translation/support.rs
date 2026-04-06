@@ -12,6 +12,7 @@ use ditto_core::capabilities::video::VideoGenerationModel;
 use ditto_core::capabilities::{
     ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel,
 };
+#[allow(unused_imports)]
 use ditto_core::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
     StreamChunk, Usage,
@@ -868,7 +869,7 @@ async fn gateway_translation_models_list() -> ditto_core::error::Result<()> {
             .headers()
             .get("x-ditto-translation")
             .and_then(|v| v.to_str().ok()),
-        Some("multi")
+        Some("primary")
     );
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -891,7 +892,7 @@ async fn gateway_translation_models_list() -> ditto_core::error::Result<()> {
 
     assert!(ids.contains(&"gpt-4o-mini".to_string()));
     assert!(ids.contains(&"primary/fake-model".to_string()));
-    assert!(ids.contains(&"secondary/fake-model".to_string()));
+    assert!(!ids.contains(&"secondary/fake-model".to_string()));
 
     Ok(())
 }
@@ -970,6 +971,86 @@ async fn gateway_translation_models_list_respects_virtual_key_route()
     assert!(ids.contains(&"gpt-4o-mini"));
     assert!(ids.contains(&"secondary/secondary-model"));
     assert!(!ids.contains(&"primary/primary-model"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_models_list_hides_unroutable_translation_backends()
+-> ditto_core::error::Result<()> {
+    use std::collections::BTreeMap;
+
+    let gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![ditto_server::gateway::VirtualKeyConfig::new(
+            "key-primary",
+            "vk-primary",
+        )],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+
+    let mut primary_map = BTreeMap::new();
+    primary_map.insert("gpt-4o-mini".to_string(), "primary-model".to_string());
+    let mut secondary_map = BTreeMap::new();
+    secondary_map.insert("claude-3.5-sonnet".to_string(), "secondary-model".to_string());
+
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)).with_model_map(primary_map),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)).with_model_map(secondary_map),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = authorized_test_app(state);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/v1/models")
+        .header("authorization", "Bearer vk-primary")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("primary")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    let ids = parsed
+        .get("data")
+        .and_then(|v| v.as_array())
+        .map(|data| {
+            data.iter()
+                .filter_map(|item| item.get("id").and_then(|v| v.as_str()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    assert!(ids.contains(&"gpt-4o-mini"));
+    assert!(ids.contains(&"primary/primary-model"));
+    assert!(!ids.contains(&"claude-3.5-sonnet"));
+    assert!(!ids.contains(&"secondary/secondary-model"));
 
     Ok(())
 }
