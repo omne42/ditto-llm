@@ -385,6 +385,7 @@ pub(super) async fn apply_control_plane_change<T>(
         &mut crate::gateway::GatewayMutation<'_>,
     ) -> Result<T, (StatusCode, Json<ErrorResponse>)>,
 ) -> Result<(T, ConfigVersionInfo), (StatusCode, Json<ErrorResponse>)> {
+    let _write_guard = state.lock_control_plane_writes().await;
     let previous = state.gateway.runtime_snapshot();
     let (staged, result) = state.gateway.stage_control_plane_mutation(mutate);
 
@@ -639,5 +640,52 @@ mod tests {
                 .is_empty(),
             "sqlite store should not be mutated"
         );
+    }
+
+    #[tokio::test]
+    async fn apply_control_plane_change_serializes_concurrent_writers() {
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", EchoBackend);
+        let state = GatewayHttpState::new(gateway);
+
+        let held_guard = state.lock_control_plane_writes().await;
+        let blocked_state = state.clone();
+        let blocked_change = tokio::spawn(async move {
+            apply_control_plane_change(&blocked_state, "test.concurrent", |gateway| {
+                gateway.remove_virtual_key("key-1");
+                Ok(())
+            })
+            .await
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !blocked_change.is_finished(),
+            "concurrent control-plane mutation should wait for the in-flight writer"
+        );
+
+        drop(held_guard);
+
+        let (_, version) = blocked_change
+            .await
+            .expect("task join")
+            .expect("serialized change should succeed");
+        assert_eq!(state.list_virtual_keys_snapshot().len(), 0);
+        assert_eq!(version.virtual_key_count, 0);
     }
 }
