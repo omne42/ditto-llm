@@ -1,4 +1,7 @@
 #[cfg(feature = "gateway-store-redis")]
+use crate::gateway::LimitsConfig;
+
+#[cfg(feature = "gateway-store-redis")]
 pub(super) fn normalize_rate_limit_route(path_and_query: &str) -> String {
     let path = path_and_query
         .split_once('?')
@@ -44,4 +47,28 @@ pub(super) fn normalize_rate_limit_route(path_and_query: &str) -> String {
             "/v1/*".to_string()
         }
     }
+}
+
+#[cfg(feature = "gateway-store-redis")]
+pub(super) fn redis_rate_limit_scopes<'a>(
+    virtual_key_id: Option<&'a str>,
+    limits: Option<&'a LimitsConfig>,
+    tenant_limits_scope: Option<&'a (String, LimitsConfig)>,
+    project_limits_scope: Option<&'a (String, LimitsConfig)>,
+    user_limits_scope: Option<&'a (String, LimitsConfig)>,
+) -> Vec<(&'a str, &'a LimitsConfig)> {
+    let mut scopes = Vec::with_capacity(4);
+    if let (Some(scope), Some(limits)) = (virtual_key_id, limits) {
+        scopes.push((scope, limits));
+    }
+    if let Some((scope, limits)) = tenant_limits_scope {
+        scopes.push((scope.as_str(), limits));
+    }
+    if let Some((scope, limits)) = project_limits_scope {
+        scopes.push((scope.as_str(), limits));
+    }
+    if let Some((scope, limits)) = user_limits_scope {
+        scopes.push((scope.as_str(), limits));
+    }
+    scopes
 }

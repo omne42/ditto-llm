@@ -1433,6 +1433,59 @@ return 1
 "#;
 
 #[cfg(feature = "gateway-store-redis")]
+const RATE_LIMIT_MANY_SCRIPT: &str = r#"
+local scope_count = tonumber(ARGV[1])
+local tokens = tonumber(ARGV[2])
+local second = tonumber(ARGV[3])
+local ttl = tonumber(ARGV[4])
+local window_weight = 60 - second
+
+local updates = {}
+local arg_index = 5
+for scope_index = 1, scope_count do
+  local rpm = tonumber(ARGV[arg_index])
+  arg_index = arg_index + 1
+  local tpm = tonumber(ARGV[arg_index])
+  arg_index = arg_index + 1
+
+  local key_offset = (scope_index - 1) * 4
+  local req_cur = tonumber(redis.call("GET", KEYS[key_offset + 1]) or "0")
+  local req_prev = tonumber(redis.call("GET", KEYS[key_offset + 2]) or "0")
+  local tok_cur = tonumber(redis.call("GET", KEYS[key_offset + 3]) or "0")
+  local tok_prev = tonumber(redis.call("GET", KEYS[key_offset + 4]) or "0")
+
+  local next_req_cur = req_cur + 1
+  local next_tok_cur = tok_cur + tokens
+  local weighted_req = next_req_cur * 60 + req_prev * window_weight
+  local weighted_tok = next_tok_cur * 60 + tok_prev * window_weight
+
+  if rpm == 0 then
+    return {2, scope_index}
+  end
+  if rpm ~= nil and rpm > 0 and weighted_req > (rpm * 60) then
+    return {2, scope_index}
+  end
+
+  if tpm == 0 then
+    return {3, scope_index}
+  end
+  if tpm ~= nil and tpm > 0 and weighted_tok > (tpm * 60) then
+    return {3, scope_index}
+  end
+
+  updates[scope_index] = {next_req_cur, next_tok_cur}
+end
+
+for scope_index = 1, scope_count do
+  local key_offset = (scope_index - 1) * 4
+  redis.call("SET", KEYS[key_offset + 1], updates[scope_index][1], "EX", ttl)
+  redis.call("SET", KEYS[key_offset + 3], updates[scope_index][2], "EX", ttl)
+end
+
+return {1, 0}
+"#;
+
+#[cfg(feature = "gateway-store-redis")]
 fn limit_to_i64(value: Option<u32>) -> i64 {
     value.map(i64::from).unwrap_or(-1)
 }
@@ -1512,6 +1565,101 @@ impl RedisStore {
             }),
             _ => Err(super::GatewayError::Backend {
                 message: format!("unexpected rate limit script response: {code}"),
+            }),
+        }
+    }
+
+    pub async fn check_and_consume_rate_limits_many<'a, I>(
+        &self,
+        scopes: I,
+        route: &str,
+        tokens: u32,
+        now_epoch_seconds: u64,
+    ) -> Result<(), super::GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::LimitsConfig)>,
+    {
+        let scoped_limits = scopes
+            .into_iter()
+            .filter(|(_, limits)| limits.rpm.is_some() || limits.tpm.is_some())
+            .collect::<Vec<_>>();
+        if scoped_limits.is_empty() {
+            return Ok(());
+        }
+
+        let minute = now_epoch_seconds / 60;
+        let prev_minute = minute.saturating_sub(1);
+        let second_in_minute = (now_epoch_seconds % 60).min(59);
+
+        let mut conn = self
+            .connection()
+            .await
+            .map_err(|err| super::GatewayError::Backend {
+                message: format!("redis error: {err}"),
+            })?;
+
+        let script = redis::Script::new(RATE_LIMIT_MANY_SCRIPT);
+        let mut invocation = script.prepare_invoke();
+        invocation.arg(i64::try_from(scoped_limits.len()).unwrap_or(i64::MAX));
+        invocation.arg(tokens_u32_to_i64(tokens));
+        invocation.arg(i64::from(second_in_minute as u32));
+        invocation.arg(DEFAULT_RATE_LIMIT_TTL_SECS as i64);
+
+        for (scope, limits) in &scoped_limits {
+            invocation.key(self.key_rate_limit_requests(scope, route, minute));
+            invocation.key(self.key_rate_limit_requests(scope, route, prev_minute));
+            invocation.key(self.key_rate_limit_tokens(scope, route, minute));
+            invocation.key(self.key_rate_limit_tokens(scope, route, prev_minute));
+            invocation.arg(limit_to_i64(limits.rpm));
+            invocation.arg(limit_to_i64(limits.tpm));
+        }
+
+        let result: Vec<i64> = invocation.invoke_async(&mut conn).await.map_err(|err| {
+            super::GatewayError::Backend {
+                message: format!("redis error: {err}"),
+            }
+        })?;
+
+        let code = result.first().copied().unwrap_or_default();
+        let scope_index: Option<usize> = result
+            .get(1)
+            .copied()
+            .and_then(|index| usize::try_from(index).ok());
+
+        match code {
+            1 => Ok(()),
+            2 => {
+                let Some(scope_offset) = scope_index.and_then(|index| index.checked_sub(1)) else {
+                    return Err(super::GatewayError::Backend {
+                        message: format!("unexpected batched rate limit response: {:?}", result),
+                    });
+                };
+                let Some((_, limits)) = scoped_limits.get(scope_offset) else {
+                    return Err(super::GatewayError::Backend {
+                        message: format!("unexpected batched rate limit response: {:?}", result),
+                    });
+                };
+                Err(super::GatewayError::RateLimited {
+                    limit: format!("rpm>{}", limits.rpm.unwrap_or(0)),
+                })
+            }
+            3 => {
+                let Some(scope_offset) = scope_index.and_then(|index| index.checked_sub(1)) else {
+                    return Err(super::GatewayError::Backend {
+                        message: format!("unexpected batched rate limit response: {:?}", result),
+                    });
+                };
+                let Some((_, limits)) = scoped_limits.get(scope_offset) else {
+                    return Err(super::GatewayError::Backend {
+                        message: format!("unexpected batched rate limit response: {:?}", result),
+                    });
+                };
+                Err(super::GatewayError::RateLimited {
+                    limit: format!("tpm>{}", limits.tpm.unwrap_or(0)),
+                })
+            }
+            _ => Err(super::GatewayError::Backend {
+                message: format!("unexpected batched rate limit response: {:?}", result),
             }),
         }
     }
@@ -2072,6 +2220,67 @@ mod tests {
         if let super::super::GatewayError::RateLimited { limit } = err {
             assert!(limit.starts_with("tpm>"));
         }
+    }
+
+    #[tokio::test]
+    async fn redis_store_rate_limits_many_is_atomic_across_scopes() {
+        let Some(url) = required_redis_url() else {
+            eprintln!("skipping redis test: set DITTO_REDIS_URL or REDIS_URL");
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        let now_epoch_seconds = now_millis_u64() / 1000;
+        let route = "/v1/chat/completions";
+        let shared_limits = super::super::LimitsConfig {
+            rpm: Some(2),
+            tpm: Some(1000),
+        };
+        let tight_limits = super::super::LimitsConfig {
+            rpm: Some(1),
+            tpm: Some(1000),
+        };
+
+        store
+            .check_and_consume_rate_limits_many(
+                [("key-many", &shared_limits), ("tenant:t1", &shared_limits)],
+                route,
+                1,
+                now_epoch_seconds,
+            )
+            .await
+            .expect("first batched request allowed");
+
+        store
+            .check_and_consume_rate_limits("user:u1", route, &tight_limits, 1, now_epoch_seconds)
+            .await
+            .expect("tight scope primed");
+
+        let err = store
+            .check_and_consume_rate_limits_many(
+                [("key-many", &shared_limits), ("user:u1", &tight_limits)],
+                route,
+                1,
+                now_epoch_seconds,
+            )
+            .await
+            .expect_err("batched request should be rejected atomically");
+        assert!(matches!(
+            err,
+            super::super::GatewayError::RateLimited { .. }
+        ));
+        if let super::super::GatewayError::RateLimited { limit } = err {
+            assert!(limit.starts_with("rpm>"));
+        }
+
+        store
+            .check_and_consume_rate_limits("key-many", route, &shared_limits, 1, now_epoch_seconds)
+            .await
+            .expect("failed batched request must not consume key scope");
     }
 }
 // end inline: ../../../redis_store/tests.rs
