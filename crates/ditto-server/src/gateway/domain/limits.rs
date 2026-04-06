@@ -24,51 +24,33 @@ struct MinuteUsage {
 }
 
 impl RateLimiter {
-    pub fn check_and_consume(
-        &mut self,
-        key_id: &str,
-        limits: &LimitsConfig,
-        tokens: u32,
-        minute: u64,
-    ) -> Result<(), GatewayError> {
-        if limits.rpm.is_none() && limits.tpm.is_none() {
-            // If limits are disabled for this scope, stop retaining per-minute state for it.
-            self.usage.remove(key_id);
-            return Ok(());
-        }
-
+    fn gc_if_needed(&mut self, minute: u64) {
         if minute > self.last_gc_minute {
             // Only advance GC when time moves forward so out-of-order or rolled-back
             // requests cannot drop newer buckets for other scopes.
             self.usage.retain(|_, usage| usage.minute == minute);
             self.last_gc_minute = minute;
         }
+    }
 
-        let usage = match self.usage.get_mut(key_id) {
-            Some(usage) => usage,
-            None => {
-                self.usage.insert(
-                    key_id.to_string(),
-                    MinuteUsage {
-                        minute,
-                        requests: 0,
-                        tokens: 0,
-                    },
-                );
-                self.usage
-                    .get_mut(key_id)
-                    .expect("usage entry must exist immediately after insert")
-            }
-        };
-
-        if usage.minute != minute {
-            usage.minute = minute;
-            usage.requests = 0;
-            usage.tokens = 0;
+    fn usage_for_scope(&self, scope: &str, minute: u64) -> MinuteUsage {
+        match self.usage.get(scope) {
+            Some(usage) if usage.minute == minute => usage.clone(),
+            _ => MinuteUsage {
+                minute,
+                requests: 0,
+                tokens: 0,
+            },
         }
+    }
 
-        let next_requests = usage.requests.saturating_add(1);
-        let next_tokens = usage.tokens.saturating_add(tokens);
+    fn validate_next_usage(
+        limits: &LimitsConfig,
+        current: &MinuteUsage,
+        tokens: u32,
+    ) -> Result<MinuteUsage, GatewayError> {
+        let next_requests = current.requests.saturating_add(1);
+        let next_tokens = current.tokens.saturating_add(tokens);
 
         if let Some(rpm) = limits.rpm
             && (rpm == 0 || next_requests > rpm)
@@ -86,8 +68,67 @@ impl RateLimiter {
             });
         }
 
-        usage.requests = next_requests;
-        usage.tokens = next_tokens;
+        Ok(MinuteUsage {
+            minute: current.minute,
+            requests: next_requests,
+            tokens: next_tokens,
+        })
+    }
+
+    pub fn check_and_consume(
+        &mut self,
+        key_id: &str,
+        limits: &LimitsConfig,
+        tokens: u32,
+        minute: u64,
+    ) -> Result<(), GatewayError> {
+        if limits.rpm.is_none() && limits.tpm.is_none() {
+            // If limits are disabled for this scope, stop retaining per-minute state for it.
+            self.usage.remove(key_id);
+            return Ok(());
+        }
+
+        self.gc_if_needed(minute);
+        let usage = self.usage_for_scope(key_id, minute);
+        let next_usage = Self::validate_next_usage(limits, &usage, tokens)?;
+        self.usage.insert(key_id.to_string(), next_usage);
+        Ok(())
+    }
+
+    pub fn check_and_consume_many<'a, I>(
+        &mut self,
+        scopes: I,
+        tokens: u32,
+        minute: u64,
+    ) -> Result<(), GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a LimitsConfig)>,
+    {
+        self.gc_if_needed(minute);
+
+        let mut proposed = HashMap::<String, MinuteUsage>::new();
+        let mut remove_scopes = Vec::<String>::new();
+
+        for (scope, limits) in scopes {
+            if limits.rpm.is_none() && limits.tpm.is_none() {
+                remove_scopes.push(scope.to_string());
+                continue;
+            }
+
+            let current = proposed
+                .get(scope)
+                .cloned()
+                .unwrap_or_else(|| self.usage_for_scope(scope, minute));
+            let next = Self::validate_next_usage(limits, &current, tokens)?;
+            proposed.insert(scope.to_string(), next);
+        }
+
+        for scope in remove_scopes {
+            self.usage.remove(&scope);
+        }
+        for (scope, usage) in proposed {
+            self.usage.insert(scope, usage);
+        }
         Ok(())
     }
 
@@ -147,5 +188,38 @@ mod tests {
             .check_and_consume("scope", &LimitsConfig::default(), 1, 42)
             .unwrap();
         assert!(!limiter.usage.contains_key("scope"));
+    }
+
+    #[test]
+    fn check_and_consume_many_is_atomic_across_scopes() {
+        let mut limiter = RateLimiter::default();
+        let limited = LimitsConfig {
+            rpm: Some(10),
+            tpm: Some(10),
+        };
+        let tight = LimitsConfig {
+            rpm: Some(1),
+            tpm: Some(10),
+        };
+
+        limiter
+            .check_and_consume_many([("key", &limited), ("tenant:t1", &limited)], 5, 42)
+            .unwrap();
+        assert_eq!(
+            limiter.usage.get("key").map(|usage| usage.requests),
+            Some(1)
+        );
+        assert_eq!(
+            limiter.usage.get("tenant:t1").map(|usage| usage.requests),
+            Some(1)
+        );
+
+        let err = limiter.check_and_consume_many([("key", &limited), ("user:u1", &tight)], 1, 42);
+        assert!(matches!(err, Err(GatewayError::RateLimited { .. })));
+        assert_eq!(
+            limiter.usage.get("key").map(|usage| usage.requests),
+            Some(1)
+        );
+        assert!(!limiter.usage.contains_key("user:u1"));
     }
 }
