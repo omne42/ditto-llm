@@ -29,6 +29,7 @@ pub(super) async fn attempt_translation_backend(
     let _ = use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
     let budget = params.budget;
+    let tenant_budget_scope = params.tenant_budget_scope;
     let project_budget_scope = params.project_budget_scope;
     let user_budget_scope = params.user_budget_scope;
     let charge_cost_usd_micros = params.charge_cost_usd_micros;
@@ -135,9 +136,8 @@ pub(super) async fn attempt_translation_backend(
     > = 'translation_backend_attempt: {
         #[allow(clippy::collapsible_else_if)]
         if models_root && parts.method == axum::http::Method::GET {
-            let models = translation::collect_models_from_translation_backends(
-                state.backends.translation_backends.as_ref(),
-            );
+            let models =
+                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
             let value = translation::models_list_to_openai(&models, _now_epoch_seconds);
             let bytes = serde_json::to_vec(&value)
                 .map(Bytes::from)
@@ -162,9 +162,8 @@ pub(super) async fn attempt_translation_backend(
         } else if let Some(model_id) = models_retrieve_id.as_deref()
             && parts.method == axum::http::Method::GET
         {
-            let models = translation::collect_models_from_translation_backends(
-                state.backends.translation_backends.as_ref(),
-            );
+            let models =
+                translation::collect_models_from_translation_backend(backend_name, &translation_backend);
             let Some(owned_by) = models.get(model_id) else {
                 break 'translation_backend_attempt Err(openai_error(
                     StatusCode::NOT_FOUND,
@@ -2132,7 +2131,18 @@ pub(super) async fn attempt_translation_backend(
                             _now_epoch_seconds,
                         )
                     } else {
-                        translation::stream_to_responses_sse(stream, fallback_response_id)
+                        let responses_stream_store = responses_input_items
+                            .clone()
+                            .map(|input_items| (translation_backend.response_store(), input_items));
+                        translation::stream_to_responses_sse(
+                            stream,
+                            backend_name.to_string(),
+                            translation::gateway_stored_response_id(
+                                backend_name,
+                                &fallback_response_id,
+                            ),
+                            responses_stream_store,
+                        )
                     };
 
                     let mut headers = HeaderMap::new();
@@ -2157,8 +2167,7 @@ pub(super) async fn attempt_translation_backend(
                     *response.headers_mut() = headers;
                     Ok((response, default_spend))
                 } else {
-                    let generated = match translation_backend.model.generate(generate_request).await
-                    {
+                    let generated = match translation_backend.model.generate(generate_request).await {
                         Ok(generated) => generated,
                         Err(err) => {
                             let (status, kind, code, message) =
@@ -2171,6 +2180,8 @@ pub(super) async fn attempt_translation_backend(
 
                     let response_id =
                         translation::provider_response_id(&generated, &fallback_response_id);
+                    let public_response_id =
+                        translation::gateway_stored_response_id(backend_name, &response_id);
                     let value = if translation::is_chat_completions_path(path_and_query) {
                         translation::generate_response_to_chat_completions(
                             &generated,
@@ -2188,7 +2199,7 @@ pub(super) async fn attempt_translation_backend(
                     } else {
                         translation::generate_response_to_responses(
                             &generated,
-                            &response_id,
+                            &public_response_id,
                             &original_model,
                             _now_epoch_seconds,
                         )
@@ -2196,7 +2207,7 @@ pub(super) async fn attempt_translation_backend(
 
                     if let Some(input_items) = responses_input_items {
                         translation_backend
-                            .store_response_record(&response_id, value.clone(), input_items)
+                            .store_response_record(&public_response_id, value.clone(), input_items)
                             .await;
                     }
 
@@ -2324,6 +2335,9 @@ pub(super) async fn attempt_translation_backend(
         {
             if spend_tokens {
                 state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
@@ -2335,6 +2349,9 @@ pub(super) async fn attempt_translation_backend(
                 if !use_persistent_budget {
                     if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
                         state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
+                        if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                            state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+                        }
                         if let Some((scope, budget)) = project_budget_scope.as_ref() {
                             state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                         }
@@ -2354,6 +2371,9 @@ pub(super) async fn attempt_translation_backend(
         if let (Some(virtual_key_id), Some(budget)) = (virtual_key_id.clone(), budget.clone()) {
             if spend_tokens {
                 state.spend_budget_tokens(&virtual_key_id, &budget, spent_tokens);
+                if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                    state.spend_budget_tokens(scope, budget, spent_tokens);
+                }
                 if let Some((scope, budget)) = project_budget_scope.as_ref() {
                     state.spend_budget_tokens(scope, budget, spent_tokens);
                 }
@@ -2364,6 +2384,9 @@ pub(super) async fn attempt_translation_backend(
                 #[cfg(feature = "gateway-costing")]
                 if let Some(spent_cost_usd_micros) = spent_cost_usd_micros {
                     state.spend_budget_cost(&virtual_key_id, &budget, spent_cost_usd_micros);
+                    if let Some((scope, budget)) = tenant_budget_scope.as_ref() {
+                        state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
+                    }
                     if let Some((scope, budget)) = project_budget_scope.as_ref() {
                         state.spend_budget_cost(scope, budget, spent_cost_usd_micros);
                     }

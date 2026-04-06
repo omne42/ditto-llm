@@ -142,12 +142,24 @@ pub(super) async fn handle_openai_models_list(
     }
 
     #[cfg(feature = "gateway-translation")]
-    let has_translation_backends = !state.backends.translation_backends.is_empty();
+    let translation_route = key_route
+        .as_deref()
+        .filter(|route| state.backends.translation_backends.contains_key(*route));
+
+    #[cfg(feature = "gateway-translation")]
+    let has_translation_backends = if translation_route.is_some() {
+        true
+    } else if key_route.is_some() {
+        false
+    } else {
+        !state.backends.translation_backends.is_empty()
+    };
 
     #[cfg(feature = "gateway-translation")]
     if has_translation_backends {
-        let models = super::translation::collect_models_from_translation_backends(
+        let models = super::translation::collect_models_from_translation_backends_for_route(
             state.backends.translation_backends.as_ref(),
+            translation_route,
         );
         for (id, owned_by) in models {
             models_by_id

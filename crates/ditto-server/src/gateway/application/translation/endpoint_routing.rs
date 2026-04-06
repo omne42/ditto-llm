@@ -68,6 +68,27 @@ fn path_without_query(path_and_query: &str) -> &str {
         .unwrap_or(path_and_query)
 }
 
+fn decode_path_segment(segment: &str) -> Option<String> {
+    let bytes = segment.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let hi = *bytes.get(index + 1)?;
+            let lo = *bytes.get(index + 2)?;
+            let hex = [hi, lo];
+            let hex = std::str::from_utf8(&hex).ok()?;
+            let value = u8::from_str_radix(hex, 16).ok()?;
+            decoded.push(value);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded).ok()
+}
+
 fn singleton_path_matches(path_and_query: &str, expected: &str) -> bool {
     let path = path_without_query(path_and_query);
     path == expected || path == format!("{expected}/")
@@ -91,7 +112,7 @@ pub fn models_retrieve_id(path_and_query: &str) -> Option<String> {
     if rest.trim().is_empty() {
         return None;
     }
-    Some(rest.to_string())
+    decode_path_segment(rest)
 }
 
 pub fn is_responses_create_path(path_and_query: &str) -> bool {
@@ -116,6 +137,19 @@ pub fn is_moderations_path(path_and_query: &str) -> bool {
 
 pub fn is_images_generations_path(path_and_query: &str) -> bool {
     singleton_path_matches(path_and_query, "/v1/images/generations")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::models_retrieve_id;
+
+    #[test]
+    fn models_retrieve_id_decodes_percent_encoded_owner_prefix() {
+        assert_eq!(
+            models_retrieve_id("/v1/models/other%2Ffake-model"),
+            Some("other/fake-model".to_string())
+        );
+    }
 }
 
 pub fn is_images_edits_path(path_and_query: &str) -> bool {

@@ -1,3 +1,19 @@
+fn response_id_from_json(value: &serde_json::Value) -> String {
+    value
+        .get("id")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string)
+        .expect("response id")
+}
+
+fn response_id_from_sse(body: &str) -> String {
+    let needle = "\"response\":{\"id\":\"";
+    let start = body.find(needle).expect("response.created event") + needle.len();
+    let rest = &body[start..];
+    let end = rest.find('"').expect("response id terminator");
+    rest[..end].to_string()
+}
+
 #[tokio::test]
 async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::error::Result<()> {
     let gateway = base_gateway();
@@ -19,7 +35,7 @@ async fn gateway_translation_responses_compact_non_streaming() -> ditto_core::er
             {"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}
         ],
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/responses/compact")
         .header("content-type", "application/json")
@@ -69,7 +85,7 @@ async fn gateway_translation_responses_streaming() -> ditto_core::error::Result<
         "stream": true,
         "input": [{"role":"user","content":"hi"}]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/responses")
         .header("content-type", "application/json")
@@ -108,7 +124,7 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
         "model": "gpt-4o-mini",
         "input": "hi"
     });
-    let create_request = Request::builder()
+    let create_request = authorized_request()
         .method("POST")
         .uri("/v1/responses")
         .header("content-type", "application/json")
@@ -117,10 +133,14 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
 
     let create_response = app.clone().oneshot(create_request).await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let create_parsed: serde_json::Value = serde_json::from_slice(&create_body)?;
+    let response_id = response_id_from_json(&create_parsed);
+    assert!(response_id.starts_with("resp_ditto_7_primary_"));
 
-    let retrieve_request = Request::builder()
+    let retrieve_request = authorized_request()
         .method("GET")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{response_id}"))
         .body(Body::empty())
         .unwrap();
     let retrieve_response = app.clone().oneshot(retrieve_request).await.unwrap();
@@ -138,16 +158,16 @@ async fn gateway_translation_responses_retrieve_and_input_items() -> ditto_core:
     let retrieve_parsed: serde_json::Value = serde_json::from_slice(&retrieve_body)?;
     assert_eq!(
         retrieve_parsed.get("id").and_then(|v| v.as_str()),
-        Some("resp_fake")
+        Some(response_id.as_str())
     );
     assert_eq!(
         retrieve_parsed.get("output_text").and_then(|v| v.as_str()),
         Some("hello")
     );
 
-    let input_items_request = Request::builder()
+    let input_items_request = authorized_request()
         .method("GET")
-        .uri("/v1/responses/resp_fake/input_items")
+        .uri(format!("/v1/responses/{response_id}/input_items"))
         .body(Body::empty())
         .unwrap();
     let input_items_response = app.oneshot(input_items_request).await.unwrap();
@@ -206,7 +226,7 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
         "model": "gpt-4o-mini",
         "input": "hi"
     });
-    let create_request = Request::builder()
+    let create_request = authorized_request()
         .method("POST")
         .uri("/v1/responses")
         .header("content-type", "application/json")
@@ -214,10 +234,13 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
         .unwrap();
     let create_response = app.clone().oneshot(create_request).await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let create_parsed: serde_json::Value = serde_json::from_slice(&create_body)?;
+    let response_id = response_id_from_json(&create_parsed);
 
-    let delete_request = Request::builder()
+    let delete_request = authorized_request()
         .method("DELETE")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{response_id}"))
         .body(Body::empty())
         .unwrap();
     let delete_response = app.clone().oneshot(delete_request).await.unwrap();
@@ -228,7 +251,7 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
     let delete_parsed: serde_json::Value = serde_json::from_slice(&delete_body)?;
     assert_eq!(
         delete_parsed.get("id").and_then(|v| v.as_str()),
-        Some("resp_fake")
+        Some(response_id.as_str())
     );
     assert_eq!(
         delete_parsed.get("deleted").and_then(|v| v.as_bool()),
@@ -239,13 +262,136 @@ async fn gateway_translation_responses_delete() -> ditto_core::error::Result<()>
         Some("response")
     );
 
-    let retrieve_request = Request::builder()
+    let retrieve_request = authorized_request()
         .method("GET")
-        .uri("/v1/responses/resp_fake")
+        .uri(format!("/v1/responses/{response_id}"))
         .body(Body::empty())
         .unwrap();
     let retrieve_response = app.oneshot(retrieve_request).await.unwrap();
     assert_eq!(retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_responses_streaming_records_gateway_scoped_id()
+-> ditto_core::error::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel))
+            .with_embedding_model(Arc::new(FakeEmbeddingModel))
+            .with_moderation_model(Arc::new(FakeModerationModel))
+            .with_image_generation_model(Arc::new(FakeImageModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "stream": true,
+        "input": "hi"
+    });
+    let request = authorized_request()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let text = String::from_utf8_lossy(&body);
+    let response_id = response_id_from_sse(&text);
+    assert!(response_id.starts_with("resp_ditto_7_primary_"));
+
+    let retrieve_request = authorized_request()
+        .method("GET")
+        .uri(format!("/v1/responses/{response_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let retrieve_response = app.clone().oneshot(retrieve_request).await.unwrap();
+    assert_eq!(retrieve_response.status(), StatusCode::OK);
+    let retrieve_body = to_bytes(retrieve_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let retrieve_parsed: serde_json::Value = serde_json::from_slice(&retrieve_body)?;
+    assert_eq!(
+        retrieve_parsed.get("id").and_then(|value| value.as_str()),
+        Some(response_id.as_str())
+    );
+    assert_eq!(
+        retrieve_parsed.get("status").and_then(|value| value.as_str()),
+        Some("completed")
+    );
+
+    let input_items_request = authorized_request()
+        .method("GET")
+        .uri(format!("/v1/responses/{response_id}/input_items"))
+        .body(Body::empty())
+        .unwrap();
+    let input_items_response = app.oneshot(input_items_request).await.unwrap();
+    assert_eq!(input_items_response.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_responses_legacy_id_is_not_scanned_across_backends()
+-> ditto_core::error::Result<()> {
+    let gateway = base_gateway();
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("other", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let payload = json!({
+        "model": "gpt-4o-mini",
+        "input": "hi"
+    });
+    let create_request = authorized_request()
+        .method("POST")
+        .uri("/v1/responses")
+        .header("content-type", "application/json")
+        .body(Body::from(payload.to_string()))
+        .unwrap();
+
+    let create_response = app.clone().oneshot(create_request).await.unwrap();
+    assert_eq!(create_response.status(), StatusCode::OK);
+    let create_body = to_bytes(create_response.into_body(), usize::MAX).await.unwrap();
+    let create_parsed: serde_json::Value = serde_json::from_slice(&create_body)?;
+    let response_id = response_id_from_json(&create_parsed);
+
+    let legacy_request = authorized_request()
+        .method("GET")
+        .uri("/v1/responses/resp_fake")
+        .body(Body::empty())
+        .unwrap();
+    let legacy_response = app.clone().oneshot(legacy_request).await.unwrap();
+    assert_eq!(legacy_response.status(), StatusCode::NOT_FOUND);
+
+    let scoped_request = authorized_request()
+        .method("GET")
+        .uri(format!("/v1/responses/{response_id}"))
+        .body(Body::empty())
+        .unwrap();
+    let scoped_response = app.oneshot(scoped_request).await.unwrap();
+    assert_eq!(scoped_response.status(), StatusCode::OK);
 
     Ok(())
 }
@@ -276,7 +422,7 @@ async fn gateway_translation_responses_input_tokens() -> ditto_core::error::Resu
     )
     .expect("token estimate");
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/responses/input_tokens")
         .header("content-type", "application/json")
@@ -326,7 +472,7 @@ async fn gateway_translation_responses_input_tokens_requires_tokenizer() -> ditt
         "model": "gpt-4o-mini",
         "input": [{"role":"user","content":"count me"}]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/responses/input_tokens")
         .header("content-type", "application/json")
@@ -363,7 +509,7 @@ async fn gateway_translation_responses_input_tokens_get_not_treated_as_retrieve(
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/responses/input_tokens")
         .body(Body::empty())
@@ -398,7 +544,7 @@ async fn gateway_translation_responses_retrieve_unknown() -> ditto_core::error::
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/responses/resp_missing")
         .body(Body::empty())
@@ -440,7 +586,7 @@ async fn gateway_translation_embeddings_non_streaming() -> ditto_core::error::Re
         "model": "text-embedding-3-small",
         "input": ["a", "b"]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/embeddings")
         .header("content-type", "application/json")
@@ -493,7 +639,7 @@ async fn gateway_translation_rejects_endpoint_without_bound_capability() -> ditt
         "model": "text-embedding-3-small",
         "input": ["a"]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/embeddings")
         .header("content-type", "application/json")
@@ -540,7 +686,7 @@ async fn gateway_translation_rejects_model_capability_mismatch_before_builder_re
         "model": "gpt-4o-mini",
         "input": ["a"]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/embeddings")
         .header("content-type", "application/json")
@@ -582,7 +728,7 @@ async fn gateway_translation_moderations_non_streaming() -> ditto_core::error::R
     let payload = json!({
         "input": "bad"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/moderations")
         .header("content-type", "application/json")
@@ -634,7 +780,7 @@ async fn gateway_translation_images_generations_non_streaming() -> ditto_core::e
     let payload = json!({
         "prompt": "hi"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/images/generations")
         .header("content-type", "application/json")
@@ -688,7 +834,7 @@ async fn gateway_translation_images_edits_non_streaming() -> ditto_core::error::
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\ngpt-image-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nremove background\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"n\"\r\n\r\n2\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"size\"\r\n\r\n1024x1024\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\nb64_json\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"image.png\"\r\nContent-Type: image/png\r\n\r\nimage-bytes\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"mask\"; filename=\"mask.png\"\r\nContent-Type: image/png\r\n\r\nmask-bytes\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/images/edits")
         .header(
@@ -759,7 +905,7 @@ async fn gateway_translation_images_edits_rejects_stream_true() -> ditto_core::e
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nremove background\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"stream\"\r\n\r\ntrue\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"image.png\"\r\nContent-Type: image/png\r\n\r\nimage-bytes\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/images/edits")
         .header(
@@ -804,7 +950,7 @@ async fn gateway_translation_images_edits_rejects_malformed_multipart() -> ditto
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nremove background\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/images/edits")
         .header(
@@ -855,7 +1001,7 @@ async fn gateway_translation_videos_create_json() -> ditto_core::error::Result<(
         "seconds": 4,
         "size": "1280x720"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/videos")
         .header("content-type", "application/json")
@@ -898,7 +1044,7 @@ async fn gateway_translation_videos_create_multipart() -> ditto_core::error::Res
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nsora-2\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"prompt\"\r\n\r\nremix shot\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"seconds\"\r\n\r\n6\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"size\"\r\n\r\n720p\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"input_reference\"; filename=\"shot.mp4\"\r\nContent-Type: video/mp4\r\n\r\nvideo-bytes\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/videos")
         .header(
@@ -935,7 +1081,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let list_request = Request::builder()
+    let list_request = authorized_request()
         .method("GET")
         .uri("/v1/videos?limit=2&after=vid_111&order=desc")
         .body(Body::empty())
@@ -955,7 +1101,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
         Some("vid_123")
     );
 
-    let get_request = Request::builder()
+    let get_request = authorized_request()
         .method("GET")
         .uri("/v1/videos/vid_123")
         .body(Body::empty())
@@ -975,7 +1121,7 @@ async fn gateway_translation_videos_list_retrieve_delete() -> ditto_core::error:
         Some("completed")
     );
 
-    let delete_request = Request::builder()
+    let delete_request = authorized_request()
         .method("DELETE")
         .uri("/v1/videos/vid_123")
         .body(Body::empty())
@@ -1013,7 +1159,7 @@ async fn gateway_translation_videos_content_download() -> ditto_core::error::Res
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/videos/vid_123/content?variant=thumbnail")
         .body(Body::empty())
@@ -1049,7 +1195,7 @@ async fn gateway_translation_videos_content_rejects_invalid_variant() -> ditto_c
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/videos/vid_123/content?variant=poster")
         .body(Body::empty())
@@ -1087,7 +1233,7 @@ async fn gateway_translation_videos_remix_json() -> ditto_core::error::Result<()
     let payload = json!({
         "prompt": "change angle"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/videos/vid_123/remix")
         .header("content-type", "application/json")
@@ -1129,7 +1275,7 @@ async fn gateway_translation_videos_remix_rejects_stream_true() -> ditto_core::e
         "prompt": "change angle",
         "stream": true
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/videos/vid_123/remix")
         .header("content-type", "application/json")
@@ -1171,7 +1317,7 @@ async fn gateway_translation_videos_rejects_stream_true() -> ditto_core::error::
         "prompt": "road at dusk",
         "stream": true
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/videos")
         .header("content-type", "application/json")
@@ -1212,7 +1358,7 @@ async fn gateway_translation_audio_transcriptions_non_streaming() -> ditto_core:
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.txt\"\r\nContent-Type: text/plain\r\n\r\nhello\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/audio/transcriptions")
         .header(
@@ -1260,7 +1406,7 @@ async fn gateway_translation_audio_translations_non_streaming() -> ditto_core::e
     let multipart = format!(
         "--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.txt\"\r\nContent-Type: text/plain\r\n\r\nhello\r\n--{boundary}--\r\n"
     );
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/audio/translations")
         .header(
@@ -1310,7 +1456,7 @@ async fn gateway_translation_audio_speech_non_streaming() -> ditto_core::error::
         "voice": "alloy",
         "response_format": "mp3"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/audio/speech")
         .header("content-type", "application/json")
@@ -1353,7 +1499,7 @@ async fn gateway_translation_batches_create() -> ditto_core::error::Result<()> {
         "completion_window": "24h"
     });
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/batches")
         .header("content-type", "application/json")
@@ -1395,7 +1541,7 @@ async fn gateway_translation_batches_list() -> ditto_core::error::Result<()> {
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/batches?limit=2&after=batch_111")
         .body(Body::empty())
@@ -1436,7 +1582,7 @@ async fn gateway_translation_batches_retrieve() -> ditto_core::error::Result<()>
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/batches/batch_123")
         .body(Body::empty())
@@ -1465,7 +1611,7 @@ async fn gateway_translation_batches_cancel() -> ditto_core::error::Result<()> {
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/batches/batch_123/cancel")
         .body(Body::empty())
@@ -1500,7 +1646,7 @@ async fn gateway_translation_rerank_non_streaming() -> ditto_core::error::Result
         "documents": ["a", "b"],
         "top_n": 2
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/rerank")
         .header("content-type", "application/json")

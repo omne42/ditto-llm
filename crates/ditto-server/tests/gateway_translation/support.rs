@@ -13,7 +13,7 @@ use ditto_core::capabilities::{
     ImageEditModel, ImageGenerationModel, ModerationModel, RerankModel,
 };
 use ditto_core::contracts::{
-    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource, Message,
+    ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
     StreamChunk, Usage,
 };
 use ditto_core::llm_core::model::{LanguageModel, StreamResult};
@@ -28,10 +28,17 @@ use ditto_core::types::{
 };
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, TranslationBackend,
+    VirtualKeyConfig,
 };
 use futures_util::StreamExt;
 use serde_json::json;
 use tower::util::ServiceExt;
+
+const TEST_VIRTUAL_KEY_TOKEN: &str = "vk-test";
+
+fn authorized_request() -> axum::http::request::Builder {
+    Request::builder().header("authorization", format!("Bearer {TEST_VIRTUAL_KEY_TOKEN}"))
+}
 
 #[derive(Clone)]
 struct FakeModel;
@@ -589,7 +596,7 @@ impl RerankModel for FakeRerankModel {
 fn base_gateway() -> Gateway {
     Gateway::new(GatewayConfig {
         backends: Vec::new(),
-        virtual_keys: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", TEST_VIRTUAL_KEY_TOKEN)],
         router: RouterConfig {
             default_backends: vec![RouteBackend {
                 backend: "primary".to_string(),
@@ -624,7 +631,7 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_core::err
         "model": "gpt-4o-mini",
         "messages": [{"role":"user","content":"hi"}]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
@@ -643,7 +650,10 @@ async fn gateway_translation_chat_completions_non_streaming() -> ditto_core::err
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("resp_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("resp_fake")
+    );
     assert_eq!(
         parsed
             .get("choices")
@@ -679,7 +689,7 @@ async fn gateway_translation_chat_completions_streaming() -> ditto_core::error::
         "stream": true,
         "messages": [{"role":"user","content":"hi"}]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/chat/completions")
         .header("content-type", "application/json")
@@ -717,7 +727,7 @@ async fn gateway_translation_completions_non_streaming() -> ditto_core::error::R
         "model": "gpt-4o-mini",
         "prompt": "hi"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/completions")
         .header("content-type", "application/json")
@@ -736,7 +746,10 @@ async fn gateway_translation_completions_non_streaming() -> ditto_core::error::R
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("resp_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("resp_fake")
+    );
     assert_eq!(
         parsed.get("object").and_then(|v| v.as_str()),
         Some("text_completion")
@@ -790,7 +803,7 @@ async fn gateway_translation_completions_streaming() -> ditto_core::error::Resul
         "stream": true,
         "prompt": "hi"
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/completions")
         .header("content-type", "application/json")
@@ -832,7 +845,7 @@ async fn gateway_translation_models_list() -> ditto_core::error::Result<()> {
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/models")
         .body(Body::empty())
@@ -887,7 +900,7 @@ async fn gateway_translation_models_retrieve() -> ditto_core::error::Result<()> 
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/models/fake/fake-model")
         .body(Body::empty())
@@ -932,7 +945,7 @@ async fn gateway_translation_models_retrieve_unknown() -> ditto_core::error::Res
         .with_translation_backends(translation_backends);
     let app = ditto_server::gateway::http::router(state);
 
-    let request = Request::builder()
+    let request = authorized_request()
         .method("GET")
         .uri("/v1/models/does-not-exist")
         .body(Body::empty())
@@ -940,6 +953,66 @@ async fn gateway_translation_models_retrieve_unknown() -> ditto_core::error::Res
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_translation_models_retrieve_uses_matching_backend()
+-> ditto_core::error::Result<()> {
+    let mut config = GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", TEST_VIRTUAL_KEY_TOKEN)],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    config.virtual_keys[0].route = Some("secondary".to_string());
+    let gateway = Gateway::new(config);
+    let mut translation_backends = HashMap::new();
+    translation_backends.insert(
+        "primary".to_string(),
+        TranslationBackend::new("fake", Arc::new(FakeModel)),
+    );
+    translation_backends.insert(
+        "secondary".to_string(),
+        TranslationBackend::new("other", Arc::new(FakeModel)),
+    );
+
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(HashMap::new())
+        .with_translation_backends(translation_backends);
+    let app = ditto_server::gateway::http::router(state);
+
+    let request = authorized_request()
+        .method("GET")
+        .uri("/v1/models/other%2Ffake-model")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-ditto-translation")
+            .and_then(|v| v.to_str().ok()),
+        Some("other")
+    );
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(
+        parsed.get("id").and_then(|value| value.as_str()),
+        Some("other/fake-model")
+    );
 
     Ok(())
 }
@@ -965,7 +1038,7 @@ async fn gateway_translation_responses_non_streaming() -> ditto_core::error::Res
         "model": "gpt-4o-mini",
         "input": [{"role":"user","content":"hi"}]
     });
-    let request = Request::builder()
+    let request = authorized_request()
         .method("POST")
         .uri("/v1/responses")
         .header("content-type", "application/json")
@@ -976,7 +1049,10 @@ async fn gateway_translation_responses_non_streaming() -> ditto_core::error::Res
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let parsed: serde_json::Value = serde_json::from_slice(&body)?;
-    assert_eq!(parsed.get("id").and_then(|v| v.as_str()), Some("resp_fake"));
+    assert_eq!(
+        parsed.get("id").and_then(|v| v.as_str()),
+        Some("resp_ditto_7_primary_resp_fake")
+    );
     assert_eq!(
         parsed.get("output_text").and_then(|v| v.as_str()),
         Some("hello")

@@ -18,22 +18,6 @@ use serde_json::{Map, Value};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::gateway::adapters::cache::LocalLruCache;
-use crate::llm_core::model::{LanguageModel, StreamResult};
-use crate::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
-use crate::provider_options::JsonSchemaFormat;
-use crate::runtime::{
-    build_audio_transcription_model, build_batch_client, build_embedding_model, build_file_client,
-    build_image_edit_model, build_image_generation_model, build_moderation_model,
-    build_rerank_model, build_speech_model, build_video_generation_model,
-};
-use crate::types::{
-    AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
-    BatchListResponse, BatchResponse, ImageEditRequest, ImageEditResponse, ImageGenerationRequest,
-    ImageGenerationResponse, ModerationRequest, ModerationResponse, RerankRequest, RerankResponse,
-    SpeechRequest, SpeechResponse, SpeechResponseFormat, TranscriptionResponseFormat,
-    VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
-    VideoListRequest, VideoListResponse, VideoRemixRequest,
-};
 use ditto_core::capabilities::BatchClient;
 use ditto_core::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_core::capabilities::embedding::EmbeddingModel;
@@ -47,6 +31,22 @@ use ditto_core::contracts::{
     CapabilityKind, ContentPart, FinishReason, GenerateRequest, GenerateResponse, ImageSource,
     Message, OperationKind, Role, RuntimeRouteRequest, Usage,
 };
+use ditto_core::llm_core::model::{LanguageModel, StreamResult};
+use ditto_core::object::{LanguageModelObjectExt, ObjectOptions, ObjectOutput};
+use ditto_core::provider_options::JsonSchemaFormat;
+use ditto_core::runtime::{
+    build_audio_transcription_model, build_batch_client, build_embedding_model, build_file_client,
+    build_image_edit_model, build_image_generation_model, build_moderation_model,
+    build_rerank_model, build_speech_model, build_video_generation_model,
+};
+use ditto_core::types::{
+    AudioTranscriptionRequest, AudioTranscriptionResponse, Batch, BatchCreateRequest,
+    BatchListResponse, BatchResponse, ImageEditRequest, ImageEditResponse, ImageGenerationRequest,
+    ImageGenerationResponse, ModerationRequest, ModerationResponse, RerankRequest, RerankResponse,
+    SpeechRequest, SpeechResponse, SpeechResponseFormat, TranscriptionResponseFormat,
+    VideoContentVariant, VideoDeleteResponse, VideoGenerationRequest, VideoGenerationResponse,
+    VideoListRequest, VideoListResponse, VideoRemixRequest,
+};
 pub use endpoint_routing::*;
 pub use files_api::*;
 use openai_provider_options::apply_openai_request_provider_options;
@@ -58,7 +58,7 @@ use response_mapping::{
 use response_store::TranslationResponseStore;
 pub(crate) use response_store::{
     delete_stored_response_from_translation_backends,
-    find_stored_response_from_translation_backends,
+    find_stored_response_from_translation_backends, gateway_stored_response_id,
 };
 
 type ParseResult<T> = std::result::Result<T, String>;
@@ -162,7 +162,7 @@ impl TranslationBackendRuntime {
             request = request.with_required_capability(capability);
         }
 
-        crate::runtime::resolve_builtin_runtime_route(request).is_ok()
+        ditto_core::runtime::resolve_builtin_runtime_route(request).is_ok()
     }
 
     fn supports_runtime_capability(
@@ -185,7 +185,7 @@ impl TranslationBackendRuntime {
                 .or_else(|| self.configured_default_model())
         };
 
-        crate::runtime::builtin_runtime_supports_capability(
+        ditto_core::runtime::builtin_runtime_supports_capability(
             provider,
             &self.provider_config,
             requested_model,
@@ -194,7 +194,7 @@ impl TranslationBackendRuntime {
     }
 
     fn supports_file_builder(&self, provider: &str) -> bool {
-        crate::runtime::builtin_runtime_supports_file_builder(provider, &self.provider_config)
+        ditto_core::runtime::builtin_runtime_supports_file_builder(provider, &self.provider_config)
     }
 
     async fn resolve_embedding_model(
@@ -1149,53 +1149,81 @@ impl TranslationBackend {
     }
 }
 // end inline: ../../translation/backend.rs
-pub fn collect_models_from_translation_backends(
+fn collect_models_from_translation_backend_entry(
+    backend_name: &str,
+    backend: &TranslationBackend,
+    out: &mut BTreeMap<String, String>,
+) {
+    let provider = backend.provider_name();
+    let owned_by = if provider.is_empty() {
+        backend_name
+    } else {
+        provider
+    };
+
+    for key in backend.model_map.keys() {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        out.entry(key.to_string())
+            .or_insert_with(|| owned_by.to_string());
+    }
+
+    let default_model = backend.default_model_id();
+    if !default_model.is_empty() {
+        out.entry(format!("{owned_by}/{default_model}"))
+            .or_insert_with(|| owned_by.to_string());
+    }
+
+    for value in backend.model_map.values() {
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        out.entry(format!("{owned_by}/{value}"))
+            .or_insert_with(|| owned_by.to_string());
+    }
+}
+
+pub fn collect_models_from_translation_backend(
+    backend_name: &str,
+    backend: &TranslationBackend,
+) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::<String, String>::new();
+    collect_models_from_translation_backend_entry(backend_name, backend, &mut out);
+    out
+}
+
+pub fn collect_models_from_translation_backends_for_route(
     backends: &HashMap<String, TranslationBackend>,
+    route: Option<&str>,
 ) -> BTreeMap<String, String> {
     let mut out = BTreeMap::<String, String>::new();
 
+    if let Some(route) = route.map(str::trim).filter(|route| !route.is_empty()) {
+        if let Some(backend) = backends.get(route) {
+            collect_models_from_translation_backend_entry(route, backend, &mut out);
+        }
+        return out;
+    }
+
     let mut backend_names = backends.keys().collect::<Vec<_>>();
     backend_names.sort();
-
     for backend_name in backend_names {
-        let backend = match backends.get(backend_name) {
-            Some(backend) => backend,
-            None => continue,
+        let Some(backend) = backends.get(backend_name) else {
+            continue;
         };
-
-        let provider = backend.provider_name();
-        let owned_by = if provider.is_empty() {
-            backend_name.as_str()
-        } else {
-            provider
-        };
-
-        for key in backend.model_map.keys() {
-            let key = key.trim();
-            if key.is_empty() {
-                continue;
-            }
-            out.entry(key.to_string())
-                .or_insert_with(|| owned_by.to_string());
-        }
-
-        let default_model = backend.default_model_id();
-        if !default_model.is_empty() {
-            out.entry(format!("{owned_by}/{default_model}"))
-                .or_insert_with(|| owned_by.to_string());
-        }
-
-        for value in backend.model_map.values() {
-            let value = value.trim();
-            if value.is_empty() {
-                continue;
-            }
-            out.entry(format!("{owned_by}/{value}"))
-                .or_insert_with(|| owned_by.to_string());
-        }
+        collect_models_from_translation_backend_entry(backend_name, backend, &mut out);
     }
 
     out
+}
+
+pub fn collect_models_from_translation_backends(
+    backends: &HashMap<String, TranslationBackend>,
+) -> BTreeMap<String, String> {
+    collect_models_from_translation_backends_for_route(backends, None)
 }
 
 pub fn model_to_openai(id: &str, owned_by: &str, created: u64) -> Value {
@@ -2107,9 +2135,11 @@ pub fn stream_to_completions_sse(
     .boxed()
 }
 
-pub fn stream_to_responses_sse(
+pub(crate) fn stream_to_responses_sse(
     stream: StreamResult,
+    backend_name: String,
     fallback_id: String,
+    response_store: Option<(TranslationResponseStore, Vec<Value>)>,
 ) -> futures_util::stream::BoxStream<'static, IoResult<Bytes>> {
     #[derive(Default)]
     struct ToolCallState {
@@ -2136,12 +2166,15 @@ pub fn stream_to_responses_sse(
                 response_id: fallback_id,
                 ..State::default()
             },
+            response_store,
             false,
         ),
-        move |(mut inner, mut buffer, mut state, mut done)| async move {
+        move |(mut inner, mut buffer, mut state, response_store, mut done)| {
+            let backend_name = backend_name.clone();
+            async move {
             loop {
                 if let Some(item) = buffer.pop_front() {
-                    return Some((item, (inner, buffer, state, done)));
+                    return Some((item, (inner, buffer, state, response_store, done)));
                 }
                 if done {
                     return None;
@@ -2152,7 +2185,7 @@ pub fn stream_to_responses_sse(
                         if let ditto_core::contracts::StreamChunk::ResponseId { id } = &chunk {
                             let id = id.trim();
                             if !id.is_empty() {
-                                state.response_id = id.to_string();
+                                state.response_id = gateway_stored_response_id(&backend_name, id);
                             }
                         }
 
@@ -2286,6 +2319,16 @@ pub fn stream_to_responses_sse(
                             response.insert("usage".to_string(), usage);
                         }
 
+                        if let Some((store, input_items)) = response_store.as_ref() {
+                            store
+                                .store_response_record(
+                                    &state.response_id,
+                                    Value::Object(response.clone()),
+                                    input_items.clone(),
+                                )
+                                .await;
+                        }
+
                         let event_kind = if status == "completed" {
                             "response.completed"
                         } else {
@@ -2301,6 +2344,7 @@ pub fn stream_to_responses_sse(
                     }
                 }
             }
+        }
         },
     )
     .boxed()
@@ -2361,7 +2405,12 @@ mod openai_protocol_reasoning_tests {
         ]));
 
         let mut out = Vec::<u8>::new();
-        let mut s = stream_to_responses_sse(inner, "fallback".to_string());
+        let mut s = stream_to_responses_sse(
+            inner,
+            "primary".to_string(),
+            "fallback".to_string(),
+            None,
+        );
         while let Some(item) = s.next().await {
             out.extend_from_slice(&item?);
         }

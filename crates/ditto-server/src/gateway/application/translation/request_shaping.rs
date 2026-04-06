@@ -2,7 +2,7 @@ use bytes::Bytes;
 use serde_json::{Map, Value};
 
 use crate::gateway::multipart::{MultipartPart, parse_multipart_form};
-use crate::types::{
+use ditto_core::types::{
     AudioTranscriptionRequest, ImageEditRequest, ImageEditUpload, ImageGenerationRequest,
     ImageResponseFormat, ModerationInput, ModerationRequest, SpeechRequest, SpeechResponseFormat,
     TranscriptionResponseFormat, VideoContentVariant, VideoGenerationRequest, VideoListOrder,
