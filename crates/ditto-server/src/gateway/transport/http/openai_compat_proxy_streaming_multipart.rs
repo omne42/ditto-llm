@@ -126,9 +126,31 @@ struct ResolvedStreamingMultipartGatewayContext {
     user_limits_scope: Option<(String, super::LimitsConfig)>,
     backend_candidates: Vec<String>,
     strip_authorization: bool,
+    local_rate_limit_reserved: bool,
     local_token_budget_reserved: bool,
     buffered_body: Bytes,
     model: Option<String>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rollback_local_streaming_multipart_rate_limits(
+    state: &GatewayHttpState,
+    virtual_key_id: Option<&str>,
+    limits: Option<&super::LimitsConfig>,
+    tenant_limits_scope: &Option<(String, super::LimitsConfig)>,
+    project_limits_scope: &Option<(String, super::LimitsConfig)>,
+    user_limits_scope: &Option<(String, super::LimitsConfig)>,
+    charge_tokens: u32,
+    minute: u64,
+) {
+    let rate_limit_scopes = collect_limit_scopes(
+        virtual_key_id,
+        limits,
+        tenant_limits_scope,
+        project_limits_scope,
+        user_limits_scope,
+    );
+    state.rollback_rate_limits(rate_limit_scopes, charge_tokens, minute);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -226,6 +248,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         user_limits_scope,
         backend_candidates,
         strip_authorization,
+        local_rate_limit_reserved,
         local_token_budget_reserved,
         buffered_body,
         model,
@@ -485,6 +508,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             }
         }
 
+        let mut local_rate_limit_reserved = false;
         if !use_redis_budget {
             let mut rate_limit_scopes = Vec::new();
             if let (Some(key), Some(limits)) = (key.as_ref(), limits.as_ref()) {
@@ -499,6 +523,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             if let Some((scope, limits)) = user_limits_scope.as_ref() {
                 rate_limit_scopes.push((scope.as_str(), limits));
             }
+            local_rate_limit_reserved = !rate_limit_scopes.is_empty();
             if let Err(err) = state.check_and_consume_rate_limits(
                 rate_limit_scopes.into_iter(),
                 charge_tokens,
@@ -546,6 +571,18 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                 && let Err(err) =
                     state.reserve_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens))
             {
+                if local_rate_limit_reserved {
+                    rollback_local_streaming_multipart_rate_limits(
+                        &state,
+                        virtual_key_id.as_deref(),
+                        limits.as_ref(),
+                        &tenant_limits_scope,
+                        &project_limits_scope,
+                        &user_limits_scope,
+                        charge_tokens,
+                        minute,
+                    );
+                }
                 state.record_budget_exceeded();
                 let mapped = map_openai_gateway_error(err);
                 #[cfg(feature = "gateway-metrics-prometheus")]
@@ -575,13 +612,41 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             local_token_budget_reserved = !budget_scopes.is_empty();
         }
 
-        let backends = state
-            .select_backends_for_model_seeded(
-                model.as_deref().unwrap_or_default(),
-                key.as_ref(),
-                Some(&request_id),
-            )
-            .map_err(map_openai_gateway_error)?;
+        let backends = match state.select_backends_for_model_seeded(
+            model.as_deref().unwrap_or_default(),
+            key.as_ref(),
+            Some(&request_id),
+        ) {
+            Ok(backends) => backends,
+            Err(err) => {
+                if local_token_budget_reserved {
+                    rollback_local_streaming_multipart_budgets(
+                        &state,
+                        virtual_key_id.as_deref(),
+                        budget.as_ref(),
+                        &tenant_budget_scope,
+                        &project_budget_scope,
+                        &user_budget_scope,
+                        charge_tokens,
+                        #[cfg(feature = "gateway-costing")]
+                        charge_cost_usd_micros,
+                    );
+                }
+                if local_rate_limit_reserved {
+                    rollback_local_streaming_multipart_rate_limits(
+                        &state,
+                        virtual_key_id.as_deref(),
+                        limits.as_ref(),
+                        &tenant_limits_scope,
+                        &project_limits_scope,
+                        &user_limits_scope,
+                        charge_tokens,
+                        minute,
+                    );
+                }
+                return Err(map_openai_gateway_error(err));
+            }
+        };
 
         ResolvedStreamingMultipartGatewayContext {
             virtual_key_id,
@@ -595,6 +660,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             user_limits_scope,
             backend_candidates: backends,
             strip_authorization,
+            local_rate_limit_reserved,
             local_token_budget_reserved,
             buffered_body,
             model,
@@ -610,19 +676,23 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         &project_limits_scope,
         &user_limits_scope,
     );
+    #[cfg(feature = "gateway-store-redis")]
+    let redis_rate_limit_scopes = collect_limit_scopes(
+        virtual_key_id.as_deref(),
+        limits.as_ref(),
+        &tenant_limits_scope,
+        &project_limits_scope,
+        &user_limits_scope,
+    );
+    #[cfg(feature = "gateway-store-redis")]
+    let mut redis_rate_limit_reserved = false;
 
     #[cfg(feature = "gateway-store-redis")]
     if use_redis_budget
         && let Some(store) = state.stores.redis.as_ref()
         && let Err(err) = store
             .check_and_consume_rate_limits_many(
-                redis_rate_limit_scopes(
-                    virtual_key_id.as_deref(),
-                    limits.as_ref(),
-                    tenant_limits_scope.as_ref(),
-                    project_limits_scope.as_ref(),
-                    user_limits_scope.as_ref(),
-                ),
+                redis_rate_limit_scopes.iter().copied(),
                 &rate_limit_route,
                 charge_tokens,
                 now_epoch_seconds,
@@ -657,6 +727,10 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             metrics.observe_proxy_request_duration(&metrics_path, duration);
         }
         return Err(mapped);
+    }
+    #[cfg(feature = "gateway-store-redis")]
+    if use_redis_budget && state.stores.redis.is_some() {
+        redis_rate_limit_reserved = true;
     }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
@@ -825,6 +899,29 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             ),
         ))]
         rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+        #[cfg(feature = "gateway-store-redis")]
+        if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+            let _ = store
+                .refund_rate_limits_many(
+                    redis_rate_limit_scopes.iter().copied(),
+                    &rate_limit_route,
+                    charge_tokens,
+                    now_epoch_seconds,
+                )
+                .await;
+        }
+        if local_rate_limit_reserved {
+            rollback_local_streaming_multipart_rate_limits(
+                &state,
+                virtual_key_id.as_deref(),
+                limits.as_ref(),
+                &tenant_limits_scope,
+                &project_limits_scope,
+                &user_limits_scope,
+                charge_tokens,
+                minute,
+            );
+        }
         if local_token_budget_reserved {
             rollback_local_streaming_multipart_budgets(
                 &state,
@@ -878,6 +975,29 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             ),
         ))]
         rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+        #[cfg(feature = "gateway-store-redis")]
+        if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+            let _ = store
+                .refund_rate_limits_many(
+                    redis_rate_limit_scopes.iter().copied(),
+                    &rate_limit_route,
+                    charge_tokens,
+                    now_epoch_seconds,
+                )
+                .await;
+        }
+        if local_rate_limit_reserved {
+            rollback_local_streaming_multipart_rate_limits(
+                &state,
+                virtual_key_id.as_deref(),
+                limits.as_ref(),
+                &tenant_limits_scope,
+                &project_limits_scope,
+                &user_limits_scope,
+                charge_tokens,
+                minute,
+            );
+        }
         if local_token_budget_reserved {
             rollback_local_streaming_multipart_budgets(
                 &state,
@@ -928,6 +1048,29 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                 ),
             ))]
             rollback_proxy_cost_budget_reservations(&state, &cost_budget_reservation_ids).await;
+            #[cfg(feature = "gateway-store-redis")]
+            if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .refund_rate_limits_many(
+                        redis_rate_limit_scopes.iter().copied(),
+                        &rate_limit_route,
+                        charge_tokens,
+                        now_epoch_seconds,
+                    )
+                    .await;
+            }
+            if local_rate_limit_reserved {
+                rollback_local_streaming_multipart_rate_limits(
+                    &state,
+                    virtual_key_id.as_deref(),
+                    limits.as_ref(),
+                    &tenant_limits_scope,
+                    &project_limits_scope,
+                    &user_limits_scope,
+                    charge_tokens,
+                    minute,
+                );
+            }
             if local_token_budget_reserved {
                 rollback_local_streaming_multipart_budgets(
                     &state,
@@ -1056,6 +1199,29 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
                     charge_cost_usd_micros,
                 );
             }
+            if local_rate_limit_reserved {
+                rollback_local_streaming_multipart_rate_limits(
+                    &state,
+                    virtual_key_id.as_deref(),
+                    limits.as_ref(),
+                    &tenant_limits_scope,
+                    &project_limits_scope,
+                    &user_limits_scope,
+                    charge_tokens,
+                    minute,
+                );
+            }
+            #[cfg(feature = "gateway-store-redis")]
+            if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .refund_rate_limits_many(
+                        redis_rate_limit_scopes.iter().copied(),
+                        &rate_limit_route,
+                        charge_tokens,
+                        now_epoch_seconds,
+                    )
+                    .await;
+            }
             return Err(mapped);
         }
     };
@@ -1138,6 +1304,32 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
             );
         } else {
             state.rollback_budget_cost(budget_scopes, charge_cost_usd_micros.unwrap_or_default());
+        }
+    }
+
+    if !spend_tokens {
+        if local_rate_limit_reserved {
+            rollback_local_streaming_multipart_rate_limits(
+                &state,
+                virtual_key_id.as_deref(),
+                limits.as_ref(),
+                &tenant_limits_scope,
+                &project_limits_scope,
+                &user_limits_scope,
+                charge_tokens,
+                minute,
+            );
+        }
+        #[cfg(feature = "gateway-store-redis")]
+        if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+            let _ = store
+                .refund_rate_limits_many(
+                    redis_rate_limit_scopes.iter().copied(),
+                    &rate_limit_route,
+                    charge_tokens,
+                    now_epoch_seconds,
+                )
+                .await;
         }
     }
 
@@ -1433,6 +1625,81 @@ Content-Type: audio/wav\r\n\r\n\
     }
 
     #[tokio::test]
+    async fn streaming_multipart_refunds_rate_limits_when_upstream_returns_error() {
+        if ditto_core::utils::test_support::should_skip_httpmock() {
+            return;
+        }
+
+        let upstream = MockServer::start();
+        let upstream_mock = upstream.mock(|when, then| {
+            when.method(POST).path("/v1/audio/transcriptions");
+            then.status(500)
+                .header("content-type", "application/json")
+                .body(r#"{"error":"upstream failed"}"#);
+        });
+
+        let mut key = build_key(
+            "key-1",
+            "vk-1",
+            1,
+            LimitsConfig {
+                rpm: Some(1),
+                tpm: None,
+            },
+        );
+        key.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+
+        let config = GatewayConfig {
+            backends: vec![backend_config("primary", upstream.base_url())],
+            virtual_keys: vec![key.clone()],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let mut proxy_backends = HashMap::new();
+        proxy_backends.insert(
+            "primary".to_string(),
+            ProxyBackend::new(upstream.base_url()).expect("proxy backend"),
+        );
+
+        let state = GatewayHttpState::new(Gateway::new(config))
+            .with_proxy_backends(proxy_backends)
+            .with_proxy_max_body_bytes(16);
+        let minute = now_epoch_seconds() / 60;
+        let boundary = "ditto-boundary";
+
+        let request = streaming_request("vk-1", boundary, multipart_audio_body(boundary));
+        let (parts, body) = request.into_parts();
+        let response = handle_openai_compat_proxy_streaming_multipart(
+            state.clone(),
+            parts,
+            body,
+            "req-stream-500".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect("upstream error response should still return a response");
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        state
+            .check_and_consume_rate_limits([("key-1", &key.limits)], 1, minute)
+            .expect("non-success upstream response should refund rate limits");
+
+        upstream_mock.assert_calls(1);
+    }
+
+    #[tokio::test]
     async fn streaming_multipart_uses_model_routing_and_passthrough_auth() {
         if ditto_core::utils::test_support::should_skip_httpmock() {
             return;
@@ -1559,5 +1826,50 @@ Content-Type: audio/wav\r\n\r\n\
         state
             .check_and_consume_rate_limits([("key-1", &key.limits)], 1, minute)
             .expect("invalid multipart request must not consume key rate limit");
+    }
+
+    #[tokio::test]
+    async fn streaming_multipart_backend_failure_rolls_back_rate_limit() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+
+        let config = GatewayConfig {
+            backends: vec![backend_config("primary", "http://127.0.0.1:9".to_string())],
+            virtual_keys: vec![key.clone()],
+            router: RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+
+        let state = GatewayHttpState::new(Gateway::new(config)).with_proxy_max_body_bytes(16);
+        let boundary = "ditto-boundary";
+        let request = streaming_request("vk-1", boundary, multipart_audio_body(boundary));
+        let (parts, body) = request.into_parts();
+        let err = handle_openai_compat_proxy_streaming_multipart(
+            state.clone(),
+            parts,
+            body,
+            "req-stream-upstream-fail".to_string(),
+            "/v1/audio/transcriptions".to_string(),
+        )
+        .await
+        .expect_err("upstream failure should surface an error");
+
+        assert_ne!(err.0, StatusCode::TOO_MANY_REQUESTS);
+
+        let minute = now_epoch_seconds() / 60;
+        state
+            .check_and_consume_rate_limits([("key-1", &key.limits)], 1, minute)
+            .expect("failed upstream request must not consume key rate limit");
     }
 }

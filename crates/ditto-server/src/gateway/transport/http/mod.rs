@@ -452,6 +452,13 @@ impl GatewayHttpState {
         lock_unpoisoned(&self.limits).check_and_consume_many(scopes, tokens, minute)
     }
 
+    pub(crate) fn rollback_rate_limits<'a, I>(&self, scopes: I, tokens: u32, minute: u64)
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::LimitsConfig)>,
+    {
+        lock_unpoisoned(&self.limits).refund_many(scopes, tokens, minute);
+    }
+
     pub(crate) fn reserve_budget_tokens<'a, I>(
         &self,
         scopes: I,
@@ -1215,6 +1222,29 @@ fn collect_budget_scopes<'a>(
     }
     if let Some((scope, budget)) = user_budget_scope.as_ref() {
         scopes.push((scope.as_str(), budget));
+    }
+    scopes
+}
+
+fn collect_limit_scopes<'a>(
+    virtual_key_id: Option<&'a str>,
+    limits: Option<&'a super::LimitsConfig>,
+    tenant_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+    project_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+    user_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+) -> Vec<(&'a str, &'a super::LimitsConfig)> {
+    let mut scopes = Vec::new();
+    if let (Some(scope), Some(limits)) = (virtual_key_id, limits) {
+        scopes.push((scope, limits));
+    }
+    if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
+        scopes.push((scope.as_str(), limits));
+    }
+    if let Some((scope, limits)) = project_limits_scope.as_ref() {
+        scopes.push((scope.as_str(), limits));
+    }
+    if let Some((scope, limits)) = user_limits_scope.as_ref() {
+        scopes.push((scope.as_str(), limits));
     }
     scopes
 }

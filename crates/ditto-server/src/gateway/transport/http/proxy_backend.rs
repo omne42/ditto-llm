@@ -23,10 +23,19 @@ pub(super) async fn attempt_proxy_backend(
     let strip_authorization = params.strip_authorization;
     let use_persistent_budget = params.use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
+    let limits = params.limits;
     let budget = params.budget;
     let tenant_budget_scope = params.tenant_budget_scope;
     let project_budget_scope = params.project_budget_scope;
     let user_budget_scope = params.user_budget_scope;
+    let tenant_limits_scope = params.tenant_limits_scope;
+    let project_limits_scope = params.project_limits_scope;
+    let user_limits_scope = params.user_limits_scope;
+    let local_rate_limit_reserved = params.local_rate_limit_reserved;
+    #[cfg(feature = "gateway-store-redis")]
+    let redis_rate_limit_reserved = params.redis_rate_limit_reserved;
+    #[cfg(feature = "gateway-store-redis")]
+    let rate_limit_route = params.rate_limit_route;
     let local_token_budget_reserved = params.local_token_budget_reserved;
     #[cfg(feature = "gateway-costing")]
     let local_cost_budget_reserved = params.local_cost_budget_reserved;
@@ -609,6 +618,40 @@ pub(super) async fn attempt_proxy_backend(
                         charge_cost_usd_micros.unwrap_or_default(),
                     );
                 }
+            }
+        }
+
+        if !spend_tokens {
+            if local_rate_limit_reserved {
+                let rate_limit_scopes = collect_limit_scopes(
+                    virtual_key_id.as_deref(),
+                    limits.as_ref(),
+                    tenant_limits_scope,
+                    project_limits_scope,
+                    user_limits_scope,
+                );
+                state.rollback_rate_limits(
+                    rate_limit_scopes,
+                    charge_tokens,
+                    _now_epoch_seconds / 60,
+                );
+            }
+            #[cfg(feature = "gateway-store-redis")]
+            if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+                let _ = store
+                    .refund_rate_limits_many(
+                        collect_limit_scopes(
+                            virtual_key_id.as_deref(),
+                            limits.as_ref(),
+                            tenant_limits_scope,
+                            project_limits_scope,
+                            user_limits_scope,
+                        ),
+                        rate_limit_route,
+                        charge_tokens,
+                        _now_epoch_seconds,
+                    )
+                    .await;
             }
         }
 

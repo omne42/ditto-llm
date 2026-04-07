@@ -259,6 +259,8 @@ mod tests {
 
     struct TestBackend;
 
+    struct FailingBackend;
+
     #[async_trait]
     impl Backend for TestBackend {
         async fn call(&self, _request: &GatewayRequest) -> Result<GatewayResponse, GatewayError> {
@@ -267,6 +269,15 @@ mod tests {
                 output_tokens: 1,
                 backend: "primary".to_string(),
                 cached: false,
+            })
+        }
+    }
+
+    #[async_trait]
+    impl Backend for FailingBackend {
+        async fn call(&self, _request: &GatewayRequest) -> Result<GatewayResponse, GatewayError> {
+            Err(GatewayError::Backend {
+                message: "upstream failed".to_string(),
             })
         }
     }
@@ -495,6 +506,143 @@ mod tests {
         lock_unpoisoned(&gateway.limits)
             .check_and_consume("key-a", &key_a.limits, 1, minute)
             .expect("key scope must remain available after tenant-scope rejection");
+    }
+
+    #[test]
+    fn prepare_handle_request_rolls_back_rate_limits_when_backend_is_missing() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: Some(3),
+        };
+
+        let gateway = Gateway::new(GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key.clone()],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        });
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let err = match gateway.prepare_handle_request(&request) {
+            Ok(_) => panic!("missing backend should fail"),
+            Err(err) => err,
+        };
+        assert!(matches!(err, GatewayError::BackendNotFound { .. }));
+
+        let minute = gateway.clock.now_epoch_seconds() / 60;
+        lock_unpoisoned(&gateway.limits)
+            .check_and_consume("key-1", &key.limits, 3, minute)
+            .expect("failed prepare should refund reserved rate limits");
+    }
+
+    #[test]
+    fn complete_handle_failure_refunds_total_rate_limit_tokens() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.limits = LimitsConfig {
+            rpm: Some(10),
+            tpm: Some(3),
+        };
+
+        let mut gateway = Gateway::new(GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        });
+        gateway.register_backend("primary", FailingBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let prepared = match gateway
+            .prepare_handle_request(&request)
+            .expect("first request should reserve limits")
+        {
+            GatewayPreparedRequest::Call(prepared) => prepared,
+            GatewayPreparedRequest::Cached { .. } => panic!("expected backend call"),
+        };
+
+        gateway.complete_handle_failure(&prepared);
+
+        assert!(matches!(
+            gateway.prepare_handle_request(&request),
+            Ok(GatewayPreparedRequest::Call(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn handle_failure_refunds_rate_limits() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.limits = LimitsConfig {
+            rpm: Some(1),
+            tpm: None,
+        };
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key.clone()],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config);
+        gateway.register_backend("primary", FailingBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 1,
+            passthrough: false,
+        };
+
+        let first = gateway.handle(request.clone()).await;
+        assert!(matches!(first, Err(GatewayError::Backend { .. })));
+
+        let second = gateway.handle(request).await;
+        assert!(
+            matches!(second, Err(GatewayError::Backend { .. })),
+            "failed request should refund rate limit capacity for retry"
+        );
     }
 
     #[test]
@@ -1110,7 +1258,12 @@ pub(crate) struct GatewayPreparedCall {
     #[cfg(feature = "gateway-costing")]
     model: String,
     input_tokens: u32,
+    rate_limit_minute: u64,
     tokens: u64,
+    key_limits: LimitsConfig,
+    tenant_limit_scope: Option<(String, LimitsConfig)>,
+    project_limit_scope: Option<(String, LimitsConfig)>,
+    user_limit_scope: Option<(String, LimitsConfig)>,
     key_budget: BudgetConfig,
     tenant_budget_scope: Option<(String, BudgetConfig)>,
     project_budget_scope: Option<(String, BudgetConfig)>,
@@ -1391,6 +1544,19 @@ impl Gateway {
         if let Some((scope, limits)) = user_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
+        let rollback_rate_limits = || {
+            let mut scopes = vec![(&key.id[..], &key.limits)];
+            if let Some((scope, limits)) = tenant_limit_scope.as_ref() {
+                scopes.push((scope.as_str(), *limits));
+            }
+            if let Some((scope, limits)) = project_limit_scope.as_ref() {
+                scopes.push((scope.as_str(), *limits));
+            }
+            if let Some((scope, limits)) = user_limit_scope.as_ref() {
+                scopes.push((scope.as_str(), *limits));
+            }
+            lock_unpoisoned(&self.limits).refund_many(scopes, tokens, minute);
+        };
         if let Err(err) =
             lock_unpoisoned(&self.limits).check_and_consume_many(rate_limit_scopes, tokens, minute)
         {
@@ -1405,16 +1571,24 @@ impl Gateway {
             .unwrap_or(&key.guardrails);
 
         if let Err(err) = guardrails.check(request) {
+            rollback_rate_limits();
             lock_unpoisoned(&self.observability).record_guardrail_blocked();
             return Err(err);
         }
 
         if let Err(err) = key.passthrough.validate(request) {
+            rollback_rate_limits();
             lock_unpoisoned(&self.observability).record_guardrail_blocked();
             return Err(err);
         }
 
-        let backend_name = control_plane.router.select_backend(request, &key)?;
+        let backend_name = match control_plane.router.select_backend(request, &key) {
+            Ok(backend_name) => backend_name,
+            Err(err) => {
+                rollback_rate_limits();
+                return Err(err);
+            }
+        };
 
         let bypass_cache = key.passthrough.bypass_cache(request);
         let cache_key = (key.cache.enabled && !bypass_cache)
@@ -1434,8 +1608,11 @@ impl Gateway {
             .backends
             .get(&backend_name)
             .cloned()
-            .ok_or_else(|| GatewayError::BackendNotFound {
-                name: backend_name.clone(),
+            .ok_or_else(|| {
+                rollback_rate_limits();
+                GatewayError::BackendNotFound {
+                    name: backend_name.clone(),
+                }
             })?;
 
         lock_unpoisoned(&self.observability).record_backend_call();
@@ -1487,6 +1664,7 @@ impl Gateway {
         if let Err(err) =
             lock_unpoisoned(&self.budget).reserve_many(budget_scopes, u64::from(tokens))
         {
+            rollback_rate_limits();
             lock_unpoisoned(&self.observability).record_budget_exceeded();
             return Err(err);
         }
@@ -1518,6 +1696,7 @@ impl Gateway {
                         ),
                         u64::from(tokens),
                     );
+                    rollback_rate_limits();
                     return Err(GatewayError::Backend {
                         message: "pricing not configured for cost budgets".to_string(),
                     });
@@ -1548,6 +1727,7 @@ impl Gateway {
                             ),
                             u64::from(tokens),
                         );
+                        rollback_rate_limits();
                         return Err(err);
                     }
                 };
@@ -1574,6 +1754,7 @@ impl Gateway {
                         ),
                         u64::from(tokens),
                     );
+                    rollback_rate_limits();
                     lock_unpoisoned(&self.observability).record_budget_exceeded();
                     return Err(err);
                 }
@@ -1589,7 +1770,18 @@ impl Gateway {
                 #[cfg(feature = "gateway-costing")]
                 model: request.model.clone(),
                 input_tokens: request.input_tokens,
+                rate_limit_minute: minute,
                 tokens: u64::from(tokens),
+                key_limits: key.limits,
+                tenant_limit_scope: tenant_limit_scope
+                    .as_ref()
+                    .map(|(scope, limits)| (scope.clone(), (*limits).clone())),
+                project_limit_scope: project_limit_scope
+                    .as_ref()
+                    .map(|(scope, limits)| (scope.clone(), (*limits).clone())),
+                user_limit_scope: user_limit_scope
+                    .as_ref()
+                    .map(|(scope, limits)| (scope.clone(), (*limits).clone())),
                 key_budget: key.budget,
                 tenant_budget_scope,
                 project_budget_scope,
@@ -1733,7 +1925,38 @@ impl Gateway {
         scopes
     }
 
+    fn handle_rate_limit_scopes<'a>(
+        key_id: &'a str,
+        key_limits: &'a LimitsConfig,
+        tenant_limit_scope: Option<&'a (String, LimitsConfig)>,
+        project_limit_scope: Option<&'a (String, LimitsConfig)>,
+        user_limit_scope: Option<&'a (String, LimitsConfig)>,
+    ) -> Vec<(&'a str, &'a LimitsConfig)> {
+        let mut scopes = vec![(key_id, key_limits)];
+        if let Some((scope, limits)) = tenant_limit_scope {
+            scopes.push((scope.as_str(), limits));
+        }
+        if let Some((scope, limits)) = project_limit_scope {
+            scopes.push((scope.as_str(), limits));
+        }
+        if let Some((scope, limits)) = user_limit_scope {
+            scopes.push((scope.as_str(), limits));
+        }
+        scopes
+    }
+
     pub(crate) fn complete_handle_failure(&self, prepared: &GatewayPreparedCall) {
+        lock_unpoisoned(&self.limits).refund_many(
+            Self::handle_rate_limit_scopes(
+                &prepared.key_id,
+                &prepared.key_limits,
+                prepared.tenant_limit_scope.as_ref(),
+                prepared.project_limit_scope.as_ref(),
+                prepared.user_limit_scope.as_ref(),
+            ),
+            u32::try_from(prepared.tokens).unwrap_or(u32::MAX),
+            prepared.rate_limit_minute,
+        );
         lock_unpoisoned(&self.budget).refund_many(
             Self::handle_budget_scopes(
                 &prepared.key_id,

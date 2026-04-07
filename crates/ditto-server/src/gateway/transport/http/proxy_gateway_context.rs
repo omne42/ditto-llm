@@ -16,6 +16,7 @@ pub(super) struct ResolvedGatewayContext {
     pub(super) backend_candidates: Vec<String>,
     pub(super) strip_authorization: bool,
     pub(super) charge_cost_usd_micros: Option<u64>,
+    pub(super) local_rate_limit_reserved: bool,
     pub(super) local_token_budget_reserved: bool,
     #[cfg(feature = "gateway-costing")]
     pub(super) local_cost_budget_reserved: bool,
@@ -60,6 +61,7 @@ struct ResolvedGatewayContextLocals {
     user_limits_scope: Option<(String, super::LimitsConfig)>,
     backend_candidates: Vec<String>,
     charge_cost_usd_micros: Option<u64>,
+    local_rate_limit_reserved: bool,
     local_token_budget_reserved: bool,
     #[cfg(feature = "gateway-costing")]
     local_cost_budget_reserved: bool,
@@ -514,6 +516,20 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
             };
             #[cfg(not(feature = "gateway-costing"))]
             let charge_cost_usd_micros: Option<u64> = None;
+            let rollback_local_rate_limits = || {
+                let mut rate_limit_scopes = vec![(&key.id[..], &key.limits)];
+                if let Some((scope, limits)) = tenant_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                if let Some((scope, limits)) = project_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                if let Some((scope, limits)) = user_limits_scope.as_ref() {
+                    rate_limit_scopes.push((scope.as_str(), limits));
+                }
+                state.rollback_rate_limits(rate_limit_scopes, charge_tokens, minute);
+            };
+            let mut local_rate_limit_reserved = false;
 
             if !use_redis_budget {
                 let mut rate_limit_scopes = vec![(&key.id[..], &key.limits)];
@@ -553,6 +569,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                     }
                     return Err(mapped);
                 }
+                local_rate_limit_reserved = true;
             }
 
             let mut local_token_budget_reserved = false;
@@ -571,6 +588,9 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                     && let Err(err) =
                         state.reserve_budget_tokens(budget_scopes.clone(), u64::from(charge_tokens))
                 {
+                    if local_rate_limit_reserved {
+                        rollback_local_rate_limits();
+                    }
                     state.record_budget_exceeded();
                     let mapped = map_openai_gateway_error(err);
                     #[cfg(feature = "gateway-metrics-prometheus")]
@@ -620,6 +640,9 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                             );
                             state.rollback_budget_tokens(budget_scopes, u64::from(charge_tokens));
                         }
+                        if local_rate_limit_reserved {
+                            rollback_local_rate_limits();
+                        }
                         return Err(openai_error(
                             StatusCode::INTERNAL_SERVER_ERROR,
                             "api_error",
@@ -644,6 +667,9 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                                 budget_scopes.clone(),
                                 u64::from(charge_tokens),
                             );
+                        }
+                        if local_rate_limit_reserved {
+                            rollback_local_rate_limits();
                         }
                         state.record_budget_exceeded();
                         let mapped = map_openai_gateway_error(err);
@@ -687,6 +713,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 user_limits_scope,
                 backend_candidates: backends,
                 charge_cost_usd_micros,
+                local_rate_limit_reserved,
                 local_token_budget_reserved,
                 #[cfg(feature = "gateway-costing")]
                 local_cost_budget_reserved,
@@ -724,6 +751,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
                 user_limits_scope: None,
                 backend_candidates: backends,
                 charge_cost_usd_micros,
+                local_rate_limit_reserved: false,
                 local_token_budget_reserved: false,
                 #[cfg(feature = "gateway-costing")]
                 local_cost_budget_reserved: false,
@@ -746,6 +774,7 @@ pub(super) async fn resolve_openai_compat_proxy_gateway_context(
         backend_candidates: resolved.backend_candidates,
         strip_authorization,
         charge_cost_usd_micros: resolved.charge_cost_usd_micros,
+        local_rate_limit_reserved: resolved.local_rate_limit_reserved,
         local_token_budget_reserved: resolved.local_token_budget_reserved,
         #[cfg(feature = "gateway-costing")]
         local_cost_budget_reserved: resolved.local_cost_budget_reserved,

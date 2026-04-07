@@ -214,6 +214,7 @@ pub(super) async fn handle_openai_compat_proxy(
         backend_candidates,
         strip_authorization,
         charge_cost_usd_micros,
+        local_rate_limit_reserved,
         local_token_budget_reserved,
         #[cfg(feature = "gateway-costing")]
         local_cost_budget_reserved,
@@ -267,19 +268,26 @@ pub(super) async fn handle_openai_compat_proxy(
         &tenant_limits_scope,
         &project_limits_scope,
         &user_limits_scope,
+        local_rate_limit_reserved,
     );
+
+    #[cfg(feature = "gateway-store-redis")]
+    let redis_rate_limit_scopes = redis_rate_limit_scopes(
+        virtual_key_id.as_deref(),
+        limits.as_ref(),
+        tenant_limits_scope.as_ref(),
+        project_limits_scope.as_ref(),
+        user_limits_scope.as_ref(),
+    );
+
+    #[cfg(feature = "gateway-store-redis")]
+    let mut redis_rate_limit_reserved = false;
 
     #[cfg(feature = "gateway-store-redis")]
     if let Some(store) = state.stores.redis.as_ref()
         && let Err(err) = store
             .check_and_consume_rate_limits_many(
-                redis_rate_limit_scopes(
-                    virtual_key_id.as_deref(),
-                    limits.as_ref(),
-                    tenant_limits_scope.as_ref(),
-                    project_limits_scope.as_ref(),
-                    user_limits_scope.as_ref(),
-                ),
+                redis_rate_limit_scopes.iter().copied(),
                 &rate_limit_route,
                 charge_tokens,
                 _now_epoch_seconds,
@@ -314,6 +322,10 @@ pub(super) async fn handle_openai_compat_proxy(
             metrics.observe_proxy_request_duration(&metrics_path, duration);
         }
         return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(mapped)).await;
+    }
+    #[cfg(feature = "gateway-store-redis")]
+    if state.stores.redis.is_some() && !redis_rate_limit_scopes.is_empty() {
+        redis_rate_limit_reserved = true;
     }
 
     #[cfg(feature = "gateway-otel")]
@@ -446,6 +458,17 @@ pub(super) async fn handle_openai_compat_proxy(
                     }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
                 }
+                #[cfg(feature = "gateway-store-redis")]
+                if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+                    let _ = store
+                        .refund_rate_limits_many(
+                            redis_rate_limit_scopes.iter().copied(),
+                            &rate_limit_route,
+                            charge_tokens,
+                            _now_epoch_seconds,
+                        )
+                        .await;
+                }
                 return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(err))
                     .await;
             }
@@ -500,6 +523,17 @@ pub(super) async fn handle_openai_compat_proxy(
                         metrics.observe_proxy_request_duration_by_model(model, duration);
                     }
                     metrics.observe_proxy_request_duration(&metrics_path, duration);
+                }
+                #[cfg(feature = "gateway-store-redis")]
+                if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+                    let _ = store
+                        .refund_rate_limits_many(
+                            redis_rate_limit_scopes.iter().copied(),
+                            &rate_limit_route,
+                            charge_tokens,
+                            _now_epoch_seconds,
+                        )
+                        .await;
                 }
                 return finish_proxy_request_dedup_result(request_dedup_leader.take(), Err(err))
                     .await;
@@ -567,12 +601,21 @@ pub(super) async fn handle_openai_compat_proxy(
         strip_authorization,
         use_persistent_budget,
         virtual_key_id: &virtual_key_id,
+        limits: &limits,
         #[cfg(feature = "gateway-translation")]
         response_owner: &response_owner,
         budget: &budget,
         tenant_budget_scope: &tenant_budget_scope,
         project_budget_scope: &project_budget_scope,
         user_budget_scope: &user_budget_scope,
+        tenant_limits_scope: &tenant_limits_scope,
+        project_limits_scope: &project_limits_scope,
+        user_limits_scope: &user_limits_scope,
+        local_rate_limit_reserved,
+        #[cfg(feature = "gateway-store-redis")]
+        redis_rate_limit_reserved,
+        #[cfg(feature = "gateway-store-redis")]
+        rate_limit_route: &rate_limit_route,
         local_token_budget_reserved,
         #[cfg(feature = "gateway-costing")]
         local_cost_budget_reserved,
@@ -704,6 +747,29 @@ pub(super) async fn handle_openai_compat_proxy(
         if local_cost_budget_reserved {
             state.rollback_budget_cost(budget_scopes, charge_cost_usd_micros.unwrap_or_default());
         }
+    }
+
+    if local_rate_limit_reserved {
+        let rate_limit_scopes = collect_limit_scopes(
+            virtual_key_id.as_deref(),
+            limits.as_ref(),
+            &tenant_limits_scope,
+            &project_limits_scope,
+            &user_limits_scope,
+        );
+        state.rollback_rate_limits(rate_limit_scopes, charge_tokens, minute);
+    }
+
+    #[cfg(feature = "gateway-store-redis")]
+    if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
+        let _ = store
+            .refund_rate_limits_many(
+                redis_rate_limit_scopes.iter().copied(),
+                &rate_limit_route,
+                charge_tokens,
+                _now_epoch_seconds,
+            )
+            .await;
     }
 
     #[cfg(feature = "gateway-metrics-prometheus")]
