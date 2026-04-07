@@ -1128,6 +1128,19 @@ async fn gateway_translation_owned_resource_ids_are_scoped_and_owner_bound(
     let foreign_file_response = app.clone().oneshot(foreign_file_request).await.unwrap();
     assert_eq!(foreign_file_response.status(), StatusCode::NOT_FOUND);
 
+    let foreign_file_content_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/files/{file_id}/content"))
+        .header(axum::http::header::AUTHORIZATION, "Bearer vk-2")
+        .body(Body::empty())
+        .unwrap();
+    let foreign_file_content_response = app
+        .clone()
+        .oneshot(foreign_file_content_request)
+        .await
+        .unwrap();
+    assert_eq!(foreign_file_content_response.status(), StatusCode::NOT_FOUND);
+
     let batch_id = create_owned_translation_batch(app.clone()).await?;
     assert!(batch_id.starts_with("batch_ditto_"));
 
@@ -1180,6 +1193,20 @@ async fn gateway_translation_owned_resource_ids_are_scoped_and_owner_bound(
             .and_then(|value| value.as_str()),
         Some(file_id.as_str())
     );
+
+    let foreign_batch_delete_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/batches/{batch_id}/cancel"))
+                .header(axum::http::header::AUTHORIZATION, "Bearer vk-2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(foreign_batch_delete_response.status(), StatusCode::NOT_FOUND);
 
     let video_id = create_owned_translation_video(app.clone()).await?;
     assert!(video_id.starts_with("video_ditto_"));
@@ -1248,6 +1275,20 @@ async fn gateway_translation_owned_resource_ids_are_scoped_and_owner_bound(
         .await
         .unwrap();
     assert_eq!(video_content_response.status(), StatusCode::OK);
+
+    let foreign_video_content_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/videos/{video_id}/content?variant=thumbnail"))
+                .header(axum::http::header::AUTHORIZATION, "Bearer vk-2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(foreign_video_content_response.status(), StatusCode::NOT_FOUND);
 
     Ok(())
 }
@@ -1475,6 +1516,15 @@ async fn gateway_translation_responses_reject_other_virtual_keys()
         .unwrap();
     let retrieve_response = app.clone().oneshot(retrieve_request).await.unwrap();
     assert_eq!(retrieve_response.status(), StatusCode::NOT_FOUND);
+
+    let input_items_request = Request::builder()
+        .method("GET")
+        .uri(format!("/v1/responses/{created_id}/input_items"))
+        .header("authorization", "Bearer vk-2")
+        .body(Body::empty())
+        .unwrap();
+    let input_items_response = app.clone().oneshot(input_items_request).await.unwrap();
+    assert_eq!(input_items_response.status(), StatusCode::NOT_FOUND);
 
     let delete_request = Request::builder()
         .method("DELETE")
