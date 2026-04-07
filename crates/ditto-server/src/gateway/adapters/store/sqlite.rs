@@ -235,6 +235,44 @@ impl SqliteStore {
         .await?
     }
 
+    pub async fn replace_control_plane_snapshot(
+        &self,
+        keys: &[VirtualKeyConfig],
+        router: &RouterConfig,
+    ) -> Result<(), SqliteStoreError> {
+        let path = self.path.clone();
+        let serialized_keys: Vec<(String, String)> = keys
+            .iter()
+            .map(|key| {
+                let key = key.sanitized_for_persistence();
+                Ok((key.id.clone(), serde_json::to_string(&key)?))
+            })
+            .collect::<Result<_, serde_json::Error>>()?;
+        let router_json = serde_json::to_string(router)?;
+
+        tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
+            let mut conn = open_connection(path)?;
+            init_schema(&conn)?;
+
+            let tx = conn.transaction()?;
+            tx.execute("DELETE FROM virtual_keys", [])?;
+            for (id, value_json) in serialized_keys {
+                tx.execute(
+                    "INSERT INTO virtual_keys (id, value_json) VALUES (?1, ?2)",
+                    rusqlite::params![id, value_json],
+                )?;
+            }
+            tx.execute(
+                "INSERT INTO config_state (key, value_json) VALUES ('router', ?1)
+                 ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json",
+                rusqlite::params![router_json],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?
+    }
+
     pub async fn reserve_budget_tokens(
         &self,
         request_id: &str,

@@ -277,7 +277,7 @@ async fn persist_control_plane_state(
                 .as_ref()
                 .expect("selected sqlite target must exist");
             store
-                .replace_virtual_keys(&stored_keys)
+                .replace_control_plane_snapshot(&stored_keys, router)
                 .await
                 .map_err(|err| {
                     error_response(
@@ -286,13 +286,6 @@ async fn persist_control_plane_state(
                         err.to_string(),
                     )
                 })?;
-            store.replace_router_config(router).await.map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
         }
         #[cfg(feature = "gateway-store-postgres")]
         Some(ControlPlanePersistenceTarget::Store(GatewayStoreTarget::Postgres)) => {
@@ -302,7 +295,7 @@ async fn persist_control_plane_state(
                 .as_ref()
                 .expect("selected postgres target must exist");
             store
-                .replace_virtual_keys(&stored_keys)
+                .replace_control_plane_snapshot(&stored_keys, router)
                 .await
                 .map_err(|err| {
                     error_response(
@@ -311,13 +304,6 @@ async fn persist_control_plane_state(
                         err.to_string(),
                     )
                 })?;
-            store.replace_router_config(router).await.map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
         }
         #[cfg(feature = "gateway-store-mysql")]
         Some(ControlPlanePersistenceTarget::Store(GatewayStoreTarget::Mysql)) => {
@@ -327,7 +313,7 @@ async fn persist_control_plane_state(
                 .as_ref()
                 .expect("selected mysql target must exist");
             store
-                .replace_virtual_keys(&stored_keys)
+                .replace_control_plane_snapshot(&stored_keys, router)
                 .await
                 .map_err(|err| {
                     error_response(
@@ -336,13 +322,6 @@ async fn persist_control_plane_state(
                         err.to_string(),
                     )
                 })?;
-            store.replace_router_config(router).await.map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
         }
         #[cfg(feature = "gateway-store-redis")]
         Some(ControlPlanePersistenceTarget::Store(GatewayStoreTarget::Redis)) => {
@@ -352,7 +331,7 @@ async fn persist_control_plane_state(
                 .as_ref()
                 .expect("selected redis target must exist");
             store
-                .replace_virtual_keys(&stored_keys)
+                .replace_control_plane_snapshot(&stored_keys, router)
                 .await
                 .map_err(|err| {
                     error_response(
@@ -361,13 +340,6 @@ async fn persist_control_plane_state(
                         err.to_string(),
                     )
                 })?;
-            store.replace_router_config(router).await.map_err(|err| {
-                error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "storage_error",
-                    err.to_string(),
-                )
-            })?;
         }
     }
 

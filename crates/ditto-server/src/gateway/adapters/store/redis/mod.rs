@@ -414,6 +414,27 @@ impl RedisStore {
         Ok(())
     }
 
+    pub async fn replace_control_plane_snapshot(
+        &self,
+        keys: &[VirtualKeyConfig],
+        router: &RouterConfig,
+    ) -> Result<(), RedisStoreError> {
+        let mut conn = self.connection().await?;
+        let virtual_keys_key = self.key_virtual_keys();
+        let router_key = self.key_router_config();
+        let router_json = serde_json::to_string(router)?;
+
+        let mut pipe = redis::pipe();
+        pipe.atomic().del(&virtual_keys_key);
+        for key in keys {
+            let key = key.sanitized_for_persistence();
+            pipe.hset(&virtual_keys_key, &key.id, serde_json::to_string(&key)?);
+        }
+        pipe.set(&router_key, router_json);
+        let _: () = pipe.query_async(&mut conn).await?;
+        Ok(())
+    }
+
     pub async fn begin_proxy_request_idempotency(
         &self,
         request_id: &str,
