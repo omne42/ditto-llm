@@ -1486,8 +1486,7 @@ async fn gateway_http_litellm_key_generate_info_delete_round_trip() -> ditto_cor
         "team_id": "t1",
         "user_id": "u1",
         "rpm_limit": 10,
-        "tpm_limit": 100,
-        "max_budget": 0.01
+        "tpm_limit": 100
     });
     let generate = Request::builder()
         .method("POST")
