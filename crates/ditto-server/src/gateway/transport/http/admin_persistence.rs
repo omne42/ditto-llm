@@ -576,6 +576,14 @@ mod tests {
                 .map(|backend| backend.backend.as_str()),
             Some("primary")
         );
+        assert_eq!(
+            state
+                .router_config_snapshot()
+                .default_backends
+                .first()
+                .map(|backend| backend.backend.as_str()),
+            Some("primary")
+        );
         state
             .gateway
             .handle(GatewayRequest {
