@@ -586,27 +586,92 @@ async fn reserve_proxy_token_budget(
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
+fn budget_storage_error(operation: &str, target: &str, err: impl std::fmt::Display) -> String {
+    format!("{operation} failed for {target}: {err}")
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+fn report_budget_storage_error(state: &GatewayHttpState, operation: &str, target: &str, err: &str) {
+    emit_json_log(
+        state,
+        "proxy.storage_error",
+        serde_json::json!({
+            "operation": operation,
+            "target": target,
+            "error": err,
+        }),
+    );
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+pub(super) async fn rollback_proxy_token_budget_reservations_checked(
+    state: &GatewayHttpState,
+    reservation_ids: &[String],
+) -> Result<(), String> {
+    for reservation_id in reservation_ids {
+        #[cfg(feature = "gateway-store-sqlite")]
+        if let Some(store) = state.stores.sqlite.as_ref() {
+            store
+                .rollback_budget_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.stores.postgres.as_ref() {
+            store
+                .rollback_budget_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.stores.mysql.as_ref() {
+            store
+                .rollback_budget_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-redis")]
+        if let Some(store) = state.stores.redis.as_ref() {
+            store
+                .rollback_budget_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                })?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 pub(super) async fn rollback_proxy_token_budget_reservations(
     state: &GatewayHttpState,
     reservation_ids: &[String],
 ) {
-    for reservation_id in reservation_ids {
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.stores.sqlite.as_ref() {
-            let _ = store.rollback_budget_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-postgres")]
-        if let Some(store) = state.stores.postgres.as_ref() {
-            let _ = store.rollback_budget_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-mysql")]
-        if let Some(store) = state.stores.mysql.as_ref() {
-            let _ = store.rollback_budget_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.stores.redis.as_ref() {
-            let _ = store.rollback_budget_reservation(reservation_id).await;
-        }
+    if let Err(err) = rollback_proxy_token_budget_reservations_checked(state, reservation_ids).await
+    {
+        report_budget_storage_error(state, "rollback_budget_reservation", "budget_tokens", &err);
     }
 }
 
@@ -616,57 +681,106 @@ pub(super) async fn rollback_proxy_token_budget_reservations(
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
-pub(super) async fn settle_proxy_token_budget_reservations(
+pub(super) async fn settle_proxy_token_budget_reservations_checked(
     state: &GatewayHttpState,
     reservation_ids: &[String],
     spend_tokens: bool,
     spent_tokens: u64,
-) {
+) -> Result<(), String> {
     if reservation_ids.is_empty() {
-        return;
+        return Ok(());
     }
     for reservation_id in reservation_ids {
         #[cfg(feature = "gateway-store-sqlite")]
         if let Some(store) = state.stores.sqlite.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_budget_reservation_with_tokens",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_budget_reservation(reservation_id).await;
+                store
+                    .rollback_budget_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-postgres")]
         if let Some(store) = state.stores.postgres.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_budget_reservation_with_tokens",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_budget_reservation(reservation_id).await;
+                store
+                    .rollback_budget_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-mysql")]
         if let Some(store) = state.stores.mysql.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_budget_reservation_with_tokens",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_budget_reservation(reservation_id).await;
+                store
+                    .rollback_budget_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-redis")]
         if let Some(store) = state.stores.redis.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_budget_reservation_with_tokens(reservation_id, spent_tokens)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_budget_reservation_with_tokens",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_budget_reservation(reservation_id).await;
+                store
+                    .rollback_budget_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_budget_reservation", reservation_id, err)
+                    })?;
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(all(
@@ -1000,27 +1114,67 @@ async fn reserve_proxy_cost_budget(
         feature = "gateway-store-redis"
     ),
 ))]
+pub(super) async fn rollback_proxy_cost_budget_reservations_checked(
+    state: &GatewayHttpState,
+    reservation_ids: &[String],
+) -> Result<(), String> {
+    for reservation_id in reservation_ids {
+        #[cfg(feature = "gateway-store-sqlite")]
+        if let Some(store) = state.stores.sqlite.as_ref() {
+            store
+                .rollback_cost_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-postgres")]
+        if let Some(store) = state.stores.postgres.as_ref() {
+            store
+                .rollback_cost_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-mysql")]
+        if let Some(store) = state.stores.mysql.as_ref() {
+            store
+                .rollback_cost_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                })?;
+        }
+        #[cfg(feature = "gateway-store-redis")]
+        if let Some(store) = state.stores.redis.as_ref() {
+            store
+                .rollback_cost_reservation(reservation_id)
+                .await
+                .map_err(|err| {
+                    budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                })?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(
+    feature = "gateway-costing",
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
+))]
 pub(super) async fn rollback_proxy_cost_budget_reservations(
     state: &GatewayHttpState,
     reservation_ids: &[String],
 ) {
-    for reservation_id in reservation_ids {
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.stores.sqlite.as_ref() {
-            let _ = store.rollback_cost_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-postgres")]
-        if let Some(store) = state.stores.postgres.as_ref() {
-            let _ = store.rollback_cost_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-mysql")]
-        if let Some(store) = state.stores.mysql.as_ref() {
-            let _ = store.rollback_cost_reservation(reservation_id).await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.stores.redis.as_ref() {
-            let _ = store.rollback_cost_reservation(reservation_id).await;
-        }
+    if let Err(err) = rollback_proxy_cost_budget_reservations_checked(state, reservation_ids).await
+    {
+        report_budget_storage_error(state, "rollback_cost_reservation", "budget_cost", &err);
     }
 }
 
@@ -1033,57 +1187,204 @@ pub(super) async fn rollback_proxy_cost_budget_reservations(
         feature = "gateway-store-redis"
     ),
 ))]
-pub(super) async fn settle_proxy_cost_budget_reservations(
+pub(super) async fn settle_proxy_cost_budget_reservations_checked(
     state: &GatewayHttpState,
     reservation_ids: &[String],
     spend_tokens: bool,
     spent_cost_usd_micros: u64,
-) {
+) -> Result<(), String> {
     if reservation_ids.is_empty() {
-        return;
+        return Ok(());
     }
 
     for reservation_id in reservation_ids {
         #[cfg(feature = "gateway-store-sqlite")]
         if let Some(store) = state.stores.sqlite.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_cost_reservation_with_usd_micros",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_cost_reservation(reservation_id).await;
+                store
+                    .rollback_cost_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-postgres")]
         if let Some(store) = state.stores.postgres.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_cost_reservation_with_usd_micros",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_cost_reservation(reservation_id).await;
+                store
+                    .rollback_cost_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-mysql")]
         if let Some(store) = state.stores.mysql.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_cost_reservation_with_usd_micros",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_cost_reservation(reservation_id).await;
+                store
+                    .rollback_cost_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                    })?;
             }
         }
         #[cfg(feature = "gateway-store-redis")]
         if let Some(store) = state.stores.redis.as_ref() {
             if spend_tokens {
-                let _ = store
+                store
                     .commit_cost_reservation_with_usd_micros(reservation_id, spent_cost_usd_micros)
-                    .await;
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error(
+                            "commit_cost_reservation_with_usd_micros",
+                            reservation_id,
+                            err,
+                        )
+                    })?;
             } else {
-                let _ = store.rollback_cost_reservation(reservation_id).await;
+                store
+                    .rollback_cost_reservation(reservation_id)
+                    .await
+                    .map_err(|err| {
+                        budget_storage_error("rollback_cost_reservation", reservation_id, err)
+                    })?;
             }
         }
+    }
+    Ok(())
+}
+
+#[cfg(all(
+    feature = "gateway-costing",
+    any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ),
+))]
+pub(super) async fn record_proxy_spent_cost_usd_micros_checked(
+    state: &GatewayHttpState,
+    virtual_key_id: &str,
+    spent_cost_usd_micros: u64,
+) -> Result<(), String> {
+    #[cfg(feature = "gateway-store-sqlite")]
+    if let Some(store) = state.stores.sqlite.as_ref() {
+        store
+            .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+            .await
+            .map_err(|err| {
+                budget_storage_error("record_spent_cost_usd_micros", virtual_key_id, err)
+            })?;
+    }
+    #[cfg(feature = "gateway-store-postgres")]
+    if let Some(store) = state.stores.postgres.as_ref() {
+        store
+            .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+            .await
+            .map_err(|err| {
+                budget_storage_error("record_spent_cost_usd_micros", virtual_key_id, err)
+            })?;
+    }
+    #[cfg(feature = "gateway-store-mysql")]
+    if let Some(store) = state.stores.mysql.as_ref() {
+        store
+            .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+            .await
+            .map_err(|err| {
+                budget_storage_error("record_spent_cost_usd_micros", virtual_key_id, err)
+            })?;
+    }
+    #[cfg(feature = "gateway-store-redis")]
+    if let Some(store) = state.stores.redis.as_ref() {
+        store
+            .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
+            .await
+            .map_err(|err| {
+                budget_storage_error("record_spent_cost_usd_micros", virtual_key_id, err)
+            })?;
+    }
+    Ok(())
+}
+
+#[cfg(all(test, feature = "gateway-store-sqlite"))]
+mod tests {
+    use super::*;
+    use crate::gateway::{Gateway, GatewayConfig, RouterConfig, SqliteStore};
+
+    #[tokio::test]
+    async fn checked_settle_token_budget_reservations_returns_storage_errors() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("gateway.sqlite");
+        let store = SqliteStore::new(&path);
+        store.init().await.expect("init");
+        store
+            .reserve_budget_tokens("r1", "key-1", 10, 7)
+            .await
+            .expect("reserve");
+
+        let conn = rusqlite::Connection::open(store.path()).expect("open sqlite");
+        conn.execute_batch(
+            "CREATE TRIGGER fail_budget_commit
+             BEFORE UPDATE ON budget_ledger
+             BEGIN
+                 SELECT RAISE(FAIL, 'budget commit failed');
+             END;",
+        )
+        .expect("install trigger");
+
+        let state = GatewayHttpState::new(Gateway::new(GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: Vec::new(),
+            router: RouterConfig::default(),
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        }))
+        .with_sqlite_store(store);
+
+        let err =
+            settle_proxy_token_budget_reservations_checked(&state, &[String::from("r1")], true, 3)
+                .await
+                .expect_err("commit should fail");
+        assert!(err.contains("commit_budget_reservation_with_tokens"));
+        assert!(err.contains("budget commit failed"));
     }
 }
 

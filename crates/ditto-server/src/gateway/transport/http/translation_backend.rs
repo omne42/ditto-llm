@@ -2651,13 +2651,14 @@ pub(super) async fn attempt_translation_backend(
             feature = "gateway-store-redis"
         ))]
         if !token_budget_reservation_ids.is_empty() {
-            settle_proxy_token_budget_reservations(
+            settle_proxy_token_budget_reservations_checked(
                 state,
                 token_budget_reservation_ids,
                 spend_tokens,
                 spent_tokens,
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         } else if local_token_budget_reserved {
             let budget_scopes = collect_budget_scopes(
                 virtual_key_id.as_deref(),
@@ -2743,13 +2744,14 @@ pub(super) async fn attempt_translation_backend(
             ),
         ))]
         if !cost_budget_reservation_ids.is_empty() {
-            settle_proxy_cost_budget_reservations(
+            settle_proxy_cost_budget_reservations_checked(
                 state,
                 cost_budget_reservation_ids,
                 spend_tokens,
                 spent_cost_usd_micros.unwrap_or_default(),
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(all(
@@ -2767,30 +2769,13 @@ pub(super) async fn attempt_translation_backend(
             && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                 (virtual_key_id.as_deref(), spent_cost_usd_micros)
         {
-            #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.stores.sqlite.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-postgres")]
-            if let Some(store) = state.stores.postgres.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-mysql")]
-            if let Some(store) = state.stores.mysql.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.stores.redis.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
+            record_proxy_spent_cost_usd_micros_checked(
+                state,
+                virtual_key_id,
+                spent_cost_usd_micros,
+            )
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(any(

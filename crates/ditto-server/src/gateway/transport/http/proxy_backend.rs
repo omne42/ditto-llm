@@ -529,13 +529,14 @@ pub(super) async fn attempt_proxy_backend(
             feature = "gateway-store-redis"
         ))]
         if !token_budget_reservation_ids.is_empty() {
-            settle_proxy_token_budget_reservations(
+            settle_proxy_token_budget_reservations_checked(
                 state,
                 token_budget_reservation_ids,
                 spend_tokens,
                 u64::MAX,
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         } else if local_token_budget_reserved {
             let budget_scopes = collect_budget_scopes(
                 virtual_key_id.as_deref(),
@@ -621,13 +622,14 @@ pub(super) async fn attempt_proxy_backend(
             )
         ))]
         if !cost_budget_reservation_ids.is_empty() {
-            settle_proxy_cost_budget_reservations(
+            settle_proxy_cost_budget_reservations_checked(
                 state,
                 cost_budget_reservation_ids,
                 spend_tokens,
                 u64::MAX,
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(all(
@@ -645,30 +647,13 @@ pub(super) async fn attempt_proxy_backend(
             && let (Some(virtual_key_id), Some(charge_cost_usd_micros)) =
                 (virtual_key_id.as_deref(), charge_cost_usd_micros)
         {
-            #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.stores.sqlite.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-postgres")]
-            if let Some(store) = state.stores.postgres.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-mysql")]
-            if let Some(store) = state.stores.mysql.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.stores.redis.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, charge_cost_usd_micros)
-                    .await;
-            }
+            record_proxy_spent_cost_usd_micros_checked(
+                state,
+                virtual_key_id,
+                charge_cost_usd_micros,
+            )
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(any(
@@ -1221,13 +1206,30 @@ pub(super) async fn attempt_proxy_backend(
                         feature = "gateway-store-redis"
                     ))]
                     if !self.token_budget_reservation_ids.is_empty() {
-                        settle_proxy_token_budget_reservations(
+                        if let Err(err) = settle_proxy_token_budget_reservations_checked(
                             &self.state,
                             &self.token_budget_reservation_ids,
                             self.spend_tokens,
                             spent_tokens,
                         )
-                        .await;
+                        .await
+                        {
+                            emit_json_log(
+                                &self.state,
+                                "proxy.storage_error",
+                                serde_json::json!({
+                                    "operation": if self.spend_tokens {
+                                        "commit_budget_reservation_with_tokens"
+                                    } else {
+                                        "rollback_budget_reservation"
+                                    },
+                                    "target": "budget_tokens",
+                                    "error": err,
+                                    "backend": &self.backend_name,
+                                    "path": &self.path_and_query,
+                                }),
+                            );
+                        }
                     } else if self.local_token_budget_reserved {
                         let budget_scopes = collect_budget_scopes(
                             self.virtual_key_id.as_deref(),
@@ -1319,14 +1321,30 @@ pub(super) async fn attempt_proxy_backend(
                             feature = "gateway-store-redis"
                         ),
                     ))]
-                    if !self.cost_budget_reservation_ids.is_empty() {
-                        settle_proxy_cost_budget_reservations(
+                    if !self.cost_budget_reservation_ids.is_empty()
+                        && let Err(err) = settle_proxy_cost_budget_reservations_checked(
                             &self.state,
                             &self.cost_budget_reservation_ids,
                             self.spend_tokens,
                             spent_cost_usd_micros.unwrap_or_default(),
                         )
-                        .await;
+                        .await
+                    {
+                        emit_json_log(
+                            &self.state,
+                            "proxy.storage_error",
+                            serde_json::json!({
+                                "operation": if self.spend_tokens {
+                                    "commit_cost_reservation_with_usd_micros"
+                                } else {
+                                    "rollback_cost_reservation"
+                                },
+                                "target": "budget_cost",
+                                "error": err,
+                                "backend": &self.backend_name,
+                                "path": &self.path_and_query,
+                            }),
+                        );
                     }
 
                     #[cfg(all(
@@ -1343,31 +1361,24 @@ pub(super) async fn attempt_proxy_backend(
                         && self.spend_tokens
                         && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                             (self.virtual_key_id.as_deref(), spent_cost_usd_micros)
+                        && let Err(err) = record_proxy_spent_cost_usd_micros_checked(
+                            &self.state,
+                            virtual_key_id,
+                            spent_cost_usd_micros,
+                        )
+                        .await
                     {
-                        #[cfg(feature = "gateway-store-sqlite")]
-                        if let Some(store) = self.state.stores.sqlite.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                                .await;
-                        }
-                        #[cfg(feature = "gateway-store-postgres")]
-                        if let Some(store) = self.state.stores.postgres.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                                .await;
-                        }
-                        #[cfg(feature = "gateway-store-mysql")]
-                        if let Some(store) = self.state.stores.mysql.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                                .await;
-                        }
-                        #[cfg(feature = "gateway-store-redis")]
-                        if let Some(store) = self.state.stores.redis.as_ref() {
-                            let _ = store
-                                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                                .await;
-                        }
+                        emit_json_log(
+                            &self.state,
+                            "proxy.storage_error",
+                            serde_json::json!({
+                                "operation": "record_spent_cost_usd_micros",
+                                "target": virtual_key_id,
+                                "error": err,
+                                "backend": &self.backend_name,
+                                "path": &self.path_and_query,
+                            }),
+                        );
                     }
 
                     #[cfg(any(
@@ -1971,13 +1982,14 @@ pub(super) async fn attempt_proxy_backend(
             feature = "gateway-store-redis"
         ))]
         if !token_budget_reservation_ids.is_empty() {
-            settle_proxy_token_budget_reservations(
+            settle_proxy_token_budget_reservations_checked(
                 state,
                 token_budget_reservation_ids,
                 spend_tokens,
                 spent_tokens,
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         } else if local_token_budget_reserved {
             let budget_scopes = collect_budget_scopes(
                 virtual_key_id.as_deref(),
@@ -2063,13 +2075,14 @@ pub(super) async fn attempt_proxy_backend(
             ),
         ))]
         if !cost_budget_reservation_ids.is_empty() {
-            settle_proxy_cost_budget_reservations(
+            settle_proxy_cost_budget_reservations_checked(
                 state,
                 cost_budget_reservation_ids,
                 spend_tokens,
                 spent_cost_usd_micros.unwrap_or_default(),
             )
-            .await;
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(all(
@@ -2087,30 +2100,13 @@ pub(super) async fn attempt_proxy_backend(
             && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
                 (virtual_key_id.as_deref(), spent_cost_usd_micros)
         {
-            #[cfg(feature = "gateway-store-sqlite")]
-            if let Some(store) = state.stores.sqlite.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-postgres")]
-            if let Some(store) = state.stores.postgres.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-mysql")]
-            if let Some(store) = state.stores.mysql.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
-            #[cfg(feature = "gateway-store-redis")]
-            if let Some(store) = state.stores.redis.as_ref() {
-                let _ = store
-                    .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                    .await;
-            }
+            record_proxy_spent_cost_usd_micros_checked(
+                state,
+                virtual_key_id,
+                spent_cost_usd_micros,
+            )
+            .await
+            .map_err(openai_storage_error_response)?;
         }
 
         #[cfg(any(

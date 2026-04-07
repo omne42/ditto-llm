@@ -108,6 +108,8 @@ pub struct ProxyCacheEntryMetadata {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_partition: Option<String>,
 }
 
 impl ProxyCacheEntryMetadata {
@@ -116,12 +118,14 @@ impl ProxyCacheEntryMetadata {
         method: &Method,
         path_and_query: &str,
         model: Option<&str>,
+        route_partition: Option<&str>,
     ) -> Self {
         Self {
             scope: normalize_required_string(scope.into()),
             method: method.as_str().to_ascii_uppercase(),
             path: normalize_path_string(path_and_query).unwrap_or_default(),
             model: normalize_optional_string(model),
+            route_partition: normalize_optional_string(route_partition),
         }
     }
 }
@@ -511,7 +515,7 @@ mod tests {
     }
 
     fn metadata(path: &str, model: Option<&str>) -> ProxyCacheEntryMetadata {
-        ProxyCacheEntryMetadata::new("vk:key-1", &Method::POST, path, model)
+        ProxyCacheEntryMetadata::new("vk:key-1", &Method::POST, path, model, None)
     }
 
     #[test]
@@ -751,11 +755,13 @@ mod tests {
             &Method::POST,
             " /v1/responses?foo=bar ",
             Some("  gpt-4o-mini  "),
+            Some("  route:abc  "),
         );
         assert_eq!(metadata.scope, "vk:key-1");
         assert_eq!(metadata.method, "POST");
         assert_eq!(metadata.path, "/v1/responses");
         assert_eq!(metadata.model.as_deref(), Some("gpt-4o-mini"));
+        assert_eq!(metadata.route_partition.as_deref(), Some("route:abc"));
 
         let selector = ProxyCachePurgeSelector {
             method: Some(" post ".to_string()),
