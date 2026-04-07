@@ -38,7 +38,15 @@ pub(super) async fn attempt_translation_backend(
     let charge_tokens = params.charge_tokens;
     let _stream_requested = params.stream_requested;
     let use_persistent_budget = params.use_persistent_budget;
-    #[cfg(not(feature = "gateway-costing"))]
+    #[cfg(not(all(
+        feature = "gateway-costing",
+        any(
+            feature = "gateway-store-sqlite",
+            feature = "gateway-store-postgres",
+            feature = "gateway-store-mysql",
+            feature = "gateway-store-redis"
+        ),
+    )))]
     let _ = use_persistent_budget;
     let virtual_key_id = params.virtual_key_id;
     let response_owner = params.response_owner.to_owned();
