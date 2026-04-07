@@ -326,3 +326,23 @@ async fn dropping_streams_aborts_background_task() -> Result<()> {
     assert!(dropped.load(Ordering::SeqCst));
     Ok(())
 }
+
+#[test]
+fn poisoned_object_handle_reports_done_and_keeps_lock_error() {
+    let state = Arc::new(std::sync::Mutex::new(
+        super::core::StreamObjectState::default(),
+    ));
+    let poisoned = state.clone();
+    let _ = std::thread::spawn(move || {
+        let _guard = poisoned.lock().expect("lock");
+        panic!("poison object state");
+    })
+    .join();
+
+    let handle = super::handle::StreamObjectHandle { state };
+    assert!(handle.is_done());
+    assert!(handle.final_json().is_err());
+    assert!(handle.final_summary().is_err());
+    let typed: Result<Option<serde_json::Value>> = handle.final_object();
+    assert!(typed.is_err());
+}
