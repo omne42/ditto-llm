@@ -1,4 +1,5 @@
 use super::*;
+use crate::gateway::RouteBackend;
 
 #[tokio::test]
 async fn sqlite_store_round_trips_virtual_keys() {
@@ -49,6 +50,112 @@ async fn sqlite_store_round_trips_router_config() {
     let loaded = loaded.expect("router");
     assert_eq!(loaded.default_backends.len(), 0);
     assert_eq!(loaded.rules.len(), 0);
+}
+
+#[tokio::test]
+async fn sqlite_store_round_trips_control_plane_snapshot() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    let key = VirtualKeyConfig::new("key-1", "vk-1");
+    let router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "primary".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+
+    store
+        .replace_control_plane_snapshot(std::slice::from_ref(&key), &router)
+        .await
+        .expect("persist snapshot");
+
+    let loaded_keys = store.load_virtual_keys().await.expect("load keys");
+    assert_eq!(loaded_keys.len(), 1);
+    assert_eq!(loaded_keys[0].id, "key-1");
+
+    let loaded_router = store
+        .load_router_config()
+        .await
+        .expect("load router")
+        .expect("router");
+    assert_eq!(loaded_router.default_backends.len(), 1);
+    assert_eq!(loaded_router.default_backends[0].backend, "primary");
+}
+
+#[tokio::test]
+async fn sqlite_store_control_plane_snapshot_rolls_back_if_router_write_fails() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&path);
+    store.init().await.expect("init");
+
+    let original_key = VirtualKeyConfig::new("key-1", "vk-1");
+    let original_router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "primary".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+    store
+        .replace_control_plane_snapshot(std::slice::from_ref(&original_key), &original_router)
+        .await
+        .expect("seed snapshot");
+
+    let trigger_path = path.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
+        let conn = open_connection(trigger_path)?;
+        init_schema(&conn)?;
+        conn.execute_batch(
+            "CREATE TRIGGER fail_router_snapshot_insert
+             BEFORE INSERT ON config_state
+             WHEN NEW.key = 'router'
+             BEGIN
+                 SELECT RAISE(FAIL, 'router write failed');
+             END;
+             CREATE TRIGGER fail_router_snapshot_update
+             BEFORE UPDATE ON config_state
+             WHEN NEW.key = 'router'
+             BEGIN
+                 SELECT RAISE(FAIL, 'router write failed');
+             END;",
+        )?;
+        Ok(())
+    })
+    .await
+    .expect("join")
+    .expect("install trigger");
+
+    let new_key = VirtualKeyConfig::new("key-2", "vk-2");
+    let new_router = RouterConfig {
+        default_backends: vec![RouteBackend {
+            backend: "secondary".to_string(),
+            weight: 1.0,
+        }],
+        rules: Vec::new(),
+    };
+
+    let err = store
+        .replace_control_plane_snapshot(std::slice::from_ref(&new_key), &new_router)
+        .await
+        .expect_err("router trigger should abort snapshot write");
+    assert!(err.to_string().contains("router write failed"));
+
+    let loaded_keys = store.load_virtual_keys().await.expect("load keys");
+    assert_eq!(loaded_keys.len(), 1);
+    assert_eq!(loaded_keys[0].id, "key-1");
+
+    let loaded_router = store
+        .load_router_config()
+        .await
+        .expect("load router")
+        .expect("router");
+    assert_eq!(loaded_router.default_backends.len(), 1);
+    assert_eq!(loaded_router.default_backends[0].backend, "primary");
 }
 
 #[tokio::test]

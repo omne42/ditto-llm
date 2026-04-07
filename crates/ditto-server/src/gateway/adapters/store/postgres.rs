@@ -462,6 +462,38 @@ impl PostgresStore {
         Ok(())
     }
 
+    pub async fn replace_control_plane_snapshot(
+        &self,
+        keys: &[VirtualKeyConfig],
+        router: &RouterConfig,
+    ) -> Result<(), PostgresStoreError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM virtual_keys")
+            .execute(&mut *tx)
+            .await?;
+        for key in keys {
+            let key = key.sanitized_for_persistence();
+            let value_json = serde_json::to_value(&key)?;
+            sqlx::query("INSERT INTO virtual_keys (id, value_json) VALUES ($1, $2)")
+                .bind(&key.id)
+                .bind(Json(value_json))
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        let router_json = serde_json::to_value(router)?;
+        sqlx::query(
+            "INSERT INTO config_state (key, value_json) VALUES ('router', $1)
+             ON CONFLICT (key) DO UPDATE SET value_json = excluded.value_json",
+        )
+        .bind(Json(router_json))
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn reserve_budget_tokens(
         &self,
         request_id: &str,

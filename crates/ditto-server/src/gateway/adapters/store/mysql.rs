@@ -570,6 +570,38 @@ impl MySqlStore {
         Ok(())
     }
 
+    pub async fn replace_control_plane_snapshot(
+        &self,
+        keys: &[VirtualKeyConfig],
+        router: &RouterConfig,
+    ) -> Result<(), MySqlStoreError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM virtual_keys")
+            .execute(&mut *tx)
+            .await?;
+        for key in keys {
+            let key = key.sanitized_for_persistence();
+            let value_json = serde_json::to_string(&key)?;
+            sqlx::query("INSERT INTO virtual_keys (id, value_json) VALUES (?, ?)")
+                .bind(&key.id)
+                .bind(value_json)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        let router_json = serde_json::to_string(router)?;
+        sqlx::query(
+            "INSERT INTO config_state (`key`, value_json) VALUES ('router', ?)
+             ON DUPLICATE KEY UPDATE value_json = VALUES(value_json)",
+        )
+        .bind(router_json)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn reserve_budget_tokens(
         &self,
         request_id: &str,
