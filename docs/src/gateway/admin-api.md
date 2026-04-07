@@ -56,6 +56,7 @@ Admin API 用于“管理与观测控制面状态”：
 常用 query 参数：
 
 - `include_tokens=true`：只对 write admin token 或 tenant-write admin token 放行；read-only token 会返回 403。
+- 如果当前 key 已经是从 `--state` / `--sqlite` / `--pg` / `--mysql` / `--redis` 的 `sha256:` 持久化结果重载进来，Ditto 会返回 `409 secret_unavailable`，因为原始 secret 已不可逆恢复。
 - `tenant_id` / `project_id` / `user_id`：按归因字段过滤。
 - `enabled=true|false`：按启用状态过滤。
 - `id_prefix=...`：按 key id 前缀过滤。
@@ -96,6 +97,11 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 持久化时，virtual key token 会被写成单向 `sha256:` 哈希；重启后仍可继续校验来访 token，但不能再从 state/store 中反解出原始 secret。
 
+这也意味着：
+
+- `include_tokens=true` 只在当前进程里仍持有原始 token 时可用。
+- 一旦进程是从持久化的 `sha256:` token 重载起来，`GET /admin/keys`、`GET /admin/config/versions/:version_id`、`GET /admin/config/export`、`GET /admin/config/diff`、`/key/list?include_tokens=true` 这类 secret 导出会返回 `409 secret_unavailable`，而不是把哈希伪装成 token。
+
 ---
 
 ## 2) Config Versions：配置版本与回滚（virtual keys）
@@ -119,6 +125,8 @@ upsert/delete 后 Ditto 会尝试持久化 keys：
 
 返回版本历史（新 -> 旧）。
 
+注意：这份 history 是当前 gateway 进程内的版本历史，不会单独持久化。重启后 Ditto 会基于已加载的当前 `virtual_keys + router` 重新建立一个新的 `bootstrap` 快照，因此旧进程里的 history 不会跨重启保留。
+
 Query 参数：
 
 - `limit`（默认不限制，最大 1000）
@@ -135,6 +143,7 @@ Query 参数：
 Query 参数：
 
 - `include_tokens=true`：只对 write admin token 或 tenant-write admin token 放行；read-only token 会返回 403。
+- 如果该版本里的 key 已经只剩持久化后的 `sha256:` 哈希，Ditto 会返回 `409 secret_unavailable`。
 
 权限：read-only admin token 或 write admin token。
 
@@ -154,6 +163,7 @@ Query 参数：
 - `from_version_id`（必填）
 - `to_version_id`（必填）
 - `include_tokens=true`：只对 write admin token 或 tenant-write admin token 放行；read-only token 会返回 403。
+- 如果参与对比的任一版本已经只剩持久化后的 `sha256:` 哈希，Ditto 会返回 `409 secret_unavailable`。
 
 权限：read-only admin token 或 write admin token。
 
@@ -165,6 +175,7 @@ Query 参数：
 
 - `version_id`（可选；不传时导出当前版本）
 - `include_tokens=true`：只对 write admin token 或 tenant-write admin token 放行；read-only token 会返回 403。
+- 如果导出的 key 已经只剩持久化后的 `sha256:` 哈希，Ditto 会返回 `409 secret_unavailable`。
 
 权限：read-only admin token 或 write admin token。
 

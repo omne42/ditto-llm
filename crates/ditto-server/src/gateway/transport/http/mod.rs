@@ -1498,6 +1498,67 @@ fn emit_devtools_log(state: &GatewayHttpState, kind: &str, payload: serde_json::
     feature = "gateway-store-mysql",
     feature = "gateway-store-redis"
 ))]
+fn enrich_audit_payload_virtual_key_scope(state: &GatewayHttpState, payload: &mut Value) {
+    let Some(fields) = payload.as_object_mut() else {
+        return;
+    };
+    let Some(virtual_key_id) = fields
+        .get("virtual_key_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+
+    let Some(key) = state
+        .list_virtual_keys_snapshot()
+        .into_iter()
+        .find(|candidate| candidate.id == virtual_key_id)
+    else {
+        return;
+    };
+
+    if !fields.contains_key("tenant_id")
+        && let Some(tenant_id) = key.tenant_id
+    {
+        fields.insert("tenant_id".to_string(), Value::String(tenant_id));
+    }
+    if !fields.contains_key("project_id")
+        && let Some(project_id) = key.project_id
+    {
+        fields.insert("project_id".to_string(), Value::String(project_id));
+    }
+    if !fields.contains_key("user_id")
+        && let Some(user_id) = key.user_id
+    {
+        fields.insert("user_id".to_string(), Value::String(user_id));
+    }
+}
+
+fn ensure_virtual_key_tokens_exportable(
+    keys: &[VirtualKeyConfig],
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    if keys
+        .iter()
+        .any(|key| crate::gateway::config::virtual_key_token_is_persisted_hash(&key.token))
+    {
+        return Err(error_response(
+            StatusCode::CONFLICT,
+            "secret_unavailable",
+            "include_tokens=true is unavailable after reloading virtual keys from hashed persistence",
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
 fn report_proxy_audit_append_failure(store: &str, kind: &str, err: &impl std::fmt::Display) {
     eprintln!("failed to append {store} proxy audit log `{kind}`: {err}");
 }
@@ -1528,8 +1589,9 @@ pub(super) fn openai_storage_error_response(
 async fn append_audit_log(
     state: &GatewayHttpState,
     kind: &str,
-    payload: serde_json::Value,
+    mut payload: serde_json::Value,
 ) -> Result<(), String> {
+    enrich_audit_payload_virtual_key_scope(state, &mut payload);
     let Some(payload) = state.prepare_observability_event(
         crate::gateway::observability::GatewayObservabilitySink::Audit,
         payload,

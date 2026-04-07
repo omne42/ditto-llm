@@ -5,11 +5,13 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
+#[cfg(feature = "gateway-store-sqlite")]
+use ditto_server::gateway::SqliteStore;
 use ditto_server::gateway::observability::ObservabilitySnapshot;
 use ditto_server::gateway::{
     Backend, BudgetConfig, CacheConfig, Gateway, GatewayConfig, GatewayError, GatewayHttpState,
-    GatewayRequest, GatewayResponse, GuardrailsConfig, LimitsConfig, PassthroughConfig,
-    ProxyBackend, RouteBackend, RouterConfig, VirtualKeyConfig,
+    GatewayRequest, GatewayResponse, GatewayStateFile, GuardrailsConfig, LimitsConfig,
+    PassthroughConfig, ProxyBackend, RouteBackend, RouterConfig, VirtualKeyConfig,
 };
 use httpmock::Method::POST;
 use httpmock::MockServer;
@@ -1917,6 +1919,172 @@ async fn gateway_http_read_only_admin_redacts_litellm_and_blocks_secret_exports(
             .get("token")
             .and_then(serde_json::Value::as_str),
         Some("redacted")
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn gateway_http_include_tokens_rejects_reloaded_hashed_virtual_keys()
+-> ditto_core::error::Result<()> {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let state_path = dir.path().join("gateway-state.json");
+    let state_file = GatewayStateFile {
+        virtual_keys: vec![base_key()],
+        router: Some(base_config().router.clone()),
+    };
+    state_file.save(&state_path).expect("save state file");
+
+    let loaded = GatewayStateFile::load(&state_path).expect("load state file");
+    let mut gateway = Gateway::new(GatewayConfig {
+        backends: Vec::new(),
+        virtual_keys: loaded.virtual_keys,
+        router: loaded.router.expect("router"),
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    });
+    gateway.register_backend("primary", EchoBackend);
+
+    let state = GatewayHttpState::new(gateway).with_admin_token("admin-write");
+    let app = ditto_server::gateway::http::router(state);
+
+    let list_keys = Request::builder()
+        .method("GET")
+        .uri("/admin/keys?include_tokens=true")
+        .header("x-admin-token", "admin-write")
+        .body(Body::empty())
+        .unwrap();
+    let list_keys_response = app.clone().oneshot(list_keys).await.unwrap();
+    assert_eq!(list_keys_response.status(), StatusCode::CONFLICT);
+    let list_keys_body = to_bytes(list_keys_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let list_keys_json: serde_json::Value = serde_json::from_slice(&list_keys_body)?;
+    assert_eq!(
+        list_keys_json
+            .pointer("/error/code")
+            .and_then(|value| value.as_str()),
+        Some("secret_unavailable")
+    );
+
+    let current_version = Request::builder()
+        .method("GET")
+        .uri("/admin/config/version")
+        .header("x-admin-token", "admin-write")
+        .body(Body::empty())
+        .unwrap();
+    let current_version_response = app.clone().oneshot(current_version).await.unwrap();
+    assert_eq!(current_version_response.status(), StatusCode::OK);
+    let current_version_body = to_bytes(current_version_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let current_version_json: serde_json::Value = serde_json::from_slice(&current_version_body)?;
+    let version_id = current_version_json
+        .get("version_id")
+        .and_then(|value| value.as_str())
+        .expect("version id");
+
+    for path in [
+        "/admin/config/export?include_tokens=true".to_string(),
+        format!("/admin/config/versions/{version_id}?include_tokens=true"),
+        format!(
+            "/admin/config/diff?from_version_id={version_id}&to_version_id={version_id}&include_tokens=true"
+        ),
+        "/key/list?return_full_object=true&include_tokens=true".to_string(),
+    ] {
+        let request = Request::builder()
+            .method("GET")
+            .uri(path)
+            .header("x-admin-token", "admin-write")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&body)?;
+        assert_eq!(
+            parsed
+                .pointer("/error/code")
+                .and_then(|value| value.as_str()),
+            Some("secret_unavailable")
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn gateway_http_tenant_admin_sees_proxy_audit_logs_for_owned_virtual_keys()
+-> ditto_core::error::Result<()> {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let sqlite_path = dir.path().join("gateway.sqlite");
+    let store = SqliteStore::new(&sqlite_path);
+    store.init().await.expect("init");
+
+    let mut config = base_config();
+    config.virtual_keys[0].tenant_id = Some("tenant-1".to_string());
+    config.virtual_keys[0].project_id = Some("project-1".to_string());
+    config.virtual_keys[0].user_id = Some("user-1".to_string());
+
+    let mut gateway = Gateway::new(config);
+    gateway.register_backend("primary", EchoBackend);
+    let state = GatewayHttpState::new(gateway)
+        .with_admin_token("admin-write")
+        .with_admin_tenant_read_token("tenant-1", "tenant-read")
+        .with_sqlite_store(store);
+    let app = ditto_server::gateway::http::router(state);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/v1/gateway")
+        .header("authorization", "Bearer vk-1")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "model": "gpt-4o-mini",
+                "prompt": "hi",
+                "input_tokens": 1,
+                "max_output_tokens": 2
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/admin/audit?limit=10")
+        .header("x-admin-token", "tenant-read")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.clone().oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_json: serde_json::Value = serde_json::from_slice(&audit_body)?;
+    let logs = audit_json.as_array().expect("audit logs");
+    assert_eq!(logs.len(), 1);
+    assert_eq!(
+        logs[0]
+            .pointer("/payload/tenant_id")
+            .and_then(|value| value.as_str()),
+        Some("tenant-1")
+    );
+    assert_eq!(
+        logs[0]
+            .pointer("/payload/project_id")
+            .and_then(|value| value.as_str()),
+        Some("project-1")
+    );
+    assert_eq!(
+        logs[0]
+            .pointer("/payload/user_id")
+            .and_then(|value| value.as_str()),
+        Some("user-1")
     );
 
     Ok(())

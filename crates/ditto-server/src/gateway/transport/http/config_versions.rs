@@ -355,6 +355,10 @@ pub(super) async fn get_config_version_by_id(
         ));
     };
 
+    if query.include_tokens {
+        ensure_virtual_key_tokens_exportable(&snapshot.virtual_keys)?;
+    }
+
     let mut virtual_keys = snapshot.virtual_keys;
     if !query.include_tokens {
         redact_virtual_key_tokens(&mut virtual_keys);
@@ -418,6 +422,10 @@ pub(super) async fn export_config(
                 })?
         }
     };
+
+    if query.include_tokens {
+        ensure_virtual_key_tokens_exportable(&snapshot.virtual_keys)?;
+    }
 
     let mut virtual_keys = snapshot.virtual_keys;
     if !query.include_tokens {
@@ -734,6 +742,11 @@ pub(super) async fn diff_config_versions(
             format!("config version not found: {to_version_id}"),
         ));
     };
+
+    if query.include_tokens {
+        ensure_virtual_key_tokens_exportable(&from.virtual_keys)?;
+        ensure_virtual_key_tokens_exportable(&to.virtual_keys)?;
+    }
 
     let mut from_by_id: BTreeMap<String, VirtualKeyConfig> = BTreeMap::new();
     for key in from.virtual_keys {
