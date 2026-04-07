@@ -18,12 +18,21 @@ pub(super) struct ProxyAttemptParams<'a> {
     pub(super) strip_authorization: bool,
     pub(super) use_persistent_budget: bool,
     pub(super) virtual_key_id: &'a Option<String>,
+    pub(super) limits: &'a Option<super::LimitsConfig>,
     #[cfg(feature = "gateway-translation")]
     pub(super) response_owner: &'a super::translation::TranslationResponseOwner,
     pub(super) budget: &'a Option<super::BudgetConfig>,
     pub(super) tenant_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     pub(super) project_budget_scope: &'a Option<(String, super::BudgetConfig)>,
     pub(super) user_budget_scope: &'a Option<(String, super::BudgetConfig)>,
+    pub(super) tenant_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+    pub(super) project_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+    pub(super) user_limits_scope: &'a Option<(String, super::LimitsConfig)>,
+    pub(super) local_rate_limit_reserved: bool,
+    #[cfg(feature = "gateway-store-redis")]
+    pub(super) redis_rate_limit_reserved: bool,
+    #[cfg(feature = "gateway-store-redis")]
+    pub(super) rate_limit_route: &'a str,
     pub(super) local_token_budget_reserved: bool,
     #[cfg(feature = "gateway-costing")]
     pub(super) local_cost_budget_reserved: bool,

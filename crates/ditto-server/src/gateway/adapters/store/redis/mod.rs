@@ -1504,6 +1504,37 @@ end
 return {1, 0}
 "#;
 
+const RATE_LIMIT_REFUND_MANY_SCRIPT: &str = r#"
+local scope_count = tonumber(ARGV[1])
+local tokens = tonumber(ARGV[2])
+local ttl = tonumber(ARGV[3])
+
+for scope_index = 1, scope_count do
+  local key_offset = (scope_index - 1) * 2
+  local req_key = KEYS[key_offset + 1]
+  local tok_key = KEYS[key_offset + 2]
+
+  local req_cur = tonumber(redis.call("GET", req_key) or "0")
+  local tok_cur = tonumber(redis.call("GET", tok_key) or "0")
+  local next_req = math.max(req_cur - 1, 0)
+  local next_tok = math.max(tok_cur - tokens, 0)
+
+  if next_req == 0 then
+    redis.call("DEL", req_key)
+  else
+    redis.call("SET", req_key, next_req, "EX", ttl)
+  end
+
+  if next_tok == 0 then
+    redis.call("DEL", tok_key)
+  else
+    redis.call("SET", tok_key, next_tok, "EX", ttl)
+  end
+end
+
+return 1
+"#;
+
 #[cfg(feature = "gateway-store-redis")]
 fn limit_to_i64(value: Option<u32>) -> i64 {
     value.map(i64::from).unwrap_or(-1)
@@ -1679,6 +1710,57 @@ impl RedisStore {
             }
             _ => Err(super::GatewayError::Backend {
                 message: format!("unexpected batched rate limit response: {:?}", result),
+            }),
+        }
+    }
+
+    pub async fn refund_rate_limits_many<'a, I>(
+        &self,
+        scopes: I,
+        route: &str,
+        tokens: u32,
+        now_epoch_seconds: u64,
+    ) -> Result<(), super::GatewayError>
+    where
+        I: IntoIterator<Item = (&'a str, &'a super::LimitsConfig)>,
+    {
+        let scoped_limits = scopes
+            .into_iter()
+            .filter(|(_, limits)| limits.rpm.is_some() || limits.tpm.is_some())
+            .collect::<Vec<_>>();
+        if scoped_limits.is_empty() {
+            return Ok(());
+        }
+
+        let minute = now_epoch_seconds / 60;
+        let mut conn = self
+            .connection()
+            .await
+            .map_err(|err| super::GatewayError::Backend {
+                message: format!("redis error: {err}"),
+            })?;
+
+        let script = redis::Script::new(RATE_LIMIT_REFUND_MANY_SCRIPT);
+        let mut invocation = script.prepare_invoke();
+        invocation.arg(i64::try_from(scoped_limits.len()).unwrap_or(i64::MAX));
+        invocation.arg(tokens_u32_to_i64(tokens));
+        invocation.arg(DEFAULT_RATE_LIMIT_TTL_SECS as i64);
+
+        for (scope, _) in &scoped_limits {
+            invocation.key(self.key_rate_limit_requests(scope, route, minute));
+            invocation.key(self.key_rate_limit_tokens(scope, route, minute));
+        }
+
+        let code: i64 = invocation.invoke_async(&mut conn).await.map_err(|err| {
+            super::GatewayError::Backend {
+                message: format!("redis error: {err}"),
+            }
+        })?;
+
+        match code {
+            1 => Ok(()),
+            _ => Err(super::GatewayError::Backend {
+                message: format!("unexpected rate limit refund response: {code}"),
             }),
         }
     }
@@ -2327,6 +2409,56 @@ mod tests {
             .check_and_consume_rate_limits("key-many", route, &shared_limits, 1, now_epoch_seconds)
             .await
             .expect("failed batched request must not consume key scope");
+    }
+
+    #[tokio::test]
+    async fn redis_store_rate_limit_refund_many_restores_capacity() {
+        let Some(url) = required_redis_url() else {
+            eprintln!("skipping redis test: set DITTO_REDIS_URL or REDIS_URL");
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        let now_epoch_seconds = now_millis_u64() / 1000;
+        let route = "/v1/chat/completions";
+        let shared_limits = super::super::LimitsConfig {
+            rpm: Some(1),
+            tpm: Some(10),
+        };
+
+        store
+            .check_and_consume_rate_limits_many(
+                [("key-many", &shared_limits), ("tenant:t1", &shared_limits)],
+                route,
+                4,
+                now_epoch_seconds,
+            )
+            .await
+            .expect("first batched request allowed");
+
+        store
+            .refund_rate_limits_many(
+                [("key-many", &shared_limits), ("tenant:t1", &shared_limits)],
+                route,
+                4,
+                now_epoch_seconds,
+            )
+            .await
+            .expect("refund should succeed");
+
+        store
+            .check_and_consume_rate_limits_many(
+                [("key-many", &shared_limits), ("tenant:t1", &shared_limits)],
+                route,
+                4,
+                now_epoch_seconds,
+            )
+            .await
+            .expect("refunded request should restore capacity");
     }
 }
 // end inline: ../../../redis_store/tests.rs

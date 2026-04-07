@@ -132,6 +132,33 @@ impl RateLimiter {
         Ok(())
     }
 
+    pub fn refund(&mut self, scope: &str, tokens: u32, minute: u64) {
+        let Some(usage) = self.usage.get_mut(scope) else {
+            return;
+        };
+        if usage.minute != minute {
+            return;
+        }
+
+        usage.requests = usage.requests.saturating_sub(1);
+        usage.tokens = usage.tokens.saturating_sub(tokens);
+        if usage.requests == 0 && usage.tokens == 0 {
+            self.usage.remove(scope);
+        }
+    }
+
+    pub fn refund_many<'a, I>(&mut self, scopes: I, tokens: u32, minute: u64)
+    where
+        I: IntoIterator<Item = (&'a str, &'a LimitsConfig)>,
+    {
+        for (scope, limits) in scopes {
+            if limits.rpm.is_none() && limits.tpm.is_none() {
+                continue;
+            }
+            self.refund(scope, tokens, minute);
+        }
+    }
+
     pub fn retain_scopes(&mut self, scopes: &HashSet<String>) {
         self.usage.retain(|scope, _| scopes.contains(scope));
     }
@@ -227,5 +254,23 @@ mod tests {
             limiter.usage.get("user:u1").map(|usage| usage.requests),
             Some(1)
         );
+    }
+
+    #[test]
+    fn refund_many_releases_same_minute_usage() {
+        let mut limiter = RateLimiter::default();
+        let limited = LimitsConfig {
+            rpm: Some(2),
+            tpm: Some(10),
+        };
+
+        limiter
+            .check_and_consume_many([("key", &limited), ("tenant:t1", &limited)], 3, 42)
+            .unwrap();
+        limiter.refund_many([("key", &limited), ("tenant:t1", &limited)], 3, 42);
+
+        limiter
+            .check_and_consume_many([("key", &limited), ("tenant:t1", &limited)], 3, 42)
+            .expect("refunded request should restore capacity");
     }
 }
