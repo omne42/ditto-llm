@@ -1098,13 +1098,14 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         feature = "gateway-store-redis"
     ))]
     if !token_budget_reservation_ids.is_empty() {
-        settle_proxy_token_budget_reservations(
+        settle_proxy_token_budget_reservations_checked(
             &state,
             &token_budget_reservation_ids,
             spend_tokens,
             spent_tokens,
         )
-        .await;
+        .await
+        .map_err(openai_storage_error_response)?;
     }
 
     if token_budget_reservation_ids.is_empty()
@@ -1153,13 +1154,14 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         ),
     ))]
     if !cost_budget_reservation_ids.is_empty() {
-        settle_proxy_cost_budget_reservations(
+        settle_proxy_cost_budget_reservations_checked(
             &state,
             &cost_budget_reservation_ids,
             spend_tokens,
             spent_cost_usd_micros.unwrap_or_default(),
         )
-        .await;
+        .await
+        .map_err(openai_storage_error_response)?;
     }
 
     #[cfg(all(
@@ -1177,18 +1179,9 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         && let (Some(virtual_key_id), Some(spent_cost_usd_micros)) =
             (virtual_key_id.as_deref(), spent_cost_usd_micros)
     {
-        #[cfg(feature = "gateway-store-sqlite")]
-        if let Some(store) = state.stores.sqlite.as_ref() {
-            let _ = store
-                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                .await;
-        }
-        #[cfg(feature = "gateway-store-redis")]
-        if let Some(store) = state.stores.redis.as_ref() {
-            let _ = store
-                .record_spent_cost_usd_micros(virtual_key_id, spent_cost_usd_micros)
-                .await;
-        }
+        record_proxy_spent_cost_usd_micros_checked(&state, virtual_key_id, spent_cost_usd_micros)
+            .await
+            .map_err(openai_storage_error_response)?;
     }
 
     #[cfg(any(

@@ -349,12 +349,14 @@ pub(super) async fn handle_openai_compat_proxy(
         && (parts.method == axum::http::Method::GET || parsed_json.is_some())
     {
         let scope = proxy_cache_scope(virtual_key_id.as_deref(), &parts.headers);
+        let route_partition = proxy_cache_route_partition(&backend_candidates);
         (
             Some(proxy_cache_key(
                 &parts.method,
                 path_and_query,
                 &body,
                 &scope,
+                &route_partition,
                 &parts.headers,
             )),
             Some(ProxyCacheEntryMetadata::new(
@@ -362,6 +364,7 @@ pub(super) async fn handle_openai_compat_proxy(
                 &parts.method,
                 path_and_query,
                 model.as_deref(),
+                Some(&route_partition),
             )),
         )
     } else {

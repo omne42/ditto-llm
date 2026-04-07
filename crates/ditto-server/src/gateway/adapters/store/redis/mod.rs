@@ -1891,6 +1891,7 @@ mod tests {
             &axum::http::Method::POST,
             "/v1/responses?stream=false",
             Some("gpt-4o-mini"),
+            Some("route:primary"),
         );
 
         let record = CachedProxyResponseRecord::from_cached(&cached, &metadata);

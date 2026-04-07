@@ -82,7 +82,7 @@ use self::proxy_bounded_body::read_reqwest_body_bytes_bounded_with_content_lengt
 ))]
 use self::proxy_budget_reservations::{
     ProxyBudgetReservationParams, reserve_proxy_token_budgets_for_request,
-    rollback_proxy_token_budget_reservations, settle_proxy_token_budget_reservations,
+    rollback_proxy_token_budget_reservations, settle_proxy_token_budget_reservations_checked,
 };
 use self::proxy_budget_reservations::{ProxyPermitOutcome, try_acquire_proxy_permits};
 #[cfg(all(
@@ -95,8 +95,8 @@ use self::proxy_budget_reservations::{ProxyPermitOutcome, try_acquire_proxy_perm
     ),
 ))]
 use self::proxy_budget_reservations::{
-    reserve_proxy_cost_budgets_for_request, rollback_proxy_cost_budget_reservations,
-    settle_proxy_cost_budget_reservations,
+    record_proxy_spent_cost_usd_micros_checked, reserve_proxy_cost_budgets_for_request,
+    rollback_proxy_cost_budget_reservations, settle_proxy_cost_budget_reservations_checked,
 };
 use self::proxy_gateway_context::{
     ResolveOpenAiCompatProxyGatewayContextRequest, ResolvedGatewayContext,
@@ -2678,6 +2678,7 @@ fn proxy_cache_key(
     path: &str,
     body: &Bytes,
     scope: &str,
+    route_partition: &str,
     headers: &HeaderMap,
 ) -> String {
     let mut header_names: Vec<&str> = headers
@@ -2689,12 +2690,14 @@ fn proxy_cache_key(
     header_names.dedup();
 
     let mut hasher = Sha256Hasher::new();
-    hasher.update(b"ditto-proxy-cache-v2|");
+    hasher.update(b"ditto-proxy-cache-v3|");
     hasher.update(method.as_str().as_bytes());
     hasher.update(b"|");
     hasher.update(path.as_bytes());
     hasher.update(b"|");
     hasher.update(scope.as_bytes());
+    hasher.update(b"|");
+    hasher.update(route_partition.as_bytes());
     hasher.update(b"|");
     for name in header_names {
         hasher.update(name.as_bytes());
@@ -2707,7 +2710,22 @@ fn proxy_cache_key(
     }
     hasher.update(b"|");
     hasher.update(body.as_ref());
-    format!("ditto-proxy-cache-v2-{}", hasher.finalize())
+    format!("ditto-proxy-cache-v3-{}", hasher.finalize())
+}
+
+#[cfg(feature = "gateway-proxy-cache")]
+fn proxy_cache_route_partition(backend_candidates: &[String]) -> String {
+    let mut hasher = Sha256Hasher::new();
+    hasher.update(b"ditto-proxy-route-v1|");
+    for backend in backend_candidates
+        .iter()
+        .map(|backend| backend.trim())
+        .filter(|backend| !backend.is_empty())
+    {
+        hasher.update(backend.as_bytes());
+        hasher.update(b"\x1f");
+    }
+    hasher.finalize().to_string()
 }
 
 #[cfg(feature = "gateway-proxy-cache")]
@@ -2828,6 +2846,54 @@ mod sanitize_proxy_headers_tests {
         assert!(headers.get("x-api-key").is_none());
         assert!(headers.get("x-litellm-api-key").is_none());
         assert_eq!(headers.get("x-test").unwrap().to_str().unwrap(), "ok");
+    }
+}
+
+#[cfg(all(test, feature = "gateway-proxy-cache"))]
+mod proxy_cache_key_tests {
+    use super::{HeaderMap, proxy_cache_key, proxy_cache_route_partition};
+    use axum::http::Method;
+    use bytes::Bytes;
+
+    #[test]
+    fn proxy_cache_key_changes_when_route_partition_changes() {
+        let headers = HeaderMap::new();
+        let body = Bytes::from_static(
+            br#"{"model":"gpt-test","messages":[{"role":"user","content":"hi"}]}"#,
+        );
+
+        let primary = proxy_cache_key(
+            &Method::POST,
+            "/v1/chat/completions",
+            &body,
+            "vk:key-1",
+            &proxy_cache_route_partition(&["primary".to_string()]),
+            &headers,
+        );
+        let secondary = proxy_cache_key(
+            &Method::POST,
+            "/v1/chat/completions",
+            &body,
+            "vk:key-1",
+            &proxy_cache_route_partition(&["secondary".to_string()]),
+            &headers,
+        );
+
+        assert_ne!(primary, secondary);
+    }
+
+    #[test]
+    fn proxy_cache_route_partition_ignores_blank_candidates() {
+        let compact =
+            proxy_cache_route_partition(&["primary".to_string(), "secondary".to_string()]);
+        let noisy = proxy_cache_route_partition(&[
+            " primary ".to_string(),
+            String::new(),
+            "secondary".to_string(),
+            "   ".to_string(),
+        ]);
+
+        assert_eq!(compact, noisy);
     }
 }
 // end inline: proxy/sanitize_proxy_headers_tests.rs
