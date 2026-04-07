@@ -316,6 +316,10 @@ jobs:
         working-directory: ditto-llm
         run: cargo test -p ditto-core --lib
 
+      - name: cargo test (ditto-core agent integration)
+        working-directory: ditto-llm
+        run: cargo test -p ditto-core --features agent --test agent_loop --test agent_toolbox
+
       - name: cargo test (ditto-server targets compile)
         working-directory: ditto-llm
         run: cargo test -p ditto-server --all-targets --no-run
@@ -370,6 +374,22 @@ jobs:
           provider-openai+cap-llm|provider-openai,cap-llm
           provider-openai-compatible|provider-openai-compatible
           provider-openai-compatible+cap-llm|provider-openai-compatible,cap-llm
+          EOF
+
+      - name: cargo check (legacy feature alias smoke)
+        working-directory: ditto-llm
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r label features; do
+            echo "::group::${label}"
+            cargo check -p ditto-core --lib --no-default-features --features "${features}" -q
+            echo "::endgroup::"
+          done <<'EOF'
+          openai|openai
+          openai-compatible+streaming|openai-compatible,streaming
+          anthropic+cap-llm|anthropic,cap-llm
+          openai-compatible+embeddings|openai-compatible,embeddings
           EOF
 
       - name: cargo check (ditto-core agent slice)
