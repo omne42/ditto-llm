@@ -329,7 +329,9 @@ async fn dropping_streams_aborts_background_task() -> Result<()> {
 
 #[test]
 fn poisoned_object_handle_reports_done_and_keeps_lock_error() {
-    let state = Arc::new(std::sync::Mutex::new(super::core::StreamObjectState::default()));
+    let state = Arc::new(std::sync::Mutex::new(
+        super::core::StreamObjectState::default(),
+    ));
     let poisoned = state.clone();
     let _ = std::thread::spawn(move || {
         let _guard = poisoned.lock().expect("lock");
