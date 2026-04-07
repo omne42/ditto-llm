@@ -485,6 +485,10 @@ pub(super) async fn finish_proxy_request_dedup_result(
 
     match result {
         Ok(response) => {
+            if !should_persist_request_dedup_status(response.status()) {
+                leader.release().await;
+                return Ok(response);
+            }
             if should_buffer_request_dedup_response(&response, leader.max_snapshot_bytes) {
                 let (outcome, mut buffered) =
                     buffer_response_into_replay_outcome(response, leader.max_snapshot_bytes)
@@ -661,6 +665,12 @@ fn should_buffer_request_dedup_response(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<usize>().ok())
         .is_some_and(|len| len <= max_snapshot_bytes)
+}
+
+fn should_persist_request_dedup_status(status: StatusCode) -> bool {
+    !(status.is_server_error()
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status == StatusCode::REQUEST_TIMEOUT)
 }
 
 async fn buffer_response_into_replay_outcome(
@@ -856,23 +866,27 @@ fn wrap_response_for_request_dedup(
             }
             None => {
                 if let Some(mut leader) = state.leader.take() {
-                    let outcome = match state.recorder.finish() {
-                        Some(bytes) => {
-                            ProxyRequestReplayOutcome::Response(ProxyRequestReplayResponse {
-                                status: state.status.as_u16(),
-                                headers: header_map_to_record(&state.headers),
-                                body: bytes.to_vec(),
-                            })
-                        }
-                        None => replay_unavailable_outcome(
-                            StatusCode::CONFLICT,
-                            "request_id_replay_unavailable",
-                            "x-request-id cannot be replayed because the gateway could not snapshot the full response body",
-                        ),
-                    };
-                    leader
-                        .complete_outcome(&outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
-                        .await;
+                    if should_persist_request_dedup_status(state.status) {
+                        let outcome = match state.recorder.finish() {
+                            Some(bytes) => {
+                                ProxyRequestReplayOutcome::Response(ProxyRequestReplayResponse {
+                                    status: state.status.as_u16(),
+                                    headers: header_map_to_record(&state.headers),
+                                    body: bytes.to_vec(),
+                                })
+                            }
+                            None => replay_unavailable_outcome(
+                                StatusCode::CONFLICT,
+                                "request_id_replay_unavailable",
+                                "x-request-id cannot be replayed because the gateway could not snapshot the full response body",
+                            ),
+                        };
+                        leader
+                            .complete_outcome(&outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
+                            .await;
+                    } else {
+                        leader.release().await;
+                    }
                 }
                 Ok(None)
             }
