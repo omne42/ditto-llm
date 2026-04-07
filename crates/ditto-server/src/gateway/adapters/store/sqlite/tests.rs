@@ -186,6 +186,15 @@ async fn sqlite_store_budget_reservations_enforce_limit() {
         .await
         .expect("commit r3");
 
+    let ledgers = store
+        .list_budget_ledgers()
+        .await
+        .expect("ledgers after commit");
+    assert_eq!(ledgers.len(), 1);
+    assert_eq!(ledgers[0].key_id, "key-1");
+    assert_eq!(ledgers[0].spent_tokens, 3);
+    assert_eq!(ledgers[0].reserved_tokens, 0);
+
     let err = store.reserve_budget_tokens("r4", "key-1", 5, 3).await;
     assert!(matches!(err, Err(SqliteStoreError::BudgetExceeded { .. })));
 }
