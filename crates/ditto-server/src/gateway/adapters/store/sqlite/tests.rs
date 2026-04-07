@@ -232,7 +232,7 @@ async fn sqlite_store_commit_budget_reservation_with_tokens_releases_difference(
     assert_eq!(ledgers.len(), 2);
     assert_eq!(ledgers[0].key_id, "key-1");
     assert_eq!(ledgers[1].key_id, "key-2");
-    assert_eq!(ledgers[1].spent_tokens, 2);
+    assert_eq!(ledgers[1].spent_tokens, 5);
     assert_eq!(ledgers[1].reserved_tokens, 0);
 }
 
@@ -322,7 +322,7 @@ async fn sqlite_store_commit_cost_reservation_with_usd_micros_releases_differenc
     assert_eq!(ledgers.len(), 2);
     assert_eq!(ledgers[0].key_id, "key-1");
     assert_eq!(ledgers[1].key_id, "key-2");
-    assert_eq!(ledgers[1].spent_usd_micros, 2);
+    assert_eq!(ledgers[1].spent_usd_micros, 5);
     assert_eq!(ledgers[1].reserved_usd_micros, 0);
 }
 

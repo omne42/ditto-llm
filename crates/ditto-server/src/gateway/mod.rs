@@ -271,6 +271,19 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "gateway-costing")]
+    fn test_pricing_table() -> PricingTable {
+        PricingTable::from_litellm_json_str(
+            r#"{
+              "gpt-test": {
+                "input_cost_per_token": 0.000001,
+                "output_cost_per_token": 0.000001
+              }
+            }"#,
+        )
+        .expect("pricing")
+    }
+
     #[test]
     fn gateway_request_cache_key_is_not_raw() {
         let request = GatewayRequest {
@@ -535,6 +548,108 @@ mod tests {
 
         let second = gateway.prepare_handle_request(&request);
         assert!(matches!(second, Ok(GatewayPreparedRequest::Call(_))));
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    #[test]
+    fn prepare_handle_request_reserves_cost_budget_until_completed_or_rolled_back() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.budget.total_usd_micros = Some(3);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config).with_pricing_table(test_pricing_table());
+        gateway.register_backend("primary", TestBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        let prepared = match gateway
+            .prepare_handle_request(&request)
+            .expect("first request should pass")
+        {
+            GatewayPreparedRequest::Call(prepared) => prepared,
+            GatewayPreparedRequest::Cached { .. } => panic!("expected backend call"),
+        };
+
+        let second = gateway.prepare_handle_request(&request);
+        assert!(matches!(
+            second,
+            Err(GatewayError::CostBudgetExceeded {
+                limit_usd_micros: 3,
+                attempted_usd_micros: 6,
+            })
+        ));
+
+        gateway.complete_handle_failure(&prepared);
+
+        let third = gateway.prepare_handle_request(&request);
+        assert!(matches!(third, Ok(GatewayPreparedRequest::Call(_))));
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    #[tokio::test]
+    async fn handle_enforces_cost_budget_after_successful_call() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.budget.total_usd_micros = Some(3);
+
+        let config = GatewayConfig {
+            backends: Vec::new(),
+            virtual_keys: vec![key],
+            router: router::RouterConfig {
+                default_backends: vec![RouteBackend {
+                    backend: "primary".to_string(),
+                    weight: 1.0,
+                }],
+                rules: Vec::new(),
+            },
+            a2a_agents: Vec::new(),
+            mcp_servers: Vec::new(),
+            observability: Default::default(),
+        };
+        let mut gateway = Gateway::new(config).with_pricing_table(test_pricing_table());
+        gateway.register_backend("primary", TestBackend);
+
+        let request = GatewayRequest {
+            virtual_key: "vk-1".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+
+        gateway
+            .handle(request.clone())
+            .await
+            .expect("first request");
+
+        let second = gateway.handle(request).await;
+        assert!(matches!(
+            second,
+            Err(GatewayError::CostBudgetExceeded {
+                limit_usd_micros: 3,
+                attempted_usd_micros: 5,
+            })
+        ));
     }
 
     #[test]
@@ -888,6 +1003,8 @@ pub struct Gateway {
     cache: Arc<Mutex<ResponseCache>>,
     budget: Arc<Mutex<BudgetTracker>>,
     observability: Arc<Mutex<Observability>>,
+    #[cfg(feature = "gateway-costing")]
+    pricing: Option<Arc<PricingTable>>,
     clock: Box<dyn Clock>,
 }
 
@@ -990,12 +1107,16 @@ pub(crate) struct GatewayPreparedCall {
     pub(crate) key_id: String,
     pub(crate) backend: Arc<dyn Backend>,
     pub(crate) backend_name: String,
+    #[cfg(feature = "gateway-costing")]
+    model: String,
     input_tokens: u32,
     tokens: u64,
     key_budget: BudgetConfig,
     tenant_budget_scope: Option<(String, BudgetConfig)>,
     project_budget_scope: Option<(String, BudgetConfig)>,
     user_budget_scope: Option<(String, BudgetConfig)>,
+    #[cfg(feature = "gateway-costing")]
+    reserved_cost_usd_micros: Option<u64>,
     cache_key: Option<String>,
 }
 
@@ -1019,8 +1140,16 @@ impl Gateway {
             cache: Arc::new(Mutex::new(ResponseCache::default())),
             budget: Arc::new(Mutex::new(BudgetTracker::default())),
             observability: Arc::new(Mutex::new(Observability::default())),
+            #[cfg(feature = "gateway-costing")]
+            pricing: None,
             clock,
         }
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    pub fn with_pricing_table(mut self, pricing: PricingTable) -> Self {
+        self.pricing = Some(Arc::new(pricing));
+        self
     }
 
     fn with_control_plane<R>(&self, f: impl FnOnce(&GatewayControlPlane) -> R) -> R {
@@ -1362,17 +1491,111 @@ impl Gateway {
             return Err(err);
         }
 
+        #[cfg(feature = "gateway-costing")]
+        let reserved_cost_usd_micros = {
+            let has_cost_budget = key.budget.total_usd_micros.is_some()
+                || tenant_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                || project_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some())
+                || user_budget_scope
+                    .as_ref()
+                    .is_some_and(|(_, budget)| budget.total_usd_micros.is_some());
+
+            if !has_cost_budget {
+                None
+            } else {
+                let Some(pricing) = self.pricing.as_ref() else {
+                    lock_unpoisoned(&self.budget).refund_many(
+                        Self::handle_budget_scopes(
+                            &key.id,
+                            &key.budget,
+                            tenant_budget_scope.as_ref(),
+                            project_budget_scope.as_ref(),
+                            user_budget_scope.as_ref(),
+                        ),
+                        u64::from(tokens),
+                    );
+                    return Err(GatewayError::Backend {
+                        message: "pricing not configured for cost budgets".to_string(),
+                    });
+                };
+
+                let estimated_cost = pricing
+                    .estimate_cost_usd_micros(
+                        request.model.trim(),
+                        request.input_tokens,
+                        request.max_output_tokens,
+                    )
+                    .ok_or_else(|| GatewayError::Backend {
+                        message: format!(
+                            "pricing not configured for model `{}`",
+                            request.model.trim()
+                        ),
+                    });
+                let estimated_cost = match estimated_cost {
+                    Ok(cost) => cost,
+                    Err(err) => {
+                        lock_unpoisoned(&self.budget).refund_many(
+                            Self::handle_budget_scopes(
+                                &key.id,
+                                &key.budget,
+                                tenant_budget_scope.as_ref(),
+                                project_budget_scope.as_ref(),
+                                user_budget_scope.as_ref(),
+                            ),
+                            u64::from(tokens),
+                        );
+                        return Err(err);
+                    }
+                };
+
+                let cost_budget_scopes = Self::handle_budget_scopes(
+                    &key.id,
+                    &key.budget,
+                    tenant_budget_scope.as_ref(),
+                    project_budget_scope.as_ref(),
+                    user_budget_scope.as_ref(),
+                );
+                let reserve_cost_result = {
+                    let mut budget = lock_unpoisoned(&self.budget);
+                    budget.reserve_cost_many(cost_budget_scopes, estimated_cost)
+                };
+                if let Err(err) = reserve_cost_result {
+                    lock_unpoisoned(&self.budget).refund_many(
+                        Self::handle_budget_scopes(
+                            &key.id,
+                            &key.budget,
+                            tenant_budget_scope.as_ref(),
+                            project_budget_scope.as_ref(),
+                            user_budget_scope.as_ref(),
+                        ),
+                        u64::from(tokens),
+                    );
+                    lock_unpoisoned(&self.observability).record_budget_exceeded();
+                    return Err(err);
+                }
+                Some(estimated_cost)
+            }
+        };
+
         Ok(GatewayPreparedRequest::Call(Box::new(
             GatewayPreparedCall {
                 key_id: key.id,
                 backend,
                 backend_name,
+                #[cfg(feature = "gateway-costing")]
+                model: request.model.clone(),
                 input_tokens: request.input_tokens,
                 tokens: u64::from(tokens),
                 key_budget: key.budget,
                 tenant_budget_scope,
                 project_budget_scope,
                 user_budget_scope,
+                #[cfg(feature = "gateway-costing")]
+                reserved_cost_usd_micros,
                 cache_key,
             },
         )))
@@ -1399,6 +1622,19 @@ impl Gateway {
         }
         if let Some((scope, budget)) = prepared.user_budget_scope.as_ref() {
             self.settle_handle_budget_scope(scope, budget, prepared.tokens, actual_tokens);
+        }
+
+        #[cfg(feature = "gateway-costing")]
+        if let Some(reserved_cost_usd_micros) = prepared.reserved_cost_usd_micros {
+            self.settle_handle_cost_budget(
+                prepared,
+                reserved_cost_usd_micros,
+                self.estimate_handle_cost_usd_micros(
+                    &prepared.model,
+                    prepared.input_tokens,
+                    response.output_tokens,
+                ),
+            );
         }
 
         let Some(cache_key) = prepared.cache_key.as_ref() else {
@@ -1445,18 +1681,82 @@ impl Gateway {
         );
     }
 
+    #[cfg(feature = "gateway-costing")]
+    fn settle_handle_cost_budget(
+        &self,
+        prepared: &GatewayPreparedCall,
+        reserved_cost_usd_micros: u64,
+        actual_cost_usd_micros: Option<u64>,
+    ) {
+        lock_unpoisoned(&self.budget).settle_cost_many(
+            Self::handle_budget_scopes(
+                &prepared.key_id,
+                &prepared.key_budget,
+                prepared.tenant_budget_scope.as_ref(),
+                prepared.project_budget_scope.as_ref(),
+                prepared.user_budget_scope.as_ref(),
+            ),
+            reserved_cost_usd_micros,
+            actual_cost_usd_micros,
+        );
+    }
+
+    #[cfg(feature = "gateway-costing")]
+    fn estimate_handle_cost_usd_micros(
+        &self,
+        model: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+    ) -> Option<u64> {
+        self.pricing.as_ref().and_then(|pricing| {
+            pricing.estimate_cost_usd_micros(model.trim(), input_tokens, output_tokens)
+        })
+    }
+
+    fn handle_budget_scopes<'a>(
+        key_id: &'a str,
+        key_budget: &'a BudgetConfig,
+        tenant_budget_scope: Option<&'a (String, BudgetConfig)>,
+        project_budget_scope: Option<&'a (String, BudgetConfig)>,
+        user_budget_scope: Option<&'a (String, BudgetConfig)>,
+    ) -> Vec<(&'a str, &'a BudgetConfig)> {
+        let mut scopes = vec![(key_id, key_budget)];
+        if let Some((scope, budget)) = tenant_budget_scope {
+            scopes.push((scope.as_str(), budget));
+        }
+        if let Some((scope, budget)) = project_budget_scope {
+            scopes.push((scope.as_str(), budget));
+        }
+        if let Some((scope, budget)) = user_budget_scope {
+            scopes.push((scope.as_str(), budget));
+        }
+        scopes
+    }
+
     pub(crate) fn complete_handle_failure(&self, prepared: &GatewayPreparedCall) {
-        let mut scopes = vec![(&prepared.key_id[..], &prepared.key_budget)];
-        if let Some((scope, budget)) = prepared.tenant_budget_scope.as_ref() {
-            scopes.push((scope.as_str(), budget));
+        lock_unpoisoned(&self.budget).refund_many(
+            Self::handle_budget_scopes(
+                &prepared.key_id,
+                &prepared.key_budget,
+                prepared.tenant_budget_scope.as_ref(),
+                prepared.project_budget_scope.as_ref(),
+                prepared.user_budget_scope.as_ref(),
+            ),
+            prepared.tokens,
+        );
+        #[cfg(feature = "gateway-costing")]
+        if let Some(reserved_cost_usd_micros) = prepared.reserved_cost_usd_micros {
+            lock_unpoisoned(&self.budget).refund_cost_many(
+                Self::handle_budget_scopes(
+                    &prepared.key_id,
+                    &prepared.key_budget,
+                    prepared.tenant_budget_scope.as_ref(),
+                    prepared.project_budget_scope.as_ref(),
+                    prepared.user_budget_scope.as_ref(),
+                ),
+                reserved_cost_usd_micros,
+            );
         }
-        if let Some((scope, budget)) = prepared.project_budget_scope.as_ref() {
-            scopes.push((scope.as_str(), budget));
-        }
-        if let Some((scope, budget)) = prepared.user_budget_scope.as_ref() {
-            scopes.push((scope.as_str(), budget));
-        }
-        lock_unpoisoned(&self.budget).refund_many(scopes, prepared.tokens);
     }
 
     pub async fn handle(&self, request: GatewayRequest) -> Result<GatewayResponse, GatewayError> {
