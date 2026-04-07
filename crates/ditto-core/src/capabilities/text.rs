@@ -59,7 +59,7 @@ pub struct StreamTextHandle {
 
 impl StreamTextHandle {
     pub fn is_done(&self) -> bool {
-        self.state.lock().map(|s| s.done).unwrap_or(false)
+        self.state.lock().map(|s| s.done).unwrap_or(true)
     }
 
     pub fn final_response(&self) -> Result<Option<GenerateResponse>> {
@@ -574,5 +574,22 @@ mod tests {
 
         assert!(dropped.load(Ordering::SeqCst));
         Ok(())
+    }
+
+    #[test]
+    fn poisoned_text_handle_reports_done_and_keeps_lock_error() {
+        let state = Arc::new(Mutex::new(StreamTextState::default()));
+        let poisoned = state.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = poisoned.lock().expect("lock");
+            panic!("poison text state");
+        })
+        .join();
+
+        let handle = StreamTextHandle { state };
+        assert!(handle.is_done());
+        assert!(handle.final_response().is_err());
+        assert!(handle.final_summary().is_err());
+        assert!(handle.final_text().is_err());
     }
 }

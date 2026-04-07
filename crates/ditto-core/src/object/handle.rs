@@ -28,7 +28,7 @@ pub struct StreamObjectHandle {
 
 impl StreamObjectHandle {
     pub fn is_done(&self) -> bool {
-        self.state.lock().map(|s| s.done).unwrap_or(false)
+        self.state.lock().map(|s| s.done).unwrap_or(true)
     }
 
     pub fn final_json(&self) -> Result<Option<Value>> {
