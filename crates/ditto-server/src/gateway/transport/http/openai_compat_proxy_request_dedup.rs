@@ -306,6 +306,17 @@ impl ProxyRequestDedupLeader {
             self.completed = true;
         }
     }
+
+    async fn release(&mut self) {
+        if let Some(heartbeat) = self.heartbeat.take() {
+            heartbeat.abort();
+        }
+        let _ = self
+            .persistence
+            .release_proxy_request_idempotency(&self.request_id, &self.owner_token)
+            .await;
+        self.completed = true;
+    }
 }
 
 impl Drop for ProxyRequestDedupLeader {
@@ -491,10 +502,7 @@ pub(super) async fn finish_proxy_request_dedup_result(
             }
         }
         Err(err) => {
-            let replay_outcome = replay_error_outcome_from_tuple(&err);
-            leader
-                .complete_outcome(&replay_outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
-                .await;
+            leader.release().await;
             Err(err)
         }
     }
@@ -742,19 +750,6 @@ fn error_tuple_from_replay_error(
     )
 }
 
-fn replay_error_outcome_from_tuple(
-    err: &(StatusCode, Json<OpenAiErrorResponse>),
-) -> ProxyRequestReplayOutcome {
-    ProxyRequestReplayOutcome::Error {
-        status: err.0.as_u16(),
-        error: ProxyRequestReplayError {
-            message: err.1.0.error.message.clone(),
-            kind: err.1.0.error.kind.clone(),
-            code: err.1.0.error.code.clone(),
-        },
-    }
-}
-
 fn replay_unavailable_outcome(
     status: StatusCode,
     code: &str,
@@ -952,6 +947,56 @@ fn now_epoch_millis() -> u64 {
 mod tests {
     use super::*;
     use crate::gateway::{Gateway, GatewayConfig, RouterConfig};
+
+    #[tokio::test]
+    async fn failed_dedup_result_releases_inflight_record() {
+        let store = Arc::new(LocalProxyRequestIdempotencyStore::default());
+        let request_id = "req-dedup-error";
+        let owner_token = "owner-1";
+        let now_ms = now_epoch_millis();
+        let fingerprint = ProxyRequestFingerprint {
+            method: "POST".to_string(),
+            path: "/v1/responses".to_string(),
+            virtual_key_id: Some("key-1".to_string()),
+            upstream_headers: Vec::new(),
+            body_sha256: "body".to_string(),
+        };
+
+        let begin = store
+            .begin_proxy_request_idempotency(
+                request_id,
+                &fingerprint,
+                "fingerprint-1",
+                owner_token,
+                now_ms,
+                REQUEST_DEDUP_LEASE_TTL_MS,
+            )
+            .await
+            .expect("begin dedup");
+        assert!(matches!(
+            begin,
+            ProxyRequestIdempotencyBeginOutcome::Acquired
+        ));
+
+        let leader = ProxyRequestDedupLeader::new(store.clone(), request_id, owner_token, 1024);
+        let result = finish_proxy_request_dedup_result(
+            Some(leader),
+            Err(openai_error(
+                StatusCode::BAD_GATEWAY,
+                "api_error",
+                Some("upstream_failure"),
+                "upstream failed",
+            )),
+        )
+        .await;
+        assert_eq!(result.expect_err("dedup error").0, StatusCode::BAD_GATEWAY);
+
+        let stored = store
+            .get_proxy_request_idempotency(request_id, now_epoch_millis())
+            .await
+            .expect("lookup dedup");
+        assert!(stored.is_none());
+    }
 
     #[tokio::test]
     async fn oversized_stream_records_replay_unavailable_outcome() {
