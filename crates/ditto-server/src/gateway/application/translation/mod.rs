@@ -17,7 +17,7 @@ use futures_util::stream;
 use serde_json::{Map, Value};
 use tokio::sync::{Mutex, OnceCell};
 
-use crate::gateway::adapters::cache::LocalLruCache;
+use crate::gateway::domain::LocalLruCache;
 use ditto_core::capabilities::BatchClient;
 use ditto_core::capabilities::audio::{AudioTranscriptionModel, SpeechModel};
 use ditto_core::capabilities::embedding::EmbeddingModel;

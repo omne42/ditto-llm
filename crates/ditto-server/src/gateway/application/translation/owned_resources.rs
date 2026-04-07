@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use crate::gateway::adapters::cache::LocalLruCache;
+use crate::gateway::domain::LocalLruCache;
 use ditto_core::capabilities::file::{FileDeleteResponse, FileObject};
 use ditto_core::types::{
     Batch, BatchListResponse, VideoDeleteResponse, VideoGenerationResponse, VideoListResponse,

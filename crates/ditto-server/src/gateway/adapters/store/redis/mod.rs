@@ -1991,6 +1991,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn redis_store_round_trips_control_plane_snapshot() {
+        let Some(url) = required_redis_url() else {
+            eprintln!("skipping redis test: set DITTO_REDIS_URL or REDIS_URL");
+            return;
+        };
+
+        let store = RedisStore::new(url)
+            .expect("store")
+            .with_prefix(test_prefix());
+        store.ping().await.expect("ping");
+
+        let key = VirtualKeyConfig::new("key-snapshot", "vk-snapshot");
+        let router = super::super::RouterConfig {
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        };
+
+        store
+            .replace_control_plane_snapshot(std::slice::from_ref(&key), &router)
+            .await
+            .expect("replace control-plane snapshot");
+
+        let loaded_keys = store.load_virtual_keys().await.expect("load");
+        assert_eq!(loaded_keys.len(), 1);
+        assert_eq!(loaded_keys[0].id, "key-snapshot");
+
+        let loaded_router = store.load_router_config().await.expect("load router");
+        let loaded_router = loaded_router.expect("router");
+        assert_eq!(
+            serde_json::to_value(&loaded_router).expect("serialize loaded router"),
+            serde_json::to_value(&router).expect("serialize expected router")
+        );
+    }
+
+    #[tokio::test]
     async fn redis_store_commit_budget_reservation_with_tokens_releases_difference() {
         let Some(url) = required_redis_url() else {
             eprintln!("skipping redis test: set DITTO_REDIS_URL or REDIS_URL");

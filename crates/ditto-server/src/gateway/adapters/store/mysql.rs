@@ -2235,4 +2235,44 @@ mod tests {
             .expect("cost ledger after reap");
         assert_eq!(cost_ledger.reserved_usd_micros, 0);
     }
+
+    #[tokio::test]
+    async fn mysql_store_round_trips_control_plane_snapshot() {
+        let Some(url) = mysql_url() else {
+            eprintln!("skipping mysql test: set DITTO_MYSQL_URL or MYSQL_URL");
+            return;
+        };
+
+        let store = MySqlStore::connect(url).await.expect("connect");
+        store.init().await.expect("init");
+
+        let suffix = test_suffix();
+        let key = VirtualKeyConfig::new(
+            format!("my-snapshot-{suffix}"),
+            format!("my-token-{suffix}"),
+        );
+        let router = RouterConfig {
+            default_backends: Vec::new(),
+            rules: Vec::new(),
+        };
+
+        store
+            .replace_control_plane_snapshot(std::slice::from_ref(&key), &router)
+            .await
+            .expect("replace control-plane snapshot");
+
+        let loaded_keys = store.load_virtual_keys().await.expect("load virtual keys");
+        assert_eq!(loaded_keys.len(), 1);
+        assert_eq!(loaded_keys[0].id, key.id);
+
+        let loaded_router = store
+            .load_router_config()
+            .await
+            .expect("load router config")
+            .expect("router config");
+        assert_eq!(
+            serde_json::to_value(&loaded_router).expect("serialize loaded router"),
+            serde_json::to_value(&router).expect("serialize expected router")
+        );
+    }
 }

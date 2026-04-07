@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use crate::gateway::router::Router as GatewayRouter;
+use crate::gateway::domain::Router as GatewayRouter;
 use crate::gateway::{Gateway, GatewayError, RouterConfig, VirtualKeyConfig};
 
 use super::{GatewayHttpState, GatewayRuntimeBackends};

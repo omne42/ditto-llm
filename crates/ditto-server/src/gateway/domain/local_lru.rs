@@ -1,8 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-// GATEWAY-LOCAL-LRU-CACHE: small in-process cache adapter shared by gateway
-// application code that needs bounded recency storage without owning cache
-// mechanics inline.
+// Small in-process LRU for gateway-local domain/application state.
 #[derive(Debug)]
 pub(crate) struct LocalLruCache<V> {
     entries: HashMap<String, V>,
@@ -58,7 +56,6 @@ impl<V: Clone> LocalLruCache<V> {
         }
     }
 
-    #[cfg(feature = "gateway-translation")]
     pub(crate) fn remove(&mut self, key: &str) -> Option<V> {
         let value = self.entries.remove(key)?;
         if let Some(index) = self.order.iter().position(|candidate| candidate == key) {
@@ -67,7 +64,6 @@ impl<V: Clone> LocalLruCache<V> {
         Some(value)
     }
 
-    #[cfg(feature = "gateway-translation")]
     pub(crate) fn snapshot(&self) -> Vec<(String, V)> {
         self.entries
             .iter()

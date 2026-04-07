@@ -4,6 +4,7 @@ pub mod budget;
 pub mod cache;
 pub mod guardrails;
 pub mod limits;
+mod local_lru;
 pub mod router;
 pub mod store_ports;
 pub mod store_types;
@@ -15,6 +16,7 @@ pub use budget::{BudgetConfig, BudgetTracker};
 pub use cache::{CacheConfig, ResponseCache};
 pub use guardrails::GuardrailsConfig;
 pub use limits::{LimitsConfig, RateLimiter};
+pub(crate) use local_lru::LocalLruCache;
 pub use router::{RouteBackend, RouteRule, Router, RouterConfig};
 pub use store_ports::{ProxyRequestIdempotencyStore, ProxyRequestIdempotencyStoreError};
 pub use store_types::{

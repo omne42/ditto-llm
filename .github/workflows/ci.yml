@@ -308,6 +308,21 @@ jobs:
         working-directory: ditto-llm
         run: cargo run -p ditto-core --bin ditto-llms-txt -- --check
 
+      - name: gateway internal layering check
+        working-directory: ditto-llm
+        run: |
+          if grep -R -n \
+            -e 'crate::gateway::router::' \
+            -e 'crate::gateway::cache::' \
+            -e 'crate::gateway::budget::' \
+            -e 'crate::gateway::guardrails::' \
+            -e 'crate::gateway::state_file::' \
+            crates/ditto-server/src/gateway/application \
+            crates/ditto-server/src/gateway/transport; then
+            echo "gateway internal layers must not depend on legacy gateway::* shim namespaces"
+            exit 1
+          fi
+
       - name: gateway contract types check
         working-directory: ditto-llm
         run: cargo test --manifest-path crates/ditto-gateway-contract-types/Cargo.toml
@@ -339,6 +354,12 @@ jobs:
       - name: cargo test (ditto-server all targets compile)
         working-directory: ditto-llm
         run: cargo test -p ditto-server --all-targets --no-run --all-features
+
+      - name: cargo test (gateway-store-redis snapshots)
+        working-directory: ditto-llm
+        run: |
+          cargo test -p ditto-server --features "gateway gateway-store-redis" redis_store_round_trips_virtual_keys_and_budget_ledgers
+          cargo test -p ditto-server --features "gateway gateway-store-redis" redis_store_round_trips_control_plane_snapshot
 
       - name: cargo test (gateway resilience slice)
         working-directory: ditto-llm
@@ -495,6 +516,7 @@ jobs:
         working-directory: ditto-llm
         run: |
           cargo test -p ditto-server --features "gateway gateway-store-sqlite" sqlite_store_round_trips_virtual_keys
+          cargo test -p ditto-server --features "gateway gateway-store-sqlite" sqlite_store_round_trips_control_plane_snapshot
           cargo run -p ditto-server --features "gateway gateway-store-sqlite" --bin ditto-gateway -- ./gateway.ci.json --sqlite ./gateway.ci.sqlite --db-doctor
 
       - name: Run postgres store tests
@@ -502,6 +524,7 @@ jobs:
         working-directory: ditto-llm
         run: |
           cargo test -p ditto-server --features "gateway gateway-store-postgres" postgres_store_round_trips_config_audit_and_ledgers
+          cargo test -p ditto-server --features "gateway gateway-store-postgres" postgres_store_round_trips_control_plane_snapshot
           cargo run -p ditto-server --features "gateway gateway-store-postgres" --bin ditto-gateway -- ./gateway.ci.json --pg "${DITTO_POSTGRES_URL}" --db-doctor
 
       - name: Run mysql store tests
@@ -509,6 +532,7 @@ jobs:
         working-directory: ditto-llm
         run: |
           cargo test -p ditto-server --features "gateway gateway-store-mysql" mysql_store_round_trips_config_audit_and_ledgers
+          cargo test -p ditto-server --features "gateway gateway-store-mysql" mysql_store_round_trips_control_plane_snapshot
           cargo run -p ditto-server --features "gateway gateway-store-mysql" --bin ditto-gateway -- ./gateway.ci.json --mysql "${DITTO_MYSQL_URL}" --db-doctor
 
   gateway-store-bench:
