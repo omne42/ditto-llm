@@ -1,7 +1,7 @@
 #![cfg(all(feature = "gateway", feature = "gateway-translation"))]
 
 use ditto_core::config::{Env, ProviderApi, ProviderConfig};
-#[cfg(feature = "cap-embedding")]
+#[cfg(all(feature = "provider-google", feature = "cap-embedding"))]
 use ditto_core::runtime::build_embedding_model;
 use ditto_core::runtime::build_language_model;
 
