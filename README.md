@@ -247,10 +247,10 @@ Endpoints:
 - `GET /health`
 - `GET /ready`
 - `GET /metrics`
-- `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Defaults to redacted tokens; `?include_tokens=true` requires a write or tenant-write admin token.
-- `GET /admin/config/version`, `GET /admin/config/versions`, and `GET /admin/config/versions/:version_id` (current/history/detail for control-plane virtual-key config versions; detail supports `?include_tokens=true` for secret-managing admins only).
-- `GET /admin/config/diff` (read-only or write admin token; compares two config versions via `from_version_id` + `to_version_id`; `include_tokens` requires secret-managing admin access).
-- `GET /admin/config/export` (read-only or write admin token; exports current config by default, or a specific version via `version_id`; `include_tokens` requires secret-managing admin access).
+- `GET /admin/keys` (admin token via `Authorization` or `x-admin-token` if configured). Defaults to redacted tokens; `?include_tokens=true` requires a write or tenant-write admin token and is rejected after keys have been reloaded from one-way hashed persistence.
+- `GET /admin/config/version`, `GET /admin/config/versions`, and `GET /admin/config/versions/:version_id` (current/process-local history/detail for control-plane virtual-key config versions; restart rebuilds history from the loaded config as a new bootstrap snapshot; detail supports `?include_tokens=true` for secret-managing admins only while original secrets are still in memory).
+- `GET /admin/config/diff` (read-only or write admin token; compares two config versions via `from_version_id` + `to_version_id`; `include_tokens` requires secret-managing admin access and is rejected once only hashed tokens remain).
+- `GET /admin/config/export` (read-only or write admin token; exports current config by default, or a specific version via `version_id`; `include_tokens` requires secret-managing admin access and is rejected once only hashed tokens remain).
 - `POST /admin/config/validate` (read-only or write admin token; validates `virtual_keys` plus optional `router` payloads with optional expected hashes, without mutating runtime state).
 - `PUT /admin/config/router` (write admin token required; updates router config with backend-reference validation and creates a new config version; supports `dry_run`).
 - MCP tool gateway: `ANY /mcp*` (JSON-RPC `tools/list` / `tools/call` + convenience endpoints), and MCP tool integration for `POST /v1/chat/completions` and `POST /v1/responses` via `tools: [{"type":"mcp", ...}]` (requires a valid virtual key).
@@ -258,7 +258,7 @@ Endpoints:
 - `POST /admin/keys` and `PUT|DELETE /admin/keys/:id` (requires the write admin token).
 - `POST /admin/config/rollback` (requires the write admin token; restores virtual keys and router to a previous config version; supports `dry_run`).
 - LiteLLM-style key management (requires admin auth): `/key/generate`, `/key/update`, `/key/regenerate` (or `/key/:key/regenerate`), `/key/delete`, `/key/info`, `/key/list`.
-  - `/key/list` returns key aliases by default; `include_tokens=true` requires a write or tenant-write admin token.
+  - `/key/list` returns key aliases by default; `include_tokens=true` requires a write or tenant-write admin token and is rejected after keys have been reloaded from one-way hashed persistence.
   - `/key/info` accepts `?key=...` (admin query) or defaults to the `Authorization: Bearer <virtual_key>` token when `?key` is omitted (self lookup).
 - `POST /admin/proxy_cache/purge` (requires the write admin token and `--proxy-cache`; body can be `{ \"cache_key\": \"...\" }` or `{ \"all\": true }`).
 - `GET /admin/backends` and `POST /admin/backends/:name/reset` (reset requires the write admin token and `--features gateway-routing-advanced`).
@@ -278,6 +278,7 @@ CLI options:
 - `--pg URL` / `--pg-env ENV` enables postgres persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-postgres`; loaded on startup). Virtual-key tokens are written as one-way `sha256:` hashes.
 - `--mysql URL` / `--mysql-env ENV` enables mysql persistence for admin config mutations (`virtual_keys` + `router`) plus audit/budget/cost ledgers (`/admin/audit*`, `/admin/budgets*`, `/admin/costs*`; costs require `gateway-costing`; requires `--features gateway-store-mysql`; loaded on startup). Virtual-key tokens are written as one-way `sha256:` hashes.
 - `--redis URL` enables redis persistence for admin config mutations (`virtual_keys` + `router`; requires `--features gateway-store-redis`). Virtual-key tokens are written as one-way `sha256:` hashes.
+- After a restart from any persisted `sha256:` state/store, Ditto can still authenticate presented virtual-key tokens, but `include_tokens=true` exports can no longer return the original secret material.
 - `--redis-env ENV` loads the redis URL from env (works with `--dotenv`; requires `--features gateway-store-redis`).
 - `--redis-prefix PREFIX` sets the redis key prefix (requires `--features gateway-store-redis` and `--redis`/`--redis-env`).
 - `--audit-retention-secs SECS` sets audit retention for sqlite/pg/mysql/redis stores (`0` disables retention; default is 30 days when any persistent store is configured).

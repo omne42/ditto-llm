@@ -120,7 +120,7 @@
 
 当前状态：
 
-- 已支持 L1 最小切片：virtual keys 配置版本历史与回滚（`GET /admin/config/version`、`GET /admin/config/versions`、`POST /admin/config/rollback`）。
+- 已支持 L1 最小切片：virtual keys 配置版本历史与回滚（`GET /admin/config/version`、`GET /admin/config/versions`、`POST /admin/config/rollback`），但版本 history 目前仍是进程内语义，重启后会从已加载配置重新建立 `bootstrap` 快照。
 - keys 可通过 Admin API 修改并持久化；gateway.json 仍以文件分发为主。
 - 仍缺：按租户/流量灰度发布、以及 budgets/router/policy 的统一版本治理。
 

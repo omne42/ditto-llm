@@ -688,6 +688,10 @@ fn persisted_virtual_key_token_hash(token: &str) -> Option<&str> {
         .then_some(hash)
 }
 
+pub(crate) fn virtual_key_token_is_persisted_hash(token: &str) -> bool {
+    persisted_virtual_key_token_hash(token).is_some()
+}
+
 pub(crate) fn validate_virtual_key_configs(
     keys: &[VirtualKeyConfig],
 ) -> Result<(), super::GatewayError> {

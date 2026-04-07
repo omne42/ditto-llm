@@ -137,11 +137,11 @@ Ditto Gateway 支持 MCP HTTP JSON-RPC proxy，并提供 `/v1/chat/completions` 
 
 ## Admin endpoints（可选）
 
-当你通过 `--admin-token*`（write）或 `--admin-read-token*`（read-only）启用 admin token 后，会开放 `/admin/*`（只读或读写）。`include_tokens=true` 一类 secret 导出只对 write / tenant-write admin token 放行。
+当你通过 `--admin-token*`（write）或 `--admin-read-token*`（read-only）启用 admin token 后，会开放 `/admin/*`（只读或读写）。`include_tokens=true` 一类 secret 导出只对 write / tenant-write admin token 放行；如果 gateway 是从持久化的 `sha256:` virtual key 状态重载起来，这些导出会返回 `409 secret_unavailable`。另外，`/admin/config/versions*` 提供的是当前进程内版本历史，重启后会从已加载配置重新建立一个新的 `bootstrap` 快照。
 
 常见端点：
 
-- `GET /admin/config/version`、`GET /admin/config/versions`、`GET /admin/config/versions/:version_id`（read-only 或 write token；按版本明细支持 `?include_tokens=true`，但 secret 导出仅限 write / tenant-write token）
+- `GET /admin/config/version`、`GET /admin/config/versions`、`GET /admin/config/versions/:version_id`（read-only 或 write token；这是当前进程内 config history；按版本明细支持 `?include_tokens=true`，但 secret 导出仅限 write / tenant-write token）
 - `GET /admin/config/diff`（read-only 或 write token；`from_version_id` + `to_version_id` 对比版本差异；`include_tokens` 仅限 write / tenant-write token）
 - `GET /admin/config/export`（read-only 或 write token；默认导出当前配置，支持 `version_id` + `include_tokens`；secret 导出仅限 write / tenant-write token）
 - `POST /admin/config/validate`（read-only 或 write token；校验 `virtual_keys` 与可选 `router` payload（含可选 hash），不修改配置）

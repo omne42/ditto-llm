@@ -829,6 +829,10 @@ async fn litellm_key_list(
         keys.truncate(size);
     }
 
+    if expose_secret {
+        ensure_virtual_key_tokens_exportable(&keys)?;
+    }
+
     let mut out = Vec::<serde_json::Value>::with_capacity(keys.len());
     for key in keys {
         if return_full_object {

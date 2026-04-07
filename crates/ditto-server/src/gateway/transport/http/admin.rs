@@ -1986,6 +1986,10 @@ pub(super) async fn list_keys(
         keys.truncate(limit);
     }
 
+    if query.include_tokens {
+        ensure_virtual_key_tokens_exportable(&keys)?;
+    }
+
     if !query.include_tokens {
         for key in &mut keys {
             key.token = "redacted".to_string();
