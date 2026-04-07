@@ -1018,6 +1018,10 @@ if (not key_id) then
   return { "OK", "missing_key" }
 end
 
+if spent_tokens == 9223372036854775807 then
+  spent_tokens = reserved_tokens
+end
+
 local ledger_key = prefix .. ":budget_ledger:" .. key_id
 local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_tokens", -reserved_tokens) or "0") or 0
 if reserved_after < 0 then
@@ -1074,6 +1078,10 @@ local reserved_usd_micros = tonumber(redis.call("HGET", reservation_key, "usd_mi
 redis.call("DEL", reservation_key)
 if (not key_id) then
   return { "OK", "missing_key" }
+end
+
+if spent_usd_micros == 9223372036854775807 then
+  spent_usd_micros = reserved_usd_micros
 end
 
 local ledger_key = prefix .. ":cost_ledger:" .. key_id

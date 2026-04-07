@@ -741,6 +741,7 @@ impl MySqlStore {
     ) -> Result<(), MySqlStoreError> {
         let ts_ms = now_millis_i64();
         let spent_tokens_i64 = u64_to_i64(spent_tokens);
+        let commit_reserved_only = spent_tokens == u64::MAX;
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
@@ -775,6 +776,11 @@ impl MySqlStore {
         .await?;
 
         let reserved_i64 = reserved_tokens_i64.max(0);
+        let committed_i64 = if commit_reserved_only {
+            reserved_i64
+        } else {
+            spent_tokens_i64.max(0)
+        };
         sqlx::query(
             "UPDATE budget_ledger
              SET reserved_tokens = GREATEST(reserved_tokens - ?, 0),
@@ -783,7 +789,7 @@ impl MySqlStore {
              WHERE key_id = ?",
         )
         .bind(reserved_i64)
-        .bind(spent_tokens_i64.max(0))
+        .bind(committed_i64)
         .bind(ts_ms)
         .bind(&key_id)
         .execute(&mut *tx)
@@ -805,6 +811,7 @@ impl MySqlStore {
     ) -> Result<(), MySqlStoreError> {
         let ts_ms = now_millis_i64();
         let spent_usd_i64 = u64_to_i64(spent_usd_micros);
+        let commit_reserved_only = spent_usd_micros == u64::MAX;
         let mut tx = self.pool.begin().await?;
 
         let reservation = sqlx::query(
@@ -839,6 +846,11 @@ impl MySqlStore {
         .await?;
 
         let reserved_i64 = reserved_usd_i64.max(0);
+        let committed_i64 = if commit_reserved_only {
+            reserved_i64
+        } else {
+            spent_usd_i64.max(0)
+        };
         sqlx::query(
             "UPDATE cost_ledger
              SET reserved_usd_micros = GREATEST(reserved_usd_micros - ?, 0),
@@ -847,7 +859,7 @@ impl MySqlStore {
              WHERE key_id = ?",
         )
         .bind(reserved_i64)
-        .bind(spent_usd_i64.max(0))
+        .bind(committed_i64)
         .bind(ts_ms)
         .bind(&key_id)
         .execute(&mut *tx)

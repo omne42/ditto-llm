@@ -408,6 +408,7 @@ impl SqliteStore {
         let request_id = request_id.to_string();
         let ts_ms = now_millis();
         let spent_tokens_i64 = tokens_to_i64(spent_tokens);
+        let commit_reserved_only = spent_tokens == u64::MAX;
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let mut conn = open_connection(path)?;
@@ -438,13 +439,18 @@ impl SqliteStore {
             )?;
 
             let reserved_i64 = tokens_i64.max(0);
+            let committed_i64 = if commit_reserved_only {
+                reserved_i64
+            } else {
+                spent_tokens_i64.max(0)
+            };
             tx.execute(
                 "UPDATE budget_ledger
                  SET reserved_tokens = CASE WHEN reserved_tokens >= ?2 THEN reserved_tokens - ?2 ELSE 0 END,
                      spent_tokens = spent_tokens + ?3,
                      updated_at_ms = ?4
                  WHERE key_id = ?1",
-                rusqlite::params![key_id, reserved_i64, spent_tokens_i64.max(0), ts_ms],
+                rusqlite::params![key_id, reserved_i64, committed_i64, ts_ms],
             )?;
 
             tx.commit()?;
@@ -470,6 +476,7 @@ impl SqliteStore {
         let request_id = request_id.to_string();
         let ts_ms = now_millis();
         let spent_usd_i64 = usd_micros_to_i64(spent_usd_micros);
+        let commit_reserved_only = spent_usd_micros == u64::MAX;
 
         tokio::task::spawn_blocking(move || -> Result<(), SqliteStoreError> {
             let mut conn = open_connection(path)?;
@@ -500,13 +507,18 @@ impl SqliteStore {
             )?;
 
             let reserved_i64 = usd_i64.max(0);
+            let committed_i64 = if commit_reserved_only {
+                reserved_i64
+            } else {
+                spent_usd_i64.max(0)
+            };
             tx.execute(
                 "UPDATE cost_ledger
                  SET reserved_usd_micros = CASE WHEN reserved_usd_micros >= ?2 THEN reserved_usd_micros - ?2 ELSE 0 END,
                      spent_usd_micros = spent_usd_micros + ?3,
                      updated_at_ms = ?4
                  WHERE key_id = ?1",
-                rusqlite::params![key_id, reserved_i64, spent_usd_i64.max(0), ts_ms],
+                rusqlite::params![key_id, reserved_i64, committed_i64, ts_ms],
             )?;
 
             tx.commit()?;
