@@ -775,7 +775,6 @@ impl MySqlStore {
         .await?;
 
         let reserved_i64 = reserved_tokens_i64.max(0);
-        let committed_i64 = reserved_i64.min(spent_tokens_i64);
         sqlx::query(
             "UPDATE budget_ledger
              SET reserved_tokens = GREATEST(reserved_tokens - ?, 0),
@@ -784,7 +783,7 @@ impl MySqlStore {
              WHERE key_id = ?",
         )
         .bind(reserved_i64)
-        .bind(committed_i64)
+        .bind(spent_tokens_i64.max(0))
         .bind(ts_ms)
         .bind(&key_id)
         .execute(&mut *tx)
@@ -840,7 +839,6 @@ impl MySqlStore {
         .await?;
 
         let reserved_i64 = reserved_usd_i64.max(0);
-        let committed_i64 = reserved_i64.min(spent_usd_i64);
         sqlx::query(
             "UPDATE cost_ledger
              SET reserved_usd_micros = GREATEST(reserved_usd_micros - ?, 0),
@@ -849,7 +847,7 @@ impl MySqlStore {
              WHERE key_id = ?",
         )
         .bind(reserved_i64)
-        .bind(committed_i64)
+        .bind(spent_usd_i64.max(0))
         .bind(ts_ms)
         .bind(&key_id)
         .execute(&mut *tx)
@@ -2131,6 +2129,26 @@ mod tests {
         assert_eq!(budget_ledger.reserved_tokens, 0);
 
         store
+            .reserve_budget_tokens("my-over-budget", &key_id, 20, 2)
+            .await
+            .expect("reserve over-budget");
+        store
+            .commit_budget_reservation_with_tokens("my-over-budget", 5)
+            .await
+            .expect("commit over-budget");
+
+        let budget_ledgers = store
+            .list_budget_ledgers()
+            .await
+            .expect("budget ledgers updated");
+        let budget_ledger = budget_ledgers
+            .iter()
+            .find(|ledger| ledger.key_id == key_id)
+            .expect("updated budget ledger for key");
+        assert_eq!(budget_ledger.spent_tokens, 8);
+        assert_eq!(budget_ledger.reserved_tokens, 0);
+
+        store
             .reserve_cost_usd_micros(&request_id_cost, &key_id, 20, 9)
             .await
             .expect("reserve cost");
@@ -2145,6 +2163,26 @@ mod tests {
             .find(|ledger| ledger.key_id == key_id)
             .expect("cost ledger for key");
         assert_eq!(cost_ledger.spent_usd_micros, 4);
+        assert_eq!(cost_ledger.reserved_usd_micros, 0);
+
+        store
+            .reserve_cost_usd_micros("my-over-cost", &key_id, 20, 2)
+            .await
+            .expect("reserve over-cost");
+        store
+            .commit_cost_reservation_with_usd_micros("my-over-cost", 5)
+            .await
+            .expect("commit over-cost");
+
+        let cost_ledgers = store
+            .list_cost_ledgers()
+            .await
+            .expect("cost ledgers updated");
+        let cost_ledger = cost_ledgers
+            .iter()
+            .find(|ledger| ledger.key_id == key_id)
+            .expect("updated cost ledger for key");
+        assert_eq!(cost_ledger.spent_usd_micros, 9);
         assert_eq!(cost_ledger.reserved_usd_micros, 0);
 
         store

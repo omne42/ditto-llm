@@ -1018,17 +1018,12 @@ if (not key_id) then
   return { "OK", "missing_key" }
 end
 
-local committed_tokens = reserved_tokens
-if spent_tokens < committed_tokens then
-  committed_tokens = spent_tokens
-end
-
 local ledger_key = prefix .. ":budget_ledger:" .. key_id
 local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_tokens", -reserved_tokens) or "0") or 0
 if reserved_after < 0 then
   redis.call("HSET", ledger_key, "reserved_tokens", 0)
 end
-redis.call("HINCRBY", ledger_key, "spent_tokens", committed_tokens)
+redis.call("HINCRBY", ledger_key, "spent_tokens", spent_tokens)
 redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
 redis.call("SADD", keys_key, key_id)
 return { "OK", key_id }
@@ -1081,17 +1076,12 @@ if (not key_id) then
   return { "OK", "missing_key" }
 end
 
-local committed_usd_micros = reserved_usd_micros
-if spent_usd_micros < committed_usd_micros then
-  committed_usd_micros = spent_usd_micros
-end
-
 local ledger_key = prefix .. ":cost_ledger:" .. key_id
 local reserved_after = tonumber(redis.call("HINCRBY", ledger_key, "reserved_usd_micros", -reserved_usd_micros) or "0") or 0
 if reserved_after < 0 then
   redis.call("HSET", ledger_key, "reserved_usd_micros", 0)
 end
-redis.call("HINCRBY", ledger_key, "spent_usd_micros", committed_usd_micros)
+redis.call("HINCRBY", ledger_key, "spent_usd_micros", spent_usd_micros)
 redis.call("HSET", ledger_key, "updated_at_ms", ts_ms)
 redis.call("SADD", keys_key, key_id)
 return { "OK", key_id }
@@ -2020,6 +2010,19 @@ mod tests {
         assert_eq!(ledgers[0].reserved_tokens, 0);
 
         store
+            .reserve_budget_tokens("req-4", "key-1", 20, 2)
+            .await
+            .expect("reserve overspend");
+        store
+            .commit_budget_reservation_with_tokens("req-4", 5)
+            .await
+            .expect("commit overspend");
+
+        let ledgers = store.list_budget_ledgers().await.expect("updated ledgers");
+        assert_eq!(ledgers[0].spent_tokens, 8);
+        assert_eq!(ledgers[0].reserved_tokens, 0);
+
+        store
             .reserve_budget_tokens("req-2", "key-1", 10, 7)
             .await
             .expect("reserve 2");
@@ -2052,6 +2055,19 @@ mod tests {
         assert_eq!(ledgers.len(), 1);
         assert_eq!(ledgers[0].key_id, "key-1");
         assert_eq!(ledgers[0].spent_usd_micros, 3);
+        assert_eq!(ledgers[0].reserved_usd_micros, 0);
+
+        store
+            .reserve_cost_usd_micros("req-4", "key-1", 20, 2)
+            .await
+            .expect("reserve overspend");
+        store
+            .commit_cost_reservation_with_usd_micros("req-4", 5)
+            .await
+            .expect("commit overspend");
+
+        let ledgers = store.list_cost_ledgers().await.expect("updated ledgers");
+        assert_eq!(ledgers[0].spent_usd_micros, 8);
         assert_eq!(ledgers[0].reserved_usd_micros, 0);
 
         store
