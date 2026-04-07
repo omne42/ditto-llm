@@ -306,6 +306,17 @@ impl ProxyRequestDedupLeader {
             self.completed = true;
         }
     }
+
+    async fn abandon(&mut self) {
+        if let Some(heartbeat) = self.heartbeat.take() {
+            heartbeat.abort();
+        }
+        let _ = self
+            .persistence
+            .release_proxy_request_idempotency(&self.request_id, &self.owner_token)
+            .await;
+        self.completed = true;
+    }
 }
 
 impl Drop for ProxyRequestDedupLeader {
@@ -473,7 +484,16 @@ pub(super) async fn finish_proxy_request_dedup_result(
     };
 
     match result {
-        Ok(response) => {
+        Ok(mut response) => {
+            if !response.status().is_success() {
+                response.headers_mut().insert(
+                    "x-ditto-request-dedup",
+                    axum::http::HeaderValue::from_static("leader"),
+                );
+                leader.abandon().await;
+                return Ok(response);
+            }
+
             if should_buffer_request_dedup_response(&response, leader.max_snapshot_bytes) {
                 let (outcome, mut buffered) =
                     buffer_response_into_replay_outcome(response, leader.max_snapshot_bytes)
@@ -491,10 +511,10 @@ pub(super) async fn finish_proxy_request_dedup_result(
             }
         }
         Err(err) => {
-            let replay_outcome = replay_error_outcome_from_tuple(&err);
-            leader
-                .complete_outcome(&replay_outcome, REQUEST_DEDUP_REPLAY_TTL_MS)
-                .await;
+            // Upstream failures are transient and must not be replayed for the
+            // full dedup TTL. Releasing the lease allows a retry with the same
+            // client-supplied request id to obtain a fresh upstream attempt.
+            leader.abandon().await;
             Err(err)
         }
     }
@@ -740,19 +760,6 @@ fn error_tuple_from_replay_error(
             },
         }),
     )
-}
-
-fn replay_error_outcome_from_tuple(
-    err: &(StatusCode, Json<OpenAiErrorResponse>),
-) -> ProxyRequestReplayOutcome {
-    ProxyRequestReplayOutcome::Error {
-        status: err.0.as_u16(),
-        error: ProxyRequestReplayError {
-            message: err.1.0.error.message.clone(),
-            kind: err.1.0.error.kind.clone(),
-            code: err.1.0.error.code.clone(),
-        },
-    }
 }
 
 fn replay_unavailable_outcome(

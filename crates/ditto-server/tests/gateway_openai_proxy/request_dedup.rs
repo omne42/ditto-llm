@@ -445,6 +445,86 @@ async fn openai_compat_proxy_rejects_conflicting_request_reuse_by_client_request
 
 #[cfg(feature = "gateway-store-sqlite")]
 #[tokio::test]
+async fn openai_compat_proxy_does_not_replay_failed_request_by_client_request_id() {
+    if ditto_core::utils::test_support::should_skip_httpmock() {
+        return;
+    }
+
+    let upstream = MockServer::start();
+    let mock = upstream.mock(|when, then| {
+        when.method(POST)
+            .path("/v1/responses")
+            .header("authorization", "Bearer sk-test")
+            .header("x-request-id", "req-dedup-failure-1");
+        then.status(503)
+            .header("content-type", "application/json")
+            .body(
+                r#"{"error":{"message":"upstream unavailable","type":"api_error","code":"upstream_unavailable"}}"#,
+            );
+    });
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("gateway.sqlite");
+    let store = ditto_server::gateway::SqliteStore::new(&db_path);
+    store.init().await.expect("init sqlite");
+
+    let config = GatewayConfig {
+        backends: vec![backend_config(
+            "primary",
+            upstream.base_url(),
+            "Bearer sk-test",
+        )],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_sqlite_store(store);
+    let app = ditto_server::gateway::http::router(state);
+
+    let first = app
+        .clone()
+        .oneshot(dedup_test_request("req-dedup-failure-1", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        first
+            .headers()
+            .get("x-ditto-request-dedup")
+            .and_then(|v| v.to_str().ok()),
+        Some("leader")
+    );
+
+    let second = app
+        .oneshot(dedup_test_request("req-dedup-failure-1", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        second
+            .headers()
+            .get("x-ditto-request-dedup")
+            .and_then(|v| v.to_str().ok()),
+        Some("leader")
+    );
+
+    mock.assert_calls(2);
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
 async fn openai_compat_proxy_rejects_request_reuse_when_upstream_headers_change() {
     if ditto_core::utils::test_support::should_skip_httpmock() {
         return;
