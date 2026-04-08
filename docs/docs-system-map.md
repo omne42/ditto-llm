@@ -6,6 +6,8 @@
   - 对外概览、功能面和快速开始。
 - `AGENTS.md`
   - 给执行者的短地图。
+- `docs/README.md`
+  - 版本化文档入口，负责把关键事实路径串起来。
 - `docs/`
   - 版本化事实来源。
 
@@ -31,3 +33,9 @@
 - 不直接维护 `docs/book/`。
 - 当共享基建复用状态变化时，更新边界文档，明确哪些已经落到 `omne_foundation` / `omne-runtime`，哪些仍然是本仓私有实现。
 - `scripts/check-docs-system.sh` 机械检查根入口与关键 docs 骨架。
+
+关键事实入口：
+
+- `docs/architecture/system-boundaries.md`
+- `docs/architecture/source-layout.md`
+- `docs/src/`
