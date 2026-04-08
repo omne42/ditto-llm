@@ -44,6 +44,25 @@ jobs:
         working-directory: ditto-llm
         run: pnpm run build
 
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ditto-llm
+        uses: actions/checkout@v4
+        with:
+          path: ditto-llm
+
+      - name: Install mdBook
+        uses: taiki-e/install-action@mdbook
+
+      - name: docs system check
+        working-directory: ditto-llm
+        run: ./scripts/check-docs-system.sh
+
+      - name: mdbook build docs
+        working-directory: ditto-llm
+        run: mdbook build docs
+
   gateway-contract-guard:
     runs-on: ubuntu-latest
     steps:

@@ -2,6 +2,11 @@
 
 `docs/` 是 `ditto-llm` 的版本化事实入口。
 
+关联入口：
+
+- `README.md`
+- `AGENTS.md`
+
 推荐阅读顺序：
 
 1. `docs/docs-system-map.md`
