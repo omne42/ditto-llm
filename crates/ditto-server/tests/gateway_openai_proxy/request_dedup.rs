@@ -79,9 +79,13 @@ async fn start_chunked_upstream(
         );
         state.hits.fetch_add(1, Ordering::SeqCst);
 
-        let stream = futures_util::stream::iter(state.chunks.iter().copied().map(|chunk| {
-            Ok::<Bytes, Infallible>(Bytes::copy_from_slice(chunk))
-        }));
+        let stream = futures_util::stream::iter(
+            state
+                .chunks
+                .iter()
+                .copied()
+                .map(|chunk| Ok::<Bytes, Infallible>(Bytes::copy_from_slice(chunk))),
+        );
         axum::response::Response::builder()
             .status(StatusCode::OK)
             .header("content-type", state.content_type)
@@ -102,7 +106,9 @@ async fn start_chunked_upstream(
             chunks,
         });
     let server = tokio::spawn(async move {
-        axum::serve(listener, app).await.expect("serve chunked upstream");
+        axum::serve(listener, app)
+            .await
+            .expect("serve chunked upstream");
     });
 
     (format!("http://{addr}"), hits, server)
@@ -718,11 +724,8 @@ async fn openai_compat_proxy_replays_when_only_trace_headers_change() {
 async fn openai_compat_proxy_replays_chunked_non_sse_request_without_content_length() {
     use std::sync::atomic::Ordering;
 
-    let (base_url, hits, upstream) = start_chunked_upstream(
-        "application/json",
-        &[br#"{"id":"resp-"#, br#"chunked"}"#],
-    )
-    .await;
+    let (base_url, hits, upstream) =
+        start_chunked_upstream("application/json", &[br#"{"id":"resp-"#, br#"chunked"}"#]).await;
 
     let dir = tempfile::tempdir().expect("tempdir");
     let db_path = dir.path().join("gateway.sqlite");
@@ -872,4 +875,75 @@ async fn openai_compat_proxy_marks_large_stream_replay_unavailable_by_client_req
     );
 
     mock.assert_calls(1);
+}
+
+#[cfg(feature = "gateway-store-sqlite")]
+#[tokio::test]
+async fn openai_compat_proxy_marks_large_chunked_response_replay_unavailable_without_retrying_upstream()
+ {
+    use std::sync::atomic::Ordering;
+
+    let (base_url, hits, upstream) = start_chunked_upstream(
+        "application/json",
+        &[
+            br#"{"id":"resp-large","output":"#,
+            br#"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"#,
+            br#"}"#,
+        ],
+    )
+    .await;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db_path = dir.path().join("gateway.sqlite");
+    let store = ditto_server::gateway::SqliteStore::new(&db_path);
+    store.init().await.expect("init sqlite");
+
+    let config = GatewayConfig {
+        backends: vec![backend_config("primary", base_url, "Bearer sk-test")],
+        virtual_keys: vec![VirtualKeyConfig::new("key-1", "vk-1")],
+        router: RouterConfig {
+            default_backends: vec![RouteBackend {
+                backend: "primary".to_string(),
+                weight: 1.0,
+            }],
+            rules: Vec::new(),
+        },
+        a2a_agents: Vec::new(),
+        mcp_servers: Vec::new(),
+        observability: Default::default(),
+    };
+    let proxy_backends = build_proxy_backends(&config).expect("proxy backends");
+    let gateway = Gateway::new(config);
+    let state = GatewayHttpState::new(gateway)
+        .with_proxy_backends(proxy_backends)
+        .with_sqlite_store(store)
+        .with_proxy_max_body_bytes(96);
+    let app = ditto_server::gateway::http::router(state);
+
+    let first = app
+        .clone()
+        .oneshot(dedup_test_request("req-dedup-large-chunked", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_body = to_bytes(first.into_body(), usize::MAX).await.unwrap();
+    assert!(first_body.starts_with(br#"{"id":"resp-large""#));
+
+    let second = app
+        .oneshot(dedup_test_request("req-dedup-large-chunked", "hi"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::CONFLICT);
+    let second_body = to_bytes(second.into_body(), usize::MAX).await.unwrap();
+    let parsed: serde_json::Value = serde_json::from_slice(&second_body).unwrap();
+    assert_eq!(
+        parsed
+            .get("error")
+            .and_then(|value| value.get("code"))
+            .and_then(|value| value.as_str()),
+        Some("request_id_replay_unavailable")
+    );
+
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    upstream.abort();
 }

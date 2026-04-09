@@ -7,8 +7,7 @@ use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
 use crate::error::{DittoError, Result};
-use ::secret_kit::runtime::SecretResolutionContext;
-use ::secret_kit::{DefaultSecretResolver, SecretResolver};
+use ::secret_kit::{DefaultSecretResolver, SecretResolutionContext, SecretResolver};
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};

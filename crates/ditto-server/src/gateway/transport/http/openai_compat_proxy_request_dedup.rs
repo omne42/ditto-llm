@@ -373,7 +373,9 @@ pub(super) async fn prepare_proxy_request_dedup(
     let mut persistence = select_proxy_request_dedup_persistence(state);
     let local_fallback = local_proxy_request_dedup_persistence(state);
     let mut tried_local_fallback = !has_persistent_proxy_request_dedup_store(state);
-    let scoped_request_id = scoped_proxy_request_id(request_id, virtual_key_id);
+    let dedup_subject_scope = request_dedup_subject_scope(headers);
+    let scoped_request_id =
+        scoped_proxy_request_id(request_id, virtual_key_id, dedup_subject_scope.as_deref());
     let (fingerprint, fingerprint_key) =
         request_dedup_fingerprint(method, path_and_query, virtual_key_id, headers, body);
     let owner_token = format!("dedup-{}", generate_request_id());
@@ -543,10 +545,15 @@ fn has_persistent_proxy_request_dedup_store(_state: &GatewayHttpState) -> bool {
     false
 }
 
-fn scoped_proxy_request_id(request_id: &str, virtual_key_id: Option<&str>) -> String {
+fn scoped_proxy_request_id(
+    request_id: &str,
+    virtual_key_id: Option<&str>,
+    dedup_subject_scope: Option<&str>,
+) -> String {
     let scope = virtual_key_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .or(dedup_subject_scope)
         .unwrap_or("_global");
     format!("ditto-proxy-request-dedup-v1|{scope}|{request_id}")
 }
@@ -616,6 +623,29 @@ fn request_dedup_upstream_headers(headers: &HeaderMap) -> Vec<StoredHttpHeader> 
     }
 
     stored
+}
+
+fn request_dedup_subject_scope(headers: &HeaderMap) -> Option<String> {
+    let mut hasher = Sha256Hasher::new();
+    let mut saw_identity = false;
+
+    for header_name in [
+        "authorization",
+        "x-api-key",
+        "x-litellm-api-key",
+        "proxy-authorization",
+        "x-forwarded-authorization",
+    ] {
+        for value in headers.get_all(header_name).iter() {
+            hasher.update(header_name.as_bytes());
+            hasher.update(b":");
+            hasher.update(value.as_bytes());
+            hasher.update(b"|");
+            saw_identity = true;
+        }
+    }
+
+    saw_identity.then(|| format!("auth:{}", hasher.finalize()))
 }
 
 fn request_dedup_header_affects_upstream(header: &str) -> bool {
@@ -1171,5 +1201,50 @@ mod tests {
         };
         assert_eq!(replay.0, StatusCode::CONFLICT);
         assert_eq!(replay.1.error.code.as_deref(), Some("request_id_conflict"));
+    }
+
+    #[tokio::test]
+    async fn request_id_dedup_is_isolated_by_auth_subject_without_virtual_key() {
+        let state = test_gateway_http_state();
+        let method = axum::http::Method::POST;
+        let request_id = "req-auth-scope";
+
+        let mut first_headers = HeaderMap::new();
+        first_headers.insert(
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderValue::from_static("Bearer token-a"),
+        );
+        let first = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &first_headers,
+            body: &Bytes::from_static(br#"{"prompt":"hello"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: None,
+        })
+        .await
+        .expect("first request should acquire dedup leadership");
+        assert!(matches!(first, ProxyRequestDedupDecision::Leader(_)));
+
+        let mut second_headers = HeaderMap::new();
+        second_headers.insert(
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderValue::from_static("Bearer token-b"),
+        );
+        let second = prepare_proxy_request_dedup(PrepareProxyRequestDedupInput {
+            state: &state,
+            method: &method,
+            path_and_query: "/v1/chat/completions",
+            headers: &second_headers,
+            body: &Bytes::from_static(br#"{"prompt":"hello"}"#),
+            request_id,
+            client_supplied_request_id: true,
+            virtual_key_id: None,
+        })
+        .await
+        .expect("different auth subjects should not conflict");
+        assert!(matches!(second, ProxyRequestDedupDecision::Leader(_)));
     }
 }
