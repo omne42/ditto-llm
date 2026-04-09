@@ -92,6 +92,33 @@ pub(crate) fn write_unpoisoned<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
         .expect("gateway rwlock poisoned; refusing to continue with inconsistent state")
 }
 
+pub(crate) fn normalize_scope_id(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|id| !id.is_empty())
+}
+
+pub(crate) fn tenant_scope_key(tenant_id: Option<&str>) -> Option<String> {
+    normalize_scope_id(tenant_id).map(|tenant_id| format!("tenant:{tenant_id}"))
+}
+
+pub(crate) fn project_scope_key(
+    tenant_id: Option<&str>,
+    project_id: Option<&str>,
+) -> Option<String> {
+    let project_id = normalize_scope_id(project_id)?;
+    if let Some(tenant_id) = normalize_scope_id(tenant_id) {
+        return Some(format!("tenant:{tenant_id}:project:{project_id}"));
+    }
+    Some(format!("project:{project_id}"))
+}
+
+pub(crate) fn user_scope_key(tenant_id: Option<&str>, user_id: Option<&str>) -> Option<String> {
+    let user_id = normalize_scope_id(user_id)?;
+    if let Some(tenant_id) = normalize_scope_id(tenant_id) {
+        return Some(format!("tenant:{tenant_id}:user:{user_id}"));
+    }
+    Some(format!("user:{user_id}"))
+}
+
 pub use adapters::backend::{HttpBackend, ProxyBackend};
 #[cfg(feature = "gateway-proxy-cache")]
 pub use adapters::cache::{
@@ -223,6 +250,8 @@ fn control_plane_cache_key(key_id: &str, backend_name: &str, request: &GatewayRe
     hasher.update(b"|");
     hasher.update(u64::from(request.max_output_tokens).to_le_bytes());
     hasher.update(b"|");
+    hasher.update([u8::from(request.passthrough)]);
+    hasher.update(b"|");
     hasher.update(request.prompt.as_bytes());
     hasher.update(b"|");
     hasher.update(
@@ -353,6 +382,29 @@ mod tests {
 
         let cache_key_a = control_plane_cache_key("vk_1", "primary", &request);
         let cache_key_b = control_plane_cache_key("vk_1", "secondary", &request);
+
+        assert_eq!(cache_key_a.len(), 64);
+        assert_eq!(cache_key_b.len(), 64);
+        assert_ne!(cache_key_a, cache_key_b);
+    }
+
+    #[test]
+    fn control_plane_cache_key_changes_when_passthrough_changes() {
+        let request_a = GatewayRequest {
+            virtual_key: "sk-test-secret".to_string(),
+            model: "gpt-test".to_string(),
+            prompt: "hello prompt".to_string(),
+            input_tokens: 1,
+            max_output_tokens: 2,
+            passthrough: false,
+        };
+        let request_b = GatewayRequest {
+            passthrough: true,
+            ..request_a.clone()
+        };
+
+        let cache_key_a = control_plane_cache_key("vk_1", "primary", &request_a);
+        let cache_key_b = control_plane_cache_key("vk_1", "primary", &request_b);
 
         assert_eq!(cache_key_a.len(), 64);
         assert_eq!(cache_key_b.len(), 64);
@@ -1460,31 +1512,16 @@ impl Gateway {
         for key in &virtual_keys {
             scopes.insert(key.id.clone());
 
-            if let Some(tenant_id) = key
-                .tenant_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-            {
-                scopes.insert(format!("tenant:{tenant_id}"));
+            if let Some(scope) = tenant_scope_key(key.tenant_id.as_deref()) {
+                scopes.insert(scope);
             }
-
-            if let Some(project_id) = key
-                .project_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
+            if let Some(scope) =
+                project_scope_key(key.tenant_id.as_deref(), key.project_id.as_deref())
             {
-                scopes.insert(format!("project:{project_id}"));
+                scopes.insert(scope);
             }
-
-            if let Some(user_id) = key
-                .user_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-            {
-                scopes.insert(format!("user:{user_id}"));
+            if let Some(scope) = user_scope_key(key.tenant_id.as_deref(), key.user_id.as_deref()) {
+                scopes.insert(scope);
             }
         }
 
@@ -1517,30 +1554,27 @@ impl Gateway {
         let tenant_limit_scope = key
             .tenant_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
+            .and_then(|tenant_id| tenant_scope_key(Some(tenant_id)))
             .zip(key.tenant_limits.as_ref())
-            .map(|(tenant_id, limits)| (format!("tenant:{tenant_id}"), limits));
+            .map(|(scope, limits)| (scope, limits));
         if let Some((scope, limits)) = tenant_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
         let project_limit_scope = key
             .project_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
+            .and_then(|project_id| project_scope_key(key.tenant_id.as_deref(), Some(project_id)))
             .zip(key.project_limits.as_ref())
-            .map(|(project_id, limits)| (format!("project:{project_id}"), limits));
+            .map(|(scope, limits)| (scope, limits));
         if let Some((scope, limits)) = project_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
         let user_limit_scope = key
             .user_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
+            .and_then(|user_id| user_scope_key(key.tenant_id.as_deref(), Some(user_id)))
             .zip(key.user_limits.as_ref())
-            .map(|(user_id, limits)| (format!("user:{user_id}"), limits));
+            .map(|(scope, limits)| (scope, limits));
         if let Some((scope, limits)) = user_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
@@ -1620,32 +1654,29 @@ impl Gateway {
         let tenant_budget_scope = key
             .tenant_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .and_then(|tenant_id| {
+            .and_then(|tenant_id| tenant_scope_key(Some(tenant_id)))
+            .and_then(|scope| {
                 key.tenant_budget
                     .as_ref()
-                    .map(|budget| (format!("tenant:{tenant_id}"), budget.clone()))
+                    .map(|budget| (scope, budget.clone()))
             });
         let project_budget_scope = key
             .project_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .and_then(|project_id| {
+            .and_then(|project_id| project_scope_key(key.tenant_id.as_deref(), Some(project_id)))
+            .and_then(|scope| {
                 key.project_budget
                     .as_ref()
-                    .map(|budget| (format!("project:{project_id}"), budget.clone()))
+                    .map(|budget| (scope, budget.clone()))
             });
         let user_budget_scope = key
             .user_id
             .as_deref()
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .and_then(|user_id| {
+            .and_then(|user_id| user_scope_key(key.tenant_id.as_deref(), Some(user_id)))
+            .and_then(|scope| {
                 key.user_budget
                     .as_ref()
-                    .map(|budget| (format!("user:{user_id}"), budget.clone()))
+                    .map(|budget| (scope, budget.clone()))
             });
 
         let mut budget_scopes = vec![(&key.id[..], &key.budget)];

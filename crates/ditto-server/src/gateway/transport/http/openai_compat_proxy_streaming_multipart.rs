@@ -269,9 +269,7 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         let tenant_scope = key
             .as_ref()
             .and_then(|key| key.tenant_id.as_deref())
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(|id| format!("tenant:{id}"));
+            .and_then(|id| crate::gateway::tenant_scope_key(Some(id)));
         let tenant_budget_scope = key.as_ref().and_then(|key| {
             tenant_scope.as_ref().and_then(|scope| {
                 key.tenant_budget
@@ -290,9 +288,12 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         let project_scope = key
             .as_ref()
             .and_then(|key| key.project_id.as_deref())
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(|id| format!("project:{id}"));
+            .and_then(|id| {
+                crate::gateway::project_scope_key(
+                    key.as_ref().and_then(|key| key.tenant_id.as_deref()),
+                    Some(id),
+                )
+            });
         let project_budget_scope = key.as_ref().and_then(|key| {
             project_scope.as_ref().and_then(|scope| {
                 key.project_budget
@@ -311,9 +312,12 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         let user_scope = key
             .as_ref()
             .and_then(|key| key.user_id.as_deref())
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(|id| format!("user:{id}"));
+            .and_then(|id| {
+                crate::gateway::user_scope_key(
+                    key.as_ref().and_then(|key| key.tenant_id.as_deref()),
+                    Some(id),
+                )
+            });
         let user_budget_scope = key.as_ref().and_then(|key| {
             user_scope.as_ref().and_then(|scope| {
                 key.user_budget

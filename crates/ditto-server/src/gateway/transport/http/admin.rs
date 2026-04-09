@@ -88,8 +88,8 @@ fn tenant_allowed_scopes(
 ) -> std::collections::HashSet<String> {
     let tenant_id = tenant_id.trim();
     let mut scopes = std::collections::HashSet::<String>::new();
-    if !tenant_id.is_empty() {
-        scopes.insert(format!("tenant:{tenant_id}"));
+    if let Some(scope) = crate::gateway::tenant_scope_key(Some(tenant_id)) {
+        scopes.insert(scope);
     }
 
     for key in keys {
@@ -98,22 +98,16 @@ fn tenant_allowed_scopes(
         }
         scopes.insert(key.id.clone());
 
-        if let Some(project_id) = key
-            .project_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        if let Some(scope) =
+            crate::gateway::project_scope_key(key.tenant_id.as_deref(), key.project_id.as_deref())
         {
-            scopes.insert(format!("project:{project_id}"));
+            scopes.insert(scope);
         }
 
-        if let Some(user_id) = key
-            .user_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
+        if let Some(scope) =
+            crate::gateway::user_scope_key(key.tenant_id.as_deref(), key.user_id.as_deref())
         {
-            scopes.insert(format!("user:{user_id}"));
+            scopes.insert(scope);
         }
     }
 
@@ -2749,6 +2743,21 @@ mod admin_auth_tests {
         let (status, Json(body)) = ensure_admin_write(&state, &headers).unwrap_err();
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body.error.code, "not_configured");
+    }
+
+    #[test]
+    fn tenant_allowed_scopes_namespaces_project_and_user_ids() {
+        let mut key = VirtualKeyConfig::new("key-1", "vk-1");
+        key.tenant_id = Some("tenant-1".to_string());
+        key.project_id = Some("project-1".to_string());
+        key.user_id = Some("user-1".to_string());
+
+        let scopes = tenant_allowed_scopes(&[key], "tenant-1");
+        assert!(scopes.contains("tenant:tenant-1"));
+        assert!(scopes.contains("tenant:tenant-1:project:project-1"));
+        assert!(scopes.contains("tenant:tenant-1:user:user-1"));
+        assert!(!scopes.contains("project:project-1"));
+        assert!(!scopes.contains("user:user-1"));
     }
 }
 // end inline: admin/auth.rs
