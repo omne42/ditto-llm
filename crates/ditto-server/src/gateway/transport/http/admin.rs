@@ -2745,6 +2745,12 @@ mod admin_auth_tests {
         assert_eq!(body.error.code, "not_configured");
     }
 
+    #[cfg(any(
+        feature = "gateway-store-sqlite",
+        feature = "gateway-store-postgres",
+        feature = "gateway-store-mysql",
+        feature = "gateway-store-redis"
+    ))]
     #[test]
     fn tenant_allowed_scopes_namespaces_project_and_user_ids() {
         let mut key = VirtualKeyConfig::new("key-1", "vk-1");
