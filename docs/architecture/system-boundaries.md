@@ -9,6 +9,7 @@
 - `ditto-core` 中的 provider adapters、capability types、warnings、stream semantics、runtime routing
 - native provider 协议与 OpenAI-compatible surface 之间的 shape conversion / translation
 - `ditto-server` gateway 的 auth、routing、budgets、cache、audit、admin、translation / passthrough HTTP surfaces
+- `ditto-server::gateway::*` 根级 facade 与必要兼容 shim；`gateway` 内部 `domain / application / transport / adapters` 目录不作为对外稳定边界
 - provider catalog、gateway contract、客户端包和部署模板
 
 ## 已复用的共享基建
