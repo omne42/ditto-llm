@@ -1555,8 +1555,7 @@ impl Gateway {
             .tenant_id
             .as_deref()
             .and_then(|tenant_id| tenant_scope_key(Some(tenant_id)))
-            .zip(key.tenant_limits.as_ref())
-            .map(|(scope, limits)| (scope, limits));
+            .zip(key.tenant_limits.as_ref());
         if let Some((scope, limits)) = tenant_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
@@ -1564,8 +1563,7 @@ impl Gateway {
             .project_id
             .as_deref()
             .and_then(|project_id| project_scope_key(key.tenant_id.as_deref(), Some(project_id)))
-            .zip(key.project_limits.as_ref())
-            .map(|(scope, limits)| (scope, limits));
+            .zip(key.project_limits.as_ref());
         if let Some((scope, limits)) = project_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
@@ -1573,8 +1571,7 @@ impl Gateway {
             .user_id
             .as_deref()
             .and_then(|user_id| user_scope_key(key.tenant_id.as_deref(), Some(user_id)))
-            .zip(key.user_limits.as_ref())
-            .map(|(scope, limits)| (scope, limits));
+            .zip(key.user_limits.as_ref());
         if let Some((scope, limits)) = user_limit_scope.as_ref() {
             rate_limit_scopes.push((scope.as_str(), *limits));
         }
