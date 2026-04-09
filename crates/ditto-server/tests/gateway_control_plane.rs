@@ -655,7 +655,7 @@ async fn user_budget_is_isolated_by_tenant_namespace() {
     key_1.tenant_id = Some("tenant-1".to_string());
     key_1.user_id = Some("user-1".to_string());
     key_1.user_budget = Some(BudgetConfig {
-        total_tokens: Some(5),
+        total_tokens: Some(10),
         total_usd_micros: None,
     });
 
@@ -663,7 +663,7 @@ async fn user_budget_is_isolated_by_tenant_namespace() {
     key_2.tenant_id = Some("tenant-2".to_string());
     key_2.user_id = Some("user-1".to_string());
     key_2.user_budget = Some(BudgetConfig {
-        total_tokens: Some(5),
+        total_tokens: Some(10),
         total_usd_micros: None,
     });
 
