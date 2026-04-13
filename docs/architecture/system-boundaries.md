@@ -19,6 +19,8 @@
   - 用于可复用的 write-scope 等策略元语义。
 - `omne-runtime/omne-integrity-primitives`
   - 用于 SHA-256、审计链等完整性原语。
+- `omne-runtime/omne-fs-primitives`
+  - 用于 gateway state file 等场景的 canonical atomic file write 原语。
 - 其他足够通用的 foundation kits
   - 例如 i18n、secret、text assets 等非产品专属语义。
 

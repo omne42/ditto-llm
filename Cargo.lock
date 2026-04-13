@@ -423,7 +423,7 @@ dependencies = [
 name = "config-kit"
 version = "0.1.0"
 dependencies = [
- "omne-fs-primitives",
+ "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -570,7 +570,7 @@ dependencies = [
  "i18n-kit",
  "i18n-runtime-kit",
  "omne-fs",
- "policy-meta",
+ "policy-meta 0.1.0",
  "regex",
  "reqwest",
  "secret-kit",
@@ -603,6 +603,7 @@ dependencies = [
  "getrandom 0.4.0",
  "httpmock",
  "i18n-kit",
+ "omne-fs-primitives 0.1.0",
  "omne-integrity-primitives",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -1667,8 +1668,8 @@ dependencies = [
  "globset",
  "libc",
  "memchr",
- "omne-fs-primitives",
- "policy-meta",
+ "omne-fs-primitives 0.1.0",
+ "policy-meta 0.1.0 (git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441)",
  "regex",
  "same-file",
  "serde",
@@ -1681,6 +1682,20 @@ dependencies = [
 [[package]]
 name = "omne-fs-primitives"
 version = "0.1.0"
+dependencies = [
+ "cap-fs-ext",
+ "cap-std",
+ "fs2",
+ "libc",
+ "rustix",
+ "tempfile",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "omne-fs-primitives"
+version = "0.1.0"
+source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -1700,12 +1715,21 @@ dependencies = [
 [[package]]
 name = "omne-process-primitives"
 version = "0.1.0"
+source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 dependencies = [
+ "omne-system-package-primitives",
  "rustix",
+ "same-file",
  "sysinfo",
+ "tempfile",
  "tokio",
  "win32job",
 ]
+
+[[package]]
+name = "omne-system-package-primitives"
+version = "0.1.0"
+source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 
 [[package]]
 name = "once_cell"
@@ -1922,6 +1946,21 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "ts-rs",
+]
+
+[[package]]
+name = "policy-meta"
+version = "0.1.0"
+source = "git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441#7de481c4f3f78ca36ad56b0cdd09dc0043f5d441"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
  "ts-rs",
 ]
 
@@ -2427,7 +2466,7 @@ name = "secret-kit"
 version = "0.1.0"
 dependencies = [
  "error-kit",
- "omne-fs-primitives",
+ "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
  "omne-process-primitives",
  "serde_json",
  "structured-text-kit",
@@ -2969,7 +3008,8 @@ dependencies = [
 name = "text-assets-kit"
 version = "0.1.0"
 dependencies = [
- "omne-fs-primitives",
+ "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
+ "rustix",
 ]
 
 [[package]]

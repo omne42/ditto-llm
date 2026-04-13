@@ -8,6 +8,8 @@ use ditto_server::gateway::{
     GatewayResponse, GatewayStateFile, RouteBackend, RouterConfig,
 };
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tower::util::ServiceExt;
 
 struct EchoBackend;
@@ -189,4 +191,37 @@ fn state_file_load_is_backward_compatible_without_router_field() {
     let loaded = GatewayStateFile::load(&state_path).expect("state file load");
     assert!(loaded.virtual_keys.is_empty());
     assert!(loaded.router.is_none());
+}
+
+#[test]
+fn state_file_save_creates_parent_directories() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let state_path = dir.path().join("nested/state/gateway-state.json");
+    let state_file = GatewayStateFile {
+        virtual_keys: Vec::new(),
+        router: None,
+    };
+
+    state_file.save(&state_path).expect("state file save");
+    assert!(state_path.exists());
+
+    let loaded = GatewayStateFile::load(&state_path).expect("state file load");
+    assert!(loaded.virtual_keys.is_empty());
+    assert!(loaded.router.is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn state_file_save_sets_restricted_permissions_on_unix() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let state_path = dir.path().join("gateway-state.json");
+    let state_file = GatewayStateFile {
+        virtual_keys: Vec::new(),
+        router: None,
+    };
+
+    state_file.save(&state_path).expect("state file save");
+
+    let permissions = fs::metadata(&state_path).expect("metadata").permissions();
+    assert_eq!(permissions.mode() & 0o777, 0o600);
 }
