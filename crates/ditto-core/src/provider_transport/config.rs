@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use http_kit::{
+    HttpClientOptions, build_http_client_with_options, parse_header_map_from_str_pairs,
+};
+use reqwest::header::HeaderMap;
 
 use crate::error::{DittoError, Result};
 
@@ -20,43 +23,29 @@ pub(crate) const DEFAULT_HTTP_TIMEOUT: Duration =
     Duration::from_secs(super::policy::DEFAULT_HTTP_TIMEOUT_SECS);
 
 pub(crate) fn header_map_from_pairs(headers: &BTreeMap<String, String>) -> Result<HeaderMap> {
-    let mut out = HeaderMap::new();
-    for (name, value) in headers {
-        let name = name.trim();
-        if name.is_empty() {
-            continue;
-        }
-        let header_name = HeaderName::from_bytes(name.as_bytes()).map_err(|err| {
-            crate::invalid_response!(
-                "error_detail.http.header_name_invalid",
-                "name" => name,
-                "error" => err.to_string()
-            )
-        })?;
-
-        let header_value = HeaderValue::from_str(value).map_err(|err| {
-            crate::invalid_response!(
-                "error_detail.http.header_value_invalid",
-                "name" => name,
-                "value" => value,
-                "error" => err.to_string()
-            )
-        })?;
-
-        out.insert(header_name, header_value);
-    }
-    Ok(out)
+    parse_header_map_from_str_pairs(
+        headers
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str())),
+    )
+    .map_err(|err| DittoError::invalid_response_text(err))
 }
 
 pub(crate) fn build_http_client_with_policy(
     policy: HttpClientPolicy,
     headers: &BTreeMap<String, String>,
 ) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder().timeout(policy.timeout());
-    if !headers.is_empty() {
-        builder = builder.default_headers(header_map_from_pairs(headers)?);
-    }
-    builder.build().map_err(DittoError::Http)
+    let default_headers = if headers.is_empty() {
+        HeaderMap::new()
+    } else {
+        header_map_from_pairs(headers)?
+    };
+    let options = HttpClientOptions {
+        timeout: Some(policy.timeout()),
+        default_headers,
+        ..HttpClientOptions::default()
+    };
+    build_http_client_with_options(&options).map_err(|err| DittoError::invalid_response_text(err))
 }
 
 #[cfg(any(feature = "provider-bedrock", feature = "provider-vertex"))]

@@ -17,6 +17,8 @@
   - 用于严格配置文档加载，以及 JSON/TOML/YAML 感知的解析入口。
 - `omne_foundation/policy-meta`
   - 用于可复用的 write-scope 等策略元语义。
+- `omne_foundation/http-kit`
+  - 用于通用 HTTP client 构建、header 解析与 bounded response body primitives；Ditto 只保留 provider/gateway 语义与错误映射。
 - `omne-runtime/omne-integrity-primitives`
   - 用于 SHA-256、审计链等完整性原语。
 - 其他足够通用的 foundation kits
