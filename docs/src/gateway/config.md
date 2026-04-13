@@ -181,6 +181,8 @@ Gateway 支持在以下字段使用 `${ENV_VAR}`：
 - `os.environ/ENV_KEY`
 - `secret://...`
 
+`${ENV_KEY}` 使用 `config-kit` 的通用插值规则，变量名需符合 `[A-Za-z_][A-Za-z0-9_]*`。
+
 
 若 env 缺失或为空，启动会失败（避免 silent misconfig）。
 

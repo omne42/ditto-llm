@@ -14,7 +14,7 @@
 ## 已复用的共享基建
 
 - `omne_foundation/config-kit`
-  - 用于严格配置文档加载，以及 JSON/TOML/YAML 感知的解析入口。
+  - 用于严格配置文档加载、`JSON/TOML/YAML` 感知解析入口，以及通用 `${VAR}` 环境变量插值。
 - `omne_foundation/policy-meta`
   - 用于可复用的 write-scope 等策略元语义。
 - `omne-runtime/omne-integrity-primitives`

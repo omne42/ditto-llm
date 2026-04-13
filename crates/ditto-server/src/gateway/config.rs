@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use config_kit::{EnvInterpolationOptions, interpolate_env_placeholders_with};
 use omne_integrity_primitives::hash_sha256;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -465,62 +466,74 @@ fn expand_env_placeholders(value: &str, env: &Env) -> Result<String, super::Gate
         return Ok(resolved);
     }
 
-    let bytes = value.as_bytes();
-    let mut out = String::with_capacity(value.len());
-    let mut idx = 0;
-    let mut last = 0;
-
-    while idx < bytes.len() {
-        if bytes[idx] != b'$' || idx + 1 >= bytes.len() || bytes[idx + 1] != b'{' {
-            idx += 1;
-            continue;
-        }
-
-        let placeholder_start = idx + 2;
-        let mut end = None;
-        for (pos, byte) in bytes[placeholder_start..].iter().copied().enumerate() {
-            if byte == b'}' {
-                end = Some(placeholder_start + pos);
-                break;
+    let mut empty_env_var: Option<String> = None;
+    interpolate_env_placeholders_with(value, EnvInterpolationOptions::default(), |name| match env
+        .get(name)
+    {
+        Some(resolved) if !resolved.trim().is_empty() => Some(resolved),
+        Some(_) => {
+            if empty_env_var.is_none() {
+                empty_env_var = Some(name.to_string());
             }
+            None
         }
+        None => None,
+    })
+    .map_err(|err| map_env_interpolation_error(err, empty_env_var.as_deref()))
+}
 
-        let Some(placeholder_end) = end else {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: "unterminated env placeholder".to_string(),
-            });
+fn map_env_interpolation_error(
+    err: config_kit::Error,
+    empty_env_var: Option<&str>,
+) -> super::GatewayError {
+    if let Some(name) = empty_env_var {
+        return super::GatewayError::InvalidRequest {
+            reason: format!("env var is empty: {name}"),
         };
+    }
 
-        let name = &value[placeholder_start..placeholder_end];
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: "empty env placeholder".to_string(),
-            });
+    if let config_kit::Error::EnvInterpolation { message } = err {
+        if message == "unterminated ${...} placeholder" {
+            return super::GatewayError::InvalidRequest {
+                reason: "unterminated env placeholder".to_string(),
+            };
         }
 
-        let resolved = env
-            .get(name)
-            .ok_or_else(|| super::GatewayError::InvalidRequest {
+        if let Some(name) = extract_env_var_name(&message) {
+            return super::GatewayError::InvalidRequest {
                 reason: format!("missing env var: {name}"),
-            })?;
-
-        if resolved.trim().is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: format!("env var is empty: {name}"),
-            });
+            };
         }
 
-        out.push_str(&value[last..idx]);
-        out.push_str(&resolved);
-        idx = placeholder_end + 1;
-        last = idx;
+        if let Some(name) = extract_invalid_env_var_name(&message) {
+            if name.is_empty() {
+                return super::GatewayError::InvalidRequest {
+                    reason: "empty env placeholder".to_string(),
+                };
+            }
+            return super::GatewayError::InvalidRequest {
+                reason: format!("invalid env var name: {name}"),
+            };
+        }
+
+        return super::GatewayError::InvalidRequest { reason: message };
     }
 
-    if last < value.len() {
-        out.push_str(&value[last..]);
+    super::GatewayError::InvalidRequest {
+        reason: err.to_string(),
     }
-    Ok(out)
+}
+
+fn extract_env_var_name(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("env var \"")?
+        .strip_suffix("\" is not set")
+}
+
+fn extract_invalid_env_var_name(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("invalid env var name \"")?
+        .strip_suffix('"')
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -854,6 +867,61 @@ mod tests {
 
         let err = backend.resolve_env(&env).expect_err("missing env");
         assert!(err.to_string().contains("env var is empty: OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn backend_config_rejects_invalid_env_var_name() {
+        let env = Env {
+            dotenv: BTreeMap::new(),
+        };
+
+        let mut backend = BackendConfig {
+            name: "primary".to_string(),
+            base_url: "https://example.com".to_string(),
+            max_in_flight: None,
+            timeout_seconds: None,
+            headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer ${OPENAI-API-KEY}".to_string(),
+            )]),
+            query_params: BTreeMap::new(),
+            provider: None,
+            provider_config: None,
+            model_map: BTreeMap::new(),
+        };
+
+        let err = backend.resolve_env(&env).expect_err("invalid env var name");
+        assert!(
+            err.to_string()
+                .contains("invalid env var name: OPENAI-API-KEY")
+        );
+    }
+
+    #[test]
+    fn backend_config_errors_for_unterminated_placeholder() {
+        let env = Env {
+            dotenv: BTreeMap::from([("OPENAI_API_KEY".to_string(), "sk-test".to_string())]),
+        };
+
+        let mut backend = BackendConfig {
+            name: "primary".to_string(),
+            base_url: "https://example.com".to_string(),
+            max_in_flight: None,
+            timeout_seconds: None,
+            headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer ${OPENAI_API_KEY".to_string(),
+            )]),
+            query_params: BTreeMap::new(),
+            provider: None,
+            provider_config: None,
+            model_map: BTreeMap::new(),
+        };
+
+        let err = backend
+            .resolve_env(&env)
+            .expect_err("unterminated placeholder");
+        assert!(err.to_string().contains("unterminated env placeholder"));
     }
 
     #[test]
