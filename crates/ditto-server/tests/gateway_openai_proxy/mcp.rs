@@ -4,36 +4,19 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions() {
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_mock = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
+            }
+        }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_mock = openai_upstream.mock(|when, then| {
@@ -87,7 +70,7 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions() {
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -119,7 +102,7 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions() {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes, r#"{"id":"ok"}"#);
 
-    mcp_mock.assert();
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
     openai_mock.assert();
 }
 
@@ -129,59 +112,22 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_when_require_approval_
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_list = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
-    let mcp_call = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "hello",
-                "arguments": { "who": "world" }
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
             }
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "content": [{ "type": "text", "text": "hi world" }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+        }]
+    })));
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "content": [{ "type": "text", "text": "hi world" }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_initial = openai_upstream.mock(|when, then| {
@@ -299,7 +245,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_when_require_approval_
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -332,8 +278,8 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_when_require_approval_
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes, r#"{"id":"final"}"#);
 
-    mcp_list.assert();
-    mcp_call.assert();
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
+    assert_eq!(mcp_upstream.requests_for_method("tools/call").len(), 1);
     openai_initial.assert();
     openai_follow_up.assert();
 }
@@ -344,36 +290,19 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions_for_respon
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_mock = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
+            }
+        }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_mock = openai_upstream.mock(|when, then| {
@@ -430,7 +359,7 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions_for_respon
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -462,7 +391,7 @@ async fn openai_compat_proxy_rewrites_mcp_tools_into_openai_functions_for_respon
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes, r#"{"id":"ok"}"#);
 
-    mcp_mock.assert();
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
     openai_mock.assert();
 }
 
@@ -473,59 +402,22 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_when_req
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_list = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
-    let mcp_call = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "hello",
-                "arguments": { "who": "world" }
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
             }
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "content": [{ "type": "text", "text": "hi world" }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+        }]
+    })));
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "content": [{ "type": "text", "text": "hi world" }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_initial = openai_upstream.mock(|when, then| {
@@ -624,7 +516,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_when_req
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -657,8 +549,8 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_when_req
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes, r#"{"id":"final"}"#);
 
-    mcp_list.assert();
-    mcp_call.assert();
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
+    assert_eq!(mcp_upstream.requests_for_method("tools/call").len(), 1);
     openai_initial.assert();
     openai_follow_up.assert();
 }
@@ -670,59 +562,22 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_via_shim
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_list = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
-    let mcp_call = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "hello",
-                "arguments": { "who": "world" }
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
             }
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "content": [{ "type": "text", "text": "hi world" }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+        }]
+    })));
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "content": [{ "type": "text", "text": "hi world" }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_responses_404 = openai_upstream.mock(|when, then| {
@@ -861,7 +716,7 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_via_shim
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -900,8 +755,8 @@ async fn openai_compat_proxy_auto_executes_mcp_tool_calls_for_responses_via_shim
         Some("done")
     );
 
-    mcp_list.assert();
-    mcp_call.assert();
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
+    assert_eq!(mcp_upstream.requests_for_method("tools/call").len(), 1);
     openai_responses_404.assert();
     openai_chat_initial.assert();
     openai_chat_follow_up.assert();

@@ -106,6 +106,8 @@ integration = ["ditto_core/integration"]
 config-kit = { path = "../../../omne_foundation/crates/config-kit" }
 ditto_core = { package = "ditto-core", path = "../ditto-core", default-features = false }
 i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
+mcp-jsonrpc = { path = "../../../omne_foundation/crates/mcp-jsonrpc" }
+mcp-kit = { path = "../../../omne_foundation/crates/mcp-kit" }
 secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
 text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
 omne-integrity-primitives = { path = "../../../omne-runtime/crates/omne-integrity-primitives" }

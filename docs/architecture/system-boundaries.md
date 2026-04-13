@@ -17,6 +17,8 @@
   - 用于严格配置文档加载，以及 JSON/TOML/YAML 感知的解析入口。
 - `omne_foundation/policy-meta`
   - 用于可复用的 write-scope 等策略元语义。
+- `omne_foundation/mcp-kit`
+  - 用于远端 MCP `streamable_http` session、初始化握手与通用请求传输。
 - `omne-runtime/omne-integrity-primitives`
   - 用于 SHA-256、审计链等完整性原语。
 - 其他足够通用的 foundation kits
@@ -25,6 +27,7 @@
 ## 继续留在本仓的能力
 
 - provider-specific HTTP / streaming quirks 与协议归一化
+- MCP server 选择、多 server tool 前缀、cursor/cache 策略与 OpenAI-compatible MCP 产品语义
 - provider catalog 形状和 runtime resolution 逻辑
 - gateway translation 语义、控制面数据模型和产品级 feature slicing
 - L0 / L1 边界与 Ditto 自己的产品路线

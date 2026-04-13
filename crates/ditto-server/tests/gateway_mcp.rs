@@ -7,10 +7,13 @@ use axum::http::{Request, StatusCode};
 use ditto_server::gateway::{
     Gateway, GatewayConfig, GatewayHttpState, RouteBackend, RouterConfig, VirtualKeyConfig,
 };
-use httpmock::Method::POST;
 use httpmock::MockServer;
 use serde_json::{Value, json};
 use tower::util::ServiceExt;
+
+mod mcp_streamable_http_support;
+
+use mcp_streamable_http_support::{ResponseSpec, TestMcpStreamableHttpServer};
 
 fn base_config() -> GatewayConfig {
     GatewayConfig {
@@ -40,41 +43,24 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_cor
         return Ok(());
     }
 
-    let upstream = MockServer::start();
-    let upstream_mock = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+    let upstream = TestMcpStreamableHttpServer::start().await;
+    upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
+            }
+        }]
+    })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -110,7 +96,7 @@ async fn gateway_mcp_jsonrpc_tools_list_proxies_and_returns_tools() -> ditto_cor
         Some("hello")
     );
 
-    upstream_mock.assert();
+    assert_eq!(upstream.requests_for_method("tools/list").len(), 1);
     Ok(())
 }
 
@@ -120,48 +106,19 @@ async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_core::er
         return Ok(());
     }
 
-    let upstream = MockServer::start();
-    let page_1 = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [{ "name": "t1", "inputSchema": {} }], "nextCursor": "c1" }
-                })
-                .to_string(),
-            );
-    });
-    let page_2 = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": { "cursor": "c1" },
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [{ "name": "t2", "inputSchema": {} }] }
-                })
-                .to_string(),
-            );
-    });
+    let upstream = TestMcpStreamableHttpServer::start().await;
+    upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{ "name": "t1", "inputSchema": {} }],
+        "nextCursor": "c1",
+    })));
+    upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{ "name": "t2", "inputSchema": {} }],
+    })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -205,8 +162,17 @@ async fn gateway_mcp_tools_list_autopaginates_until_complete() -> ditto_core::er
             .is_none()
     );
 
-    page_1.assert();
-    page_2.assert();
+    let requests = upstream.requests_for_method("tools/list");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(
+        requests[1]
+            .json_body
+            .as_ref()
+            .and_then(|body| body.get("params"))
+            .and_then(|value| value.get("cursor"))
+            .and_then(|value| value.as_str()),
+        Some("c1")
+    );
     Ok(())
 }
 
@@ -216,30 +182,16 @@ async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_core:
         return Ok(());
     }
 
-    let upstream = MockServer::start();
-    let page = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": { "cursor": "c1" },
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [{ "name": "t2", "inputSchema": {} }], "nextCursor": "c2" }
-                })
-                .to_string(),
-            );
-    });
+    let upstream = TestMcpStreamableHttpServer::start().await;
+    upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{ "name": "t2", "inputSchema": {} }],
+        "nextCursor": "c2",
+    })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -283,7 +235,17 @@ async fn gateway_mcp_tools_list_with_cursor_returns_next_cursor() -> ditto_core:
         Some("c2")
     );
 
-    page.assert();
+    let requests = upstream.requests_for_method("tools/list");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0]
+            .json_body
+            .as_ref()
+            .and_then(|body| body.get("params"))
+            .and_then(|value| value.get("cursor"))
+            .and_then(|value| value.as_str()),
+        Some("c1")
+    );
     Ok(())
 }
 
@@ -356,55 +318,25 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
         return Ok(());
     }
 
-    let upstream_a = MockServer::start();
-    let mock_a = upstream_a.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [{ "name": "hello", "inputSchema": {} }] }
-                })
-                .to_string(),
-            );
-    });
+    let upstream_a = TestMcpStreamableHttpServer::start().await;
+    upstream_a.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{ "name": "hello", "inputSchema": {} }],
+    })));
 
-    let upstream_b = MockServer::start();
-    let mock_b = upstream_b.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [{ "name": "hello", "inputSchema": {} }] }
-                })
-                .to_string(),
-            );
-    });
+    let upstream_b = TestMcpStreamableHttpServer::start().await;
+    upstream_b.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{ "name": "hello", "inputSchema": {} }],
+    })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "a".to_string(),
-        ditto_server::gateway::http::McpServerState::new("a".to_string(), upstream_a.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("a".to_string(), upstream_a.url())
             .expect("mcp state a"),
     );
     mcp_servers.insert(
         "b".to_string(),
-        ditto_server::gateway::http::McpServerState::new("b".to_string(), upstream_b.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("b".to_string(), upstream_b.url())
             .expect("mcp state b"),
     );
 
@@ -448,8 +380,8 @@ async fn gateway_mcp_prefixes_tool_names_when_multiple_servers_selected()
         vec!["a-hello".to_string(), "b-hello".to_string()]
     );
 
-    mock_a.assert();
-    mock_b.assert();
+    assert_eq!(upstream_a.requests_for_method("tools/list").len(), 1);
+    assert_eq!(upstream_b.requests_for_method("tools/list").len(), 1);
     Ok(())
 }
 
@@ -460,44 +392,23 @@ async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
         return Ok(());
     }
 
-    let upstream_alpha = MockServer::start();
-    let upstream_alpha_1 = MockServer::start();
-    let call_alpha_1 = upstream_alpha_1.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "hello",
-                "arguments": { "who": "world" }
-            },
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "server": "alpha-1" }
-                })
-                .to_string(),
-            );
-    });
+    let upstream_alpha = TestMcpStreamableHttpServer::start().await;
+    let upstream_alpha_1 = TestMcpStreamableHttpServer::start().await;
+    upstream_alpha_1.enqueue(ResponseSpec::json_result(json!({
+        "server": "alpha-1",
+    })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "alpha".to_string(),
-        ditto_server::gateway::http::McpServerState::new(
-            "alpha".to_string(),
-            upstream_alpha.url("/mcp"),
-        )
-        .expect("mcp state alpha"),
+        ditto_server::gateway::http::McpServerState::new("alpha".to_string(), upstream_alpha.url())
+            .expect("mcp state alpha"),
     );
     mcp_servers.insert(
         "alpha-1".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "alpha-1".to_string(),
-            upstream_alpha_1.url("/mcp"),
+            upstream_alpha_1.url(),
         )
         .expect("mcp state alpha-1"),
     );
@@ -537,7 +448,18 @@ async fn gateway_mcp_tools_call_routes_to_longest_hyphenated_server_prefix()
         Some("alpha-1")
     );
 
-    call_alpha_1.assert();
+    assert_eq!(upstream_alpha.requests_for_method("tools/call").len(), 0);
+    let requests = upstream_alpha_1.requests_for_method("tools/call");
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0]
+            .json_body
+            .as_ref()
+            .and_then(|body| body.get("params"))
+            .and_then(|value| value.get("name"))
+            .and_then(|value| value.as_str()),
+        Some("hello")
+    );
     Ok(())
 }
 
@@ -674,24 +596,18 @@ async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_core::erro
         return Ok(());
     }
 
-    let upstream = MockServer::start();
+    let upstream = TestMcpStreamableHttpServer::start().await;
     let too_large = "x".repeat(6 * 1024 * 1024);
-    let upstream_mock = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(too_large.clone());
-    });
+    upstream.enqueue(ResponseSpec::raw_http(
+        "200 OK",
+        [("content-type", "application/json")],
+        too_large,
+    ));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -731,11 +647,11 @@ async fn gateway_mcp_bounded_backend_response_prevents_oom() -> ditto_core::erro
         .and_then(|v| v.as_str())
         .unwrap_or("");
     assert!(
-        message.contains("max bytes"),
+        message.contains("mcp transport error"),
         "unexpected error message: {message}"
     );
 
-    upstream_mock.assert();
+    assert_eq!(upstream.requests_for_method("tools/list").len(), 1);
     Ok(())
 }
 
@@ -745,30 +661,13 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_core::error
         return Ok(());
     }
 
-    let upstream = MockServer::start();
-    let upstream_mock = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": { "tools": [] }
-                })
-                .to_string(),
-            );
-    });
+    let upstream = TestMcpStreamableHttpServer::start().await;
+    upstream.enqueue(ResponseSpec::json_result(json!({ "tools": [] })));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -791,6 +690,7 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_core::error
         .unwrap();
     let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(upstream.recorded_requests().is_empty());
 
     let request = Request::builder()
         .method("POST")
@@ -809,7 +709,7 @@ async fn gateway_mcp_requires_virtual_key_when_configured() -> ditto_core::error
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    upstream_mock.assert();
+    assert_eq!(upstream.requests_for_method("tools/list").len(), 1);
     Ok(())
 }
 
@@ -1161,23 +1061,17 @@ async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502() -> ditto_cor
         return Ok(());
     }
 
-    let upstream = MockServer::start();
-    let upstream_mock = upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(500)
-            .header("content-type", "text/plain")
-            .body("boom");
-    });
+    let upstream = TestMcpStreamableHttpServer::start().await;
+    upstream.enqueue(ResponseSpec::raw_http(
+        "500 Internal Server Error",
+        [("content-type", "text/plain")],
+        "boom",
+    ));
 
     let mut mcp_servers = HashMap::new();
     mcp_servers.insert(
         "local".to_string(),
-        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url("/mcp"))
+        ditto_server::gateway::http::McpServerState::new("local".to_string(), upstream.url())
             .expect("mcp state"),
     );
 
@@ -1207,8 +1101,8 @@ async fn gateway_mcp_tools_list_http_get_maps_upstream_500_to_502() -> ditto_cor
         .and_then(|v| v.get("message"))
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    assert!(message.contains("status=500"), "{message}");
+    assert!(message.contains("mcp transport error"), "{message}");
 
-    upstream_mock.assert();
+    assert_eq!(upstream.requests_for_method("tools/list").len(), 1);
     Ok(())
 }

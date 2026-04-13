@@ -2,9 +2,8 @@ use super::*;
 
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
-const MCP_MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
-const MCP_MAX_ERROR_RESPONSE_BYTES: usize = 64 * 1024;
-const MCP_MAX_ERROR_BODY_SNIPPET_BYTES: usize = 8 * 1024;
+const MCP_DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+const MCP_ERROR_BODY_PREVIEW_BYTES: usize = 8 * 1024;
 const MCP_TOOLS_LIST_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 const MCP_TOOLS_LIST_MAX_PAGES: usize = 8;
 const MCP_TOOLS_LIST_MAX_CURSOR_BYTES: usize = 1024;
@@ -31,10 +30,10 @@ struct McpToolsListCache {
 pub struct McpServerState {
     server_id: String,
     url: String,
-    client: reqwest::Client,
-    headers: HeaderMap,
+    headers: BTreeMap<String, String>,
     query_params: BTreeMap<String, String>,
     request_timeout: Option<std::time::Duration>,
+    session: std::sync::Arc<tokio::sync::Mutex<Option<std::sync::Arc<mcp_kit::Session>>>>,
     tools_list_cache: std::sync::Arc<tokio::sync::Mutex<McpToolsListCache>>,
 }
 
@@ -53,20 +52,13 @@ impl McpServerState {
             }
         }
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
-            .build()
-            .map_err(|err| GatewayError::Backend {
-                message: format!("mcp http client error: {err}"),
-            })?;
-
         Ok(Self {
             server_id,
             url: parsed.to_string(),
-            client,
-            headers: HeaderMap::new(),
+            headers: BTreeMap::new(),
             query_params: BTreeMap::new(),
             request_timeout: None,
+            session: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             tools_list_cache: std::sync::Arc::new(tokio::sync::Mutex::new(
                 McpToolsListCache::default(),
             )),
@@ -89,17 +81,14 @@ impl McpServerState {
     }
 
     pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Result<Self, GatewayError> {
-        self.headers = parse_headers(&headers)?;
+        validate_headers(&headers)?;
+        self.headers = headers;
         Ok(self)
     }
 
     pub fn with_query_params(mut self, params: BTreeMap<String, String>) -> Self {
         self.query_params = normalize_query_params(&params);
         self
-    }
-
-    pub fn headers(&self) -> &HeaderMap {
-        &self.headers
     }
 
     fn parse_tools_list_result(&self, result: Value) -> Result<McpToolsListResult, GatewayError> {
@@ -157,21 +146,7 @@ impl McpServerState {
                 obj.insert("cursor".to_string(), Value::String(cursor.to_string()));
             }
         }
-        let req = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": params,
-        });
-        let resp = self.jsonrpc(req).await?;
-
-        if let Some(err) = resp.get("error") {
-            return Err(GatewayError::Backend {
-                message: format!("mcp tools/list failed for server {}: {err}", self.server_id),
-            });
-        }
-
-        let result = resp.get("result").cloned().unwrap_or(Value::Null);
+        let result = self.request("tools/list", Some(params)).await?;
         self.parse_tools_list_result(result)
     }
 
@@ -264,74 +239,81 @@ impl McpServerState {
         Ok(result)
     }
 
-    pub async fn jsonrpc(&self, req: Value) -> Result<Value, GatewayError> {
-        let mut request = self
-            .client
-            .post(&self.url)
-            .headers(self.headers.clone())
-            .json(&req);
-        if !self.query_params.is_empty() {
-            request = request.query(&self.query_params);
+    async fn session(&self) -> Result<std::sync::Arc<mcp_kit::Session>, GatewayError> {
+        let mut guard = self.session.lock().await;
+        if let Some(session) = guard.as_ref() {
+            return Ok(session.clone());
         }
-        if let Some(timeout) = self.request_timeout {
-            request = request.timeout(timeout);
-        }
-        let response = request.send().await.map_err(|err| GatewayError::Backend {
-            message: format!("mcp request failed: {err}"),
-        })?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let max_bytes = if status.is_success() {
-            MCP_MAX_RESPONSE_BYTES
-        } else {
-            MCP_MAX_ERROR_RESPONSE_BYTES
-        };
-        let bytes =
-            read_reqwest_body_bytes_bounded_with_content_length(response, &headers, max_bytes)
-                .await
-                .map_err(|err| GatewayError::Backend {
-                    message: format!("mcp response read failed: {err}"),
-                })?;
-        if !status.is_success() {
-            let body_slice = bytes.as_ref();
-            let truncated = body_slice.len() > MCP_MAX_ERROR_BODY_SNIPPET_BYTES;
-            let body_slice = &body_slice[..body_slice.len().min(MCP_MAX_ERROR_BODY_SNIPPET_BYTES)];
-            let mut body = String::from_utf8_lossy(body_slice).to_string();
-            if truncated {
-                body.push('…');
-            }
 
-            return Err(GatewayError::Backend {
-                message: format!(
-                    "mcp server responded with status={} body={}",
-                    status.as_u16(),
-                    body
-                ),
-            });
+        let timeout = self.request_timeout.unwrap_or(MCP_DEFAULT_TIMEOUT);
+        let session = std::sync::Arc::new(
+            mcp_kit::Manager::new("ditto-gateway", env!("CARGO_PKG_VERSION"), timeout)
+                .with_trust_mode(mcp_kit::TrustMode::Trusted)
+                .connect_streamable_http_session(
+                    &self.server_id,
+                    &self.url,
+                    mcp_jsonrpc::StreamableHttpOptions {
+                        headers: self
+                            .headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                        query: self
+                            .query_params
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect(),
+                        connect_timeout: Some(timeout),
+                        request_timeout: Some(timeout),
+                        follow_redirects: true,
+                        error_body_preview_bytes: MCP_ERROR_BODY_PREVIEW_BYTES,
+                        ..Default::default()
+                    },
+                )
+                .await
+                .map_err(map_mcp_kit_error)?,
+        );
+        *guard = Some(session.clone());
+        Ok(session)
+    }
+
+    async fn request(&self, method: &str, params: Option<Value>) -> Result<Value, GatewayError> {
+        let session = self.session().await?;
+        match session.request(method, params).await {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                // Fail-closed on broken transport state so next request reconnects.
+                *self.session.lock().await = None;
+                Err(map_mcp_kit_error(err))
+            }
         }
-        serde_json::from_slice(&bytes).map_err(|err| GatewayError::Backend {
-            message: format!("mcp response is not valid JSON: {err}"),
-        })
+    }
+
+    pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<Value, GatewayError> {
+        self.request(
+            "tools/call",
+            Some(serde_json::json!({
+                "name": name,
+                "arguments": arguments,
+            })),
+        )
+        .await
     }
 }
 
-fn parse_headers(headers: &BTreeMap<String, String>) -> Result<HeaderMap, GatewayError> {
-    let mut out = HeaderMap::new();
+fn validate_headers(headers: &BTreeMap<String, String>) -> Result<(), GatewayError> {
     for (name, value) in headers {
-        let header_name =
-            name.parse::<axum::http::HeaderName>()
-                .map_err(|_| GatewayError::InvalidRequest {
-                    reason: format!("invalid header name: {name}"),
-                })?;
-        let header_value =
-            value
-                .parse::<axum::http::HeaderValue>()
-                .map_err(|_| GatewayError::InvalidRequest {
-                    reason: format!("invalid header value for {name}"),
-                })?;
-        out.insert(header_name, header_value);
+        name.parse::<axum::http::HeaderName>()
+            .map_err(|_| GatewayError::InvalidRequest {
+                reason: format!("invalid header name: {name}"),
+            })?;
+        value
+            .parse::<axum::http::HeaderValue>()
+            .map_err(|_| GatewayError::InvalidRequest {
+                reason: format!("invalid header value for {name}"),
+            })?;
     }
-    Ok(out)
+    Ok(())
 }
 
 fn normalize_query_params(params: &BTreeMap<String, String>) -> BTreeMap<String, String> {
@@ -340,6 +322,20 @@ fn normalize_query_params(params: &BTreeMap<String, String>) -> BTreeMap<String,
         .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
         .filter(|(name, _)| !name.is_empty())
         .collect()
+}
+
+fn map_mcp_kit_error(err: mcp_kit::Error) -> GatewayError {
+    match err.kind() {
+        mcp_kit::ErrorKind::Timeout => GatewayError::BackendTimeout {
+            message: format!("mcp transport timed out: {err:#}"),
+        },
+        mcp_kit::ErrorKind::Config => GatewayError::InvalidRequest {
+            reason: format!("invalid MCP transport config: {err:#}"),
+        },
+        _ => GatewayError::Backend {
+            message: format!("mcp transport error: {err:#}"),
+        },
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -911,24 +907,7 @@ pub(super) async fn mcp_call_tool(
                 reason: format!("unknown MCP server: {server_id}"),
             })?;
 
-    let req = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": tool_name,
-            "arguments": arguments,
-        },
-    });
-    let resp = server.jsonrpc(req).await?;
-
-    if let Some(err) = resp.get("error") {
-        return Err(GatewayError::Backend {
-            message: format!("mcp tool call failed: {err}"),
-        });
-    }
-
-    Ok(resp.get("result").cloned().unwrap_or(Value::Null))
+    server.call_tool(tool_name, arguments).await
 }
 
 fn mcp_jsonrpc_result(id: Value, result: Value) -> Value {

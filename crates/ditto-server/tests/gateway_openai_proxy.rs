@@ -13,6 +13,10 @@ use httpmock::MockServer;
 use serde_json::json;
 use tower::util::ServiceExt;
 
+mod mcp_streamable_http_support;
+
+use mcp_streamable_http_support::{ResponseSpec, TestMcpStreamableHttpServer};
+
 fn build_proxy_backends(
     config: &GatewayConfig,
 ) -> Result<HashMap<String, ProxyBackend>, ditto_server::gateway::GatewayError> {

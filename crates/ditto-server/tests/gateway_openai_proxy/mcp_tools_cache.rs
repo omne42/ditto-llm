@@ -4,36 +4,19 @@ async fn openai_compat_proxy_caches_mcp_tools_list_between_requests() {
         return;
     }
 
-    let mcp_upstream = MockServer::start();
-    let mcp_list = mcp_upstream.mock(|when, then| {
-        when.method(POST).path("/mcp").json_body(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/list",
-            "params": {},
-        }));
-        then.status(200)
-            .header("content-type", "application/json")
-            .body(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": {
-                        "tools": [{
-                            "name": "hello",
-                            "description": "hi",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "who": { "type": "string" }
-                                }
-                            }
-                        }]
-                    }
-                })
-                .to_string(),
-            );
-    });
+    let mcp_upstream = TestMcpStreamableHttpServer::start().await;
+    mcp_upstream.enqueue(ResponseSpec::json_result(json!({
+        "tools": [{
+            "name": "hello",
+            "description": "hi",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "who": { "type": "string" }
+                }
+            }
+        }]
+    })));
 
     let openai_upstream = MockServer::start();
     let openai_req1 = openai_upstream.mock(|when, then| {
@@ -117,7 +100,7 @@ async fn openai_compat_proxy_caches_mcp_tools_list_between_requests() {
         "local".to_string(),
         ditto_server::gateway::http::McpServerState::new(
             "local".to_string(),
-            mcp_upstream.url("/mcp"),
+            mcp_upstream.url(),
         )
         .expect("mcp state"),
     );
@@ -162,7 +145,7 @@ async fn openai_compat_proxy_caches_mcp_tools_list_between_requests() {
     let bytes2 = to_bytes(response2.into_body(), usize::MAX).await.unwrap();
     assert_eq!(bytes2, r#"{"id":"ok2"}"#);
 
-    mcp_list.assert_calls(1);
+    assert_eq!(mcp_upstream.requests_for_method("tools/list").len(), 1);
     openai_req1.assert();
     openai_req2.assert();
 }
