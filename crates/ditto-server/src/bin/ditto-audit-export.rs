@@ -547,7 +547,9 @@ async fn upload_to_http_put(
 
     let status = response.status();
     if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
+        let body = http_kit::read_text_body_limited(response, 64 * 1024)
+            .await
+            .unwrap_or_default();
         return Err(audit_export_http_upload_failed(locale, &status.to_string(), &body).into());
     }
     Ok(())
