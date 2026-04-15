@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use bytes::Bytes;
-use futures_util::StreamExt;
 #[cfg(any(
     feature = "gateway",
     feature = "provider-openai",
@@ -11,11 +10,14 @@ use reqwest::header::HeaderMap;
 use serde::de::DeserializeOwned;
 
 use crate::error::{DittoError, Result};
+use http_kit::{
+    ReadReqwestBodyBytesError, read_reqwest_body_bytes_limited, read_reqwest_body_bytes_truncated,
+};
 
 use super::policy::HttpResponseBodyPolicy;
 
 pub async fn response_text_truncated(response: reqwest::Response, max_bytes: usize) -> String {
-    let (bytes, truncated) = match response_bytes_truncated(response, max_bytes).await {
+    let (bytes, truncated) = match read_reqwest_body_bytes_truncated(response, max_bytes).await {
         Ok((bytes, truncated)) => (bytes, truncated),
         Err(err) => return format!("failed to read response body: {err}"),
     };
@@ -29,38 +31,6 @@ pub async fn response_text_truncated(response: reqwest::Response, max_bytes: usi
     body
 }
 
-async fn response_bytes_truncated(
-    response: reqwest::Response,
-    max_bytes: usize,
-) -> Result<(Vec<u8>, bool)> {
-    let max_bytes = max_bytes.max(1);
-    let initial_capacity = response
-        .content_length()
-        .and_then(|len| usize::try_from(len).ok())
-        .map(|len| len.min(max_bytes))
-        .unwrap_or(0);
-    let mut out = Vec::<u8>::with_capacity(initial_capacity);
-    let mut truncated = false;
-
-    let mut stream = response.bytes_stream();
-    while let Some(next) = stream.next().await {
-        let chunk = next?;
-        let remaining = max_bytes.saturating_sub(out.len());
-        if remaining == 0 {
-            truncated = true;
-            break;
-        }
-        if chunk.len() <= remaining {
-            out.extend_from_slice(chunk.as_ref());
-        } else {
-            out.extend_from_slice(&chunk.as_ref()[..remaining]);
-            truncated = true;
-            break;
-        }
-    }
-    Ok((out, truncated))
-}
-
 #[cfg(any(
     feature = "gateway",
     feature = "provider-openai",
@@ -68,40 +38,10 @@ async fn response_bytes_truncated(
 ))]
 pub(crate) async fn read_reqwest_body_bytes_bounded_with_content_length(
     response: reqwest::Response,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     max_bytes: usize,
 ) -> Result<Bytes> {
-    let max_bytes = max_bytes.max(1);
-
-    let content_length = headers
-        .get(reqwest::header::CONTENT_LENGTH)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<usize>().ok());
-    if content_length.is_some_and(|len| len > max_bytes) {
-        return Err(crate::invalid_response!(
-            "error_detail.http.content_length_exceeds_max_bytes",
-            "content_length" => content_length
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "?".to_string()),
-            "max_bytes" => max_bytes.to_string()
-        ));
-    }
-
-    let initial_capacity = content_length.map(|len| len.min(max_bytes)).unwrap_or(0);
-    let mut stream = response.bytes_stream();
-    let mut buffered = bytes::BytesMut::with_capacity(initial_capacity);
-    while let Some(next) = stream.next().await {
-        let chunk = next?;
-        if buffered.len().saturating_add(chunk.len()) > max_bytes {
-            return Err(crate::invalid_response!(
-                "error_detail.http.response_exceeded_max_bytes",
-                "max_bytes" => max_bytes.to_string()
-            ));
-        }
-        buffered.extend_from_slice(chunk.as_ref());
-    }
-
-    Ok(buffered.freeze())
+    read_reqwest_body_bytes_bounded(response, max_bytes).await
 }
 
 pub(crate) async fn send_checked(req: reqwest::RequestBuilder) -> Result<reqwest::Response> {
@@ -132,7 +72,8 @@ pub(crate) async fn send_checked_json_with_policy<T: DeserializeOwned>(
     policy: HttpResponseBodyPolicy,
 ) -> Result<T> {
     let response = send_checked_with_policy(req, policy).await?;
-    Ok(response.json::<T>().await?)
+    let bytes = read_reqwest_body_bytes_bounded(response, policy.max_response_body_bytes).await?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[allow(dead_code)]
@@ -147,39 +88,35 @@ pub(crate) async fn send_checked_bytes_with_policy(
 ) -> Result<Bytes> {
     let response = req.send().await?;
     let status = response.status();
-    let content_length = response
-        .content_length()
-        .and_then(|len| usize::try_from(len).ok());
-    if status.is_success() && content_length.is_some_and(|len| len > policy.max_response_body_bytes)
-    {
-        return Err(crate::invalid_response!(
-            "error_detail.http.content_length_exceeds_max_bytes",
-            "content_length" => content_length
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "?".to_string()),
-            "max_bytes" => policy.max_response_body_bytes.to_string()
-        ));
-    }
-    let (bytes, truncated) =
-        response_bytes_truncated(response, policy.max_response_body_bytes).await?;
-    let bytes = Bytes::from(bytes);
     if !status.is_success() {
-        let body = String::from_utf8_lossy(&bytes).to_string();
-        if truncated {
-            return Err(DittoError::Api {
-                status,
-                body: format!("{body}\n...(truncated)"),
-            });
-        }
+        let body = response_text_truncated(response, policy.max_response_body_bytes).await;
         return Err(DittoError::Api { status, body });
     }
-    if truncated {
-        return Err(crate::invalid_response!(
-            "error_detail.http.response_exceeded_max_bytes",
-            "max_bytes" => policy.max_response_body_bytes.to_string()
-        ));
+    read_reqwest_body_bytes_bounded(response, policy.max_response_body_bytes).await
+}
+
+async fn read_reqwest_body_bytes_bounded(
+    response: reqwest::Response,
+    max_bytes: usize,
+) -> Result<Bytes> {
+    match read_reqwest_body_bytes_limited(response, max_bytes.max(1)).await {
+        Ok(bytes) => Ok(Bytes::from(bytes)),
+        Err(ReadReqwestBodyBytesError::ContentLengthExceedsLimit {
+            content_length,
+            max_bytes,
+        }) => Err(crate::invalid_response!(
+            "error_detail.http.content_length_exceeds_max_bytes",
+            "content_length" => content_length.to_string(),
+            "max_bytes" => max_bytes.to_string()
+        )),
+        Err(ReadReqwestBodyBytesError::ResponseExceededLimit { max_bytes }) => {
+            Err(crate::invalid_response!(
+                "error_detail.http.response_exceeded_max_bytes",
+                "max_bytes" => max_bytes.to_string()
+            ))
+        }
+        Err(ReadReqwestBodyBytesError::Transport(err)) => Err(err.into()),
     }
-    Ok(bytes)
 }
 
 #[cfg(test)]

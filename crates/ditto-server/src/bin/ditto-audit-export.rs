@@ -221,7 +221,9 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
     let status = response.status();
 
     if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
+        let body = http_kit::read_text_body_limited(response, 64 * 1024)
+            .await
+            .unwrap_or_default();
         return Err(audit_export_export_failed(locale, &status.to_string(), &body).into());
     }
 
@@ -233,16 +235,30 @@ async fn run(locale: Locale, raw_args: Vec<String>) -> Result<(), Box<dyn std::e
     if output == "-" {
         use std::io::Write as _;
 
-        let mut stdout = std::io::stdout();
-        let mut stream = response.bytes_stream();
-        let mut bytes_written: u64 = 0;
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk?;
-            stdout.write_all(&chunk)?;
-            bytes_written = bytes_written.saturating_add(chunk.len() as u64);
+        struct CountingWrite<W> {
+            inner: W,
+            written: u64,
         }
+
+        impl<W: std::io::Write> std::io::Write for CountingWrite<W> {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                let written = self.inner.write(buf)?;
+                self.written = self.written.saturating_add(written as u64);
+                Ok(written)
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.inner.flush()
+            }
+        }
+
+        let mut stdout = CountingWrite {
+            inner: std::io::stdout(),
+            written: 0,
+        };
+        http_kit::write_response_body_limited(response, &mut stdout, None).await?;
         stdout.flush()?;
-        eprintln!("{}", cli_wrote_bytes_to_stdout(locale, bytes_written));
+        eprintln!("{}", cli_wrote_bytes_to_stdout(locale, stdout.written));
         return Ok(());
     }
 

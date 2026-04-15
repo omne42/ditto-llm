@@ -4,7 +4,7 @@ use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 #[cfg(feature = "gateway")]
 use ditto_core::config::ProviderApi;
 #[cfg(feature = "gateway")]
-use ditto_core::error::{DittoError, try_structured_text_from_text_args};
+use ditto_core::error::{DittoError, StructuredText, try_structured_text_from_text_args};
 #[cfg(feature = "gateway")]
 use ditto_server::config_editing::{
     ConfigScope, ModelDeleteRequest, ModelListRequest, ModelShowRequest, ModelUpsertRequest,
@@ -121,6 +121,8 @@ async fn discover_models_for_provider(
     request: &ProviderUpsertRequest,
     locale: Locale,
 ) -> ditto_core::error::Result<Vec<String>> {
+    const DISCOVERY_MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
     let base_url = request
         .base_url
         .as_deref()
@@ -183,9 +185,13 @@ async fn discover_models_for_provider(
         }
     }
 
-    let response = http_request.send().await.map_err(DittoError::Http)?;
-    let response = response.error_for_status().map_err(DittoError::Http)?;
-    let payload = response.json::<Value>().await.map_err(DittoError::Http)?;
+    let payload = http_kit::send_reqwest_json_after_http_success_limited(
+        http_request,
+        "provider model discovery",
+        DISCOVERY_MAX_RESPONSE_BYTES,
+    )
+    .await
+    .map_err(|err| DittoError::Config(StructuredText::freeform(err.to_string())))?;
 
     let mut models = match api {
         ProviderApi::OpenaiChatCompletions | ProviderApi::OpenaiResponses => {
