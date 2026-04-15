@@ -399,6 +399,7 @@ pub async fn resolve_auth_token_with_default_keys(
                     if let Some(value) = env.get(key) {
                         return resolve_string_if_secret_with_runtime(&value, env, env)
                             .await
+                            .map(|token| token.trim().to_string())
                             .map_err(Into::into);
                     }
                 }
@@ -408,6 +409,7 @@ pub async fn resolve_auth_token_with_default_keys(
                 if let Some(value) = env.get(key.as_str()) {
                     return resolve_string_if_secret_with_runtime(&value, env, env)
                         .await
+                        .map(|token| token.trim().to_string())
                         .map_err(Into::into);
                 }
             }
@@ -420,6 +422,7 @@ pub async fn resolve_auth_token_with_default_keys(
             let token = parse_auth_command_token(stdout.as_str())?;
             resolve_string_if_secret_with_runtime(&token, env, env)
                 .await
+                .map(|token| token.trim().to_string())
                 .map_err(Into::into)
         }
         ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
@@ -651,6 +654,19 @@ mod tests {
             dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
         };
         let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
+        assert_eq!(token, "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_auth_token_trims_env_value_after_helper_resolution() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "  sk-test  ".to_string())]),
+        };
+        let auth = ProviderAuth::ApiKeyEnv {
+            keys: vec!["DITTO_TEST_KEY".to_string()],
+        };
         let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
         assert_eq!(token, "sk-test");
         Ok(())
