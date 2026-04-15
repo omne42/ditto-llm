@@ -570,6 +570,7 @@ dependencies = [
  "httpmock",
  "i18n-kit",
  "i18n-runtime-kit",
+ "omne-execution-gateway",
  "omne-fs",
  "policy-meta 0.1.0",
  "regex",
@@ -1682,6 +1683,23 @@ checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
 dependencies = [
  "libc",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "omne-execution-gateway"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "libc",
+ "omne-fs-primitives 0.1.0",
+ "policy-meta 0.1.0 (git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441)",
+ "rustix",
+ "same-file",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 1.0.69",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

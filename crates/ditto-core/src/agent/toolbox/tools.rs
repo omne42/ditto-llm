@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
@@ -246,7 +244,7 @@ impl ToolboxExecutor {
     }
 }
 
-#[async_trait]
+#[::async_trait::async_trait]
 impl ToolExecutor for ToolboxExecutor {
     async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
         match call.name.as_str() {
@@ -319,7 +317,7 @@ struct HttpFetchArgs {
     parse_json: Option<bool>,
 }
 
-#[async_trait]
+#[::async_trait::async_trait]
 impl ToolExecutor for HttpToolExecutor {
     async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
         if call.name != TOOL_HTTP_FETCH {
@@ -601,281 +599,6 @@ struct ShellExecArgs {
     #[serde(default)]
     timeout_ms: Option<u64>,
 }
-
-#[async_trait]
-impl ToolExecutor for ShellToolExecutor {
-    async fn execute(&self, call: ToolCall) -> Result<ToolResult> {
-        if call.name != TOOL_SHELL_EXEC {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: format!("unknown tool: {}", call.name),
-                is_error: Some(true),
-            });
-        }
-
-        let args: ShellExecArgs = match serde_json::from_value(call.arguments.clone()) {
-            Ok(args) => args,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("invalid args: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let program = match Self::validate_program(&args.program) {
-            Ok(program) => program.to_string(),
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err,
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        if !self.allowed_programs.contains(&program) {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: format!("program not allowed: {program}"),
-                is_error: Some(true),
-            });
-        }
-
-        if args.args.len() > 128 {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: "too many args (max: 128)".to_string(),
-                is_error: Some(true),
-            });
-        }
-        for arg in &args.args {
-            if arg.len() > 8 * 1024 {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: "arg too large (max: 8192 bytes)".to_string(),
-                    is_error: Some(true),
-                });
-            }
-        }
-
-        let stdin = args.stdin.clone();
-        if let Some(stdin) = stdin.as_deref()
-            && stdin.len() > self.max_stdin_bytes {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
-                    is_error: Some(true),
-                });
-            }
-
-        let cwd = match self.resolve_existing_dir(args.cwd.as_deref().unwrap_or("")) {
-            Ok(dir) => dir,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err,
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let timeout = args
-            .timeout_ms
-            .map(Duration::from_millis)
-            .unwrap_or(self.timeout);
-        let timeout = timeout.min(self.timeout).max(Duration::from_millis(1));
-        let start = std::time::Instant::now();
-        let remaining = || timeout.saturating_sub(start.elapsed());
-
-        let mut command = tokio::process::Command::new(&program);
-        command.args(&args.args);
-        command.current_dir(&cwd);
-        command.stdin(if stdin.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        });
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped());
-        command.kill_on_drop(true);
-
-        let mut child = match command.spawn() {
-            Ok(child) => child,
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("failed to spawn: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let stdin_task = stdin.map(|stdin| {
-            let mut child_stdin = match child.stdin.take() {
-                Some(stdin) => stdin,
-                None => {
-                    return tokio::spawn(async {
-                        Err::<(), std::io::Error>(std::io::Error::other(
-                            "shell_exec missing stdin pipe",
-                        ))
-                    });
-                }
-            };
-
-            tokio::spawn(async move {
-                use tokio::io::AsyncWriteExt;
-
-                child_stdin.write_all(stdin.as_bytes()).await?;
-                child_stdin.shutdown().await?;
-                Ok(())
-            })
-        });
-
-        let stdout = child.stdout.take().ok_or_else(|| {
-            DittoError::Io(std::io::Error::other("shell_exec missing stdout pipe"))
-        })?;
-        let stderr = child.stderr.take().ok_or_else(|| {
-            DittoError::Io(std::io::Error::other("shell_exec missing stderr pipe"))
-        })?;
-
-        let max_output_bytes = self.max_output_bytes;
-        let stdout_task = tokio::spawn(read_async_limited_bytes(stdout, max_output_bytes));
-        let stderr_task = tokio::spawn(read_async_limited_bytes(stderr, max_output_bytes));
-
-        let mut timed_out = false;
-        let mut wait_error: Option<String> = None;
-        let status = match tokio::time::timeout(remaining(), child.wait()).await {
-            Ok(status) => match status {
-                Ok(status) => Some(status),
-                Err(err) => {
-                    wait_error = Some(err.to_string());
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                    None
-                }
-            },
-            Err(_) => {
-                timed_out = true;
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                None
-            }
-        };
-
-        let stdin_error = match stdin_task {
-            Some(task) => match task.await {
-                Ok(Ok(())) => None,
-                Ok(Err(err)) => Some(format!("failed to write stdin: {err}")),
-                Err(err) => Some(format!("stdin join error: {err}")),
-            },
-            None => None,
-        };
-
-        let (stdout_result, stderr_result) = tokio::join!(stdout_task, stderr_task);
-        let (stdout_bytes, stdout_truncated) = match stdout_result {
-            Ok(Ok(ok)) => ok,
-            Ok(Err(err)) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("failed to read stdout: {err}"),
-                    is_error: Some(true),
-                });
-            }
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("stdout join error: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-        let (stderr_bytes, stderr_truncated) = match stderr_result {
-            Ok(Ok(ok)) => ok,
-            Ok(Err(err)) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("failed to read stderr: {err}"),
-                    is_error: Some(true),
-                });
-            }
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("stderr join error: {err}"),
-                    is_error: Some(true),
-                });
-            }
-        };
-
-        let exit_code = status.as_ref().and_then(|status| status.code());
-        let ok =
-            exit_code == Some(0) && !timed_out && wait_error.is_none() && stdin_error.is_none();
-
-        let is_error = !ok || timed_out || wait_error.is_some() || stdin_error.is_some();
-
-        let mut out = serde_json::json!({
-            "program": program,
-            "args": args.args,
-            "cwd": args.cwd.unwrap_or_else(|| ".".to_string()),
-            "stdin_provided": args.stdin.is_some(),
-            "ok": ok,
-            "exit_code": exit_code,
-            "stdout": String::from_utf8_lossy(&stdout_bytes).to_string(),
-            "stderr": String::from_utf8_lossy(&stderr_bytes).to_string(),
-            "stdout_truncated": stdout_truncated,
-            "stderr_truncated": stderr_truncated,
-            "timed_out": timed_out,
-        });
-        if let Some(obj) = out.as_object_mut() {
-            if let Some(wait_error) = wait_error {
-                obj.insert("wait_error".to_string(), Value::String(wait_error));
-            }
-            if let Some(stdin_error) = stdin_error {
-                obj.insert("stdin_error".to_string(), Value::String(stdin_error));
-            }
-        }
-
-        Ok(ToolResult {
-            tool_call_id: call.id,
-            content: out.to_string(),
-            is_error: if is_error { Some(true) } else { None },
-        })
-    }
-}
-
-async fn read_async_limited_bytes(
-    mut reader: impl tokio::io::AsyncRead + Unpin,
-    max_bytes: usize,
-) -> std::io::Result<(Vec<u8>, bool)> {
-    use tokio::io::AsyncReadExt;
-
-    let mut out = Vec::<u8>::new();
-    let mut truncated = false;
-    let mut buf = [0u8; 8192];
-
-    loop {
-        let read = reader.read(&mut buf).await?;
-        if read == 0 {
-            break;
-        }
-
-        if out.len() < max_bytes {
-            let remaining = max_bytes.saturating_sub(out.len());
-            let take = read.min(remaining);
-            out.extend_from_slice(&buf[..take]);
-            if take < read {
-                truncated = true;
-            }
-        } else {
-            truncated = true;
-        }
-    }
-
-    Ok((out, truncated))
-}
-
 #[derive(Clone)]
 pub struct FsToolExecutor {
     root: PathBuf,

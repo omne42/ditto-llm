@@ -38,7 +38,6 @@ async fn http_fetch_tool_executes_get() -> Result<()> {
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, None);
-
     let value: serde_json::Value = serde_json::from_str(&result.content)?;
     assert_eq!(value.get("status").and_then(|v| v.as_u64()), Some(200));
     assert_eq!(value.get("body").and_then(|v| v.as_str()), Some("world"));
@@ -73,7 +72,6 @@ async fn http_fetch_tool_parses_json_body() -> Result<()> {
     let result = executor.execute(call).await?;
     assert_eq!(result.tool_call_id, "call_1");
     assert_eq!(result.is_error, None);
-
     let value: serde_json::Value = serde_json::from_str(&result.content)?;
     assert_eq!(
         value.get("body_json"),
@@ -586,16 +584,41 @@ async fn shell_exec_tool_denies_disallowed_program() -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+const OPAQUE_SHELL_PROGRAM: &str = "cmd";
+#[cfg(not(windows))]
+const OPAQUE_SHELL_PROGRAM: &str = "sh";
+
 #[tokio::test]
-async fn shell_exec_tool_runs_allowlisted_program() -> Result<()> {
+async fn shell_exec_tool_denies_opaque_launcher_even_when_allowlisted() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["rustc"]);
+    let executor =
+        ShellToolExecutor::new(dir.path())?.with_allowed_programs([OPAQUE_SHELL_PROGRAM]);
     let call = ToolCall {
         id: "call_1".to_string(),
         name: TOOL_SHELL_EXEC.to_string(),
         arguments: json!({
-            "program": "rustc",
-            "args": ["--version"]
+            "program": OPAQUE_SHELL_PROGRAM
+        }),
+    };
+    let result = executor.execute(call).await?;
+    assert_eq!(result.tool_call_id, "call_1");
+    assert_eq!(result.is_error, Some(true));
+    assert!(result.content.contains("opaque command launchers"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn shell_exec_tool_runs_allowlisted_program() -> Result<()> {
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("hello.txt"), "hello from cat\n")?;
+    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["cat"]);
+    let call = ToolCall {
+        id: "call_1".to_string(),
+        name: TOOL_SHELL_EXEC.to_string(),
+        arguments: json!({
+            "program": "cat",
+            "args": ["hello.txt"]
         }),
     };
     let result = executor.execute(call).await?;
@@ -604,9 +627,10 @@ async fn shell_exec_tool_runs_allowlisted_program() -> Result<()> {
 
     let value: serde_json::Value = serde_json::from_str(&result.content)?;
     assert_eq!(value.get("exit_code").and_then(|v| v.as_i64()), Some(0));
-    let stdout = value.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
-    let stderr = value.get("stderr").and_then(|v| v.as_str()).unwrap_or("");
-    assert!(stdout.contains("rustc") || stderr.contains("rustc"));
+    assert_eq!(
+        value.get("stdout").and_then(|v| v.as_str()),
+        Some("hello from cat\n")
+    );
     Ok(())
 }
 
@@ -638,13 +662,12 @@ async fn shell_exec_tool_writes_stdin() -> Result<()> {
 #[tokio::test]
 async fn shell_exec_tool_rejects_cwd_escape() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["rustc"]);
+    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["cat"]);
     let call = ToolCall {
         id: "call_1".to_string(),
         name: TOOL_SHELL_EXEC.to_string(),
         arguments: json!({
-            "program": "rustc",
-            "args": ["--version"],
+            "program": "cat",
             "cwd": "../"
         }),
     };
@@ -658,16 +681,17 @@ async fn shell_exec_tool_rejects_cwd_escape() -> Result<()> {
 async fn shell_exec_tool_truncates_large_stdout() -> Result<()> {
     let dir = tempfile::tempdir()?;
     std::fs::create_dir_all(dir.path().join("sub"))?;
+    std::fs::write(dir.path().join("sub").join("large.txt"), "A".repeat(256))?;
 
     let executor = ShellToolExecutor::new(dir.path())?
-        .with_allowed_programs(["rustc"])
+        .with_allowed_programs(["cat"])
         .with_max_output_bytes(64);
     let call = ToolCall {
         id: "call_1".to_string(),
         name: TOOL_SHELL_EXEC.to_string(),
         arguments: json!({
-            "program": "rustc",
-            "args": ["--print", "target-list"],
+            "program": "cat",
+            "args": ["large.txt"],
             "cwd": "sub"
         }),
     };

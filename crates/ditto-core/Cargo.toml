@@ -9,7 +9,7 @@ autobins = false
 [features]
 default = ["provider-openai-compatible", "cap-llm"]
 
-agent = ["dep:regex", "dep:omne-fs"]
+agent = ["dep:regex", "dep:omne-execution-gateway", "dep:omne-fs"]
 contract-guard = ["dep:regex", "dep:serde_yaml"]
 auth = ["dep:hmac", "dep:sha2", "dep:time"]
 sdk = []
@@ -96,6 +96,7 @@ text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 regex = { version = "1", optional = true }
 omne-fs = { path = "../../../omne-runtime/crates/omne-fs", optional = true }
+omne-execution-gateway = { path = "../../../omne-runtime/crates/omne-execution-gateway", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = { version = "0.9", optional = true }
