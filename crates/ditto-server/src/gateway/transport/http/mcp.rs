@@ -280,18 +280,17 @@ impl McpServerState {
             message: format!("mcp request failed: {err}"),
         })?;
         let status = response.status();
-        let headers = response.headers().clone();
         let max_bytes = if status.is_success() {
             MCP_MAX_RESPONSE_BYTES
         } else {
             MCP_MAX_ERROR_RESPONSE_BYTES
         };
-        let bytes =
-            read_reqwest_body_bytes_bounded_with_content_length(response, &headers, max_bytes)
-                .await
-                .map_err(|err| GatewayError::Backend {
-                    message: format!("mcp response read failed: {err}"),
-                })?;
+        let bytes = read_reqwest_body_bytes_limited(response, max_bytes)
+            .await
+            .map(Bytes::from)
+            .map_err(|err| GatewayError::Backend {
+                message: format!("mcp response read failed: {err}"),
+            })?;
         if !status.is_success() {
             let body_slice = bytes.as_ref();
             let truncated = body_slice.len() > MCP_MAX_ERROR_BODY_SNIPPET_BYTES;

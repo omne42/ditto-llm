@@ -302,14 +302,8 @@ pub(super) async fn handle_a2a_invoke(
         return response;
     }
 
-    let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
-        upstream,
-        &upstream_headers,
-        state.proxy.max_body_bytes,
-    )
-    .await
-    {
-        Ok(bytes) => bytes,
+    let bytes = match read_reqwest_body_bytes_limited(upstream, state.proxy.max_body_bytes).await {
+        Ok(bytes) => Bytes::from(bytes),
         Err(err) => {
             return jsonrpc_error(request_id, -32603, format!("Backend response error: {err}"));
         }

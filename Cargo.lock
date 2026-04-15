@@ -602,6 +602,7 @@ dependencies = [
  "ditto-core",
  "futures-util",
  "getrandom 0.4.0",
+ "http-kit",
  "httpmock",
  "i18n-kit",
  "omne-integrity-primitives",
