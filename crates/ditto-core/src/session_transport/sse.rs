@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use futures_util::stream::BoxStream;
+use futures_util::stream::{self, BoxStream};
 pub use http_kit::SseLimits;
 use tokio::io::AsyncBufRead;
 
@@ -49,6 +49,21 @@ fn map_http_kit_sse_error(error: http_kit::Error) -> DittoError {
     DittoError::invalid_response_text(message)
 }
 
+fn adapt_http_kit_sse_stream(
+    stream: futures_util::stream::BoxStream<'static, std::result::Result<String, http_kit::Error>>,
+) -> BoxStream<'static, Result<String>> {
+    Box::pin(stream::unfold(stream, |mut stream| async move {
+        loop {
+            match stream.next().await {
+                Some(Ok(data)) if data == "[DONE]" => return None,
+                Some(Ok(data)) => return Some((Ok(data), stream)),
+                Some(Err(error)) => return Some((Err(map_http_kit_sse_error(error)), stream)),
+                None => return None,
+            }
+        }
+    }))
+}
+
 pub fn sse_data_stream_from_reader_with_limits<R>(
     reader: R,
     limits: SseLimits,
@@ -56,29 +71,22 @@ pub fn sse_data_stream_from_reader_with_limits<R>(
 where
     R: AsyncBufRead + Unpin + Send + 'static,
 {
-    Box::pin(
-        http_kit::sse_data_stream_from_reader_with_limits(reader, limits)
-            .map(|item| item.map_err(map_http_kit_sse_error)),
-    )
+    adapt_http_kit_sse_stream(http_kit::sse_data_stream_from_reader_with_limits(
+        reader, limits,
+    ))
 }
 
 pub fn sse_data_stream_from_reader<R>(reader: R) -> BoxStream<'static, Result<String>>
 where
     R: AsyncBufRead + Unpin + Send + 'static,
 {
-    Box::pin(
-        http_kit::sse_data_stream_from_reader(reader)
-            .map(|item| item.map_err(map_http_kit_sse_error)),
-    )
+    adapt_http_kit_sse_stream(http_kit::sse_data_stream_from_reader(reader))
 }
 
 pub fn sse_data_stream_from_response(
     response: reqwest::Response,
 ) -> BoxStream<'static, Result<String>> {
-    Box::pin(
-        http_kit::sse_data_stream_from_response(response)
-            .map(|item| item.map_err(map_http_kit_sse_error)),
-    )
+    adapt_http_kit_sse_stream(http_kit::sse_data_stream_from_response(response))
 }
 
 #[cfg(test)]
@@ -109,7 +117,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preserves_empty_data_events_and_done_literal() -> Result<()> {
+    async fn preserves_empty_data_events_and_stops_at_done_literal() -> Result<()> {
         let sse = concat!("data:\n\n", "data: [DONE]\n\n");
         let stream = stream::iter([Ok::<_, std::io::Error>(Bytes::from(sse.to_owned()))]);
         let reader = tokio_util::io::StreamReader::new(stream);
@@ -119,7 +127,7 @@ mod tests {
             out.push(item?);
         }
 
-        assert_eq!(out, vec!["", "[DONE]"]);
+        assert_eq!(out, vec![""]);
         Ok(())
     }
 
