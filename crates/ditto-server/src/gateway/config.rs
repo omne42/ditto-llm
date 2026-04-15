@@ -1,11 +1,15 @@
 use std::collections::{BTreeMap, HashSet};
 
+use config_kit::{
+    EnvInterpolationOptions, Error as ConfigKitError,
+    interpolate_env_placeholders_in_json_value_with, interpolate_env_placeholders_with,
+};
 use omne_integrity_primitives::hash_sha256;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 
 use ditto_core::config::{Env, ProviderConfig};
-use secret_kit::spec::resolve_secret;
+use secret_kit::resolve_string_if_secret_with_runtime;
 
 use super::{
     BudgetConfig, CacheConfig, GuardrailsConfig, LimitsConfig, PassthroughConfig, RouterConfig,
@@ -248,11 +252,7 @@ pub struct A2aAgentConfig {
 
 impl A2aAgentConfig {
     pub fn resolve_env(&mut self, env: &Env) -> Result<(), super::GatewayError> {
-        if let Value::Object(obj) = &mut self.agent_card_params
-            && let Some(Value::String(url)) = obj.get_mut("url")
-        {
-            *url = expand_env_placeholders(url, env)?;
-        }
+        expand_env_placeholders_in_json_value(&mut self.agent_card_params, env)?;
         for value in self.headers.values_mut() {
             *value = expand_env_placeholders(value, env)?;
         }
@@ -370,24 +370,11 @@ impl BackendConfig {
             *value = expand_env_placeholders(value, env)?;
         }
         if let Some(provider_config) = self.provider_config.as_mut() {
-            if let Some(base_url) = provider_config.base_url.as_mut() {
-                *base_url = expand_env_placeholders(base_url, env)?;
-            }
-            if let Some(default_model) = provider_config.default_model.as_mut() {
-                *default_model = expand_env_placeholders(default_model, env)?;
-            }
-            if let Some(normalize_endpoint) = provider_config.normalize_endpoint.as_mut() {
-                *normalize_endpoint = expand_env_placeholders(normalize_endpoint, env)?;
-            }
-            for value in provider_config.model_whitelist.iter_mut() {
-                *value = expand_env_placeholders(value, env)?;
-            }
-            for value in provider_config.http_headers.values_mut() {
-                *value = expand_env_placeholders(value, env)?;
-            }
-            for value in provider_config.http_query_params.values_mut() {
-                *value = expand_env_placeholders(value, env)?;
-            }
+            expand_env_placeholders_in_typed_value(
+                provider_config,
+                env,
+                "backends[].provider_config",
+            )?;
         }
         Ok(())
     }
@@ -460,86 +447,142 @@ impl std::fmt::Debug for BackendConfig {
 }
 
 fn expand_env_placeholders(value: &str, env: &Env) -> Result<String, super::GatewayError> {
-    let trimmed = value.trim();
-    if let Some(name) = trimmed.strip_prefix("os.environ/") {
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: "empty env placeholder".to_string(),
-            });
-        }
-
-        let resolved = env
-            .get(name)
-            .ok_or_else(|| super::GatewayError::InvalidRequest {
-                reason: format!("missing env var: {name}"),
-            })?;
-
-        if resolved.trim().is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: format!("env var is empty: {name}"),
-            });
-        }
-
+    if let Some(resolved) = resolve_legacy_os_environ_reference(value, env)? {
         return Ok(resolved);
     }
 
-    let bytes = value.as_bytes();
-    let mut out = String::with_capacity(value.len());
-    let mut idx = 0;
-    let mut last = 0;
+    let mut lookup_error = None;
+    interpolate_env_placeholders_with(value, EnvInterpolationOptions::default(), |name| {
+        lookup_gateway_env_var(env, name, &mut lookup_error)
+    })
+    .map_err(|err| map_env_interpolation_error(err, lookup_error))
+}
 
-    while idx < bytes.len() {
-        if bytes[idx] != b'$' || idx + 1 >= bytes.len() || bytes[idx + 1] != b'{' {
-            idx += 1;
-            continue;
-        }
+fn expand_env_placeholders_in_json_value(
+    value: &mut Value,
+    env: &Env,
+) -> Result<(), super::GatewayError> {
+    resolve_legacy_os_environ_in_json_value(value, env)?;
 
-        let placeholder_start = idx + 2;
-        let mut end = None;
-        for (pos, byte) in bytes[placeholder_start..].iter().copied().enumerate() {
-            if byte == b'}' {
-                end = Some(placeholder_start + pos);
-                break;
+    let mut lookup_error = None;
+    interpolate_env_placeholders_in_json_value_with(
+        value,
+        EnvInterpolationOptions::default(),
+        |name| lookup_gateway_env_var(env, name, &mut lookup_error),
+    )
+    .map_err(|err| map_env_interpolation_error(err, lookup_error))
+}
+
+fn expand_env_placeholders_in_typed_value<T>(
+    value: &mut T,
+    env: &Env,
+    label: &str,
+) -> Result<(), super::GatewayError>
+where
+    T: Serialize + DeserializeOwned,
+{
+    let mut rendered =
+        serde_json::to_value(&*value).map_err(|err| super::GatewayError::InvalidRequest {
+            reason: format!("failed to encode {label} for env interpolation: {err}"),
+        })?;
+    expand_env_placeholders_in_json_value(&mut rendered, env)?;
+    *value =
+        serde_json::from_value(rendered).map_err(|err| super::GatewayError::InvalidRequest {
+            reason: format!("failed to decode {label} after env interpolation: {err}"),
+        })?;
+    Ok(())
+}
+
+fn resolve_legacy_os_environ_in_json_value(
+    value: &mut Value,
+    env: &Env,
+) -> Result<(), super::GatewayError> {
+    match value {
+        Value::String(rendered) => {
+            if let Some(resolved) = resolve_legacy_os_environ_reference(rendered, env)? {
+                *rendered = resolved;
             }
         }
-
-        let Some(placeholder_end) = end else {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: "unterminated env placeholder".to_string(),
-            });
-        };
-
-        let name = &value[placeholder_start..placeholder_end];
-        let name = name.trim();
-        if name.is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: "empty env placeholder".to_string(),
-            });
+        Value::Array(items) => {
+            for item in items {
+                resolve_legacy_os_environ_in_json_value(item, env)?;
+            }
         }
-
-        let resolved = env
-            .get(name)
-            .ok_or_else(|| super::GatewayError::InvalidRequest {
-                reason: format!("missing env var: {name}"),
-            })?;
-
-        if resolved.trim().is_empty() {
-            return Err(super::GatewayError::InvalidRequest {
-                reason: format!("env var is empty: {name}"),
-            });
+        Value::Object(map) => {
+            for item in map.values_mut() {
+                resolve_legacy_os_environ_in_json_value(item, env)?;
+            }
         }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+    Ok(())
+}
 
-        out.push_str(&value[last..idx]);
-        out.push_str(&resolved);
-        idx = placeholder_end + 1;
-        last = idx;
+fn resolve_legacy_os_environ_reference(
+    value: &str,
+    env: &Env,
+) -> Result<Option<String>, super::GatewayError> {
+    let trimmed = value.trim();
+    let Some(name) = trimmed.strip_prefix("os.environ/") else {
+        return Ok(None);
+    };
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: "empty env placeholder".to_string(),
+        });
     }
 
-    if last < value.len() {
-        out.push_str(&value[last..]);
+    let resolved = env
+        .get(name)
+        .ok_or_else(|| super::GatewayError::InvalidRequest {
+            reason: format!("missing env var: {name}"),
+        })?;
+
+    if resolved.trim().is_empty() {
+        return Err(super::GatewayError::InvalidRequest {
+            reason: format!("env var is empty: {name}"),
+        });
     }
-    Ok(out)
+
+    Ok(Some(resolved))
+}
+
+fn lookup_gateway_env_var(
+    env: &Env,
+    name: &str,
+    lookup_error: &mut Option<String>,
+) -> Option<String> {
+    match env.get(name) {
+        Some(resolved) if !resolved.trim().is_empty() => Some(resolved),
+        Some(_) => {
+            *lookup_error = Some(format!("env var is empty: {name}"));
+            None
+        }
+        None => {
+            *lookup_error = Some(format!("missing env var: {name}"));
+            None
+        }
+    }
+}
+
+fn map_env_interpolation_error(
+    err: ConfigKitError,
+    lookup_error: Option<String>,
+) -> super::GatewayError {
+    if let Some(reason) = lookup_error {
+        return super::GatewayError::InvalidRequest { reason };
+    }
+
+    let reason = match err {
+        ConfigKitError::EnvInterpolation { message } => match message.as_str() {
+            "unterminated ${...} placeholder" => "unterminated env placeholder".to_string(),
+            _ => message,
+        },
+        other => other.to_string(),
+    };
+
+    super::GatewayError::InvalidRequest { reason }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -894,14 +937,8 @@ async fn resolve_secret_in_string(
     env: &Env,
     label: &str,
 ) -> Result<(), super::GatewayError> {
-    let trimmed = value.trim();
-    if !trimmed.starts_with("secret://") {
-        return Ok(());
-    }
-
-    let resolved = resolve_secret(trimmed, env)
+    let resolved = resolve_string_if_secret_with_runtime(value, env, env)
         .await
-        .map(|secret| secret.into_owned())
         .map_err(|err| super::GatewayError::InvalidRequest {
             reason: format!("failed to resolve secret for {label}: {err}"),
         })?;
@@ -1074,6 +1111,40 @@ mod tests {
 
         backend.resolve_env(&env).expect("resolve");
         assert_eq!(backend.base_url, "https://example.com");
+    }
+
+    #[test]
+    fn a2a_agent_config_recursively_resolves_env_placeholders_in_agent_card_params() {
+        let env = Env {
+            dotenv: BTreeMap::from([
+                ("HOST".to_string(), "agents.example.com".to_string()),
+                ("TOKEN".to_string(), "sk-test".to_string()),
+            ]),
+        };
+
+        let mut agent = A2aAgentConfig {
+            agent_id: "agent-1".to_string(),
+            agent_card_params: serde_json::json!({
+                "url": "https://${HOST}/card",
+                "headers": {
+                    "authorization": "Bearer ${TOKEN}"
+                }
+            }),
+            headers: BTreeMap::new(),
+            query_params: BTreeMap::new(),
+            timeout_seconds: None,
+        };
+
+        agent.resolve_env(&env).expect("resolve");
+        assert_eq!(
+            agent.agent_card_params,
+            serde_json::json!({
+                "url": "https://agents.example.com/card",
+                "headers": {
+                    "authorization": "Bearer sk-test"
+                }
+            })
+        );
     }
 
     #[test]

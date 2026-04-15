@@ -423,7 +423,7 @@ dependencies = [
 name = "config-kit"
 version = "0.1.0"
 dependencies = [
- "omne-fs-primitives",
+ "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -566,11 +566,12 @@ dependencies = [
  "error-kit",
  "futures-util",
  "hmac",
+ "http-kit",
  "httpmock",
  "i18n-kit",
  "i18n-runtime-kit",
  "omne-fs",
- "policy-meta",
+ "policy-meta 0.1.0",
  "regex",
  "reqwest",
  "secret-kit",
@@ -1104,6 +1105,19 @@ dependencies = [
  "http",
  "http-body",
  "pin-project-lite",
+]
+
+[[package]]
+name = "http-kit"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1677,8 +1691,8 @@ dependencies = [
  "globset",
  "libc",
  "memchr",
- "omne-fs-primitives",
- "policy-meta",
+ "omne-fs-primitives 0.1.0",
+ "policy-meta 0.1.0 (git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441)",
  "regex",
  "same-file",
  "serde",
@@ -1711,9 +1725,11 @@ dependencies = [
 [[package]]
 name = "omne-process-primitives"
 version = "0.1.0"
+source = "git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532#9c69b43d8b51a4fbc3e87450fb74fb67c0e62532"
 dependencies = [
  "omne-system-package-primitives",
  "rustix",
+ "same-file",
  "sysinfo",
  "tempfile",
  "tokio",
@@ -2446,7 +2462,7 @@ name = "secret-kit"
 version = "0.1.0"
 dependencies = [
  "error-kit",
- "omne-fs-primitives",
+ "omne-fs-primitives 0.1.0 (git+https://github.com/omne42/omne-runtime.git?rev=9c69b43d8b51a4fbc3e87450fb74fb67c0e62532)",
  "omne-process-primitives",
  "serde_json",
  "structured-text-kit",
