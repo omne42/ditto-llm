@@ -66,14 +66,14 @@ impl ToolExecutor for ShellToolExecutor {
         }
 
         let stdin = args.stdin.clone();
-        if let Some(stdin) = stdin.as_deref() {
-            if stdin.len() > self.max_stdin_bytes {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
-                    is_error: Some(true),
-                });
-            }
+        if let Some(stdin) = stdin.as_deref()
+            && stdin.len() > self.max_stdin_bytes
+        {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
+                is_error: Some(true),
+            });
         }
 
         let cwd = match self.resolve_existing_dir(args.cwd.as_deref().unwrap_or("")) {
@@ -265,7 +265,7 @@ impl ShellToolExecutor {
         Ok(canonical_path)
     }
 
-    fn exec_gateway_for_program(&self, program: &PathBuf) -> ExecGateway {
+    fn exec_gateway_for_program(&self, program: &std::path::Path) -> ExecGateway {
         ExecGateway::with_policy(GatewayPolicy {
             allow_isolation_none: true,
             non_mutating_program_allowlist: vec![program.display().to_string()],
