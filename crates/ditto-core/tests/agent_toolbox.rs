@@ -713,13 +713,13 @@ async fn shell_exec_tool_truncates_large_stdout() -> Result<()> {
 #[tokio::test]
 async fn shell_exec_tool_marks_non_zero_exit_as_error() -> Result<()> {
     let dir = tempfile::tempdir()?;
-    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["sh"]);
+    let executor = ShellToolExecutor::new(dir.path())?.with_allowed_programs(["cat"]);
     let call = ToolCall {
         id: "call_1".to_string(),
         name: TOOL_SHELL_EXEC.to_string(),
         arguments: json!({
-            "program": "sh",
-            "args": ["-c", "exit 7"]
+            "program": "cat",
+            "args": ["missing.txt"]
         }),
     };
 
@@ -729,7 +729,7 @@ async fn shell_exec_tool_marks_non_zero_exit_as_error() -> Result<()> {
 
     let value: serde_json::Value = serde_json::from_str(&result.content)?;
     assert_eq!(value.get("ok").and_then(|v| v.as_bool()), Some(false));
-    assert_eq!(value.get("exit_code").and_then(|v| v.as_i64()), Some(7));
+    assert_eq!(value.get("exit_code").and_then(|v| v.as_i64()), Some(1));
     Ok(())
 }
 
