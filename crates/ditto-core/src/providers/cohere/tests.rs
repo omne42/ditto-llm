@@ -8,10 +8,14 @@ mod tests {
         let chat = Cohere::new("sk-test").with_base_url("https://proxy.example/v2");
         assert_eq!(chat.chat_url(), "https://proxy.example/v2/chat");
 
+        #[cfg(feature = "cap-embedding")]
         let embeddings = CohereEmbeddings::new("sk-test").with_base_url("https://proxy.example/v2");
+        #[cfg(feature = "cap-embedding")]
         assert_eq!(embeddings.embed_url(), "https://proxy.example/v2/embed");
 
+        #[cfg(feature = "cap-rerank")]
         let rerank = CohereRerank::new("sk-test").with_base_url("https://proxy.example/v2");
+        #[cfg(feature = "cap-rerank")]
         assert_eq!(rerank.rerank_url(), "https://proxy.example/v2/rerank");
     }
 
