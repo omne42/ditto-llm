@@ -5,6 +5,37 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn generate_url_respects_v1beta_join_ergonomics() {
+        let client = Google::new("sk-test").with_base_url("https://proxy.example/v1beta");
+        assert_eq!(
+            client.generate_url("gemini-2.5-flash"),
+            "https://proxy.example/v1beta/models/gemini-2.5-flash:generateContent"
+        );
+    }
+
+    #[cfg(feature = "cap-llm-streaming")]
+    #[test]
+    fn stream_url_appends_alt_query_without_duplicating_v1beta() {
+        let client = Google::new("sk-test").with_base_url("https://proxy.example/v1beta");
+        assert_eq!(
+            client.stream_url("gemini-2.5-flash"),
+            "https://proxy.example/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+        );
+    }
+
+    #[cfg(feature = "cap-embedding")]
+    #[test]
+    fn embedding_url_respects_v1beta_join_ergonomics() {
+        let client = GoogleEmbeddings::new("sk-test")
+            .with_base_url("https://proxy.example/v1beta")
+            .with_model("text-embedding-004");
+        assert_eq!(
+            client.embed_url("embedContent"),
+            "https://proxy.example/v1beta/models/text-embedding-004:embedContent"
+        );
+    }
+
+    #[test]
     fn converts_system_to_system_instruction() -> crate::error::Result<()> {
         let mut warnings = Vec::new();
         let tool_names = HashMap::new();

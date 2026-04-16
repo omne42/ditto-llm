@@ -80,12 +80,7 @@ impl CohereRerank {
     }
 
     fn rerank_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/rerank") {
-            base.to_string()
-        } else {
-            format!("{base}/rerank")
-        }
+        http_kit::join_api_base_url_path(&self.base_url, "rerank")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a RerankRequest) -> Result<&'a str> {

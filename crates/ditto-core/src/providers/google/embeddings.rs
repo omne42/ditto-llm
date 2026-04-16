@@ -90,9 +90,8 @@ impl GoogleEmbeddings {
     }
 
     fn embed_url(&self, suffix: &str) -> String {
-        let base = self.base_url.trim_end_matches('/');
         let model = Google::model_path(self.model.as_str());
-        format!("{base}/{model}:{suffix}")
+        http_kit::join_api_base_url_path(&self.base_url, &format!("{model}:{suffix}"))
     }
 }
 

@@ -105,9 +105,8 @@ mod google_images_impl {
         }
 
         fn predict_url(&self, model: &str) -> String {
-            let base = self.client.base_url.trim_end_matches('/');
             let path = Google::model_path(model);
-            format!("{base}/{path}:predict")
+            http_kit::join_api_base_url_path(&self.client.base_url, &format!("{path}:predict"))
         }
     }
 

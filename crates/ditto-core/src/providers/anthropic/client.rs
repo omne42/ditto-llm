@@ -110,12 +110,7 @@ impl Anthropic {
     }
 
     fn messages_url(&self) -> String {
-        let base = self.base_url.trim_end_matches('/');
-        if base.ends_with("/messages") {
-            base.to_string()
-        } else {
-            format!("{base}/messages")
-        }
+        http_kit::join_api_base_url_path(&self.base_url, "messages")
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {

@@ -17,16 +17,6 @@ pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const HTTP_TIMEOUT: Duration = Duration::from_secs(300);
 pub(crate) const DEFAULT_MAX_BINARY_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 
-pub(crate) fn join_endpoint(base_url: &str, endpoint: &str) -> String {
-    let base = base_url.trim_end_matches('/');
-    let endpoint = endpoint.trim_start_matches('/');
-    if base.ends_with(&format!("/{endpoint}")) {
-        base.to_string()
-    } else {
-        format!("{base}/{endpoint}")
-    }
-}
-
 pub(crate) fn default_http_client() -> reqwest::Client {
     crate::provider_transport::default_http_client(HTTP_TIMEOUT)
 }
@@ -159,7 +149,7 @@ impl OpenAiLikeClient {
     }
 
     pub(crate) fn endpoint(&self, endpoint: &str) -> String {
-        join_endpoint(&self.base_url, endpoint)
+        http_kit::join_api_base_url_path(&self.base_url, endpoint)
     }
 
     pub(crate) async fn upload_file_with_purpose(

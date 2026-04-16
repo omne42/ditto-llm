@@ -132,16 +132,17 @@ impl Google {
     }
 
     fn generate_url(&self, model: &str) -> String {
-        let base = self.base_url.trim_end_matches('/');
         let path = Self::model_path(model);
-        format!("{base}/{path}:generateContent")
+        http_kit::join_api_base_url_path(&self.base_url, &format!("{path}:generateContent"))
     }
 
     #[cfg(feature = "cap-llm-streaming")]
     fn stream_url(&self, model: &str) -> String {
-        let base = self.base_url.trim_end_matches('/');
         let path = Self::model_path(model);
-        format!("{base}/{path}:streamGenerateContent?alt=sse")
+        http_kit::append_url_query_params(
+            http_kit::join_api_base_url_path(&self.base_url, &format!("{path}:streamGenerateContent")),
+            &[("alt".to_string(), "sse".to_string())],
+        )
     }
 
     fn build_tool_name_map(messages: &[Message]) -> HashMap<String, String> {
