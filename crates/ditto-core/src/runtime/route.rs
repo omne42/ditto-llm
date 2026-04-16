@@ -57,7 +57,7 @@ pub(crate) struct RuntimeRouteExplainPlan {
     pub capability_resolution: ProviderCapabilityResolution,
     pub origin_base_url: String,
     pub base_url_source: RuntimeResolvedBaseUrlSource,
-    pub base_url_rewrite: Option<crate::session_transport::WebsocketBaseUrlRewrite>,
+    pub base_url_rewrite: Option<http_kit::WebsocketBaseUrlRewrite>,
     pub route: RuntimeRoute,
 }
 

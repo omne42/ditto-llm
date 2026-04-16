@@ -1,7 +1,6 @@
 use ditto_core::provider_transport::HttpTransportPolicy;
-use ditto_core::session_transport::{
-    SessionTransportPolicy, SseLimits, WebsocketBaseUrlRewrite, resolve_websocket_base_url,
-};
+use ditto_core::session_transport::{SessionTransportPolicy, SseLimits};
+use http_kit::{WebsocketBaseUrlRewrite, resolve_websocket_base_url};
 
 #[test]
 fn provider_transport_exposes_machine_readable_default_policy() {
