@@ -71,6 +71,7 @@ impl OpenAiCompatibilityProfile {
                 .map(|resolved| resolved.catalog_provider)
         });
         let family = explicit_family
+            .or_else(|| config.and_then(configured_provider_family_override))
             .or_else(|| {
                 resolved_catalog_provider.and_then(openai_provider_family_for_catalog_provider)
             })
@@ -208,6 +209,13 @@ fn explicit_family_override(config: &ProviderConfig) -> Option<OpenAiProviderFam
         .openai_compatible
         .as_ref()
         .and_then(|explicit| explicit.family.as_deref())
+        .and_then(parse_openai_provider_family)
+}
+
+fn configured_provider_family_override(config: &ProviderConfig) -> Option<OpenAiProviderFamily> {
+    config
+        .provider
+        .as_deref()
         .and_then(parse_openai_provider_family)
 }
 
