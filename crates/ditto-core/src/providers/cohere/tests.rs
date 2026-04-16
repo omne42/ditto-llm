@@ -3,6 +3,18 @@ mod tests {
     use super::*;
     use httpmock::{Method::POST, MockServer};
 
+    #[test]
+    fn endpoint_urls_respect_v2_join_ergonomics() {
+        let chat = Cohere::new("sk-test").with_base_url("https://proxy.example/v2");
+        assert_eq!(chat.chat_url(), "https://proxy.example/v2/chat");
+
+        let embeddings = CohereEmbeddings::new("sk-test").with_base_url("https://proxy.example/v2");
+        assert_eq!(embeddings.embed_url(), "https://proxy.example/v2/embed");
+
+        let rerank = CohereRerank::new("sk-test").with_base_url("https://proxy.example/v2");
+        assert_eq!(rerank.rerank_url(), "https://proxy.example/v2/rerank");
+    }
+
     #[tokio::test]
     async fn chat_posts_and_parses_text_and_tool_calls() -> Result<()> {
         if crate::utils::test_support::should_skip_httpmock() {

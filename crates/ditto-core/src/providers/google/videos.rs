@@ -135,9 +135,11 @@ mod google_videos_impl {
         }
 
         fn predict_long_running_url(&self, model: &str) -> String {
-            let base = self.client.base_url.trim_end_matches('/');
             let path = Google::model_path(model);
-            format!("{base}/{path}:predictLongRunning")
+            http_kit::join_api_base_url_path(
+                &self.client.base_url,
+                &format!("{path}:predictLongRunning"),
+            )
         }
 
         fn operation_url(&self, operation_name: &str) -> Result<String> {
@@ -150,11 +152,9 @@ mod google_videos_impl {
             if operation_name.starts_with("http://") || operation_name.starts_with("https://") {
                 return Ok(operation_name.to_string());
             }
-            let base = self.client.base_url.trim_end_matches('/');
-            Ok(format!(
-                "{}/{}",
-                base,
-                operation_name.trim_start_matches('/')
+            Ok(http_kit::join_api_base_url_path(
+                &self.client.base_url,
+                operation_name,
             ))
         }
     }
@@ -606,6 +606,18 @@ mod google_videos_impl {
     mod google_video_tests {
         use super::*;
         use httpmock::{Method::GET, Method::POST, MockServer};
+
+        #[test]
+        fn operation_url_joins_relative_name_against_base_url() -> Result<()> {
+            let client = GoogleVideos::new("")
+                .with_base_url("https://proxy.example/v1beta")
+                .with_model("veo-2.0-generate-001");
+            assert_eq!(
+                client.operation_url("/operations/video-123")?,
+                "https://proxy.example/v1beta/operations/video-123"
+            );
+            Ok(())
+        }
 
         #[tokio::test]
         async fn create_video_posts_to_predict_long_running_endpoint() -> Result<()> {

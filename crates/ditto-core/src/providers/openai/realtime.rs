@@ -107,7 +107,7 @@ impl RealtimeSessionModel for OpenAIRealtime {
         }
 
         let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
-        let mut url = reqwest::Url::parse(&openai_like::join_endpoint(&base_url, "realtime"))
+        let mut url = reqwest::Url::parse(&http_kit::join_api_base_url_path(&base_url, "realtime"))
             .map_err(|err| {
                 crate::invalid_response!(
                     "error_detail.provider.base_url_invalid",

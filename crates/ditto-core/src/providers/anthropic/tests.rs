@@ -4,6 +4,15 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn messages_url_respects_v1_join_ergonomics() {
+        let client = Anthropic::new("sk-test").with_base_url("https://proxy.example/v1");
+        assert_eq!(
+            client.messages_url(),
+            "https://proxy.example/v1/messages"
+        );
+    }
+
+    #[test]
     fn converts_pdf_file_part_to_document_block() {
         let tool_names = HashMap::new();
         let message = Message {
