@@ -7,8 +7,10 @@ use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
 use crate::error::{DittoError, Result};
-use ::secret_kit::runtime::SecretResolutionContext;
-use ::secret_kit::{DefaultSecretResolver, SecretResolver};
+use ::secret_kit::{
+    SecretResolutionContext, SecretResolver, looks_like_secret_spec,
+    resolve_string_if_secret_with_runtime,
+};
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};
@@ -388,13 +390,45 @@ pub async fn resolve_auth_token_with_default_keys(
     env: &Env,
     default_keys: &[&str],
 ) -> Result<String> {
-    resolve_auth_token_with_default_keys_and_resolver(
-        auth,
-        env,
-        default_keys,
-        &DefaultSecretResolver,
-    )
-    .await
+    match auth {
+        ProviderAuth::ApiKeyEnv { keys }
+        | ProviderAuth::HttpHeaderEnv { keys, .. }
+        | ProviderAuth::QueryParamEnv { keys, .. } => {
+            if keys.is_empty() {
+                for key in default_keys {
+                    if let Some(value) = env.get(key) {
+                        return resolve_string_if_secret_with_runtime(&value, env, env)
+                            .await
+                            .map(|token| token.trim().to_string())
+                            .map_err(Into::into);
+                    }
+                }
+                return Err(missing_api_key_env(&default_keys.join(", ")));
+            }
+            for key in keys {
+                if let Some(value) = env.get(key.as_str()) {
+                    return resolve_string_if_secret_with_runtime(&value, env, env)
+                        .await
+                        .map(|token| token.trim().to_string())
+                        .map_err(Into::into);
+                }
+            }
+            Err(missing_api_key_env(&keys.join(", ")))
+        }
+        ProviderAuth::Command { command }
+        | ProviderAuth::HttpHeaderCommand { command, .. }
+        | ProviderAuth::QueryParamCommand { command, .. } => {
+            let stdout = run_auth_command(command, env).await?;
+            let token = parse_auth_command_token(stdout.as_str())?;
+            resolve_string_if_secret_with_runtime(&token, env, env)
+                .await
+                .map(|token| token.trim().to_string())
+                .map_err(Into::into)
+        }
+        ProviderAuth::SigV4 { .. } | ProviderAuth::OAuthClientCredentials { .. } => {
+            Err(token_string_auth_unsupported("sigv4/oauth"))
+        }
+    }
 }
 
 async fn resolve_secret_if_needed_with_resolver<R>(
@@ -406,7 +440,7 @@ where
     R: SecretResolver + ?Sized,
 {
     let raw = raw.trim().to_string();
-    if raw.starts_with("secret://") {
+    if looks_like_secret_spec(&raw) {
         return resolver
             .resolve_secret(raw.as_str(), SecretResolutionContext::new(env, env))
             .await
@@ -620,6 +654,19 @@ mod tests {
             dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "sk-test".to_string())]),
         };
         let auth = ProviderAuth::ApiKeyEnv { keys: Vec::new() };
+        let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
+        assert_eq!(token, "sk-test");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resolves_auth_token_trims_env_value_after_helper_resolution() -> Result<()> {
+        let env = Env {
+            dotenv: BTreeMap::from([("DITTO_TEST_KEY".to_string(), "  sk-test  ".to_string())]),
+        };
+        let auth = ProviderAuth::ApiKeyEnv {
+            keys: vec!["DITTO_TEST_KEY".to_string()],
+        };
         let token = resolve_auth_token_with_default_keys(&auth, &env, &["DITTO_TEST_KEY"]).await?;
         assert_eq!(token, "sk-test");
         Ok(())

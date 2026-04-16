@@ -106,6 +106,7 @@ integration = ["ditto_core/integration"]
 config-kit = { path = "../../../omne_foundation/crates/config-kit" }
 ditto_core = { package = "ditto-core", path = "../ditto-core", default-features = false }
 ditto-gateway-contract-types = { path = "../ditto-gateway-contract-types" }
+http-kit = { path = "../../../omne_foundation/crates/http-kit" }
 i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
 secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
 text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }

@@ -635,13 +635,10 @@ pub(crate) async fn resolve_cli_secret(
     locale: Locale,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let raw = raw.trim().to_string();
-    if !raw.starts_with("secret://") {
-        return Ok(raw);
-    }
+    let is_secret_spec = secret_kit::looks_like_secret_spec(&raw);
 
-    let resolved = secret_kit::spec::resolve_secret(raw.as_str(), env)
+    let resolved = secret_kit::resolve_string_if_secret_with_runtime(raw.as_str(), env, env)
         .await
-        .map(|secret| secret.into_owned())
         .map_err(|err| {
             MESSAGE_CATALOG.render(
                 locale,
@@ -652,7 +649,7 @@ pub(crate) async fn resolve_cli_secret(
                 ],
             )
         })?;
-    if resolved.trim().is_empty() {
+    if is_secret_spec && resolved.trim().is_empty() {
         return Err(MESSAGE_CATALOG
             .render(
                 locale,
@@ -937,5 +934,47 @@ mod tests {
         assert!(cli.proxy_cb_no_network_errors);
         assert!(cli.proxy_cb_no_timeout_errors);
         assert!(cli.proxy_circuit_breaker_enabled);
+    }
+
+    #[tokio::test]
+    async fn resolve_cli_secret_uses_secret_helper() {
+        let env = ditto_core::config::Env {
+            dotenv: std::collections::BTreeMap::from([(
+                "DITTO_GATEWAY_ADMIN_TOKEN".to_string(),
+                "admin-token".to_string(),
+            )]),
+        };
+
+        let resolved = resolve_cli_secret(
+            "secret://env/DITTO_GATEWAY_ADMIN_TOKEN".to_string(),
+            &env,
+            "admin token",
+            Locale::EN_US,
+        )
+        .await
+        .expect("resolve");
+
+        assert_eq!(resolved, "admin-token");
+    }
+
+    #[tokio::test]
+    async fn resolve_cli_secret_rejects_empty_secret_result() {
+        let env = ditto_core::config::Env {
+            dotenv: std::collections::BTreeMap::from([(
+                "DITTO_GATEWAY_ADMIN_TOKEN".to_string(),
+                "   ".to_string(),
+            )]),
+        };
+
+        let err = resolve_cli_secret(
+            "secret://env/DITTO_GATEWAY_ADMIN_TOKEN".to_string(),
+            &env,
+            "admin token",
+            Locale::EN_US,
+        )
+        .await
+        .expect_err("empty secret");
+
+        assert!(err.to_string().contains("admin token"));
     }
 }

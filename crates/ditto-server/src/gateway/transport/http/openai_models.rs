@@ -117,17 +117,11 @@ pub(super) async fn handle_openai_models_list(
         if !response.status().is_success() {
             continue;
         }
-        let headers = response.headers().clone();
-        let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
-            response,
-            &headers,
-            PER_BACKEND_MAX_BODY_BYTES,
-        )
-        .await
-        {
-            Ok(bytes) => bytes,
-            Err(_) => continue,
-        };
+        let bytes =
+            match read_reqwest_body_bytes_limited(response, PER_BACKEND_MAX_BODY_BYTES).await {
+                Ok(bytes) => Bytes::from(bytes),
+                Err(_) => continue,
+            };
         let json: serde_json::Value = match serde_json::from_slice(&bytes) {
             Ok(value) => value,
             Err(_) => continue,

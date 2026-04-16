@@ -566,11 +566,13 @@ dependencies = [
  "error-kit",
  "futures-util",
  "hmac",
+ "http-kit",
  "httpmock",
  "i18n-kit",
  "i18n-runtime-kit",
+ "omne-execution-gateway",
  "omne-fs",
- "policy-meta",
+ "policy-meta 0.1.0",
  "regex",
  "reqwest",
  "secret-kit",
@@ -610,6 +612,7 @@ dependencies = [
  "ditto-gateway-contract-types",
  "futures-util",
  "getrandom 0.4.0",
+ "http-kit",
  "httpmock",
  "i18n-kit",
  "omne-integrity-primitives",
@@ -1104,6 +1107,19 @@ dependencies = [
  "http",
  "http-body",
  "pin-project-lite",
+]
+
+[[package]]
+name = "http-kit"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1670,6 +1686,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "omne-execution-gateway"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "libc",
+ "omne-fs-primitives",
+ "policy-meta 0.1.0 (git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441)",
+ "rustix",
+ "same-file",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 1.0.69",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "omne-fs"
 version = "0.1.0"
 dependencies = [
@@ -1678,7 +1711,7 @@ dependencies = [
  "libc",
  "memchr",
  "omne-fs-primitives",
- "policy-meta",
+ "policy-meta 0.1.0 (git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441)",
  "regex",
  "same-file",
  "serde",
@@ -1935,6 +1968,19 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "policy-meta"
 version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "ts-rs",
+]
+
+[[package]]
+name = "policy-meta"
+version = "0.1.0"
+source = "git+https://github.com/omne42/omne_foundation.git?rev=7de481c4f3f78ca36ad56b0cdd09dc0043f5d441#7de481c4f3f78ca36ad56b0cdd09dc0043f5d441"
 dependencies = [
  "schemars",
  "serde",
@@ -2372,9 +2418,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
 dependencies = [
  "ring",
  "rustls-pki-types",

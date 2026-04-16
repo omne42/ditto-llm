@@ -23,7 +23,6 @@ mod openai_compat_proxy_request_schema;
 mod openai_compat_proxy_streaming_multipart;
 mod openai_models;
 mod proxy_backend;
-mod proxy_bounded_body;
 mod proxy_budget_reservations;
 mod proxy_gateway_context;
 mod proxy_map_openai_gateway_error;
@@ -73,7 +72,6 @@ use self::openai_compat_proxy_streaming_multipart::{
     handle_openai_compat_proxy_streaming_multipart, should_stream_large_multipart_request,
 };
 use self::proxy_backend::attempt_proxy_backend;
-use self::proxy_bounded_body::read_reqwest_body_bytes_bounded_with_content_length;
 #[cfg(any(
     feature = "gateway-store-sqlite",
     feature = "gateway-store-postgres",
@@ -110,6 +108,7 @@ use self::request_extractors::{
 pub use self::router::router;
 #[cfg(feature = "gateway-translation")]
 use self::translation_backend::attempt_translation_backend;
+use http_kit::read_reqwest_body_bytes_limited;
 #[cfg(feature = "gateway-proxy-cache")]
 use omne_integrity_primitives::Sha256Hasher;
 
@@ -2160,14 +2159,8 @@ async fn proxy_response(
                     1
                 }
             };
-            let bytes = match read_reqwest_body_bytes_bounded_with_content_length(
-                upstream,
-                &headers,
-                max_body_bytes,
-            )
-            .await
-            {
-                Ok(bytes) => bytes,
+            let bytes = match read_reqwest_body_bytes_limited(upstream, max_body_bytes).await {
+                Ok(bytes) => Bytes::from(bytes),
                 Err(err) => {
                     return openai_error(
                         StatusCode::BAD_GATEWAY,
@@ -2377,12 +2370,9 @@ async fn responses_shim_response(
         Ok(response)
     } else {
         let max_body_bytes = 8 * 1024 * 1024;
-        let bytes = read_reqwest_body_bytes_bounded_with_content_length(
-            upstream,
-            &upstream_headers,
-            max_body_bytes,
-        )
+        let bytes = read_reqwest_body_bytes_limited(upstream, max_body_bytes)
             .await
+            .map(Bytes::from)
             .map_err(|err| {
                 openai_error(
                     StatusCode::BAD_GATEWAY,

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use http_kit::read_reqwest_body_bytes_truncated;
 
 use super::{Backend, GatewayError, GatewayRequest, GatewayResponse};
 
@@ -49,11 +50,7 @@ impl Backend for HttpBackend {
 
         let status = response.status();
         if !status.is_success() {
-            let body = ditto_core::provider_transport::response_text_truncated(
-                response,
-                MAX_BACKEND_ERROR_BODY_BYTES,
-            )
-            .await;
+            let body = response_text_truncated(response, MAX_BACKEND_ERROR_BODY_BYTES).await;
             return Err(GatewayError::Backend {
                 message: format!("backend status {status}: {body}"),
             });
@@ -66,4 +63,19 @@ impl Backend for HttpBackend {
                 message: format!("backend response decode error: {err}"),
             })
     }
+}
+
+async fn response_text_truncated(response: reqwest::Response, max_bytes: usize) -> String {
+    let (bytes, truncated) = match read_reqwest_body_bytes_truncated(response, max_bytes).await {
+        Ok((bytes, truncated)) => (bytes, truncated),
+        Err(err) => return format!("failed to read response body: {err}"),
+    };
+    let mut body = String::from_utf8_lossy(&bytes).to_string();
+    if truncated {
+        if !body.is_empty() {
+            body.push('\n');
+        }
+        body.push_str("...(truncated)");
+    }
+    body
 }
