@@ -5,8 +5,7 @@
 //! config hints to produce concrete runtime routes.
 
 use super::route_endpoint::{
-    adapt_runtime_base_url_for_transport, append_query_params, join_base_url,
-    merge_runtime_query_params, resolve_runtime_base_url,
+    adapt_runtime_base_url_for_transport, merge_runtime_query_params, resolve_runtime_base_url,
 };
 use super::route_selection::{
     effective_runtime_provider_hint, normalize_runtime_hints, resolve_runtime_model,
@@ -136,8 +135,9 @@ pub(crate) fn resolve_runtime_route_plan(
     );
     let query_params =
         merge_runtime_query_params(&invocation.endpoint.query_params, request.provider_hints);
-    let joined = join_base_url(base_url.as_str(), invocation.endpoint.path.as_str());
-    let url = append_query_params(joined, &query_params);
+    let joined =
+        http_kit::join_api_base_url_path(base_url.as_str(), invocation.endpoint.path.as_str());
+    let url = http_kit::append_url_query_params(joined, &query_params);
 
     Ok(RuntimeRouteExplainPlan {
         provider_hint: provider_hint.to_string(),
@@ -316,15 +316,15 @@ mod tests {
     #[test]
     fn runtime_route_respects_v1_join_ergonomics() {
         assert_eq!(
-            join_base_url("http://localhost:8080/v1", "/v1/chat/completions"),
+            http_kit::join_api_base_url_path("http://localhost:8080/v1", "/v1/chat/completions"),
             "http://localhost:8080/v1/chat/completions"
         );
         assert_eq!(
-            join_base_url("http://localhost:8080/v1", "v1/chat/completions"),
+            http_kit::join_api_base_url_path("http://localhost:8080/v1", "v1/chat/completions"),
             "http://localhost:8080/v1/chat/completions"
         );
         assert_eq!(
-            join_base_url("http://localhost:8080/v1", "/v1"),
+            http_kit::join_api_base_url_path("http://localhost:8080/v1", "/v1"),
             "http://localhost:8080/v1"
         );
     }
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn append_query_params_appends_with_existing_separator() {
         assert_eq!(
-            append_query_params(
+            http_kit::append_url_query_params(
                 "https://example.com/path".to_string(),
                 &[
                     ("a".to_string(), "1".to_string()),
@@ -435,7 +435,7 @@ mod tests {
             "https://example.com/path?a=1&b=2"
         );
         assert_eq!(
-            append_query_params(
+            http_kit::append_url_query_params(
                 "https://example.com/path?x=0".to_string(),
                 &[("a".to_string(), "1".to_string())]
             ),
