@@ -1,17 +1,14 @@
 //! L0 boundary: session_transport.
 //!
 //! This module owns stream/session-level transport semantics:
-//! SSE framing, websocket base URL negotiation, and stream bootstrap
-//! helpers shared by provider adapters and gateway bridges.
+//! SSE framing and stream bootstrap helpers shared by provider adapters and
+//! gateway bridges.
 
 mod policy;
 mod sse;
 mod streaming;
 
-pub use policy::{
-    SessionTransportPolicy, WebsocketBaseUrlResolution, WebsocketBaseUrlRewrite,
-    resolve_websocket_base_url,
-};
+pub use policy::SessionTransportPolicy;
 pub use sse::SseLimits;
 
 #[allow(unused_imports)]
@@ -24,7 +21,7 @@ pub(crate) use streaming::init_sse_stream;
 
 #[cfg(feature = "cap-realtime")]
 pub(crate) fn to_websocket_base_url(base_url: &str) -> String {
-    resolve_websocket_base_url(base_url).base_url
+    http_kit::resolve_websocket_base_url(base_url).base_url
 }
 
 #[cfg(test)]

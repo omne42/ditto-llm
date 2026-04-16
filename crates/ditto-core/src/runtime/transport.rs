@@ -215,13 +215,11 @@ pub fn plan_builtin_runtime_transport(
     plan_runtime_transport(runtime.catalog(), request)
 }
 
-impl From<crate::session_transport::WebsocketBaseUrlRewrite> for RuntimeTransportBaseUrlRewrite {
-    fn from(value: crate::session_transport::WebsocketBaseUrlRewrite) -> Self {
+impl From<http_kit::WebsocketBaseUrlRewrite> for RuntimeTransportBaseUrlRewrite {
+    fn from(value: http_kit::WebsocketBaseUrlRewrite) -> Self {
         match value {
-            crate::session_transport::WebsocketBaseUrlRewrite::HttpToWebsocket => {
-                Self::HttpToWebsocket
-            }
-            crate::session_transport::WebsocketBaseUrlRewrite::HttpsToSecureWebsocket => {
+            http_kit::WebsocketBaseUrlRewrite::HttpToWebsocket => Self::HttpToWebsocket,
+            http_kit::WebsocketBaseUrlRewrite::HttpsToSecureWebsocket => {
                 Self::HttpsToSecureWebsocket
             }
         }

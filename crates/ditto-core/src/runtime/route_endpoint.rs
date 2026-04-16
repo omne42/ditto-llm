@@ -45,15 +45,12 @@ pub(super) fn resolve_runtime_base_url(
 pub(super) fn adapt_runtime_base_url_for_transport(
     base_url: String,
     transport: TransportKind,
-) -> (
-    String,
-    Option<crate::session_transport::WebsocketBaseUrlRewrite>,
-) {
+) -> (String, Option<http_kit::WebsocketBaseUrlRewrite>) {
     if transport != TransportKind::WebSocket {
         return (base_url, None);
     }
 
-    let rewritten = crate::session_transport::resolve_websocket_base_url(&base_url);
+    let rewritten = http_kit::resolve_websocket_base_url(&base_url);
     (rewritten.base_url, rewritten.rewrite)
 }
 
