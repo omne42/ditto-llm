@@ -107,8 +107,10 @@ impl RealtimeSessionModel for OpenAIRealtime {
         }
 
         let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
-        let mut url = reqwest::Url::parse(&http_kit::join_api_base_url_path(&base_url, "realtime"))
-            .map_err(|err| {
+        let url = http_kit::join_api_base_url_path(&base_url, "realtime");
+        let query_params = query_params.into_iter().collect::<Vec<_>>();
+        let url =
+            http_kit::append_url_query_params_encoded(&url, &query_params).map_err(|err| {
                 crate::invalid_response!(
                     "error_detail.provider.base_url_invalid",
                     "subject" => "openai realtime websocket",
@@ -116,15 +118,9 @@ impl RealtimeSessionModel for OpenAIRealtime {
                     "error" => err.to_string()
                 )
             })?;
-        {
-            let mut pairs = url.query_pairs_mut();
-            for (name, value) in &query_params {
-                pairs.append_pair(name, value);
-            }
-        }
 
         Ok(RealtimeSessionConnection {
-            url: url.to_string(),
+            url,
             headers,
             setup_payload: None,
             provider_metadata: Some(serde_json::json!({
@@ -195,19 +191,24 @@ mod tests {
             }),
             http_query_params: std::collections::BTreeMap::from([(
                 "region".to_string(),
-                "us".to_string(),
+                "us east".to_string(),
             )]),
             ..ProviderConfig::default()
         };
-        let env = Env::parse_dotenv("DITTO_TEST_OPENAI_KEY=sk-test\n");
+        let env = Env::parse_dotenv("DITTO_TEST_OPENAI_KEY=sk/test\n");
         let client = OpenAIRealtime::from_config(&config, &env).await?;
 
         let session = client
             .prepare_session(RealtimeSessionRequest {
                 model: None,
-                query_params: BTreeMap::from([("trace".to_string(), "1".to_string())]),
+                query_params: BTreeMap::from([("trace".to_string(), "1/2".to_string())]),
             })
             .await?;
+
+        assert_eq!(
+            session.url,
+            "wss://proxy.example/v1/realtime?api_key=sk%2Ftest&model=gpt-realtime-mini&region=us+east&trace=1%2F2"
+        );
 
         let parsed = reqwest::Url::parse(&session.url)
             .expect("realtime session url should remain a valid websocket url");
@@ -222,9 +223,9 @@ mod tests {
             params.get("model").map(String::as_str),
             Some("gpt-realtime-mini")
         );
-        assert_eq!(params.get("region").map(String::as_str), Some("us"));
-        assert_eq!(params.get("trace").map(String::as_str), Some("1"));
-        assert_eq!(params.get("api_key").map(String::as_str), Some("sk-test"));
+        assert_eq!(params.get("region").map(String::as_str), Some("us east"));
+        assert_eq!(params.get("trace").map(String::as_str), Some("1/2"));
+        assert_eq!(params.get("api_key").map(String::as_str), Some("sk/test"));
         assert_eq!(session.headers.get("authorization"), None);
         assert_eq!(
             session.headers.get("openai-beta").map(String::as_str),
