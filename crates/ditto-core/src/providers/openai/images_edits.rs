@@ -5,7 +5,7 @@ use crate::providers::openai_like;
 
 use crate::capabilities::ImageEditModel;
 use crate::config::{Env, ProviderConfig};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::types::{ImageEditRequest, ImageEditResponse};
 
 macro_rules! define_openai_like_image_edits {
@@ -52,16 +52,12 @@ macro_rules! define_openai_like_image_edits {
             }
 
             fn resolve_model<'a>(&'a self, request: &'a ImageEditRequest) -> Result<&'a str> {
-                if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-                    return Ok(model);
-                }
-                if !self.client.model.trim().is_empty() {
-                    return Ok(self.client.model.as_str());
-                }
-                Err(DittoError::provider_model_missing(
+                crate::providers::resolve_model_or_default(
+                    request.model.as_deref().filter(|m| !m.trim().is_empty()),
+                    self.client.model.as_str(),
                     $model_subject,
                     $model_hint,
-                ))
+                )
             }
         }
 

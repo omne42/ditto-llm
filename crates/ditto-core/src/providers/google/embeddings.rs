@@ -80,13 +80,12 @@ impl GoogleEmbeddings {
     }
 
     fn resolve_model(&self) -> Result<&str> {
-        if !self.model.trim().is_empty() {
-            return Ok(self.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            None,
+            self.model.as_str(),
             "google embedding",
             "set GoogleEmbeddings::with_model",
-        ))
+        )
     }
 
     fn embed_url(&self, suffix: &str) -> String {

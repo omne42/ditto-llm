@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::config::{Env, ProviderAuth, ProviderConfig};
 use crate::contracts::{GenerateRequest, GenerateResponse};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 use crate::providers::openai_chat_completions_core::{
     OpenAiChatCompletionsFacade, OpenAiChatCompletionsModelBehaviorResolver,
@@ -100,20 +100,15 @@ impl OpenAIChatCompletions {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request
-            .model
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            return Ok(model);
-        }
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request
+                .model
+                .as_deref()
+                .filter(|value| !value.trim().is_empty()),
+            self.client.model.as_str(),
             "openai chat/completions",
             "set request.model or OpenAIChatCompletions::with_model",
-        ))
+        )
     }
 
     fn request_quirks_for_model(&self, model: &str) -> OpenAiChatCompletionsRequestQuirks {

@@ -8,6 +8,7 @@ pub mod cohere;
 mod genai;
 #[cfg(feature = "provider-google")]
 pub mod google;
+mod model_resolution;
 #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 pub mod openai;
 mod openai_compat_profile;
@@ -85,6 +86,7 @@ pub use google::GoogleImages;
 pub use google::GoogleRealtime;
 #[cfg(all(feature = "provider-google", feature = "cap-video-generation"))]
 pub use google::GoogleVideos;
+pub(crate) use model_resolution::resolve_model_or_default;
 #[cfg(feature = "provider-openai")]
 pub use openai::OpenAI;
 #[cfg(all(feature = "cap-batch", feature = "provider-openai"))]

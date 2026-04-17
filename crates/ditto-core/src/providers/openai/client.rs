@@ -24,8 +24,6 @@ use crate::contracts::{
     ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
-#[cfg(feature = "provider-openai")]
-use crate::error::DittoError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -198,16 +196,12 @@ impl OpenAI {
 
     #[cfg(feature = "provider-openai")]
     pub(super) fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-            return Ok(model);
-        }
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().filter(|m| !m.trim().is_empty()),
+            self.client.model.as_str(),
             "openai",
             "set request.model or OpenAI::with_model",
-        ))
+        )
     }
 
     #[cfg(feature = "provider-openai")]

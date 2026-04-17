@@ -30,7 +30,7 @@ use crate::contracts::{
 };
 #[cfg(feature = "cap-rerank")]
 use crate::types::{RerankDocument, RerankRequest, RerankResponse, RerankResult};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 
 const DEFAULT_BASE_URL: &str = "https://api.cohere.com/v2";
 
@@ -118,16 +118,12 @@ impl Cohere {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-            return Ok(model);
-        }
-        if !self.default_model.trim().is_empty() {
-            return Ok(self.default_model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().filter(|m| !m.trim().is_empty()),
+            self.default_model.as_str(),
             "cohere chat",
             "set request.model or Cohere::with_model",
-        ))
+        )
     }
 
     fn sanitize_temperature(

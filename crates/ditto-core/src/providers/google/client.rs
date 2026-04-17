@@ -110,16 +110,12 @@ impl Google {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-            return Ok(model);
-        }
-        if !self.default_model.trim().is_empty() {
-            return Ok(self.default_model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().filter(|m| !m.trim().is_empty()),
+            self.default_model.as_str(),
             "google",
             "set request.model or Google::with_model",
-        ))
+        )
     }
 
     fn model_path(model: &str) -> String {
