@@ -141,26 +141,26 @@ mod google_realtime_impl {
                 }
             }
 
-            let mut url = Url::parse(&format!(
-                "{root}/ws/google.ai.generativelanguage.{version}.GenerativeService.BidiGenerateContent"
-            ))
-            .map_err(|err| {
-                crate::invalid_response!(
-                    "error_detail.provider.base_url_invalid",
-                    "subject" => "google realtime websocket",
-                    "base_url" => format!("{root} (version={version})"),
-                    "error" => err.to_string()
-                )
-            })?;
-            if !query_params.is_empty() {
-                let mut pairs = url.query_pairs_mut();
-                for (name, value) in &query_params {
-                    pairs.append_pair(name, value);
-                }
-            }
+            let url = http_kit::join_api_base_url_path(
+                &root,
+                &format!(
+                    "ws/google.ai.generativelanguage.{version}.GenerativeService.BidiGenerateContent"
+                ),
+            );
+            let query_params = query_params.into_iter().collect::<Vec<_>>();
+            let url = http_kit::append_url_query_params_encoded(&url, &query_params).map_err(
+                |err| {
+                    crate::invalid_response!(
+                        "error_detail.provider.base_url_invalid",
+                        "subject" => "google realtime websocket",
+                        "base_url" => format!("{root} (version={version})"),
+                        "error" => err.to_string()
+                    )
+                },
+            )?;
 
             Ok(RealtimeSessionConnection {
-                url: url.to_string(),
+                url,
                 headers,
                 setup_payload: Some(serde_json::json!({
                     "setup": {
@@ -207,6 +207,39 @@ mod google_realtime_impl {
                         "model": "models/gemini-2.5-flash-live"
                     }
                 }))
+            );
+            Ok(())
+        }
+
+        #[tokio::test]
+        async fn prepare_session_encodes_query_auth_and_extra_params() -> Result<()> {
+            let config = ProviderConfig {
+                base_url: Some("https://proxy.example/v1beta".to_string()),
+                default_model: Some("gemini-2.5-flash-live".to_string()),
+                auth: Some(crate::config::ProviderAuth::QueryParamEnv {
+                    param: "api_key".to_string(),
+                    keys: vec!["DITTO_TEST_GOOGLE_KEY".to_string()],
+                    prefix: None,
+                }),
+                http_query_params: BTreeMap::from([(
+                    "region".to_string(),
+                    "us east".to_string(),
+                )]),
+                ..ProviderConfig::default()
+            };
+            let env = Env::parse_dotenv("DITTO_TEST_GOOGLE_KEY=sk/test\n");
+            let client = GoogleRealtime::from_config(&config, &env).await?;
+
+            let session = client
+                .prepare_session(RealtimeSessionRequest {
+                    model: None,
+                    query_params: BTreeMap::from([("trace".to_string(), "1/2".to_string())]),
+                })
+                .await?;
+
+            assert_eq!(
+                session.url,
+                "wss://proxy.example/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?api_key=sk%2Ftest&region=us+east&trace=1%2F2"
             );
             Ok(())
         }

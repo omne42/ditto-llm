@@ -11,7 +11,6 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::StreamExt;
 #[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
-use reqwest::Url;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -116,8 +115,7 @@ impl Bedrock {
         if self.base_url.contains("{model}") {
             return self.base_url.replace("{model}", model);
         }
-        let base = self.base_url.trim_end_matches('/');
-        format!("{base}/model/{model}/invoke")
+        http_kit::join_api_base_url_path(&self.base_url, &format!("model/{model}/invoke"))
     }
 
     #[cfg(feature = "cap-llm-streaming")]
@@ -132,26 +130,24 @@ impl Bedrock {
             }
             return format!("{replaced}/invoke-with-response-stream");
         }
-        let base = self.base_url.trim_end_matches('/');
-        format!("{base}/model/{model}/invoke-with-response-stream")
+        http_kit::join_api_base_url_path(
+            &self.base_url,
+            &format!("model/{model}/invoke-with-response-stream"),
+        )
     }
 
     fn build_url_with_query(&self, base: &str) -> Result<String> {
-        let mut url = Url::parse(base).map_err(|err| {
-            DittoError::provider_base_url_invalid("bedrock", base, err)
-        })?;
-        if !self.http_query_params.is_empty() {
-            {
-                let mut pairs = url.query_pairs_mut();
-                for (key, value) in &self.http_query_params {
-                    if key.trim().is_empty() {
-                        continue;
-                    }
-                    pairs.append_pair(key, value);
-                }
-            }
+        if self.http_query_params.is_empty() {
+            return Ok(base.to_string());
         }
-        Ok(url.to_string())
+
+        let query_params = self
+            .http_query_params
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        http_kit::append_url_query_params_encoded(base, &query_params)
+            .map_err(|err| DittoError::provider_base_url_invalid("bedrock", base, err))
     }
 
     fn build_tool_name_map(messages: &[Message]) -> HashMap<String, String> {

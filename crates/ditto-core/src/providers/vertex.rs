@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 #[cfg(feature = "cap-llm-streaming")]
 use futures_util::stream;
-use reqwest::Url;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -113,8 +112,7 @@ impl Vertex {
         if self.base_url.ends_with(":generateContent") {
             return self.base_url.clone();
         }
-        let base = self.base_url.trim_end_matches('/');
-        format!("{base}/models/{model}:generateContent")
+        http_kit::join_api_base_url_path(&self.base_url, &format!("models/{model}:generateContent"))
     }
 
     #[cfg(feature = "cap-llm-streaming")]
@@ -137,26 +135,29 @@ impl Vertex {
                 .base_url
                 .replace(":generateContent", ":streamGenerateContent");
         }
-        let base = self.base_url.trim_end_matches('/');
-        format!("{base}/models/{model}:streamGenerateContent")
+        http_kit::join_api_base_url_path(
+            &self.base_url,
+            &format!("models/{model}:streamGenerateContent"),
+        )
     }
 
     fn build_url_with_query_and_alt(&self, base: &str, alt: Option<&str>) -> Result<String> {
-        let mut url = Url::parse(base)
-            .map_err(|err| DittoError::provider_base_url_invalid("vertex", base, err))?;
-        {
-            let mut pairs = url.query_pairs_mut();
-            if let Some(alt) = alt {
-                pairs.append_pair("alt", alt);
-            }
-            for (key, value) in &self.http_query_params {
-                if key.trim().is_empty() {
-                    continue;
-                }
-                pairs.append_pair(key, value);
-            }
+        let mut query_params =
+            Vec::with_capacity(self.http_query_params.len() + usize::from(alt.is_some()));
+        if let Some(alt) = alt {
+            query_params.push(("alt".to_string(), alt.to_string()));
         }
-        Ok(url.to_string())
+        query_params.extend(
+            self.http_query_params
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone())),
+        );
+        if query_params.is_empty() {
+            return Ok(base.to_string());
+        }
+
+        http_kit::append_url_query_params_encoded(base, &query_params)
+            .map_err(|err| DittoError::provider_base_url_invalid("vertex", base, err))
     }
 
     async fn apply_auth(&self, req: reqwest::RequestBuilder) -> Result<reqwest::RequestBuilder> {
@@ -170,6 +171,46 @@ impl Vertex {
             req = req.header(name, value);
         }
         req
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vertex_client() -> Result<Vertex> {
+        let oauth = OAuthClientCredentials::new(
+            "https://auth.example/token",
+            "client-id",
+            "client-secret",
+        )?;
+        Vertex::new(oauth, "https://proxy.example/v1", "gemini-2.5-pro")
+    }
+
+    #[test]
+    fn generate_url_respects_v1_join_ergonomics() -> Result<()> {
+        let client = vertex_client()?;
+        assert_eq!(
+            client.generate_url("gemini-2.5-pro"),
+            "https://proxy.example/v1/models/gemini-2.5-pro:generateContent"
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "cap-llm-streaming")]
+    #[test]
+    fn stream_url_appends_encoded_alt_and_http_query_params() -> Result<()> {
+        let client = vertex_client()?.with_http_query_params(BTreeMap::from([
+            ("label".to_string(), "us east".to_string()),
+            ("tenant".to_string(), "team/a".to_string()),
+        ]));
+
+        assert_eq!(
+            client
+                .build_url_with_query_and_alt(&client.stream_url("gemini-2.5-pro"), Some("sse"))?,
+            "https://proxy.example/v1/models/gemini-2.5-pro:streamGenerateContent?alt=sse&label=us+east&tenant=team%2Fa"
+        );
+        Ok(())
     }
 }
 

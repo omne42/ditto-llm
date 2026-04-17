@@ -127,6 +127,45 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn bedrock_generate_encodes_http_query_params() -> Result<()> {
+        if crate::utils::test_support::should_skip_httpmock() {
+            return Ok(());
+        }
+        let server = MockServer::start_async().await;
+        let signer = SigV4Signer::new("AKID", "SECRET", None, "us-east-1", "bedrock")?;
+        let client = Bedrock::new(signer, server.url(""), "claude-test")?.with_http_query_params(
+            std::collections::BTreeMap::from([
+                ("region".to_string(), "us east".to_string()),
+                ("trace".to_string(), "1/2".to_string()),
+            ]),
+        );
+
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/model/claude-test/invoke")
+                    .query_param("region", "us east")
+                    .query_param("trace", "1/2");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(
+                        json!({
+                            "content": [{ "type": "text", "text": "ok" }],
+                            "stop_reason": "stop",
+                            "usage": { "input_tokens": 1, "output_tokens": 2 }
+                        })
+                        .to_string(),
+                    );
+            })
+            .await;
+
+        let response = client.generate(GenerateRequest::from(vec![Message::user("hi")])).await?;
+        mock.assert_async().await;
+        assert_eq!(response.text(), "ok");
+        Ok(())
+    }
+
     #[cfg(feature = "cap-llm-streaming")]
     #[tokio::test]
     async fn bedrock_stream_parses_eventstream() -> Result<()> {
