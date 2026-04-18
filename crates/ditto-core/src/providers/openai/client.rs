@@ -24,8 +24,6 @@ use crate::contracts::{
     ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
-#[cfg(feature = "provider-openai")]
-use crate::error::DittoError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -613,7 +611,7 @@ impl OpenAI {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
+            Err(crate::error::DittoError::builder_capability_feature_missing(
                 "openai",
                 "streaming",
             ))
