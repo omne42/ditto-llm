@@ -84,19 +84,12 @@ impl CohereRerank {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a RerankRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref() {
-            let model = model.trim();
-            if !model.is_empty() {
-                return Ok(model);
-            }
-        }
-        if !self.default_model.trim().is_empty() {
-            return Ok(self.default_model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().map(str::trim).filter(|m| !m.is_empty()),
+            self.default_model.as_str(),
             "cohere rerank",
             "set request.model or CohereRerank::with_model",
-        ))
+        )
     }
 }
 

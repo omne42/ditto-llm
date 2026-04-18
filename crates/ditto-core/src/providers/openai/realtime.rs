@@ -8,7 +8,7 @@ use crate::capabilities::realtime::{
     RealtimeSessionConnection, RealtimeSessionModel, RealtimeSessionRequest,
 };
 use crate::config::{Env, ProviderConfig, RequestAuth};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 
 const OPENAI_REALTIME_BETA_HEADER: &str = "realtime=v1";
 
@@ -48,20 +48,15 @@ impl OpenAIRealtime {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a RealtimeSessionRequest) -> Result<&'a str> {
-        if let Some(model) = request
-            .model
-            .as_deref()
-            .filter(|model| !model.trim().is_empty())
-        {
-            return Ok(model);
-        }
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request
+                .model
+                .as_deref()
+                .filter(|model| !model.trim().is_empty()),
+            self.client.model.as_str(),
             "openai realtime",
             "set request.model or OpenAIRealtime::with_model",
-        ))
+        )
     }
 }
 

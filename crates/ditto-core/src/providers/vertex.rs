@@ -93,16 +93,12 @@ impl Vertex {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-            return Ok(model);
-        }
-        if !self.default_model.trim().is_empty() {
-            return Ok(self.default_model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().filter(|m| !m.trim().is_empty()),
+            self.default_model.as_str(),
             "vertex",
             "set request.model or Vertex::with_model",
-        ))
+        )
     }
 
     fn generate_url(&self, model: &str) -> String {
@@ -392,10 +388,7 @@ impl LanguageModel for Vertex {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
-                "vertex",
-                "streaming",
-            ))
+            Err(crate::error::DittoError::builder_capability_feature_missing("vertex", "streaming"))
         }
 
         #[cfg(feature = "cap-llm-streaming")]

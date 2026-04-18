@@ -12,7 +12,7 @@ mod google_images_impl {
     use crate::types::{
         ImageGenerationRequest, ImageGenerationResponse, ImageResponseFormat,
     };
-    use crate::error::{DittoError, Result};
+    use crate::error::Result;
 
     #[derive(Clone)]
     pub struct GoogleImages {
@@ -88,20 +88,12 @@ mod google_images_impl {
         }
 
         fn resolve_model<'a>(&'a self, request: &'a ImageGenerationRequest) -> Result<&'a str> {
-            if let Some(model) = request
-                .model
-                .as_deref()
-                .filter(|model| !model.trim().is_empty())
-            {
-                return Ok(model);
-            }
-            if !self.client.default_model.trim().is_empty() {
-                return Ok(self.client.default_model.as_str());
-            }
-            Err(DittoError::provider_model_missing(
+            crate::providers::resolve_model_or_default(
+                request.model.as_deref().filter(|model| !model.trim().is_empty()),
+                self.client.default_model.as_str(),
                 "google image",
                 "set request.model or GoogleImages::with_model",
-            ))
+            )
         }
 
         fn predict_url(&self, model: &str) -> String {

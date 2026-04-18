@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::capabilities::audio::SpeechModel;
 use crate::config::{Env, ProviderConfig};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::providers::{openai_audio_common, openai_like};
 use crate::types::{SpeechRequest, SpeechResponse};
 
@@ -55,16 +55,12 @@ macro_rules! define_openai_like_speech {
             }
 
             fn resolve_model<'a>(&'a self, request: &'a SpeechRequest) -> Result<&'a str> {
-                if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-                    return Ok(model);
-                }
-                if !self.client.model.trim().is_empty() {
-                    return Ok(self.client.model.as_str());
-                }
-                Err(DittoError::provider_model_missing(
+                crate::providers::resolve_model_or_default(
+                    request.model.as_deref().filter(|m| !m.trim().is_empty()),
+                    self.client.model.as_str(),
                     $model_subject,
                     $model_hint,
-                ))
+                )
             }
         }
 

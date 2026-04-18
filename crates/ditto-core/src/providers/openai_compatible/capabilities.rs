@@ -36,13 +36,12 @@ impl OpenAICompatibleEmbeddings {
     }
 
     fn resolve_model(&self) -> Result<&str> {
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            None,
+            self.client.model.as_str(),
             "openai-compatible embedding",
             "set OpenAICompatibleEmbeddings::with_model",
-        ))
+        )
     }
 }
 

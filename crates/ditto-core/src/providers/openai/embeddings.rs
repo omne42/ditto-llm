@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use crate::capabilities::embedding::EmbeddingModel;
 use crate::config::{Env, ProviderConfig};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::providers::openai_like;
 
 #[derive(Clone)]
@@ -41,13 +41,12 @@ impl OpenAIEmbeddings {
     }
 
     fn resolve_model(&self) -> Result<&str> {
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            None,
+            self.client.model.as_str(),
             "openai embedding",
             "set OpenAIEmbeddings::with_model",
-        ))
+        )
     }
 }
 

@@ -19,7 +19,7 @@ use crate::contracts::{FileSource, Message, Role, ToolChoice};
 #[cfg(all(test, feature = "cap-llm-tools"))]
 use crate::contracts::Tool;
 use crate::contracts::{FinishReason, GenerateRequest, GenerateResponse, Usage, Warning};
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 #[cfg(test)]
 use crate::providers::openai_chat_completions_core::{
@@ -216,16 +216,12 @@ impl OpenAICompatible {
     }
 
     fn resolve_model<'a>(&'a self, request: &'a GenerateRequest) -> Result<&'a str> {
-        if let Some(model) = request.model.as_deref().filter(|m| !m.trim().is_empty()) {
-            return Ok(model);
-        }
-        if !self.client.model.trim().is_empty() {
-            return Ok(self.client.model.as_str());
-        }
-        Err(DittoError::provider_model_missing(
+        crate::providers::resolve_model_or_default(
+            request.model.as_deref().filter(|m| !m.trim().is_empty()),
+            self.client.model.as_str(),
             "openai-compatible",
             "set request.model or OpenAICompatible::with_model",
-        ))
+        )
     }
 
     fn request_quirks_for_model(&self, model: &str) -> OpenAiCompatibleRequestQuirks {
@@ -283,6 +279,8 @@ impl OpenAICompatible {
 #[cfg(test)]
 mod client_tests {
     use super::*;
+    #[cfg(feature = "cap-llm-tools")]
+    use crate::error::DittoError;
     use serde_json::json;
     use std::collections::BTreeMap;
 

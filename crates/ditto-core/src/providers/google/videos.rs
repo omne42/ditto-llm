@@ -17,7 +17,7 @@ mod google_videos_impl {
         VideoGenerationResponse, VideoGenerationStatus, VideoListRequest, VideoListResponse,
         VideoReferenceUpload, VideoRemixRequest,
     };
-    use crate::error::{DittoError, Result};
+    use crate::error::Result;
 
     #[derive(Clone)]
     pub struct GoogleVideos {
@@ -118,20 +118,12 @@ mod google_videos_impl {
         }
 
         fn resolve_model<'a>(&'a self, request: &'a VideoGenerationRequest) -> Result<&'a str> {
-            if let Some(model) = request
-                .model
-                .as_deref()
-                .filter(|model| !model.trim().is_empty())
-            {
-                return Ok(model);
-            }
-            if !self.client.default_model.trim().is_empty() {
-                return Ok(self.client.default_model.as_str());
-            }
-            Err(DittoError::provider_model_missing(
+            crate::providers::resolve_model_or_default(
+                request.model.as_deref().filter(|model| !model.trim().is_empty()),
+                self.client.default_model.as_str(),
                 "google video",
                 "set request.model or GoogleVideos::with_model",
-            ))
+            )
         }
 
         fn predict_long_running_url(&self, model: &str) -> String {

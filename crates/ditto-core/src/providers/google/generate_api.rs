@@ -51,9 +51,11 @@ fn parse_google_candidate(
 // failure, not as a final model answer failure: retry once via non-streaming
 // generate() and re-wrap the response as stream chunks so upstream callers can
 // stay on the streaming interface.
-fn classify_google_stream_fallback(err: &DittoError) -> Option<GoogleStreamFallbackReason> {
+fn classify_google_stream_fallback(
+    err: &crate::error::DittoError,
+) -> Option<GoogleStreamFallbackReason> {
     match err {
-        DittoError::Api { body, .. } => {
+        crate::error::DittoError::Api { body, .. } => {
             let parsed = serde_json::from_str::<GoogleApiFailureEnvelope>(body).ok()?;
             let code = parsed.error.code.trim();
             if code == "channel:empty_response" {
@@ -318,7 +320,7 @@ impl LanguageModel for Google {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
+            Err(crate::error::DittoError::builder_capability_feature_missing(
                 "google",
                 "streaming",
             ))
