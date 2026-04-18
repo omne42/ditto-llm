@@ -23,7 +23,7 @@ use crate::contracts::{
     ContentPart, FinishReason, GenerateRequest, GenerateResponse, Message, Tool, ToolChoice, Usage,
     Warning,
 };
-use crate::error::{DittoError, Result};
+use crate::error::Result;
 
 #[cfg(feature = "cap-embedding")]
 use crate::capabilities::embedding::EmbeddingModel;

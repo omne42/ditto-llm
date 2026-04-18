@@ -388,10 +388,7 @@ impl LanguageModel for Vertex {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
-                "vertex",
-                "streaming",
-            ))
+            Err(crate::error::DittoError::builder_capability_feature_missing("vertex", "streaming"))
         }
 
         #[cfg(feature = "cap-llm-streaming")]

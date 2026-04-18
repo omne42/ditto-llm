@@ -15,8 +15,6 @@ use super::client::{
 use crate::contracts::StreamChunk;
 use crate::contracts::{ContentPart, GenerateRequest, GenerateResponse};
 use crate::contracts::{FinishReason, Warning};
-#[cfg(not(feature = "cap-llm-streaming"))]
-use crate::error::DittoError;
 use crate::error::Result;
 use crate::llm_core::model::{LanguageModel, StreamResult};
 
@@ -231,10 +229,7 @@ impl LanguageModel for OpenAI {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
-                "openai",
-                "streaming",
-            ))
+            Err(crate::error::DittoError::builder_capability_feature_missing("openai", "streaming"))
         }
 
         #[cfg(feature = "cap-llm-streaming")]
