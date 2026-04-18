@@ -233,7 +233,7 @@ impl LanguageModel for Anthropic {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(DittoError::builder_capability_feature_missing(
+            Err(crate::error::DittoError::builder_capability_feature_missing(
                 "anthropic",
                 "streaming",
             ))
