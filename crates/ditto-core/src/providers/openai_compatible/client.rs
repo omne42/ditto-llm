@@ -279,7 +279,6 @@ impl OpenAICompatible {
 #[cfg(test)]
 mod client_tests {
     use super::*;
-    use crate::error::DittoError;
     use serde_json::json;
     use std::collections::BTreeMap;
 
