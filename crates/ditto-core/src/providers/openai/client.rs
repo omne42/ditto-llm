@@ -24,6 +24,8 @@ use crate::contracts::{
     ContentPart, FileSource, GenerateRequest, ImageSource, Message, Role, Tool, ToolChoice, Usage,
     Warning,
 };
+#[cfg(feature = "provider-openai")]
+use crate::error::DittoError;
 use crate::error::Result;
 
 #[derive(Clone)]
