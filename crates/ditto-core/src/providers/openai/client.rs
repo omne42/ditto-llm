@@ -611,10 +611,7 @@ impl OpenAI {
         #[cfg(not(feature = "cap-llm-streaming"))]
         {
             let _ = request;
-            Err(crate::error::DittoError::builder_capability_feature_missing(
-                "openai",
-                "streaming",
-            ))
+            Err(crate::error::DittoError::builder_capability_feature_missing("openai", "streaming"))
         }
 
         #[cfg(feature = "cap-llm-streaming")]
