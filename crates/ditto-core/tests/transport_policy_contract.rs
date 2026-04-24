@@ -1,6 +1,5 @@
 use ditto_core::provider_transport::HttpTransportPolicy;
-use ditto_core::session_transport::{SessionTransportPolicy, SseLimits};
-use http_kit::{WebsocketBaseUrlRewrite, resolve_websocket_base_url};
+use http_kit::{SseLimits, WebsocketBaseUrlRewrite, resolve_websocket_base_url};
 
 #[test]
 fn provider_transport_exposes_machine_readable_default_policy() {
@@ -14,7 +13,7 @@ fn provider_transport_exposes_machine_readable_default_policy() {
 }
 
 #[test]
-fn session_transport_exposes_rewrite_resolution_and_default_sse_policy() {
+fn http_kit_exposes_rewrite_resolution_and_default_sse_policy() {
     let secure = resolve_websocket_base_url("https://api.openai.com/v1");
     assert_eq!(secure.base_url, "wss://api.openai.com/v1");
     assert_eq!(
@@ -29,6 +28,6 @@ fn session_transport_exposes_rewrite_resolution_and_default_sse_policy() {
         Some(WebsocketBaseUrlRewrite::HttpToWebsocket)
     );
 
-    let policy = SessionTransportPolicy::default();
-    assert_eq!(policy.sse, SseLimits::default());
+    assert_eq!(SseLimits::default().max_line_bytes, 256 * 1024);
+    assert_eq!(SseLimits::default().max_event_bytes, 4 * 1024 * 1024);
 }

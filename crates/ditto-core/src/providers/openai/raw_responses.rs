@@ -163,7 +163,8 @@ pub(super) async fn process_raw_responses_sse<R>(
         &value[..end]
     }
 
-    let mut data_stream = crate::session_transport::sse_data_stream_from_reader(reader);
+    let mut data_stream =
+        crate::providers::openai_like::openai_compatible_sse_data_stream_from_reader(reader);
     loop {
         if tx_event.is_closed() {
             break;

@@ -1,45 +1,10 @@
-//! L0 boundary: session_transport.
+//! Ditto-internal stream bootstrap helpers.
 //!
-//! This module owns stream/session-level transport semantics:
-//! SSE framing and stream bootstrap helpers shared by provider adapters and
-//! gateway bridges.
+//! Generic SSE parsing and websocket URL rewrite live in lower layers
+//! (`http-kit` and `runtime`). This module only keeps Ditto's stream bootstrap
+//! glue for warning prelude chunks and crate-local stream assembly.
 
-mod policy;
-mod sse;
 mod streaming;
 
-pub use policy::SessionTransportPolicy;
-pub use sse::SseLimits;
-
 #[allow(unused_imports)]
-pub use sse::{
-    sse_data_stream_from_reader, sse_data_stream_from_reader_with_limits,
-    sse_data_stream_from_response,
-};
-#[allow(unused_imports)]
-pub(crate) use streaming::init_sse_stream;
-
-#[cfg(feature = "cap-realtime")]
-pub(crate) fn to_websocket_base_url(base_url: &str) -> String {
-    http_kit::resolve_websocket_base_url(base_url).base_url
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(feature = "cap-realtime")]
-    #[test]
-    fn to_websocket_base_url_rewrites_http_and_https() {
-        assert_eq!(
-            super::to_websocket_base_url("https://api.openai.com/v1"),
-            "wss://api.openai.com/v1"
-        );
-        assert_eq!(
-            super::to_websocket_base_url("http://localhost:8080/v1"),
-            "ws://localhost:8080/v1"
-        );
-        assert_eq!(
-            super::to_websocket_base_url("wss://proxy.example/v1"),
-            "wss://proxy.example/v1"
-        );
-    }
-}
+pub(crate) use streaming::{init_data_stream, init_sse_stream};

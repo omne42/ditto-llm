@@ -101,7 +101,7 @@ impl RealtimeSessionModel for OpenAIRealtime {
             }
         }
 
-        let base_url = crate::session_transport::to_websocket_base_url(&self.client.base_url);
+        let base_url = http_kit::resolve_websocket_base_url(&self.client.base_url).base_url;
         let url = http_kit::join_api_base_url_path(&base_url, "realtime");
         let query_params = query_params.into_iter().collect::<Vec<_>>();
         let url =

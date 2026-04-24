@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Runtime/Transport: move generic websocket base-url rewrite and generic SSE reader ownership out of `session_transport` and down to `http-kit`/runtime; keep OpenAI-compatible `[DONE]` termination handling in Ditto provider and gateway adapters.
 - Gateway: large multipart OpenAI-compatible proxy requests now preserve model-aware routing/passthrough auth semantics, and invalid requests no longer consume in-memory RPM/TPM before schema or guardrail validation.
 - Gateway/Security: fail-close proxy-compatible HTTP auth when no virtual keys are configured, restrict `include_tokens=true` and LiteLLM key secret export paths to secret-managing admin tokens, validate duplicate virtual-key tokens on control-plane mutations, and persist virtual keys as one-way `sha256:` hashes in state/store backends.
 - Gateway/Security: make MCP `/mcp*` and A2A `/a2a/*` endpoints fail-closed as well, add a dependency-aware `/ready` readiness probe (while keeping `/health` as liveness), and switch the optional Admin UI token cache from `localStorage` to `sessionStorage`.

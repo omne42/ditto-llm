@@ -121,7 +121,7 @@ pub(super) async fn handle_google_genai(
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
             let reader = tokio::io::BufReader::new(reader);
-            let data_stream = ditto_core::session_transport::sse_data_stream_from_reader(reader);
+            let data_stream = super::openai_compatible_sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);
@@ -372,7 +372,7 @@ async fn handle_cloudcode_generate_content_inner(
                 .map(|result| result.map_err(|err| std::io::Error::other(err.to_string())));
             let reader = StreamReader::new(data_stream);
             let reader = tokio::io::BufReader::new(reader);
-            let data_stream = ditto_core::session_transport::sse_data_stream_from_reader(reader);
+            let data_stream = super::openai_compatible_sse_data_stream_from_reader(reader);
 
             let fallback_id =
                 extract_header(&parts.headers, "x-request-id").unwrap_or_else(generate_request_id);

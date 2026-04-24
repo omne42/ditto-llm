@@ -56,7 +56,7 @@ mod google_realtime_impl {
 
         fn websocket_root_and_version(&self) -> Result<(String, String)> {
             let websocket_base =
-                crate::session_transport::to_websocket_base_url(&self.client.base_url);
+                http_kit::resolve_websocket_base_url(&self.client.base_url).base_url;
             let mut url = Url::parse(&websocket_base).map_err(|err| {
                 DittoError::provider_base_url_invalid(
                     "google realtime",
