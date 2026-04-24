@@ -118,7 +118,7 @@ impl ShellToolExecutor {
         Ok(canonical_path)
     }
 
-    fn exec_gateway_for_program(&self, program: &PathBuf) -> ExecGateway {
+    fn exec_gateway_for_program(&self, program: &Path) -> ExecGateway {
         ExecGateway::with_policy(GatewayPolicy {
             allow_isolation_none: true,
             non_mutating_program_allowlist: vec![program.display().to_string()],
