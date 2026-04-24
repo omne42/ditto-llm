@@ -16,6 +16,8 @@ fn direct_l0_namespaces_expose_low_level_owners() {
     let _ = TypeId::of::<ditto_core::runtime_registry::RuntimeRegistrySnapshot>();
     let _ = ditto_core::runtime::build_language_model;
     let _ = ditto_core::runtime::build_context_cache_model;
+    #[cfg(feature = "agent")]
+    let _ = TypeId::of::<ditto_core::runtime::ToolboxExecutor>();
 }
 
 #[test]

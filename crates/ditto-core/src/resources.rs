@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
 use i18n_kit::{Catalog, FallbackStrategy, Locale, TemplateArg};
-use i18n_runtime_kit::{CatalogInitError, CatalogLocaleError, LazyCatalog, bootstrap_i18n_catalog};
+use i18n_runtime_kit::{
+    CatalogInitError, CatalogLocaleError, bootstrap_i18n_catalog, compat::LazyCatalog,
+};
 use text_assets_kit::{DataRootOptions, ResourceManifest, TextResource, ensure_data_root};
 
 use crate::error::{DittoError, Result};
