@@ -585,8 +585,12 @@ impl LanguageModel for OpenAICompatible {
                 .json(&body);
             let response = crate::provider_transport::send_checked(self.apply_auth(req)).await?;
 
+            let data_stream =
+                crate::providers::openai_like::openai_compatible_sse_data_stream_from_response(
+                    response,
+                );
             let (data_stream, buffer) =
-                crate::session_transport::init_sse_stream(response, warnings);
+                crate::session_transport::init_data_stream(data_stream, warnings);
             let stream = stream::unfold(
                 (data_stream, buffer, StreamState::default(), false),
                 |(mut data_stream, mut buffer, mut state, mut done)| async move {

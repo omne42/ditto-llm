@@ -1673,6 +1673,97 @@ async fn append_audit_log(
 
 type ProxyBodyStream = BoxStream<'static, Result<Bytes, std::io::Error>>;
 
+fn openai_compatible_sse_data_stream_from_response(
+    response: reqwest::Response,
+) -> BoxStream<'static, http_kit::Result<String>> {
+    adapt_openai_compatible_sse_stream(http_kit::sse_data_stream_from_response(response))
+}
+
+fn openai_compatible_sse_data_stream_from_reader<R>(
+    reader: R,
+) -> BoxStream<'static, http_kit::Result<String>>
+where
+    R: tokio::io::AsyncBufRead + Unpin + Send + 'static,
+{
+    adapt_openai_compatible_sse_stream(http_kit::sse_data_stream_from_reader(reader))
+}
+
+fn adapt_openai_compatible_sse_stream(
+    stream: BoxStream<'static, http_kit::Result<String>>,
+) -> BoxStream<'static, http_kit::Result<String>> {
+    Box::pin(stream::unfold(stream, |mut stream| async move {
+        loop {
+            match stream.next().await {
+                Some(Ok(data)) if data == "[DONE]" => return None,
+                Some(item) => return Some((item, stream)),
+                None => return None,
+            }
+        }
+    }))
+}
+
+fn map_http_kit_sse_error(error: http_kit::Error) -> ditto_core::error::DittoError {
+    let message = error.message();
+
+    if let Some(limit) = message
+        .strip_suffix(" must be greater than zero")
+        .filter(|limit| !limit.is_empty())
+    {
+        return ditto_core::invalid_response!("error_detail.sse.limit_must_be_positive", "limit" => limit);
+    }
+
+    if let Some(max_line_bytes) = message.strip_prefix("sse line exceeds max_line_bytes ") {
+        return ditto_core::invalid_response!(
+            "error_detail.sse.line_too_large",
+            "max_line_bytes" => max_line_bytes
+        );
+    }
+
+    if let Some(max_event_bytes) = message.strip_prefix("sse event exceeds max_event_bytes ") {
+        return ditto_core::invalid_response!(
+            "error_detail.sse.event_too_large",
+            "max_event_bytes" => max_event_bytes
+        );
+    }
+
+    if let Some(read_error) = message.strip_prefix("read sse line failed: ") {
+        return ditto_core::invalid_response!(
+            "error_detail.sse.read_line_failed",
+            "error" => read_error
+        );
+    }
+
+    if let Some(decode_error) = message.strip_prefix("invalid sse utf-8: ") {
+        return ditto_core::invalid_response!(
+            "error_detail.sse.invalid_utf8",
+            "error" => decode_error
+        );
+    }
+
+    ditto_core::error::DittoError::invalid_response_text(message)
+}
+
+fn openai_compatible_ditto_sse_data_stream_from_response(
+    response: reqwest::Response,
+) -> BoxStream<'static, ditto_core::error::Result<String>> {
+    Box::pin(
+        openai_compatible_sse_data_stream_from_response(response)
+            .map(|item| item.map_err(map_http_kit_sse_error)),
+    )
+}
+
+fn openai_compatible_ditto_sse_data_stream_from_reader<R>(
+    reader: R,
+) -> BoxStream<'static, ditto_core::error::Result<String>>
+where
+    R: tokio::io::AsyncBufRead + Unpin + Send + 'static,
+{
+    Box::pin(
+        openai_compatible_sse_data_stream_from_reader(reader)
+            .map(|item| item.map_err(map_http_kit_sse_error)),
+    )
+}
+
 #[derive(Default)]
 struct ProxyPermits {
     _proxy: Option<OwnedSemaphorePermit>,
@@ -2239,7 +2330,7 @@ async fn responses_shim_response(
         .to_ascii_lowercase();
 
     if content_type.starts_with("text/event-stream") {
-        let data_stream = ditto_core::session_transport::sse_data_stream_from_response(upstream);
+        let data_stream = openai_compatible_ditto_sse_data_stream_from_response(upstream);
         let stream =
             responses_shim::chat_completions_sse_to_responses_sse(data_stream, request_id.clone());
         let upstream_stream: ProxyBodyStream = stream.boxed();

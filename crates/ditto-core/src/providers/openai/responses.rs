@@ -270,8 +270,12 @@ impl LanguageModel for OpenAI {
             )
             .await?;
 
+            let data_stream =
+                crate::providers::openai_like::openai_compatible_sse_data_stream_from_response(
+                    response,
+                );
             let (data_stream, buffer) =
-                crate::session_transport::init_sse_stream(response, warnings);
+                crate::session_transport::init_data_stream(data_stream, warnings);
 
             let stream = stream::unfold(
                 (data_stream, buffer, false, false, None::<String>),

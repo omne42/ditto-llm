@@ -2,20 +2,106 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use crate::capabilities::file::{FileContent, FileDeleteResponse, FileObject, FileUploadRequest};
+#[cfg(feature = "cap-llm-streaming")]
+use futures_util::StreamExt;
+#[cfg(feature = "cap-llm-streaming")]
+use futures_util::stream::{self, BoxStream};
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
+#[cfg(any(feature = "provider-openai", test))]
+use tokio::io::AsyncBufRead;
 
 #[cfg(feature = "provider-openai-compatible")]
 use crate::config::resolve_provider_request_auth_optional;
 #[cfg(any(feature = "provider-openai", feature = "provider-openai-compatible"))]
 use crate::config::resolve_provider_request_auth_required;
 use crate::config::{Env, HttpAuth, ProviderConfig, RequestAuth};
+#[cfg(feature = "cap-llm-streaming")]
+use crate::error::DittoError;
 use crate::error::Result;
 use crate::provider_transport::{apply_http_query_params, resolve_http_provider_config};
 
 pub(crate) const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const HTTP_TIMEOUT: Duration = Duration::from_secs(300);
 pub(crate) const DEFAULT_MAX_BINARY_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
+
+#[cfg(feature = "cap-llm-streaming")]
+fn map_http_kit_sse_error(error: http_kit::Error) -> DittoError {
+    let message = error.message();
+
+    if let Some(limit) = message
+        .strip_suffix(" must be greater than zero")
+        .filter(|limit| !limit.is_empty())
+    {
+        return crate::invalid_response!(
+            "error_detail.sse.limit_must_be_positive",
+            "limit" => limit
+        );
+    }
+
+    if let Some(max_line_bytes) = message.strip_prefix("sse line exceeds max_line_bytes ") {
+        return crate::invalid_response!(
+            "error_detail.sse.line_too_large",
+            "max_line_bytes" => max_line_bytes
+        );
+    }
+
+    if let Some(max_event_bytes) = message.strip_prefix("sse event exceeds max_event_bytes ") {
+        return crate::invalid_response!(
+            "error_detail.sse.event_too_large",
+            "max_event_bytes" => max_event_bytes
+        );
+    }
+
+    if let Some(read_error) = message.strip_prefix("read sse line failed: ") {
+        return crate::invalid_response!(
+            "error_detail.sse.read_line_failed",
+            "error" => read_error
+        );
+    }
+
+    if let Some(decode_error) = message.strip_prefix("invalid sse utf-8: ") {
+        return crate::invalid_response!(
+            "error_detail.sse.invalid_utf8",
+            "error" => decode_error
+        );
+    }
+
+    DittoError::invalid_response_text(message)
+}
+
+#[cfg(feature = "cap-llm-streaming")]
+fn adapt_openai_compatible_sse_stream(
+    stream: BoxStream<'static, std::result::Result<String, http_kit::Error>>,
+) -> BoxStream<'static, Result<String>> {
+    Box::pin(stream::unfold(stream, |mut stream| async move {
+        loop {
+            match stream.next().await {
+                Some(Ok(data)) if data == "[DONE]" => return None,
+                Some(Ok(data)) => return Some((Ok(data), stream)),
+                Some(Err(error)) => return Some((Err(map_http_kit_sse_error(error)), stream)),
+                None => return None,
+            }
+        }
+    }))
+}
+
+#[cfg(any(feature = "provider-openai", test))]
+pub(crate) fn openai_compatible_sse_data_stream_from_reader<R>(
+    reader: R,
+) -> BoxStream<'static, Result<String>>
+where
+    R: AsyncBufRead + Unpin + Send + 'static,
+{
+    adapt_openai_compatible_sse_stream(http_kit::sse_data_stream_from_reader(reader))
+}
+
+#[cfg(feature = "cap-llm-streaming")]
+pub(crate) fn openai_compatible_sse_data_stream_from_response(
+    response: reqwest::Response,
+) -> BoxStream<'static, Result<String>> {
+    adapt_openai_compatible_sse_stream(http_kit::sse_data_stream_from_response(response))
+}
 
 pub(crate) fn default_http_client() -> reqwest::Client {
     crate::provider_transport::default_http_client(HTTP_TIMEOUT)
@@ -248,6 +334,28 @@ pub(crate) async fn list_files(
     req = apply_auth(req, auth, http_query_params);
     let parsed = crate::provider_transport::send_checked_json::<FilesListResponse>(req).await?;
     Ok(parsed.data)
+}
+
+#[cfg(all(test, feature = "cap-llm-streaming"))]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use futures_util::StreamExt;
+    use futures_util::stream;
+
+    #[tokio::test]
+    async fn openai_compatible_sse_stops_at_done_literal() -> Result<()> {
+        let sse = concat!("data: hello\n\n", "data: [DONE]\n\n");
+        let stream = stream::iter([Ok::<_, std::io::Error>(Bytes::from(sse.to_owned()))]);
+        let reader = tokio_util::io::StreamReader::new(stream);
+
+        let mut data_stream =
+            openai_compatible_sse_data_stream_from_reader(tokio::io::BufReader::new(reader));
+        let first = data_stream.next().await.unwrap()?;
+        assert_eq!(first, "hello");
+        assert!(data_stream.next().await.is_none());
+        Ok(())
+    }
 }
 
 pub(crate) async fn retrieve_file(
