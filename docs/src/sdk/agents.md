@@ -4,7 +4,7 @@
 
 > 默认的 `generate_text` / `generate_object_json` / `generate` 都是“单次请求”：不会自动执行工具、不会自动循环。
 
-实现位置：`crates/ditto-core/src/agent/tool_loop.rs`、`crates/ditto-core/src/agent/types.rs`、`crates/ditto-core/src/agent/toolbox/*`。
+实现位置：`crates/ditto-core/src/agent/tool_loop.rs`、`crates/ditto-core/src/agent/types.rs`、`crates/ditto-core/src/runtime/toolbox.rs`、`crates/ditto-core/src/runtime/toolbox/*`。
 
 ---
 
@@ -32,9 +32,10 @@
 示例（伪代码风格，展示结构）：
 
 ```rust
-use ditto_core::agent::{ToolLoopAgent, ToolboxExecutor};
+use ditto_core::agent::ToolLoopAgent;
 use ditto_core::contracts::Message;
 use ditto_core::providers::OpenAI;
+use ditto_core::runtime::ToolboxExecutor;
 
 #[tokio::main]
 async fn main() -> ditto_core::error::Result<()> {
