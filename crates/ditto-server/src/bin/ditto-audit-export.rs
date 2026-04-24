@@ -1,7 +1,7 @@
 use ditto_core::resources::MESSAGE_CATALOG;
 use i18n_kit::{Locale, TemplateArg};
 #[cfg(feature = "gateway")]
-use omne_integrity_primitives::Sha256Hasher;
+use omne_integrity_primitives::{Sha256Hasher, hash_sha256_json_chain};
 
 #[cfg(feature = "gateway")]
 #[derive(Clone, Copy)]
@@ -386,8 +386,7 @@ fn verify_audit_export_jsonl(
             kind: record.kind,
             payload: record.payload,
         };
-        let expected_hash =
-            ditto_server::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &base);
+        let expected_hash = hash_sha256_json_chain(prev_hash.as_deref(), &base)?.to_string();
         if record.hash != expected_hash {
             return Err(
                 audit_hash_mismatch(locale, line_no + 1, &expected_hash, &record.hash).into(),
