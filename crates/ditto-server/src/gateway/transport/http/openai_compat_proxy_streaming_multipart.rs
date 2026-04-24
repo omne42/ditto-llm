@@ -1311,19 +1311,19 @@ pub(super) async fn handle_openai_compat_proxy_streaming_multipart(
         }
     }
 
+    if !spend_tokens && local_rate_limit_reserved {
+        rollback_local_streaming_multipart_rate_limits(
+            &state,
+            virtual_key_id.as_deref(),
+            limits.as_ref(),
+            &tenant_limits_scope,
+            &project_limits_scope,
+            &user_limits_scope,
+            charge_tokens,
+            minute,
+        );
+    }
     if !spend_tokens {
-        if local_rate_limit_reserved {
-            rollback_local_streaming_multipart_rate_limits(
-                &state,
-                virtual_key_id.as_deref(),
-                limits.as_ref(),
-                &tenant_limits_scope,
-                &project_limits_scope,
-                &user_limits_scope,
-                charge_tokens,
-                minute,
-            );
-        }
         #[cfg(feature = "gateway-store-redis")]
         if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
             let _ = store

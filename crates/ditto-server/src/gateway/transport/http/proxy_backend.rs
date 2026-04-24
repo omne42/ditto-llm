@@ -621,21 +621,17 @@ pub(super) async fn attempt_proxy_backend(
             }
         }
 
+        if !spend_tokens && local_rate_limit_reserved {
+            let rate_limit_scopes = collect_limit_scopes(
+                virtual_key_id.as_deref(),
+                limits.as_ref(),
+                tenant_limits_scope,
+                project_limits_scope,
+                user_limits_scope,
+            );
+            state.rollback_rate_limits(rate_limit_scopes, charge_tokens, _now_epoch_seconds / 60);
+        }
         if !spend_tokens {
-            if local_rate_limit_reserved {
-                let rate_limit_scopes = collect_limit_scopes(
-                    virtual_key_id.as_deref(),
-                    limits.as_ref(),
-                    tenant_limits_scope,
-                    project_limits_scope,
-                    user_limits_scope,
-                );
-                state.rollback_rate_limits(
-                    rate_limit_scopes,
-                    charge_tokens,
-                    _now_epoch_seconds / 60,
-                );
-            }
             #[cfg(feature = "gateway-store-redis")]
             if redis_rate_limit_reserved && let Some(store) = state.stores.redis.as_ref() {
                 let _ = store

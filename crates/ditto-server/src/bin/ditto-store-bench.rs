@@ -11,7 +11,7 @@ use std::path::PathBuf;
 ))]
 use std::time::Instant;
 
-use ditto_core::resources::MESSAGE_CATALOG;
+use ditto_core::resources::{MESSAGE_CATALOG, bootstrap_cli_runtime_from_args_with_defaults};
 use i18n_kit::{Locale, TemplateArg};
 #[cfg(feature = "gateway")]
 use serde::Serialize;
@@ -57,7 +57,10 @@ struct StoreBenchResult {
 #[tokio::main]
 async fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
-    if let Err(err) = ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
+    if let Err(err) = bootstrap_cli_runtime_from_args_with_defaults(
+        &raw_args,
+        ditto_server::data_root::default_server_data_root_files(),
+    ) {
         eprintln!("{err:?}");
         std::process::exit(2);
     }

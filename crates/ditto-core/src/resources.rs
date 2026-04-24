@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 
@@ -9,8 +11,34 @@ use text_assets_kit::{DataRootOptions, ResourceManifest, TextResource, ensure_da
 
 use crate::error::{DittoError, Result};
 
-const DATA_ROOT_DIR_NAME: &str = ".omne_data";
-const DATA_ROOT_ENV_VAR: &str = "OMNE_DATA_DIR";
+pub const DATA_ROOT_DIR_NAME: &str = ".omne_data";
+pub const DATA_ROOT_ENV_VAR: &str = "OMNE_DATA_DIR";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDefaultFile {
+    file_name: &'static str,
+    contents: Cow<'static, str>,
+}
+
+impl RuntimeDefaultFile {
+    #[must_use]
+    pub fn new(file_name: &'static str, contents: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            file_name,
+            contents: contents.into(),
+        }
+    }
+
+    #[must_use]
+    pub const fn file_name(&self) -> &'static str {
+        self.file_name
+    }
+
+    #[must_use]
+    pub fn contents(&self) -> &str {
+        self.contents.as_ref()
+    }
+}
 
 pub struct RuntimeMessageCatalog {
     inner: GlobalCatalog,
@@ -145,6 +173,101 @@ pub fn bootstrap_runtime_assets_at_root(root: impl Into<PathBuf>) -> Result<Runt
     bootstrap_runtime_assets_with_options(&options)
 }
 
+pub fn runtime_data_root_options(
+    data_dir: Option<PathBuf>,
+    scope: text_assets_kit::DataRootScope,
+) -> DataRootOptions {
+    let options = runtime_assets_data_root_options().with_scope(scope);
+    match data_dir {
+        Some(data_dir) => options.with_data_dir(data_dir),
+        None => options,
+    }
+}
+
+pub fn sniff_runtime_data_root_options(args: &[String]) -> Result<DataRootOptions> {
+    let mut data_dir = None;
+    let mut scope = text_assets_kit::DataRootScope::Auto;
+    let mut iter = args.iter();
+
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--root" => {
+                let value = iter.next().ok_or_else(|| {
+                    crate::config_error!(
+                        "error_detail.config.missing_flag_value",
+                        "flag" => "--root"
+                    )
+                })?;
+                if value.trim().is_empty() {
+                    return Err(crate::config_error!(
+                        "error_detail.config.empty_flag_value",
+                        "flag" => "--root"
+                    ));
+                }
+                data_dir = Some(PathBuf::from(value));
+            }
+            "--scope" => {
+                let value = iter.next().ok_or_else(|| {
+                    crate::config_error!(
+                        "error_detail.config.missing_flag_value",
+                        "flag" => "--scope"
+                    )
+                })?;
+                scope = parse_data_root_scope(value)?;
+            }
+            _ => {
+                if let Some(value) = arg.strip_prefix("--root=") {
+                    if value.trim().is_empty() {
+                        return Err(crate::config_error!(
+                            "error_detail.config.empty_flag_value",
+                            "flag" => "--root"
+                        ));
+                    }
+                    data_dir = Some(PathBuf::from(value));
+                    continue;
+                }
+                if let Some(value) = arg.strip_prefix("--scope=") {
+                    scope = parse_data_root_scope(value)?;
+                }
+            }
+        }
+    }
+
+    Ok(runtime_data_root_options(data_dir, scope))
+}
+
+pub fn bootstrap_cli_runtime_with_options(options: &DataRootOptions) -> Result<RuntimeAssets> {
+    bootstrap_runtime_assets_with_options(options)
+}
+
+pub fn bootstrap_cli_runtime_from_args(args: &[String]) -> Result<RuntimeAssets> {
+    let options = sniff_runtime_data_root_options(args)?;
+    bootstrap_cli_runtime_with_options(&options)
+}
+
+pub fn bootstrap_cli_runtime_with_options_and_defaults<I>(
+    options: &DataRootOptions,
+    default_files: I,
+) -> Result<RuntimeAssets>
+where
+    I: IntoIterator<Item = RuntimeDefaultFile>,
+{
+    let runtime_assets = bootstrap_cli_runtime_with_options(options)?;
+    bootstrap_runtime_default_files(runtime_assets.data_root(), default_files)?;
+    Ok(runtime_assets)
+}
+
+pub fn bootstrap_cli_runtime_from_args_with_defaults<I>(
+    args: &[String],
+    default_files: I,
+) -> Result<RuntimeAssets>
+where
+    I: IntoIterator<Item = RuntimeDefaultFile>,
+{
+    let options = sniff_runtime_data_root_options(args)?;
+    bootstrap_cli_runtime_with_options_and_defaults(&options, default_files)
+}
+
 pub fn bootstrap_runtime_assets_with_options(options: &DataRootOptions) -> Result<RuntimeAssets> {
     let data_root = ensure_data_root(options).map_err(DittoError::Io)?;
     let i18n_dir = data_root.join("i18n");
@@ -169,6 +292,17 @@ pub fn bootstrap_runtime_assets_with_options(options: &DataRootOptions) -> Resul
     })
 }
 
+pub fn bootstrap_runtime_default_files<I>(data_root: &Path, default_files: I) -> Result<()>
+where
+    I: IntoIterator<Item = RuntimeDefaultFile>,
+{
+    for file in default_files {
+        write_if_missing(data_root.join(file.file_name()), file.contents())
+            .map_err(DittoError::Io)?;
+    }
+    Ok(())
+}
+
 fn load_default_message_catalog() -> std::result::Result<Arc<dyn Catalog>, CatalogInitError> {
     let data_root =
         ensure_data_root(&runtime_assets_data_root_options()).map_err(CatalogInitError::from)?;
@@ -189,6 +323,31 @@ fn runtime_assets_data_root_options() -> DataRootOptions {
         .with_env_var(DATA_ROOT_ENV_VAR)
 }
 
+fn parse_data_root_scope(value: &str) -> Result<text_assets_kit::DataRootScope> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" => Ok(text_assets_kit::DataRootScope::Auto),
+        "workspace" => Ok(text_assets_kit::DataRootScope::Workspace),
+        "global" => Ok(text_assets_kit::DataRootScope::Global),
+        _ => Err(crate::config_error!(
+            "error_detail.config.invalid_flag_value",
+            "flag" => "--scope",
+            "value" => value
+        )),
+    }
+}
+
+fn write_if_missing(path: PathBuf, contents: &str) -> std::io::Result<()> {
+    match std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&path)
+    {
+        Ok(mut file) => file.write_all(contents.as_bytes()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 fn default_i18n_manifest() -> ResourceManifest {
     ResourceManifest::new()
         .with_resource(
@@ -207,7 +366,7 @@ fn default_i18n_manifest() -> ResourceManifest {
 
 #[cfg(test)]
 mod tests {
-    use super::RuntimeMessageCatalog;
+    use super::*;
     use i18n_kit::{Locale, StaticJsonCatalog, StaticJsonLocale, TemplateArg};
     use i18n_runtime_kit::CatalogInitError;
     use std::sync::Arc;
@@ -245,5 +404,72 @@ mod tests {
         catalog.replace(replacement);
 
         assert_eq!(catalog.render(Locale::EN_US, "hello", &[]), "hello");
+    }
+
+    #[test]
+    fn sniff_runtime_data_root_options_reads_root_and_scope_flags() {
+        let options = sniff_runtime_data_root_options(&[
+            "--root".to_string(),
+            "/tmp/omne".to_string(),
+            "--scope".to_string(),
+            "workspace".to_string(),
+        ])
+        .expect("parse data root options");
+
+        let debug = format!("{options:?}");
+        assert!(debug.contains("data_dir: Some(\"/tmp/omne\")"));
+        assert!(debug.contains("scope: Workspace"));
+    }
+
+    #[test]
+    fn sniff_runtime_data_root_options_rejects_missing_root_value() {
+        let err =
+            sniff_runtime_data_root_options(&["--root".to_string()]).expect_err("missing value");
+        let DittoError::Config(message) = err else {
+            panic!("expected config error");
+        };
+        assert_eq!(
+            message.as_catalog().map(|message| message.code()),
+            Some("error_detail.config.missing_flag_value")
+        );
+    }
+
+    #[test]
+    fn sniff_runtime_data_root_options_rejects_invalid_scope() {
+        let err = sniff_runtime_data_root_options(&["--scope=sideways".to_string()])
+            .expect_err("invalid scope");
+        let DittoError::Config(message) = err else {
+            panic!("expected config error");
+        };
+        assert_eq!(
+            message.as_catalog().map(|message| message.code()),
+            Some("error_detail.config.invalid_flag_value")
+        );
+    }
+
+    #[test]
+    fn bootstrap_runtime_default_files_only_creates_missing_files() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        let existing_path = root.join("config.toml");
+        std::fs::write(&existing_path, "user = true\n").expect("seed existing config");
+
+        bootstrap_runtime_default_files(
+            root,
+            [
+                RuntimeDefaultFile::new("config.toml", "default = true\n"),
+                RuntimeDefaultFile::new("gateway.json", "{}\n"),
+            ],
+        )
+        .expect("bootstrap default files");
+
+        assert_eq!(
+            std::fs::read_to_string(&existing_path).expect("read existing config"),
+            "user = true\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("gateway.json")).expect("read gateway config"),
+            "{}\n"
+        );
     }
 }

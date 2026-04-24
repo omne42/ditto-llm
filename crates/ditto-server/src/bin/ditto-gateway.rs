@@ -10,7 +10,7 @@ use ditto_gateway::attach::{
 
 #[cfg(feature = "gateway")]
 use config_kit::{ConfigDocument, ConfigFormat, ConfigLoadOptions, load_config_document};
-use ditto_core::resources::MESSAGE_CATALOG;
+use ditto_core::resources::{MESSAGE_CATALOG, bootstrap_cli_runtime_from_args_with_defaults};
 #[cfg(feature = "gateway")]
 use ditto_gateway::cli::{
     GatewayCliArgs, gateway_cli_usage, parse_gateway_cli_args_with_locale, resolve_cli_secret,
@@ -23,13 +23,17 @@ use i18n_kit::{Locale, TemplateArg};
 #[tokio::main]
 async fn main() {
     let raw_args = std::env::args().skip(1).collect::<Vec<_>>();
-    let data_root = match ditto_server::data_root::bootstrap_cli_runtime_from_args(&raw_args) {
-        Ok(data_root) => data_root,
+    let runtime_assets = match bootstrap_cli_runtime_from_args_with_defaults(
+        &raw_args,
+        ditto_server::data_root::default_server_data_root_files(),
+    ) {
+        Ok(runtime_assets) => runtime_assets,
         Err(err) => {
             eprintln!("{err:?}");
             std::process::exit(2);
         }
     };
+    let data_root = ditto_server::data_root::server_data_root(runtime_assets.data_root());
     let (locale, raw_args) = match MESSAGE_CATALOG.resolve_cli_locale(raw_args, "DITTO_LOCALE") {
         Ok(parsed) => parsed,
         Err(err) => {
