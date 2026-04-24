@@ -7,6 +7,13 @@
 use super::admin_persistence::append_admin_audit_log;
 use super::admin_persistence::apply_control_plane_change;
 use super::*;
+#[cfg(any(
+    feature = "gateway-store-sqlite",
+    feature = "gateway-store-postgres",
+    feature = "gateway-store-mysql",
+    feature = "gateway-store-redis"
+))]
+use omne_integrity_primitives::hash_sha256_json_chain;
 
 // inlined from admin/handlers.rs
 // inlined from handlers/common.rs
@@ -608,7 +615,15 @@ fn render_audit_export(
     match format {
         "jsonl" | "ndjson" => {
             for log in logs {
-                let hash = crate::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &log);
+                let hash = hash_sha256_json_chain(prev_hash.as_deref(), &log)
+                    .map_err(|err| {
+                        error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "encode_error",
+                            err.to_string(),
+                        )
+                    })?
+                    .to_string();
                 let record = AuditExportRecord {
                     id: log.id,
                     ts_ms: log.ts_ms,
@@ -644,7 +659,15 @@ fn render_audit_export(
         "csv" => {
             lines.push("id,ts_ms,kind,payload_json,prev_hash,hash\n".to_string());
             for log in logs {
-                let hash = crate::audit_integrity::audit_chain_hash(prev_hash.as_deref(), &log);
+                let hash = hash_sha256_json_chain(prev_hash.as_deref(), &log)
+                    .map_err(|err| {
+                        error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "encode_error",
+                            err.to_string(),
+                        )
+                    })?
+                    .to_string();
                 let payload_json = serde_json::to_string(&log.payload).unwrap_or_default();
                 let line = format!(
                     "{},{},{},{},{},{}\n",
