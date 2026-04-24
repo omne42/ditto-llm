@@ -68,7 +68,6 @@ pub(crate) fn init_data_stream(
 }
 
 #[cfg_attr(not(feature = "cap-llm-streaming"), allow(dead_code))]
-#[allow(dead_code)]
 pub(crate) fn init_sse_stream(
     response: reqwest::Response,
     warnings: Vec<Warning>,

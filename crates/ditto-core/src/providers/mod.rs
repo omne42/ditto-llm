@@ -86,6 +86,7 @@ pub use google::GoogleImages;
 pub use google::GoogleRealtime;
 #[cfg(all(feature = "provider-google", feature = "cap-video-generation"))]
 pub use google::GoogleVideos;
+#[allow(unused_imports)]
 pub(crate) use model_resolution::resolve_model_or_default;
 #[cfg(feature = "provider-openai")]
 pub use openai::OpenAI;
