@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -6,10 +6,10 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::ShellToolExecutor;
+use crate::agent::{ToolCall, ToolExecutor, ToolResult};
 use crate::contracts::Tool;
 use crate::error::{DittoError, Result};
-
-use super::{ToolCall, ToolExecutor, ToolResult};
 
 pub const TOOL_HTTP_FETCH: &str = "http_fetch";
 pub const TOOL_FS_READ_FILE: &str = "fs_read_file";
@@ -495,110 +495,6 @@ fn response_headers_to_map(headers: &reqwest::header::HeaderMap) -> BTreeMap<Str
     out
 }
 
-#[derive(Clone)]
-pub struct ShellToolExecutor {
-    root: PathBuf,
-    allowed_programs: BTreeSet<String>,
-    max_output_bytes: usize,
-    max_stdin_bytes: usize,
-    timeout: Duration,
-}
-
-impl ShellToolExecutor {
-    pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
-        let root = root.into();
-        let root = std::fs::canonicalize(&root).map_err(|err| {
-            DittoError::Io(std::io::Error::new(
-                err.kind(),
-                format!("invalid shell tool root {}: {err}", root.display()),
-            ))
-        })?;
-        Ok(Self {
-            root,
-            allowed_programs: BTreeSet::new(),
-            max_output_bytes: 256 * 1024,
-            max_stdin_bytes: 64 * 1024,
-            timeout: Duration::from_secs(20),
-        })
-    }
-
-    pub fn with_allowed_programs<I, S>(mut self, programs: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.allowed_programs = programs.into_iter().map(|p| p.into()).collect();
-        self
-    }
-
-    pub fn with_max_output_bytes(mut self, max_output_bytes: usize) -> Self {
-        self.max_output_bytes = max_output_bytes.max(1);
-        self
-    }
-
-    pub fn with_max_stdin_bytes(mut self, max_stdin_bytes: usize) -> Self {
-        self.max_stdin_bytes = max_stdin_bytes.max(1);
-        self
-    }
-
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
-    }
-
-    fn validate_program(raw: &str) -> std::result::Result<&str, String> {
-        let raw = raw.trim();
-        if raw.is_empty() {
-            return Err("program is empty".to_string());
-        }
-        if raw.contains('/') || raw.contains('\\') || raw.contains(':') {
-            return Err("program must be a bare name without path separators".to_string());
-        }
-        Ok(raw)
-    }
-
-    fn resolve_existing_dir(&self, raw: &str) -> std::result::Result<PathBuf, String> {
-        let raw = raw.trim();
-        if raw.is_empty() {
-            return Ok(self.root.clone());
-        }
-
-        let rel = Path::new(raw);
-        if rel.is_absolute() {
-            return Err("absolute paths are not allowed".to_string());
-        }
-        for component in rel.components() {
-            if matches!(component, std::path::Component::ParentDir) {
-                return Err("parent dir segments are not allowed".to_string());
-            }
-        }
-
-        let joined = self.root.join(rel);
-        let canonical = std::fs::canonicalize(&joined)
-            .map_err(|err| format!("failed to resolve path {}: {err}", joined.display()))?;
-        if !canonical.starts_with(&self.root) {
-            return Err("path escapes root".to_string());
-        }
-        let meta = std::fs::metadata(&canonical).map_err(|err| format!("stat failed: {err}"))?;
-        if !meta.is_dir() {
-            return Err("path is not a directory".to_string());
-        }
-        Ok(canonical)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-struct ShellExecArgs {
-    program: String,
-    #[serde(default)]
-    args: Vec<String>,
-    #[serde(default)]
-    stdin: Option<String>,
-    #[serde(default)]
-    cwd: Option<String>,
-    #[serde(default)]
-    timeout_ms: Option<u64>,
-}
 #[derive(Clone)]
 pub struct FsToolExecutor {
     root: PathBuf,
