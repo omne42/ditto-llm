@@ -75,13 +75,11 @@ fn adapt_openai_compatible_sse_stream(
     stream: BoxStream<'static, std::result::Result<String, http_kit::Error>>,
 ) -> BoxStream<'static, Result<String>> {
     Box::pin(stream::unfold(stream, |mut stream| async move {
-        loop {
-            match stream.next().await {
-                Some(Ok(data)) if data == "[DONE]" => return None,
-                Some(Ok(data)) => return Some((Ok(data), stream)),
-                Some(Err(error)) => return Some((Err(map_http_kit_sse_error(error)), stream)),
-                None => return None,
-            }
+        match stream.next().await {
+            Some(Ok(data)) if data == "[DONE]" => None,
+            Some(Ok(data)) => Some((Ok(data), stream)),
+            Some(Err(error)) => Some((Err(map_http_kit_sse_error(error)), stream)),
+            None => None,
         }
     }))
 }
