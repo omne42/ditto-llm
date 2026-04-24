@@ -8,7 +8,7 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, BoxStream};
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
-#[cfg(any(feature = "provider-openai", test))]
+#[cfg(all(any(feature = "provider-openai", test), feature = "cap-llm-streaming"))]
 use tokio::io::AsyncBufRead;
 
 #[cfg(feature = "provider-openai-compatible")]
@@ -84,7 +84,7 @@ fn adapt_openai_compatible_sse_stream(
     }))
 }
 
-#[cfg(any(feature = "provider-openai", test))]
+#[cfg(all(any(feature = "provider-openai", test), feature = "cap-llm-streaming"))]
 pub(crate) fn openai_compatible_sse_data_stream_from_reader<R>(
     reader: R,
 ) -> BoxStream<'static, Result<String>>
