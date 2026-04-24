@@ -13,12 +13,16 @@ use serde_json::Value as JsonValue;
 use text_assets_kit::DataRootScope;
 use toml_edit::{Array, DocumentMut, Item, Table, Value as TomlValue, value};
 
-use crate::data_root::{bootstrap_server_data_root_with_options, data_root_options};
+use crate::data_root::default_server_data_root_files;
 use ditto_core::config::{
     ProviderApi, ProviderCapabilities, ProviderConfig, normalize_string_list,
 };
 use ditto_core::contracts::{AuthMethodKind, CapabilityKind};
 use ditto_core::error::{DittoError, Result};
+use ditto_core::resources::{
+    bootstrap_runtime_assets_with_options, bootstrap_runtime_default_files,
+    runtime_data_root_options,
+};
 use ditto_core::runtime_registry::{
     BuiltinProviderPreset, ResolvedProviderConfigSemantics, builtin_runtime_registry_catalog,
 };
@@ -1464,9 +1468,7 @@ async fn resolve_config_target_for_read(
         });
     }
 
-    let root =
-        bootstrap_server_data_root_with_options(&data_root_options(root, data_root_scope(scope)))?
-            .data_root;
+    let root = bootstrap_config_data_root(root, scope)?;
 
     let local_path = root.join("config_local.toml");
     let shared_path = root.join("config.toml");
@@ -1521,9 +1523,7 @@ async fn resolve_config_target(
         });
     }
 
-    let root =
-        bootstrap_server_data_root_with_options(&data_root_options(root, data_root_scope(scope)))?
-            .data_root;
+    let root = bootstrap_config_data_root(root, scope)?;
 
     let local_path = root.join("config_local.toml");
     let shared_path = root.join("config.toml");
@@ -1563,6 +1563,13 @@ async fn resolve_config_target(
 
 async fn path_exists(path: &Path) -> Result<bool> {
     tokio::fs::try_exists(path).await.map_err(DittoError::Io)
+}
+
+fn bootstrap_config_data_root(root: Option<PathBuf>, scope: ConfigScope) -> Result<PathBuf> {
+    let options = runtime_data_root_options(root, data_root_scope(scope));
+    let runtime_assets = bootstrap_runtime_assets_with_options(&options)?;
+    bootstrap_runtime_default_files(runtime_assets.data_root(), default_server_data_root_files())?;
+    Ok(runtime_assets.data_root().to_path_buf())
 }
 
 fn data_root_scope(scope: ConfigScope) -> DataRootScope {
