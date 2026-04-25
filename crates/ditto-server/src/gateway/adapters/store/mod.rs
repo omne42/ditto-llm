@@ -1,5 +1,7 @@
 //! Gateway persistence adapters.
 
+mod memory_request_idempotency;
+
 #[cfg(any(
     feature = "gateway-store-sqlite",
     feature = "gateway-store-postgres",
@@ -36,6 +38,7 @@ pub mod redis;
 #[cfg(feature = "gateway-store-sqlite")]
 pub mod sqlite;
 
+pub(crate) use memory_request_idempotency::LocalProxyRequestIdempotencyStore;
 #[cfg(feature = "gateway-store-mysql")]
 pub use mysql::{MySqlStore, MySqlStoreError};
 #[cfg(feature = "gateway-store-postgres")]
