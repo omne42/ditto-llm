@@ -154,17 +154,10 @@ pub(crate) fn resolve_http_provider_config(
 }
 
 pub(crate) fn apply_http_query_params(
-    mut req: reqwest::RequestBuilder,
+    req: reqwest::RequestBuilder,
     params: &BTreeMap<String, String>,
 ) -> reqwest::RequestBuilder {
-    for (name, value) in params {
-        let name = name.trim();
-        if name.is_empty() {
-            continue;
-        }
-        req = req.query(&[(name, value)]);
-    }
-    req
+    http_auth_kit::apply_query_params(req, params)
 }
 
 #[cfg(test)]

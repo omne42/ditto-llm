@@ -1,16 +1,12 @@
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+pub use http_auth_kit::OAuthToken;
 
 use crate::config::{Env, ProviderAuth};
 use crate::error::{DittoError, Result};
 
 fn oauth_field_required(field: &str) -> DittoError {
     crate::invalid_response!("error_detail.oauth.field_required", "field" => field)
-}
-
-fn oauth_response_missing_access_token() -> DittoError {
-    crate::invalid_response!("error_detail.oauth.response_missing_access_token")
 }
 
 fn oauth_expected_auth() -> DittoError {
@@ -25,28 +21,13 @@ fn oauth_missing_field(label: &str, keys: &str) -> DittoError {
     )
 }
 
-#[derive(Clone)]
-pub struct OAuthToken {
-    pub access_token: String,
-    pub token_type: String,
-    pub expires_in: Option<u64>,
-    pub scope: Option<String>,
-}
-
-impl std::fmt::Debug for OAuthToken {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("OAuthToken")
-            .field("access_token", &"<redacted>")
-            .field("token_type", &self.token_type)
-            .field("expires_in", &self.expires_in)
-            .field("scope", &self.scope)
-            .finish()
-    }
-}
-
-impl OAuthToken {
-    pub fn authorization_header_value(&self) -> String {
-        format!("{} {}", self.token_type, self.access_token)
+fn oauth_foundation_error(error: http_auth_kit::HttpAuthError) -> DittoError {
+    match error {
+        http_auth_kit::HttpAuthError::FieldRequired { field } => oauth_field_required(field),
+        http_auth_kit::HttpAuthError::OAuthResponseMissingAccessToken => {
+            crate::invalid_response!("error_detail.oauth.response_missing_access_token")
+        }
+        other => crate::invalid_response!(format!("OAuth auth failed: {other}")),
     }
 }
 
@@ -62,8 +43,7 @@ pub struct OAuthClientCredentials {
 
 impl std::fmt::Debug for OAuthClientCredentials {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let extra_param_keys: Vec<&str> =
-            self.extra_params.keys().map(|key| key.as_str()).collect();
+        let extra_param_keys: Vec<&str> = self.extra_params.keys().map(String::as_str).collect();
         f.debug_struct("OAuthClientCredentials")
             .field("token_url", &self.token_url)
             .field("client_id", &self.client_id)
@@ -81,24 +61,17 @@ impl OAuthClientCredentials {
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
     ) -> Result<Self> {
-        let token_url = token_url.into();
-        let client_id = client_id.into();
-        let client_secret = client_secret.into();
-
-        if token_url.trim().is_empty() {
-            return Err(oauth_field_required("token_url"));
-        }
-        if client_id.trim().is_empty() {
-            return Err(oauth_field_required("client_id"));
-        }
-        if client_secret.trim().is_empty() {
-            return Err(oauth_field_required("client_secret"));
-        }
+        let inner = http_auth_kit::OAuthClientCredentials::new(
+            token_url.into(),
+            client_id.into(),
+            client_secret.into(),
+        )
+        .map_err(oauth_foundation_error)?;
 
         Ok(Self {
-            token_url,
-            client_id,
-            client_secret,
+            token_url: inner.token_url,
+            client_id: inner.client_id,
+            client_secret: inner.client_secret,
             scope: None,
             audience: None,
             extra_params: BTreeMap::new(),
@@ -121,55 +94,30 @@ impl OAuthClientCredentials {
     }
 
     pub async fn fetch_token(&self, http: &reqwest::Client) -> Result<OAuthToken> {
-        let mut params = Vec::<(String, String)>::new();
-        params.push(("grant_type".to_string(), "client_credentials".to_string()));
-        params.push(("client_id".to_string(), self.client_id.clone()));
-        params.push(("client_secret".to_string(), self.client_secret.clone()));
-        if let Some(scope) = self.scope.as_ref().filter(|s| !s.trim().is_empty()) {
-            params.push(("scope".to_string(), scope.clone()));
+        self.to_foundation()?
+            .fetch_token(http)
+            .await
+            .map_err(oauth_foundation_error)
+    }
+
+    fn to_foundation(&self) -> Result<http_auth_kit::OAuthClientCredentials> {
+        let mut out = http_auth_kit::OAuthClientCredentials::new(
+            self.token_url.clone(),
+            self.client_id.clone(),
+            self.client_secret.clone(),
+        )
+        .map_err(oauth_foundation_error)?;
+        if let Some(scope) = self.scope.as_ref() {
+            out = out.with_scope(scope);
         }
-        if let Some(audience) = self.audience.as_ref().filter(|s| !s.trim().is_empty()) {
-            params.push(("audience".to_string(), audience.clone()));
+        if let Some(audience) = self.audience.as_ref() {
+            out = out.with_audience(audience);
         }
         for (key, value) in &self.extra_params {
-            if key.trim().is_empty() {
-                continue;
-            }
-            params.push((key.clone(), value.clone()));
+            out = out.with_extra_param(key, value);
         }
-
-        let parsed = crate::provider_transport::send_checked_json::<TokenResponse>(
-            http.post(self.token_url.as_str()).form(&params),
-        )
-        .await?;
-        let access_token = parsed
-            .access_token
-            .filter(|token| !token.trim().is_empty())
-            .ok_or_else(oauth_response_missing_access_token)?;
-        let token_type = parsed
-            .token_type
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "Bearer".to_string());
-
-        Ok(OAuthToken {
-            access_token,
-            token_type,
-            expires_in: parsed.expires_in,
-            scope: parsed.scope,
-        })
+        Ok(out)
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct TokenResponse {
-    #[serde(default)]
-    access_token: Option<String>,
-    #[serde(default)]
-    token_type: Option<String>,
-    #[serde(default)]
-    expires_in: Option<u64>,
-    #[serde(default)]
-    scope: Option<String>,
 }
 
 pub fn resolve_oauth_client_credentials(
