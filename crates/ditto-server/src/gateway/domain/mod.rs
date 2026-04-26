@@ -5,6 +5,7 @@ pub mod cache;
 pub mod guardrails;
 pub mod limits;
 pub mod router;
+pub(crate) mod scope;
 pub mod store_ports;
 pub mod store_types;
 
