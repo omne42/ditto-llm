@@ -1,8 +1,12 @@
-#![allow(dead_code)]
-
+use std::ffi::OsString;
 use std::fmt::Display;
+use std::path::PathBuf;
 use std::time::Duration;
 
+use omne_process_primitives::{
+    HostCommandCaptureOptions, HostCommandError, HostCommandRequest, HostCommandRunOptions,
+    HostCommandSudoMode, run_host_command_with_capture_options,
+};
 use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
@@ -69,41 +73,11 @@ fn command_spawn_failed(program: &str, error: impl Display) -> DittoError {
     )
 }
 
-fn command_stdout_not_captured(program: &str) -> DittoError {
-    crate::auth_command_error!(
-        "error_detail.auth.command_stdout_not_captured",
-        "program" => program
-    )
-}
-
-fn command_stderr_not_captured(program: &str) -> DittoError {
-    crate::auth_command_error!(
-        "error_detail.auth.command_stderr_not_captured",
-        "program" => program
-    )
-}
-
-fn command_wait_failed(program: &str, error: impl Display) -> DittoError {
-    crate::auth_command_error!(
-        "error_detail.auth.command_wait_failed",
-        "program" => program,
-        "error" => error.to_string()
-    )
-}
-
 fn command_timeout(program: &str, timeout_ms: u128) -> DittoError {
     crate::auth_command_error!(
         "error_detail.auth.command_timeout",
         "program" => program,
         "timeout_ms" => timeout_ms.to_string()
-    )
-}
-
-fn command_reader_join_failed(stream: &str, error: impl Display) -> DittoError {
-    crate::auth_command_error!(
-        "error_detail.auth.command_reader_join_failed",
-        "stream" => stream,
-        "error" => error.to_string()
     )
 }
 
@@ -452,6 +426,7 @@ where
 
 const DEFAULT_AUTH_COMMAND_TIMEOUT_SECS: u64 = 15;
 const MAX_AUTH_COMMAND_TIMEOUT_SECS: u64 = 300;
+const MAX_AUTH_COMMAND_OUTPUT_BYTES: usize = 64 * 1024;
 
 fn auth_command_timeout(env: &Env) -> Duration {
     let ms = env
@@ -472,86 +447,72 @@ fn auth_command_timeout(env: &Env) -> Duration {
 }
 
 async fn run_auth_command(command: &[String], env: &Env) -> Result<String> {
-    use std::process::Stdio;
-
     let timeout = auth_command_timeout(env);
     let (program, args) = command.split_first().ok_or_else(command_empty)?;
 
-    let mut cmd = tokio::process::Command::new(program);
-    cmd.args(args);
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    cmd.kill_on_drop(true);
+    let output = run_auth_command_blocking(program.clone(), args.to_vec(), timeout).await?;
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|err| command_spawn_failed(program, err))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| command_stdout_not_captured(program))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| command_stderr_not_captured(program))?;
-
-    const MAX_AUTH_COMMAND_OUTPUT_BYTES: usize = 64 * 1024;
-    let stdout_task = tokio::spawn(read_capped(stdout, MAX_AUTH_COMMAND_OUTPUT_BYTES));
-    let stderr_task = tokio::spawn(read_capped(stderr, MAX_AUTH_COMMAND_OUTPUT_BYTES));
-
-    let timeout_error = match tokio::time::timeout(timeout, child.wait()).await {
-        Ok(status) => {
-            let status = status.map_err(|err| command_wait_failed(program, err))?;
-            Ok(status)
-        }
-        Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            Err(command_timeout(program, timeout.as_millis()))
-        }
-    };
-
-    let status = match timeout_error {
-        Ok(status) => status,
-        Err(err) => {
-            stdout_task.abort();
-            stderr_task.abort();
-            let _ = stdout_task.await;
-            let _ = stderr_task.await;
-            return Err(err);
-        }
-    };
-
-    let (stdout, stdout_truncated) = stdout_task
-        .await
-        .map_err(|err| command_reader_join_failed("stdout", err))??;
-    let (_stderr, stderr_truncated) = stderr_task
-        .await
-        .map_err(|err| command_reader_join_failed("stderr", err))??;
-
-    if stdout_truncated {
-        return Err(command_stdout_too_large(
-            program,
-            MAX_AUTH_COMMAND_OUTPUT_BYTES,
-        ));
-    }
-    if stderr_truncated {
-        return Err(command_stderr_too_large(
-            program,
-            MAX_AUTH_COMMAND_OUTPUT_BYTES,
-        ));
+    if !output.status.success() {
+        return Err(command_failed_status(program, &output.status.to_string()));
     }
 
-    if !status.success() {
-        return Err(command_failed_status(program, &status.to_string()));
-    }
-
-    let stdout = String::from_utf8_lossy(&stdout);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stdout = stdout.trim();
     if stdout.is_empty() {
         return Err(command_empty_stdout(program));
     }
     Ok(stdout.to_string())
+}
+
+async fn run_auth_command_blocking(
+    program: String,
+    args: Vec<String>,
+    timeout: Duration,
+) -> Result<std::process::Output> {
+    tokio::task::spawn_blocking(move || run_auth_command_sync(&program, &args, timeout))
+        .await
+        .map_err(|err| command_spawn_failed("auth command", err))?
+}
+
+fn run_auth_command_sync(
+    program: &str,
+    args: &[String],
+    timeout: Duration,
+) -> Result<std::process::Output> {
+    let args = args.iter().map(OsString::from).collect::<Vec<_>>();
+    let cwd = std::env::current_dir().map_err(|err| command_spawn_failed(program, err))?;
+    let request = HostCommandRequest {
+        program: std::ffi::OsStr::new(program),
+        args: &args,
+        env: &[],
+        working_directory: Some(PathBuf::as_path(&cwd)),
+        sudo_mode: HostCommandSudoMode::Never,
+    };
+    let options = HostCommandRunOptions::new().with_timeout(timeout);
+    let capture_options = HostCommandCaptureOptions::new()
+        .with_capture_limit_bytes_per_stream(MAX_AUTH_COMMAND_OUTPUT_BYTES);
+    run_host_command_with_capture_options(&request, options, capture_options)
+        .map(|output| output.output)
+        .map_err(|err| map_auth_command_error(program, err))
+}
+
+fn map_auth_command_error(program: &str, error: HostCommandError) -> DittoError {
+    match error {
+        HostCommandError::CommandNotFound { .. } | HostCommandError::SpawnFailed { .. } => {
+            command_spawn_failed(program, error)
+        }
+        HostCommandError::CaptureFailed { ref source, .. } => {
+            let message = source.to_string();
+            if message.starts_with("stdout exceeded capture limit") {
+                command_stdout_too_large(program, MAX_AUTH_COMMAND_OUTPUT_BYTES)
+            } else if message.starts_with("stderr exceeded capture limit") {
+                command_stderr_too_large(program, MAX_AUTH_COMMAND_OUTPUT_BYTES)
+            } else {
+                command_spawn_failed(program, error)
+            }
+        }
+        HostCommandError::TimedOut { timeout, .. } => command_timeout(program, timeout.as_millis()),
+    }
 }
 
 fn parse_auth_command_token(stdout: &str) -> Result<String> {
@@ -603,43 +564,6 @@ fn parse_auth_command_token(stdout: &str) -> Result<String> {
         Ok(_) => Err(auth_output_shape_invalid()),
         Err(_) => Ok(stdout.to_string()),
     }
-}
-
-async fn read_capped<R>(mut reader: R, max_bytes: usize) -> Result<(Vec<u8>, bool)>
-where
-    R: tokio::io::AsyncRead + Unpin,
-{
-    use tokio::io::AsyncReadExt as _;
-
-    let mut out = Vec::<u8>::new();
-    let mut buf = [0u8; 4096];
-    let mut truncated = false;
-    loop {
-        let n = reader.read(&mut buf).await?;
-        if n == 0 {
-            break;
-        }
-
-        if truncated {
-            continue;
-        }
-
-        let remaining = max_bytes.saturating_sub(out.len());
-        if remaining == 0 {
-            truncated = true;
-            continue;
-        }
-
-        if n > remaining {
-            out.extend_from_slice(&buf[..remaining]);
-            truncated = true;
-            continue;
-        }
-
-        out.extend_from_slice(&buf[..n]);
-    }
-
-    Ok((out, truncated))
 }
 
 #[cfg(test)]
