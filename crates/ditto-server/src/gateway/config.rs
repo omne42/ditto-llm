@@ -98,11 +98,10 @@ fn default_observability_sample_rate() -> f64 {
 }
 
 fn validate_sample_rate(name: &str, value: f64) -> Result<(), super::GatewayError> {
-    if value.is_finite() && (0.0..=1.0).contains(&value) {
-        return Ok(());
-    }
-    Err(super::GatewayError::InvalidRequest {
-        reason: format!("{name} must be a finite value between 0.0 and 1.0"),
+    redaction_kit::validate_sample_rate(name, value).map_err(|err| {
+        super::GatewayError::InvalidRequest {
+            reason: err.to_string(),
+        }
     })
 }
 
