@@ -2,6 +2,14 @@ use ditto_core::resources::{MESSAGE_CATALOG, bootstrap_cli_runtime_from_args_wit
 use i18n_kit::{Locale, TemplateArg};
 #[cfg(feature = "gateway")]
 use omne_integrity_primitives::{Sha256Hasher, hash_sha256_json_chain};
+#[cfg(feature = "gateway")]
+use omne_process_primitives::{
+    HostCommandCaptureOptions, HostCommandRunOptions, HostCommandSudoMode, HostRecipeError,
+    HostRecipeRequest, run_host_recipe_with_capture_options,
+};
+
+#[cfg(feature = "gateway")]
+const UPLOAD_COMMAND_CAPTURE_BYTES: usize = 64 * 1024;
 
 #[cfg(feature = "gateway")]
 #[derive(Clone, Copy)]
@@ -466,38 +474,45 @@ async fn upload_to_s3_via_aws_cli(
     key: &str,
     options: UploadOptions<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = tokio::process::Command::new("aws");
-    cmd.arg("s3api")
-        .arg("put-object")
-        .arg("--bucket")
-        .arg(bucket)
-        .arg("--key")
-        .arg(key)
-        .arg("--body")
-        .arg(local_path)
-        .arg("--content-type")
-        .arg(options.content_type);
-
+    let mut args = vec![
+        "s3api".into(),
+        "put-object".into(),
+        "--bucket".into(),
+        bucket.into(),
+        "--key".into(),
+        key.into(),
+        "--body".into(),
+        local_path.into(),
+        "--content-type".into(),
+        options.content_type.into(),
+    ];
     if let Some(value) = options.s3_object_lock_mode {
-        cmd.arg("--object-lock-mode").arg(value);
+        args.push("--object-lock-mode".into());
+        args.push(value.into());
     }
     if let Some(value) = options.s3_object_lock_retain_until_date {
-        cmd.arg("--object-lock-retain-until-date").arg(value);
+        args.push("--object-lock-retain-until-date".into());
+        args.push(value.into());
     }
     if let Some(value) = options.s3_object_lock_legal_hold_status {
-        cmd.arg("--object-lock-legal-hold-status").arg(value);
+        args.push("--object-lock-legal-hold-status".into());
+        args.push(value.into());
     }
 
-    let output = cmd.output().await?;
-    if !output.status.success() {
-        return Err(audit_export_aws_put_object_failed(
-            locale,
-            output.status.code().unwrap_or(-1),
-            &String::from_utf8_lossy(&output.stderr),
-        )
-        .into());
+    match run_upload_command("aws", args).await {
+        Ok(_) => Ok(()),
+        Err(HostRecipeError::NonZeroExit { output, .. }) => {
+            Err(audit_export_aws_put_object_failed(
+                locale,
+                output.status.code().unwrap_or(-1),
+                &String::from_utf8_lossy(&output.stderr),
+            )
+            .into())
+        }
+        Err(HostRecipeError::Command(err)) => {
+            Err(audit_export_aws_put_object_failed(locale, -1, &err.to_string()).into())
+        }
     }
-    Ok(())
 }
 
 #[cfg(feature = "gateway")]
@@ -507,23 +522,58 @@ async fn upload_to_gcs_via_gsutil(
     dest: &str,
     content_type: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = tokio::process::Command::new("gsutil");
-    cmd.arg("-h")
-        .arg(format!("Content-Type:{content_type}"))
-        .arg("cp")
-        .arg(local_path)
-        .arg(dest);
+    let args = vec![
+        "-h".into(),
+        format!("Content-Type:{content_type}").into(),
+        "cp".into(),
+        local_path.into(),
+        dest.into(),
+    ];
 
-    let output = cmd.output().await?;
-    if !output.status.success() {
-        return Err(audit_export_gsutil_cp_failed(
+    match run_upload_command("gsutil", args).await {
+        Ok(_) => Ok(()),
+        Err(HostRecipeError::NonZeroExit { output, .. }) => Err(audit_export_gsutil_cp_failed(
             locale,
             output.status.code().unwrap_or(-1),
             &String::from_utf8_lossy(&output.stderr),
         )
-        .into());
+        .into()),
+        Err(HostRecipeError::Command(err)) => {
+            Err(audit_export_gsutil_cp_failed(locale, -1, &err.to_string()).into())
+        }
     }
-    Ok(())
+}
+
+#[cfg(feature = "gateway")]
+async fn run_upload_command(
+    program: &'static str,
+    args: Vec<std::ffi::OsString>,
+) -> Result<std::process::Output, HostRecipeError> {
+    tokio::task::spawn_blocking(move || {
+        let request = HostRecipeRequest {
+            program: std::ffi::OsStr::new(program),
+            args: &args,
+            env: &[],
+            working_directory: None,
+            sudo_mode: HostCommandSudoMode::Never,
+        };
+        let capture_options = HostCommandCaptureOptions::new()
+            .with_capture_limit_bytes_per_stream(UPLOAD_COMMAND_CAPTURE_BYTES);
+        run_host_recipe_with_capture_options(
+            &request,
+            HostCommandRunOptions::new(),
+            capture_options,
+        )
+        .map(|output| output.output)
+    })
+    .await
+    .map_err(|err| {
+        HostRecipeError::Command(omne_process_primitives::HostCommandError::SpawnFailed {
+            program: program.into(),
+            execution: omne_process_primitives::HostCommandExecution::Direct,
+            source: std::io::Error::other(format!("upload command join failed: {err}")),
+        })
+    })?
 }
 
 #[cfg(feature = "gateway")]
