@@ -61,8 +61,8 @@ use self::openai_compat_proxy_proxy_failure::{
 #[cfg(feature = "gateway-store-redis")]
 use self::openai_compat_proxy_rate_limit::{normalize_rate_limit_route, redis_rate_limit_scopes};
 use self::openai_compat_proxy_request_dedup::{
-    LocalProxyRequestIdempotencyStore, PrepareProxyRequestDedupInput, ProxyRequestDedupDecision,
-    finish_proxy_request_dedup_result, prepare_proxy_request_dedup,
+    PrepareProxyRequestDedupInput, ProxyRequestDedupDecision, finish_proxy_request_dedup_result,
+    prepare_proxy_request_dedup,
 };
 #[allow(unused_imports)]
 use self::openai_compat_proxy_request_schema::{
@@ -222,6 +222,7 @@ use super::{
     VirtualKeyConfig, lock_unpoisoned,
 };
 use crate::gateway::ProxyRequestIdempotencyStore;
+use crate::gateway::adapters::store::LocalProxyRequestIdempotencyStore;
 
 static REQUEST_ID_SEQ: AtomicU64 = AtomicU64::new(0);
 
