@@ -91,6 +91,7 @@ i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
 i18n-runtime-kit = { path = "../../../omne_foundation/crates/i18n-runtime-kit" }
 policy-meta = { path = "../../../omne_foundation/crates/policy-meta" }
 secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
+speech-transcription-kit = { path = "../../../omne_foundation/crates/speech-transcription-kit" }
 structured-text-kit = { path = "../../../omne_foundation/crates/structured-text-kit" }
 text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
