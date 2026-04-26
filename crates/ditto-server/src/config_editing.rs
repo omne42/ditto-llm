@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use omne_fs_primitives::{AtomicWriteOptions, write_file_atomically};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use text_assets_kit::DataRootScope;
@@ -1631,12 +1632,18 @@ async fn write_document_if_changed(path: &PathBuf, doc: &DocumentMut) -> Result<
         return Ok(false);
     }
 
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(DittoError::Io)?;
-    }
-    tokio::fs::write(path, out).await.map_err(DittoError::Io)?;
+    let target = path.clone();
+    let bytes = out.into_bytes();
+    tokio::task::spawn_blocking(move || {
+        write_file_atomically(&bytes, &target, &AtomicWriteOptions::default())
+    })
+    .await
+    .map_err(|err| {
+        DittoError::Io(std::io::Error::other(format!(
+            "config write join error: {err}"
+        )))
+    })?
+    .map_err(|err| DittoError::Io(std::io::Error::other(err)))?;
     Ok(true)
 }
 

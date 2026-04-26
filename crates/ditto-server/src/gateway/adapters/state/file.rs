@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-#[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-
+use omne_fs_primitives::{AtomicWriteError, AtomicWriteOptions, write_file_atomically};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -24,7 +22,7 @@ pub enum GatewayStateFileError {
     #[error("parse state file failed: {0}")]
     Parse(#[from] serde_json::Error),
     #[error("write state file failed: {0}")]
-    Write(std::io::Error),
+    Write(#[from] AtomicWriteError),
 }
 
 impl GatewayStateFile {
@@ -35,13 +33,6 @@ impl GatewayStateFile {
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), GatewayStateFileError> {
         let path = path.as_ref();
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-            && let Err(err) = fs::create_dir_all(parent)
-        {
-            return Err(GatewayStateFileError::Write(err));
-        }
-
         let payload = serde_json::to_vec_pretty(&GatewayStateFile {
             virtual_keys: self
                 .virtual_keys
@@ -51,55 +42,12 @@ impl GatewayStateFile {
             router: self.router.clone(),
         })
         .map_err(GatewayStateFileError::Parse)?;
-        let tmp_path = path.with_extension("tmp");
 
-        if write_restricted_file(&tmp_path, &payload).is_err() {
-            write_restricted_file(path, &payload).map_err(GatewayStateFileError::Write)?;
-            return Ok(());
-        }
-
-        match fs::rename(&tmp_path, path) {
-            Ok(()) => {
-                set_restricted_permissions(path).map_err(GatewayStateFileError::Write)?;
-                Ok(())
-            }
-            Err(_) => {
-                write_restricted_file(path, &payload).map_err(GatewayStateFileError::Write)?;
-                let _ = fs::remove_file(&tmp_path);
-                Ok(())
-            }
-        }
-    }
-}
-
-fn write_restricted_file(path: &Path, payload: &[u8]) -> Result<(), std::io::Error> {
-    #[cfg(unix)]
-    {
-        use std::io::Write as _;
-
-        let mut file = fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .mode(0o600)
-            .open(path)?;
-        file.write_all(payload)?;
-        file.sync_all()?;
+        let options = AtomicWriteOptions {
+            unix_mode: Some(0o600),
+            ..AtomicWriteOptions::default()
+        };
+        write_file_atomically(&payload, path, &options)?;
         Ok(())
     }
-
-    #[cfg(not(unix))]
-    {
-        fs::write(path, payload)
-    }
-}
-
-fn set_restricted_permissions(path: &Path) -> Result<(), std::io::Error> {
-    #[cfg(unix)]
-    {
-        let permissions = fs::Permissions::from_mode(0o600);
-        fs::set_permissions(path, permissions)?;
-    }
-
-    Ok(())
 }

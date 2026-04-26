@@ -110,6 +110,7 @@ http-kit = { path = "../../../omne_foundation/crates/http-kit" }
 i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
 secret-kit = { path = "../../../omne_foundation/crates/secret-kit" }
 text-assets-kit = { path = "../../../omne_foundation/crates/text-assets-kit" }
+omne-fs-primitives = { path = "../../../omne-runtime/crates/omne-fs-primitives" }
 omne-integrity-primitives = { path = "../../../omne-runtime/crates/omne-integrity-primitives" }
 async-trait = "0.1"
 axum = { version = "0.7", optional = true, features = ["json"] }
