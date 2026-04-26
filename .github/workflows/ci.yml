@@ -385,14 +385,51 @@ jobs:
         run: |
           set -euo pipefail
           while IFS='|' read -r label features; do
-            echo "::group::${label}"
+            echo "::group::provider-only ${label}"
             cargo check -p ditto-core --lib --no-default-features --features "${features}" -q
             echo "::endgroup::"
           done <<'EOF'
+          provider-anthropic|provider-anthropic
+          provider-bailian|provider-bailian
+          provider-bedrock|provider-bedrock
+          provider-cohere|provider-cohere
+          provider-deepseek|provider-deepseek
+          provider-doubao|provider-doubao
+          provider-google|provider-google
+          provider-hunyuan|provider-hunyuan
+          provider-kimi|provider-kimi
+          provider-minimax|provider-minimax
           provider-openai|provider-openai
-          provider-openai+cap-llm|provider-openai,cap-llm
           provider-openai-compatible|provider-openai-compatible
+          provider-openrouter|provider-openrouter
+          provider-qianfan|provider-qianfan
+          provider-vertex|provider-vertex
+          provider-xai|provider-xai
+          provider-zhipu|provider-zhipu
+          EOF
+
+          while IFS='|' read -r label features; do
+            echo "::group::provider+cap-llm ${label}"
+            cargo check -p ditto-core --lib --no-default-features --features "${features}" -q
+            echo "::endgroup::"
+          done <<'EOF'
+          provider-anthropic+cap-llm|provider-anthropic,cap-llm
+          provider-bailian+cap-llm|provider-bailian,cap-llm
+          provider-bedrock+cap-llm|provider-bedrock,cap-llm
+          provider-cohere+cap-llm|provider-cohere,cap-llm
+          provider-deepseek+cap-llm|provider-deepseek,cap-llm
+          provider-doubao+cap-llm|provider-doubao,cap-llm
+          provider-google+cap-llm|provider-google,cap-llm
+          provider-hunyuan+cap-llm|provider-hunyuan,cap-llm
+          provider-kimi+cap-llm|provider-kimi,cap-llm
+          provider-minimax+cap-llm|provider-minimax,cap-llm
+          provider-openai+cap-llm|provider-openai,cap-llm
           provider-openai-compatible+cap-llm|provider-openai-compatible,cap-llm
+          provider-openrouter+cap-llm|provider-openrouter,cap-llm
+          provider-qianfan+cap-llm|provider-qianfan,cap-llm
+          provider-vertex+cap-llm|provider-vertex,cap-llm
+          provider-xai+cap-llm|provider-xai,cap-llm
+          provider-zhipu+cap-llm|provider-zhipu,cap-llm
           EOF
 
       - name: cargo check (legacy feature alias smoke)
