@@ -92,31 +92,19 @@ pub(crate) fn write_unpoisoned<T>(lock: &RwLock<T>) -> RwLockWriteGuard<'_, T> {
         .expect("gateway rwlock poisoned; refusing to continue with inconsistent state")
 }
 
-pub(crate) fn normalize_scope_id(value: Option<&str>) -> Option<&str> {
-    value.map(str::trim).filter(|id| !id.is_empty())
-}
-
 pub(crate) fn tenant_scope_key(tenant_id: Option<&str>) -> Option<String> {
-    normalize_scope_id(tenant_id).map(|tenant_id| format!("tenant:{tenant_id}"))
+    domain::scope::tenant_scope_key(tenant_id)
 }
 
 pub(crate) fn project_scope_key(
     tenant_id: Option<&str>,
     project_id: Option<&str>,
 ) -> Option<String> {
-    let project_id = normalize_scope_id(project_id)?;
-    if let Some(tenant_id) = normalize_scope_id(tenant_id) {
-        return Some(format!("tenant:{tenant_id}:project:{project_id}"));
-    }
-    Some(format!("project:{project_id}"))
+    domain::scope::project_scope_key(tenant_id, project_id)
 }
 
 pub(crate) fn user_scope_key(tenant_id: Option<&str>, user_id: Option<&str>) -> Option<String> {
-    let user_id = normalize_scope_id(user_id)?;
-    if let Some(tenant_id) = normalize_scope_id(tenant_id) {
-        return Some(format!("tenant:{tenant_id}:user:{user_id}"));
-    }
-    Some(format!("user:{user_id}"))
+    domain::scope::user_scope_key(tenant_id, user_id)
 }
 
 pub use adapters::backend::{HttpBackend, ProxyBackend};
