@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use ::secret_kit::SecretString;
 use ::secret_kit::runtime::{SecretCommandRuntime, SecretEnvironment};
+pub use config_kit::parse_dotenv;
 
 #[derive(Clone, Default)]
 pub struct Env {
@@ -39,43 +40,6 @@ impl SecretEnvironment for Env {
 }
 
 impl SecretCommandRuntime for Env {}
-
-pub fn parse_dotenv(contents: &str) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::<String, String>::new();
-
-    for raw_line in contents.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        let line = line.strip_prefix("export ").unwrap_or(line).trim();
-        let Some((raw_key, raw_value)) = line.split_once('=') else {
-            continue;
-        };
-        let key = raw_key.trim();
-        if key.is_empty() {
-            continue;
-        }
-
-        let mut value = raw_value.trim().to_string();
-        if let Some(stripped) = value
-            .strip_prefix('"')
-            .and_then(|v| v.strip_suffix('"'))
-            .or_else(|| value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')))
-        {
-            value = stripped.to_string();
-        }
-
-        if value.trim().is_empty() {
-            continue;
-        }
-
-        out.insert(key.to_string(), value);
-    }
-
-    out
-}
 
 #[cfg(test)]
 mod tests {
