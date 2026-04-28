@@ -16,6 +16,12 @@
 
 - `omne_foundation/config-kit`
   - 用于严格配置文档加载，以及 JSON/TOML/YAML 感知的解析入口。
+- `omne_foundation/http-auth-kit`
+  - 用于 header/query auth、OAuth client-credentials 和 AWS SigV4 这类通用 HTTP 鉴权协议构件。
+- `omne_foundation/redaction-kit`
+  - 用于 JSON / query / regex / Prometheus label 脱敏和稳定采样原语。
+- `omne_foundation/speech-transcription-kit`
+  - 用于 provider-neutral 转写请求 / 响应 DTO 和 provider provenance 语义；Ditto 只依赖默认轻量 DTO feature，不依赖 foundation provider catalog 或转写 job feature。
 - `omne_foundation/policy-meta`
   - 用于可复用的 write-scope 等策略元语义。
 - `omne-runtime/omne-integrity-primitives`
@@ -27,7 +33,10 @@
 
 - provider-specific HTTP / streaming quirks 与协议归一化
 - provider catalog 形状和 runtime resolution 逻辑
+- provider auth schema、环境变量 key 选择、secret 解析和 provider 默认鉴权策略
+- OpenAI / OpenAI-compatible audio multipart transport、转写 provider routing 与 model builder
 - gateway translation 语义、控制面数据模型和产品级 feature slicing
+- gateway OpenAPI/types、tenant/project/user scope、budgets、rate-limits、cache、idempotency 和 guardrails
 - L0 / L1 边界与 Ditto 自己的产品路线
 
 ## 不负责什么
