@@ -1,11 +1,142 @@
-use std::io::{Read, Write};
+use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
-use std::time::Instant;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
-use omne_execution_gateway::{
-    ExecGateway, ExecRequest, ExecutionOutcome, GatewayPolicy, PreparedChild,
-    resolve_bare_program_path_for_execution,
-};
+use omne_execution_gateway::{ExecGateway, ExecRequest, GatewayPolicy};
+use serde::Deserialize;
+use serde_json::Value;
+
+use super::toolbox::TOOL_SHELL_EXEC;
+use crate::agent::{ToolCall, ToolExecutor, ToolResult};
+use crate::error::{DittoError, Result};
+
+#[derive(Clone)]
+pub struct ShellToolExecutor {
+    root: PathBuf,
+    allowed_programs: BTreeSet<String>,
+    max_output_bytes: usize,
+    max_stdin_bytes: usize,
+    timeout: Duration,
+}
+
+impl ShellToolExecutor {
+    pub fn new(root: impl Into<PathBuf>) -> Result<Self> {
+        let root = root.into();
+        let root = std::fs::canonicalize(&root).map_err(|err| {
+            DittoError::Io(std::io::Error::new(
+                err.kind(),
+                format!("invalid shell tool root {}: {err}", root.display()),
+            ))
+        })?;
+        Ok(Self {
+            root,
+            allowed_programs: BTreeSet::new(),
+            max_output_bytes: 256 * 1024,
+            max_stdin_bytes: 64 * 1024,
+            timeout: Duration::from_secs(20),
+        })
+    }
+
+    pub fn with_allowed_programs<I, S>(mut self, programs: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.allowed_programs = programs.into_iter().map(|p| p.into()).collect();
+        self
+    }
+
+    pub fn with_max_output_bytes(mut self, max_output_bytes: usize) -> Self {
+        self.max_output_bytes = max_output_bytes.max(1);
+        self
+    }
+
+    pub fn with_max_stdin_bytes(mut self, max_stdin_bytes: usize) -> Self {
+        self.max_stdin_bytes = max_stdin_bytes.max(1);
+        self
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    fn validate_program(raw: &str) -> std::result::Result<&str, String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Err("program is empty".to_string());
+        }
+        if raw.contains('/') || raw.contains('\\') || raw.contains(':') {
+            return Err("program must be a bare name without path separators".to_string());
+        }
+        Ok(raw)
+    }
+
+    fn resolve_existing_dir(&self, raw: &str) -> std::result::Result<PathBuf, String> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Ok(self.root.clone());
+        }
+
+        let rel = Path::new(raw);
+        if rel.is_absolute() {
+            return Err("absolute paths are not allowed".to_string());
+        }
+        for component in rel.components() {
+            if matches!(component, std::path::Component::ParentDir) {
+                return Err("parent dir segments are not allowed".to_string());
+            }
+        }
+
+        let joined = self.root.join(rel);
+        let canonical = std::fs::canonicalize(&joined)
+            .map_err(|err| format!("failed to resolve path {}: {err}", joined.display()))?;
+        if !canonical.starts_with(&self.root) {
+            return Err("path escapes root".to_string());
+        }
+        let meta = std::fs::metadata(&canonical).map_err(|err| format!("stat failed: {err}"))?;
+        if !meta.is_dir() {
+            return Err("path is not a directory".to_string());
+        }
+        Ok(canonical)
+    }
+
+    fn resolve_allowlisted_program_path(
+        &self,
+        program: &str,
+    ) -> std::result::Result<PathBuf, String> {
+        let path = resolve_bare_program_path(program.as_ref())
+            .ok_or_else(|| format!("failed to resolve program in PATH: {program}"))?;
+        let canonical_path = std::fs::canonicalize(&path)
+            .map_err(|err| format!("failed to canonicalize program {}: {err}", path.display()))?;
+        ensure_canonical_program_matches_request(program, &canonical_path)?;
+        Ok(canonical_path)
+    }
+
+    fn exec_gateway_for_program(&self, program: &PathBuf) -> ExecGateway {
+        ExecGateway::with_policy(GatewayPolicy {
+            allow_isolation_none: true,
+            non_mutating_program_allowlist: vec![program.display().to_string()],
+            ..GatewayPolicy::default()
+        })
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ShellExecArgs {
+    program: String,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default)]
+    stdin: Option<String>,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    timeout_ms: Option<u64>,
+}
 
 #[::async_trait::async_trait]
 impl ToolExecutor for ShellToolExecutor {
@@ -66,14 +197,14 @@ impl ToolExecutor for ShellToolExecutor {
         }
 
         let stdin = args.stdin.clone();
-        if let Some(stdin) = stdin.as_deref()
-            && stdin.len() > self.max_stdin_bytes
-        {
-            return Ok(ToolResult {
-                tool_call_id: call.id,
-                content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
-                is_error: Some(true),
-            });
+        if let Some(stdin) = stdin.as_deref() {
+            if stdin.len() > self.max_stdin_bytes {
+                return Ok(ToolResult {
+                    tool_call_id: call.id,
+                    content: format!("stdin exceeds max_stdin_bytes ({})", self.max_stdin_bytes),
+                    is_error: Some(true),
+                });
+            }
         }
 
         let cwd = match self.resolve_existing_dir(args.cwd.as_deref().unwrap_or("")) {
@@ -115,26 +246,24 @@ impl ToolExecutor for ShellToolExecutor {
         )
         .with_declared_mutation(false);
 
-        let (_event, prepared) = gateway.prepare_command(&request);
-        let prepared = match prepared {
-            Ok(prepared) => {
-                let prepared = prepared.with_piped_stdout().with_piped_stderr();
-                if stdin.is_some() {
-                    prepared.with_piped_stdin()
-                } else {
-                    prepared
-                }
-            }
-            Err(err) => {
-                return Ok(ToolResult {
-                    tool_call_id: call.id,
-                    content: err.to_string(),
-                    is_error: Some(true),
-                });
-            }
-        };
+        if let Err(err) = gateway.preflight(&request) {
+            return Ok(ToolResult {
+                tool_call_id: call.id,
+                content: format!("{err:?}"),
+                is_error: Some(true),
+            });
+        }
 
-        let mut child = match prepared.spawn() {
+        let mut command = Command::new(&resolved_program);
+        command.args(&args.args);
+        command.current_dir(&cwd);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        if stdin.is_some() {
+            command.stdin(Stdio::piped());
+        }
+
+        let mut child = match command.spawn() {
             Ok(child) => child,
             Err(err) => {
                 return Ok(ToolResult {
@@ -146,7 +275,7 @@ impl ToolExecutor for ShellToolExecutor {
         };
 
         let stdin_task = stdin.map(|stdin| {
-            let child_stdin = match child.take_stdin() {
+            let child_stdin = match child.stdin.take() {
                 Some(stdin_handle) => stdin_handle,
                 None => {
                     return tokio::task::spawn_blocking(|| {
@@ -160,10 +289,10 @@ impl ToolExecutor for ShellToolExecutor {
             tokio::task::spawn_blocking(move || write_sync_stdin(child_stdin, stdin))
         });
 
-        let stdout = child.take_stdout().ok_or_else(|| {
+        let stdout = child.stdout.take().ok_or_else(|| {
             DittoError::Io(std::io::Error::other("shell_exec missing stdout pipe"))
         })?;
-        let stderr = child.take_stderr().ok_or_else(|| {
+        let stderr = child.stderr.take().ok_or_else(|| {
             DittoError::Io(std::io::Error::other("shell_exec missing stderr pipe"))
         })?;
 
@@ -173,7 +302,7 @@ impl ToolExecutor for ShellToolExecutor {
         let stderr_task =
             tokio::task::spawn_blocking(move || read_sync_limited_bytes(stderr, max_output_bytes));
 
-        let (exit_code, wait_error, timed_out) = wait_for_prepared_child(child, timeout).await;
+        let (exit_code, wait_error, timed_out) = wait_for_child(child, timeout).await;
 
         let stdin_error = match stdin_task {
             Some(task) => match task.await {
@@ -223,7 +352,7 @@ impl ToolExecutor for ShellToolExecutor {
         let ok =
             exit_code == Some(0) && !timed_out && wait_error.is_none() && stdin_error.is_none();
 
-        let is_error = !ok || timed_out || wait_error.is_some() || stdin_error.is_some();
+        let is_error = timed_out || wait_error.is_some() || stdin_error.is_some();
 
         let mut out = serde_json::json!({
             "program": program,
@@ -255,25 +384,6 @@ impl ToolExecutor for ShellToolExecutor {
     }
 }
 
-impl ShellToolExecutor {
-    fn resolve_allowlisted_program_path(&self, program: &str) -> std::result::Result<PathBuf, String> {
-        let path = resolve_bare_program_path_for_execution(program.as_ref())
-            .ok_or_else(|| format!("failed to resolve program in PATH: {program}"))?;
-        let canonical_path = std::fs::canonicalize(&path)
-            .map_err(|err| format!("failed to canonicalize program {}: {err}", path.display()))?;
-        ensure_canonical_program_matches_request(program, &canonical_path)?;
-        Ok(canonical_path)
-    }
-
-    fn exec_gateway_for_program(&self, program: &std::path::Path) -> ExecGateway {
-        ExecGateway::with_policy(GatewayPolicy {
-            allow_isolation_none: true,
-            non_mutating_program_allowlist: vec![program.display().to_string()],
-            ..GatewayPolicy::default()
-        })
-    }
-}
-
 fn ensure_canonical_program_matches_request(
     program: &str,
     canonical_path: &std::path::Path,
@@ -287,8 +397,8 @@ fn ensure_canonical_program_matches_request(
     }
 }
 
-async fn wait_for_prepared_child(
-    mut child: PreparedChild,
+async fn wait_for_child(
+    mut child: std::process::Child,
     timeout: Duration,
 ) -> (Option<i32>, Option<String>, bool) {
     let start = Instant::now();
@@ -297,11 +407,7 @@ async fn wait_for_prepared_child(
             Ok(Some(status)) => return (status.code(), None, false),
             Ok(None) => {}
             Err(err) => {
-                return (
-                    err.completed_status().and_then(std::process::ExitStatus::code),
-                    Some(err.to_string()),
-                    false,
-                );
+                return (None, Some(err.to_string()), false);
             }
         }
 
@@ -314,24 +420,34 @@ async fn wait_for_prepared_child(
 
     let _ = child.kill();
     match tokio::task::spawn_blocking(move || child.wait()).await {
-        Ok(outcome) => map_execution_outcome(outcome, true),
+        Ok(Ok(status)) => (status.code(), None, true),
+        Ok(Err(err)) => (None, Some(err.to_string()), true),
         Err(err) => (None, Some(format!("wait join error: {err}")), true),
     }
 }
 
-fn map_execution_outcome(
-    outcome: ExecutionOutcome,
-    timed_out: bool,
-) -> (Option<i32>, Option<String>, bool) {
-    let (_event, result) = outcome.into_parts();
-    match result {
-        Ok(status) => (status.code(), None, timed_out),
-        Err(err) => (
-            err.completed_status().and_then(std::process::ExitStatus::code),
-            Some(err.to_string()),
-            timed_out,
-        ),
+fn resolve_bare_program_path(program: &OsStr) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(program);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            if let Ok(metadata) = std::fs::metadata(&candidate) {
+                if metadata.is_file() && (metadata.permissions().mode() & 0o111 != 0) {
+                    return Some(candidate);
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
     }
+    None
 }
 
 fn write_sync_stdin(mut stdin: std::process::ChildStdin, input: String) -> std::io::Result<()> {
@@ -375,8 +491,10 @@ mod tests {
 
     #[test]
     fn canonical_program_name_must_match_requested_name() {
-        assert!(ensure_canonical_program_matches_request("cat", std::path::Path::new("/bin/cat"))
-            .is_ok());
+        assert!(
+            ensure_canonical_program_matches_request("cat", std::path::Path::new("/bin/cat"))
+                .is_ok()
+        );
         assert!(
             ensure_canonical_program_matches_request("rustc", std::path::Path::new("/bin/rustup"))
                 .is_err()
