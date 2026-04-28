@@ -11,7 +11,7 @@ default = ["provider-openai-compatible", "cap-llm"]
 
 agent = ["dep:regex", "dep:omne-execution-gateway", "dep:omne-fs"]
 contract-guard = ["dep:regex", "dep:serde_yaml"]
-auth = ["dep:hmac", "dep:sha2", "dep:time"]
+auth = ["dep:time"]
 sdk = []
 sdk-axum = ["sdk", "dep:axum"]
 base64 = ["dep:base64"]
@@ -84,8 +84,8 @@ base64 = { version = "0.22", optional = true }
 bytes = "1"
 config-kit = { path = "../../../omne_foundation/crates/config-kit" }
 futures-util = "0.3"
-hmac = { version = "0.12", optional = true }
 error-kit = { path = "../../../omne_foundation/crates/error-kit" }
+http-auth-kit = { path = "../../../omne_foundation/crates/http-auth-kit" }
 http-kit = { path = "../../../omne_foundation/crates/http-kit" }
 i18n-kit = { path = "../../../omne_foundation/crates/i18n-kit" }
 i18n-runtime-kit = { path = "../../../omne_foundation/crates/i18n-runtime-kit" }
@@ -100,7 +100,6 @@ omne-execution-gateway = { path = "../../../omne-runtime/crates/omne-execution-g
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = { version = "0.9", optional = true }
-sha2 = { version = "0.10", optional = true }
 thiserror = "1"
 time = { version = "0.3", features = ["formatting", "macros"], optional = true }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt", "rt-multi-thread", "net", "sync", "time"] }

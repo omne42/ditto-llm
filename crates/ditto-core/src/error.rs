@@ -418,6 +418,34 @@ impl From<::secret_kit::SecretError> for DittoError {
     }
 }
 
+impl From<http_auth_kit::HttpAuthError> for DittoError {
+    fn from(value: http_auth_kit::HttpAuthError) -> Self {
+        match value {
+            http_auth_kit::HttpAuthError::FieldRequired { field } if field == "header" => {
+                Self::InvalidResponse(structured_text!("error_detail.auth.header_name_empty"))
+            }
+            http_auth_kit::HttpAuthError::FieldRequired { field } if field == "param" => {
+                Self::InvalidResponse(structured_text!("error_detail.auth.query_param_name_empty"))
+            }
+            http_auth_kit::HttpAuthError::HeaderNameInvalid { header, message } => {
+                Self::InvalidResponse(structured_text!(
+                    "error_detail.auth.header_name_invalid",
+                    "header" => header,
+                    "error" => message
+                ))
+            }
+            http_auth_kit::HttpAuthError::HeaderValueInvalid { header, message } => {
+                Self::InvalidResponse(structured_text!(
+                    "error_detail.auth.header_value_invalid",
+                    "header" => header,
+                    "error" => message
+                ))
+            }
+            other => Self::InvalidResponse(text_detail(other)),
+        }
+    }
+}
+
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __ditto_checked_structured_text {

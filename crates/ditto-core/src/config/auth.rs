@@ -3,7 +3,6 @@
 use std::fmt::Display;
 use std::time::Duration;
 
-use reqwest::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
 use crate::error::{DittoError, Result};
@@ -14,30 +13,6 @@ use ::secret_kit::{
 
 use super::env::Env;
 use super::provider_config::{ProviderAuth, ProviderConfig};
-
-fn invalid_auth_header_name() -> DittoError {
-    crate::invalid_response!("error_detail.auth.header_name_empty")
-}
-
-fn invalid_auth_header_name_with_error(header: &str, error: impl Display) -> DittoError {
-    crate::invalid_response!(
-        "error_detail.auth.header_name_invalid",
-        "header" => header,
-        "error" => error.to_string()
-    )
-}
-
-fn invalid_auth_header_value(header: &str, error: impl Display) -> DittoError {
-    crate::invalid_response!(
-        "error_detail.auth.header_value_invalid",
-        "header" => header,
-        "error" => error.to_string()
-    )
-}
-
-fn invalid_auth_query_param_name() -> DittoError {
-    crate::invalid_response!("error_detail.auth.query_param_name_empty")
-}
 
 fn static_request_auth_unsupported(auth_kind: &str) -> DittoError {
     crate::invalid_response!(
@@ -150,105 +125,9 @@ fn auth_output_shape_invalid() -> DittoError {
     crate::auth_command_error!("error_detail.auth.output_shape_invalid")
 }
 
-#[derive(Clone)]
-pub(crate) struct HttpAuth {
-    pub(crate) header: HeaderName,
-    pub(crate) value: HeaderValue,
-}
-
-impl std::fmt::Debug for HttpAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HttpAuth")
-            .field("header", &self.header)
-            .field("value", &"<redacted>")
-            .finish()
-    }
-}
-
-impl HttpAuth {
-    pub(crate) fn bearer(token: &str) -> Result<Self> {
-        Self::header_value("authorization", Some("Bearer "), token)
-    }
-
-    pub(crate) fn header_value(header: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
-        let header = header.trim();
-        if header.is_empty() {
-            return Err(invalid_auth_header_name());
-        }
-
-        let header = HeaderName::from_bytes(header.as_bytes())
-            .map_err(|err| invalid_auth_header_name_with_error(header, err))?;
-
-        let mut out = String::new();
-        if let Some(prefix) = prefix {
-            out.push_str(prefix);
-        }
-        out.push_str(token);
-        let mut value = HeaderValue::from_str(&out)
-            .map_err(|err| invalid_auth_header_value(header.as_str(), err))?;
-        value.set_sensitive(true);
-
-        Ok(Self { header, value })
-    }
-
-    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        req.header(self.header.clone(), self.value.clone())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct QueryParamAuth {
-    pub(crate) param: String,
-    pub(crate) value: String,
-}
-
-impl std::fmt::Debug for QueryParamAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("QueryParamAuth")
-            .field("param", &self.param)
-            .field("value", &"<redacted>")
-            .finish()
-    }
-}
-
-impl QueryParamAuth {
-    pub(crate) fn new(param: &str, prefix: Option<&str>, token: &str) -> Result<Self> {
-        let param = param.trim();
-        if param.is_empty() {
-            return Err(invalid_auth_query_param_name());
-        }
-
-        let mut value = String::new();
-        if let Some(prefix) = prefix {
-            value.push_str(prefix);
-        }
-        value.push_str(token);
-
-        Ok(Self {
-            param: param.to_string(),
-            value,
-        })
-    }
-
-    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        req.query(&[(self.param.as_str(), self.value.as_str())])
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum RequestAuth {
-    Http(HttpAuth),
-    QueryParam(QueryParamAuth),
-}
-
-impl RequestAuth {
-    pub(crate) fn apply(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self {
-            Self::Http(auth) => auth.apply(req),
-            Self::QueryParam(auth) => auth.apply(req),
-        }
-    }
-}
+pub(crate) type HttpAuth = http_auth_kit::HttpHeaderAuth;
+pub(crate) type QueryParamAuth = http_auth_kit::HttpQueryParamAuth;
+pub(crate) type RequestAuth = http_auth_kit::HttpRequestAuth;
 
 pub(crate) async fn resolve_request_auth_with_default_keys(
     auth: &ProviderAuth,
